@@ -1,0 +1,37 @@
+[package]
+name = "onchain_tinysynth"
+version = "0.1.0"
+edition = "2024_07"
+description = "Starknet class library that serves an onchain, offline-playable TinySynth MIDI player for NFTs via library_call."
+repository = "https://github.com/Provable-Games/onchain-tinysynth"
+license = "Apache-2.0"
+
+# See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
+
+[dependencies]
+starknet = "2.20.1"
+
+[dev-dependencies]
+snforge_std = "0.64.0"
+assert_macros = "2.20.0"
+
+[[target.starknet-contract]]
+sierra = true
+
+[scripts]
+test = "snforge test"
+
+[tool.scarb]
+allow-prebuilt-plugins = ["snforge_std"]
+
+# Visit https://foundry-rs.github.io/starknet-foundry/appendix/scarb-toml.html for more information
+
+# [tool.snforge]
+# exit_first = true
+# fuzzer_runs = 256
+# tracked_resource = "sierra-gas"
+
+# [profile.dev.cairo]                                        # Needed for `snforge test --coverage`
+# unstable-add-statements-code-locations-debug-info = true
+# unstable-add-statements-functions-debug-info = true
+# inlining-strategy = "avoid"

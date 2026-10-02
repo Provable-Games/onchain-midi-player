@@ -1,0 +1,11 @@
+onchain-tinysynth
+Copyright 2026 Provable Games
+https://github.com/Provable-Games/onchain-tinysynth
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product embeds a modified version of webaudio-tinysynth by
+Tatsuya Shinyagaito (g200kg), https://github.com/g200kg/webaudio-tinysynth,
+licensed under the Apache License, Version 2.0. The modified version is
+maintained at https://github.com/Provable-Games/webaudio-tinysynth; see that
+repository's NOTICE file for the list of modifications.
