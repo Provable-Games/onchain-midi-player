@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-check
-// Headless Chromium check of the real page (tests/fixtures/page.html) with the golden fixture
-// inputs (tests/fixtures/page.json), loaded three ways:
+// Headless browser check of the real page (tests/fixtures/page.html) with the golden fixture
+// inputs (tests/fixtures/page.json), on Chromium, Firefox or WebKit, loaded three ways:
 //
 //   data:      the decoded animation_url as a top-level data: URI, with the browser offline
 //   iframe     inside <iframe sandbox="allow-scripts" src="data:..."> (opaque origin)
@@ -12,38 +12,39 @@
 // DOMContentLoaded listener), that ▶ is disabled until the page is ready, that the art is shown
 // first, that ▶ starts TinySynth (AudioContext running, notes scheduled) and ■ stops it, that the
 // page loops at End-of-Track (consecutive passes start maxTick x tick2Time apart), and that nothing
-// is requested over the network (the gzip tag's data: URI included) and nothing is logged as an
-// error. On the data: page it also checks that ▶ restarts the art: the probe art is a bar sweeping
-// linearly over 8 s, and screenshots before and after ▶ show the bar where time-since-restart (not
-// time-since-load) puts it, and it prints when the page became ready. Failure variants (unparsable
-// settings, invalid MIDI; a corrupt, truncated or missing gzip payload, or one without the engine)
-// must keep the art visible, keep ▶ disabled, show the exact error and construct no synth. Range
-// checks are Cairo's: settings that only break a range rule must still play.
+// is requested over the network and nothing is logged as an error. That the gzip tag's data: URI is
+// never fetched shows on Chromium through the DevTools protocol on every load; on every engine, the
+// CSP load reports no violation although its CSP blocks data: scripts, and a control page shows the
+// engine reports one for a plain <script src="data:...">. On the data: page it also checks that ▶
+// restarts the art: the probe art is a bar sweeping linearly over 8 s, and screenshots before and
+// after ▶ show the bar where time-since-restart (not time-since-load) puts it, and it prints when
+// the page became ready. It prints how long each ▶ took to start playback. Failure variants
+// (unparsable settings, invalid MIDI; a corrupt, truncated or missing gzip payload, or one without
+// the engine) must keep the art visible, keep ▶ disabled, show the exact error and construct no
+// synth. Range checks are Cairo's: settings that only break a range rule must still play.
 //
-// Playwright is not a dependency of this repository; point the script at an existing install:
+// Playwright is not a dependency of this repository; point the script at an existing install, and
+// pick the engine (scripts/browsers.mjs; Firefox plays audio only with an output device, which a
+// PulseAudio null sink provides on a machine without one: see README, CI):
 //
 //   PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core \
-//   CHROME=/path/to/chrome-headless-shell [LD_LIBRARY_PATH=...] \
+//   PLAYWRIGHT_BROWSER=chromium|firefox|webkit \
+//   [CHROME=/path/to/chrome-headless-shell] [LD_LIBRARY_PATH=...] \
 //   node scripts/page_check.mjs [screenshot_dir]
 //
-// Exits 0 when every check passes, 1 when one fails, 2 when PLAYWRIGHT_CORE is not set.
+// Exits 0 when every check passes, 1 when one fails, 2 when PLAYWRIGHT_CORE is not set or
+// PLAYWRIGHT_BROWSER names no supported engine.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
+import { collectErrors, dataRequestLog, launchBrowser } from "./browsers.mjs";
 import { ENGINE_SHA256 } from "./engine.mjs";
 import { ART_OPEN, MIDI_OPEN, pageHtml, sha256, withGzipPayload } from "./page.mjs";
 import { decodePng } from "./png.mjs";
 import { smf } from "./page_fixtures.mjs";
 import { ENGINE_MISSING } from "../player/player.js";
 
-const { PLAYWRIGHT_CORE, CHROME } = process.env;
-if (!PLAYWRIGHT_CORE) {
-  console.error("set PLAYWRIGHT_CORE to a playwright-core directory (and CHROME to a Chromium binary)");
-  process.exit(2);
-}
-const { chromium } = createRequire(import.meta.url)(PLAYWRIGHT_CORE);
 const shotDir = process.argv[2];
 
 const fixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/page.json", import.meta.url), "utf8"));
@@ -62,6 +63,12 @@ function check(cond, msg) {
   console.log(`  ${cond ? "ok  " : "FAIL"} ${msg}`);
   if (!cond) failures++;
 }
+/** A check this engine cannot make, and why. @param {string} msg */
+function skip(msg) {
+  console.log(`  skip ${msg}`);
+}
+/** Where the DevTools protocol is missing (Firefox, WebKit): the per-load data: request check. */
+const NO_CDP = "Chromium-only (DevTools protocol): no other engine shows data: requests; the CSP check proves it on every engine";
 
 /**
  * Runs in every frame before the page's scripts: wraps the engine constructor (which the engine
@@ -114,7 +121,7 @@ function instrument() {
   }).observe(document, { childList: true, subtree: true, attributes: true });
 }
 
-const browser = await chromium.launch({ executablePath: CHROME || undefined, env: process.env });
+const { browser } = await launchBrowser();
 
 /**
  * A fresh context with the instrumentation, network blocking (data: only, plus `serve`d URLs) and
@@ -126,8 +133,6 @@ async function open({ offline = false, serve = {}, viewport = { width: 400, heig
   await context.addInitScript(instrument);
   /** @type {string[]} */
   const blocked = [];
-  /** @type {string[]} */
-  const errors = [];
   await context.route("**/*", (/** @type {any} */ route) => {
     const url = route.request().url();
     if (url.startsWith("data:")) return route.continue();
@@ -136,18 +141,14 @@ async function open({ offline = false, serve = {}, viewport = { width: 400, heig
     blocked.push(url);
     return route.abort();
   });
-  // Every resource request the page's renderer makes, data: URLs included, from the DevTools
-  // protocol: Playwright's own request events and route() skip data: URLs, so neither `blocked` nor
-  // they could show that the gzip tag's data: URI is never fetched.
-  /** @type {string[]} */
-  const requests = [];
   const page = await context.newPage();
-  const cdp = await context.newCDPSession(page);
-  await cdp.send("Network.enable");
-  cdp.on("Network.requestWillBeSent", (/** @type {any} */ e) => requests.push(e.request.url));
-  page.on("console", (/** @type {any} */ m) => { if (m.type() === "error") errors.push(m.text()); });
-  page.on("pageerror", (/** @type {any} */ e) => errors.push(String(e)));
-  return { context, page, blocked, errors, requests };
+  // Every resource request the page's renderer makes, data: URLs included (Chromium only, from the
+  // DevTools protocol; null elsewhere): Playwright's own request events and route() skip data: URLs,
+  // so neither `blocked` nor they could show that the gzip tag's data: URI is never fetched.
+  const requests = await dataRequestLog(context, page);
+  // What the page logs as errors or throws uncaught, as text (await it: it settles asynchronously).
+  const logged = collectErrors(page);
+  return { context, page, blocked, logged, requests };
 }
 
 /**
@@ -155,7 +156,7 @@ async function open({ offline = false, serve = {}, viewport = { width: 400, heig
  * engine (its text hashed here, in Node), it ran before the player registered its DOMContentLoaded
  * listener, and the gzip tag's data: URI was never requested.
  * @param {any} frame
- * @param {string[]} requests
+ * @param {string[] | null} requests
  */
 async function checkInflated(frame, requests) {
   const r = await frame.evaluate(() => ({
@@ -168,6 +169,7 @@ async function checkInflated(frame, requests) {
     `the shim replaced the gzip tag with the inflated engine (${r.text.length} bytes, sha256 = script_sha256())`);
   const [engine, listener, dcl] = ["engine", "listener", "dcl"].map((e) => r.order.indexOf(e));
   check(engine >= 0 && engine < listener && listener < dcl, `the engine ran before the player registered its listener, before DOMContentLoaded (${r.order.join(", ")})`);
+  if (!requests) return skip(`the gzip tag's data: URI was never fetched: ${NO_CDP}`);
   // The frame's own document request shows its requests are observed.
   const url = frame.url();
   const fetched = requests.filter((u) => u.startsWith("data:text/javascript"));
@@ -197,6 +199,24 @@ const ready = (/** @type {any} */ frame) => frame.waitForFunction(() => {
   const e = document.getElementById("error");
   return b && (!b.disabled || (e && !e.hidden));
 });
+
+/**
+ * Clicks ▶ and waits until playback has started: the player's n-th playMIDI, which it calls once the
+ * AudioContext's resume() has settled, and a MIDI message scheduled. How long resume() takes depends
+ * on the engine and its audio output (Firefox settles it only once its output stream runs: up to
+ * ~2 s on a null sink), so that time is printed, not assumed by a fixed sleep.
+ * @param {any} frame
+ * @param {number} [n]
+ */
+async function startPlayback(frame, n = 1) {
+  const t0 = Date.now();
+  await frame.click("#play");
+  await frame.waitForFunction((/** @type {number} */ n) => {
+    const st = /** @type {any} */ (window).__check;
+    return st.plays.length >= n && st.sends.length > 0;
+  }, n, { timeout: 10000 }).catch(() => {}); // the checks that follow report a start that never came
+  console.log(`  info ▶ to playMIDI: ${Date.now() - t0} ms`);
+}
 
 /**
  * Start times of every pass: the first lead note-on (channel 1, note 72) of each.
@@ -239,7 +259,7 @@ async function barX(/** @type {any} */ page) {
 async function checkDataPage() {
   const c = CASES.beast_140bpm;
   console.log(`data: URI, offline (${c.name}: art-restart probe, ${(c.midi_loop_seconds).toFixed(4)} s loop at ${(60 / (c.midi_loop_seconds / 4)).toFixed(4)} BPM)`);
-  const { context, page, blocked, errors, requests } = await open({ offline: true });
+  const { context, page, blocked, logged, requests } = await open({ offline: true });
   await page.goto(dataUrl(htmlOf(c)));
   await ready(page);
   await checkInflated(page, requests);
@@ -264,7 +284,7 @@ async function checkDataPage() {
   check(Math.abs(before - (390 * sinceLoad) / SWEEP_SECONDS) < 20, `before ▶: bar at x = ${before}, ${sinceLoad.toFixed(2)} s after the art was shown (expected ~${Math.round((390 * sinceLoad) / SWEEP_SECONDS)})`);
   if (shotDir) await page.screenshot({ path: join(shotDir, "page_before_play.png") });
 
-  await page.click("#play");
+  await startPlayback(page);
   await page.waitForFunction(() => /** @type {any} */ (window).__check.imgs.length >= 2, null, { timeout: 3000 }).catch(() => {});
   st = await state(page);
   check(st.constructed === 1 && st.synth.state === "running", `▶: synth constructed in the gesture, AudioContext ${st.synth.state}`);
@@ -306,7 +326,7 @@ async function checkDataPage() {
     return w.__check.synth.chvol.every((/** @type {any} */ n, /** @type {number} */ i) => n !== w.__vols[i]);
   }), "■ replaced every channel's volume node, cutting off drum voices and notes scheduled ahead");
 
-  await page.click("#play");
+  await startPlayback(page, 2);
   await page.waitForFunction(() => /** @type {any} */ (window).__check.imgs.length >= 3, null, { timeout: 3000 }).catch(() => {});
   st = await state(page);
   const again = st.plays[1];
@@ -314,6 +334,7 @@ async function checkDataPage() {
   check(st.constructed === 1 && st.label === "Stop" && Math.abs(restartStarts[0] - again.playTime) < 1e-9,
     "▶ again: same synth, playback from tick 0 at playTime");
   check(st.imgs.length === 3 && st.imgs[2].src.includes(";r=2;base64,"), "▶ again: art restarted again (r=2)");
+  const errors = await logged();
   check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   check(blocked.length === 0, `no network requests${blocked.length ? ": " + blocked.join(" ") : ""}`);
   await context.close();
@@ -325,7 +346,7 @@ async function checkIframe() {
   console.log(`<iframe sandbox="allow-scripts" src="data:..."> (${c.name})`);
   const host = "http://host.test/embed.html";
   const body = `<!doctype html><title>host</title><iframe sandbox="allow-scripts" width="400" height="200" src="${dataUrl(htmlOf(c))}"></iframe>`;
-  const { context, page, blocked, errors, requests } = await open({ serve: { [host]: { body } }, viewport: { width: 420, height: 220 } });
+  const { context, page, blocked, logged, requests } = await open({ serve: { [host]: { body } }, viewport: { width: 420, height: 220 } });
   await page.goto(host);
   const frame = await (await page.waitForSelector("iframe")).contentFrame();
   await ready(frame);
@@ -335,14 +356,14 @@ async function checkIframe() {
   check(st.origin === "null", "the frame has an opaque origin (sandboxed)");
   check(st.readyDisabled === true && !st.disabled, "▶ disabled until DOMContentLoaded, then enabled");
   check(st.img.src === artSrc(c.svg) && st.img.w > 0, `art shown (UTF-8 SVG re-encoded byte for byte, ${st.img.w}x${st.img.h})`);
-  await frame.click("#play");
-  await frame.waitForTimeout(300);
+  await startPlayback(frame);
   st = await state(frame);
   check(st.constructed === 1 && st.synth.state === "running" && st.sends > 0, `▶: AudioContext ${st.synth.state}, ${st.sends} MIDI messages scheduled`);
   await checkLoop(frame, c);
   await frame.click("#play");
   st = await state(frame);
   check(st.synth.playing === 0 && st.label === "Play", "■ stops");
+  const errors = await logged();
   check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   check(blocked.length === 0, `no network requests beyond the host page${blocked.length ? ": " + blocked.join(" ") : ""}`);
   await context.close();
@@ -353,21 +374,44 @@ async function checkCsp() {
   const c = CASES.six_timbres_format1;
   console.log(`Content-Security-Policy: ${CSP}; sandbox allow-scripts (${c.name})`);
   const url = "http://player.test/token.html";
-  const { context, page, blocked, errors, requests } = await open({ serve: { [url]: { body: htmlOf(c), headers: { "Content-Security-Policy": CSP + "; sandbox allow-scripts" } } } });
+  const { context, page, blocked, logged, requests } = await open({ serve: { [url]: { body: htmlOf(c), headers: { "Content-Security-Policy": CSP + "; sandbox allow-scripts" } } } });
   await page.goto(url);
   await ready(page);
   await checkInflated(page, requests);
   await page.waitForFunction(() => document.querySelector("img")?.complete);
   let st = await state(page);
   check(st.origin === "null" && !st.disabled && st.img.w === 250, "art shown and ▶ enabled under the CSP");
-  await page.click("#play");
-  await page.waitForTimeout(300);
+  await startPlayback(page);
   st = await state(page);
   check(st.synth?.state === "running" && st.sends > 0, `▶ plays (${st.sends} MIDI messages scheduled)`);
   await checkLoop(page, c);
-  check(st.violations.length === 0, `no CSP violations${st.violations.length ? ": " + st.violations.join(" | ") : ""}`);
+  st = await state(page);
+  // The CSP allows no data: scripts, so fetching the gzip tag's data: URI would be a script-src
+  // violation, which every engine reports (checkCspControl): this is that proof on every engine.
+  check(st.violations.length === 0, `no CSP violations, so the gzip tag's data: URI was never fetched${st.violations.length ? ": " + st.violations.join(" | ") : ""}`);
+  const errors = await logged();
   check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   check(blocked.length === 0, `no network requests beyond the page${blocked.length ? ": " + blocked.join(" ") : ""}`);
+  await context.close();
+}
+
+/**
+ * The control for checkCsp's proof: under the same CSP, a plain <script src="data:..."> (a type the
+ * browser does fetch) must be blocked and reported as a script-src violation. That shows the engine
+ * reports such a fetch, so the page's lack of violations shows the gzip tag's data: URI was never
+ * fetched: the one proof of it on Firefox and WebKit, where no DevTools protocol shows data: requests.
+ */
+async function checkCspControl() {
+  console.log("CSP control: a plain <script src=\"data:...\"> under the same CSP");
+  const url = "http://player.test/control.html";
+  const script = "data:text/javascript;base64," + Buffer.from("window.__fetched = 1").toString("base64");
+  const body = `<!doctype html><title>control</title><script src="${script}"></script>`;
+  const { context, page } = await open({ serve: { [url]: { body, headers: { "Content-Security-Policy": CSP + "; sandbox allow-scripts" } } } });
+  await page.goto(url);
+  await page.waitForFunction(() => /** @type {any} */ (window).__check.violations.length > 0, null, { timeout: 3000 }).catch(() => {});
+  const r = await page.evaluate(() => ({ violations: /** @type {any} */ (window).__check.violations, fetched: /** @type {any} */ (window).__fetched }));
+  check(r.fetched === undefined && r.violations.some((/** @type {string} */ v) => /^script-src(-elem)? data$/.test(v)),
+    `the data: script was blocked and reported (${r.violations.join(" | ") || "no violation"})`);
   await context.close();
 }
 
@@ -387,7 +431,7 @@ async function checkFailures() {
   ];
   for (const [label, d, message] of variants) {
     console.log(`failure variant: ${label} (data: URI, offline)`);
-    const { context, page, blocked, errors } = await open({ offline: true, viewport: { width: 400, height: 400 } });
+    const { context, page, blocked, logged } = await open({ offline: true, viewport: { width: 400, height: 400 } });
     await page.goto(dataUrl(htmlOf(c, d)));
     await ready(page);
     await page.waitForFunction(() => document.querySelector("img")?.complete);
@@ -397,6 +441,7 @@ async function checkFailures() {
     check(st.error === message && (await page.isVisible("#error")), `error shown: ${JSON.stringify(st.error)}`);
     await page.click("#play", { force: true });
     check((await state(page)).constructed === 0, "no synth constructed, even after clicking ▶");
+    const errors = await logged();
     check(errors.length === 1 && errors[0].includes(message), `only the error itself logged (${errors.length})`);
     check(blocked.length === 0, "no network requests");
     if (shotDir) await page.screenshot({ path: join(shotDir, `page_failure_${variants.findIndex((v) => v[0] === label)}.png`) });
@@ -420,9 +465,9 @@ async function checkEngineFailures() {
     ["no gzip tag", withGzipPayload(html, () => null), [ENGINE_MISSING]],
     ["a gzip payload that inflates to a script without the engine", withGzipPayload(html, () => gzipSync("/* not TinySynth */").toString("base64")), [ENGINE_MISSING]],
   ];
-  for (const [label, page_, logged] of variants) {
+  for (const [label, page_, expected] of variants) {
     console.log(`engine failure: ${label} (data: URI, offline)`);
-    const { context, page, blocked, errors, requests } = await open({ offline: true, viewport: { width: 400, height: 400 } });
+    const { context, page, blocked, logged, requests } = await open({ offline: true, viewport: { width: 400, height: 400 } });
     await page.goto(dataUrl(page_));
     await ready(page);
     await page.waitForFunction(() => document.querySelector("img")?.complete);
@@ -432,9 +477,12 @@ async function checkEngineFailures() {
     check(st.error === ENGINE_MISSING && (await page.isVisible("#error")), `error shown: ${JSON.stringify(st.error)}`);
     await page.click("#play", { force: true });
     check((await state(page)).constructed === 0, "no synth constructed, even after clicking ▶");
-    check(errors.length === logged.length && logged.every((m, i) => errors[i].includes(m)),
+    const errors = await logged();
+    check(errors.length === expected.length && expected.every((m, i) => errors[i].includes(m)),
       `logged: ${errors.map((e) => JSON.stringify(e.split("\n")[0])).join(", ")}`);
-    check(blocked.length === 0 && requests.length > 0 && !requests.some((u) => u.startsWith("data:text/javascript")), "no network requests; the gzip tag's data: URI not fetched");
+    check(blocked.length === 0, "no network requests");
+    if (requests) check(requests.length > 0 && !requests.some((u) => u.startsWith("data:text/javascript")), "the gzip tag's data: URI not fetched");
+    else skip(`the gzip tag's data: URI not fetched: ${NO_CDP}`);
     await context.close();
   }
 }
@@ -443,12 +491,11 @@ async function checkEngineFailures() {
 async function checkRangeOnly() {
   const c = CASES.default_120bpm;
   console.log("range-only violation (quality 2): not the page's to reject (data: URI, offline)");
-  const { context, page, errors } = await open({ offline: true });
+  const { context, page, logged } = await open({ offline: true });
   await page.goto(dataUrl(htmlOf(c, " 1,2,30,40,64,0,0" + c.d.slice(c.d.indexOf(MIDI_OPEN)))));
   await ready(page);
-  check(!(await state(page)).disabled && errors.length === 0, "▶ enabled, no error");
-  await page.click("#play");
-  await page.waitForTimeout(200);
+  check(!(await state(page)).disabled && (await logged()).length === 0, "▶ enabled, no error");
+  await startPlayback(page);
   check((await state(page)).synth?.state === "running", "▶ plays");
   await context.close();
 }
@@ -457,6 +504,7 @@ try {
   await checkDataPage();
   await checkIframe();
   await checkCsp();
+  await checkCspControl();
   await checkFailures();
   await checkEngineFailures();
   await checkRangeOnly();

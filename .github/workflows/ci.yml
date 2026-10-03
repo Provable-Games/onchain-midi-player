@@ -1,7 +1,8 @@
 name: CI
 
 # Cairo (format, build, test), JavaScript tests and type checks, generated-file
-# drift (including the page build), and headless Chromium checks. Steps that need the root package.json,
+# drift (including the page build), and headless browser checks on Chromium,
+# Firefox and WebKit. Steps that need the root package.json,
 # its scripts or player/ (added by PR #5) are switched on by a detection step
 # after checkout, so this file needs no change when they land. A job-level
 # hashFiles() would be evaluated before checkout and never activate.
@@ -177,10 +178,20 @@ jobs:
             exit 1
           fi
 
-  browser:
-    name: browser
+  # One leg per engine; the required `browser` check below passes only when
+  # every leg does.
+  browser-engine:
+    name: browser (${{ matrix.browser }})
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      # Read by scripts/browsers.mjs in every browser check below.
+      PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
+      PLAYWRIGHT_CORE: ${{ github.workspace }}/.github/ci-tools/node_modules/playwright-core
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -200,27 +211,38 @@ jobs:
         working-directory: ${{ env.CI_TOOLS }}
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      # The browser build is fixed by the playwright-core version in the lockfile.
+      # The browser builds are fixed by the playwright-core version in the lockfile.
       - name: Cache Playwright browsers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/ci-tools/package-lock.json') }}
+          key: playwright-v2-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}-${{ hashFiles('.github/ci-tools/package-lock.json') }}
 
-      # Downloads the headless shell only on a cache miss; the system libraries
-      # are installed every run.
-      - name: Install Chromium headless shell and system libraries
+      # Downloads the browser only on a cache miss (Chromium: its headless shell);
+      # the system libraries are installed every run.
+      - name: Install ${{ matrix.browser }} and its system libraries
         working-directory: ${{ env.CI_TOOLS }}
-        run: npx --no-install playwright-core install --with-deps --only-shell chromium
+        run: |
+          shell=()
+          if [ "$PLAYWRIGHT_BROWSER" = chromium ]; then shell=(--only-shell); fi
+          npx --no-install playwright-core install --with-deps "${shell[@]}" "$PLAYWRIGHT_BROWSER"
 
-      # TODO(roadmap phase 5): add Firefox and WebKit (a browser matrix) once the
-      # player page is validated across engines.
+      # Firefox runs an AudioContext only with an audio output device: without
+      # one, resume() never settles and nothing plays. The runner has no sound
+      # card, so give it PulseAudio with a null sink. Chromium's headless shell
+      # and WebKit fall back to a clock of their own.
+      - name: Audio output for Firefox (PulseAudio null sink)
+        if: matrix.browser == 'firefox'
+        run: |
+          sudo apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
+          pactl info
+          pactl get-default-sink | grep -qx ci_null
 
-      # Both scripts launch Playwright's own headless shell: CHROME stays unset.
       - name: Example browser check
         working-directory: examples/beast_consumer
-        env:
-          PLAYWRIGHT_CORE: ${{ github.workspace }}/.github/ci-tools/node_modules/playwright-core
         run: |
           mkdir -p "$RUNNER_TEMP/screenshots"
           node scripts/browser_check.mjs "$RUNNER_TEMP/screenshots"
@@ -231,21 +253,34 @@ jobs:
 
       - name: Render check of the reference timbres
         if: steps.detect.outputs.has_render_check == 'true'
-        env:
-          PLAYWRIGHT_CORE: ${{ github.workspace }}/.github/ci-tools/node_modules/playwright-core
         run: npm run render-check
 
       - name: Page check (offline data URI, sandboxed iframe, strict CSP, loop timing, art restart)
         if: steps.detect.outputs.has_page_check == 'true'
-        env:
-          PLAYWRIGHT_CORE: ${{ github.workspace }}/.github/ci-tools/node_modules/playwright-core
         run: npm run page-check -- "$RUNNER_TEMP/screenshots"
 
       - name: Upload screenshots
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: browser-screenshots
+          name: browser-screenshots-${{ matrix.browser }}
           path: ${{ runner.temp }}/screenshots
           if-no-files-found: ignore
           retention-days: 7
+
+  # The required status check: passes only when every engine's leg passed.
+  # always() makes it run (and fail) when a leg fails; a skipped required check
+  # would count as passing.
+  browser:
+    name: browser
+    needs: browser-engine
+    if: always()
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - name: Every engine passed
+        env:
+          RESULT: ${{ needs.browser-engine.result }}
+        run: |
+          echo "browser (chromium, firefox, webkit): $RESULT"
+          test "$RESULT" = success

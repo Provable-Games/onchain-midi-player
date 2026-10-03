@@ -153,15 +153,15 @@ For the valid pages it confirms that the page's shim inflated the engine (its gz
 
 For the invalid variants it confirms that the page fails closed: the art still renders, ▶ is disabled, the error is shown (the parser's, or `engine: TinySynth did not load`), and no synth is created. (Range checks are Cairo's job: the page only parses `SETTINGS`.)
 
-For the unsafe SVG it confirms the failure the art rule prevents: Chromium ends the art block at the SVG's `</script>` (exactly where `parseArtBlock` in `scripts/reference.mjs` predicts), the art `<img>` is broken, and the rest of the SVG lands in the page as elements (its `<style>`, and a `<text>` holding the token's name). The engine and ▶ are unaffected. `scripts/art_safety.test.mjs` shows the same truncation without a browser.
+For the unsafe SVG it confirms the failure the art rule prevents: the browser (Chromium, Firefox and WebKit alike) ends the art block at the SVG's `</script>` (exactly where `parseArtBlock` in `scripts/reference.mjs` predicts), the art `<img>` is broken, and the rest of the SVG lands in the page as elements (its `<style>`, and a `<text>` holding the token's name). The engine and ▶ are unaffected. `scripts/art_safety.test.mjs` shows the same truncation without a browser.
 
-Every page must make no network requests (the gzip tag's `data:` URI included, which the check watches through the DevTools protocol) and log no console errors other than the expected ones. The repository's `npm run page-check` checks the page in more depth: in a sandboxed iframe, under a strict CSP, the inflation order, the loop timing, the art restart, and more failure variants.
+Every page must make no network requests (the gzip tag's `data:` URI included, which the check watches through Chromium's DevTools protocol; Firefox and WebKit cannot show `data:` requests, so `npm run page-check` proves it there with a CSP) and log no console errors other than the expected ones. The repository's `npm run page-check` checks the page in more depth: in a sandboxed iframe, under a strict CSP, the inflation order, the loop timing, the art restart, and more failure variants.
 
 The same player paths (the tokens' settings, unparsable settings, corrupt MIDI, a corrupt gzipped engine) are also tested without a browser in `scripts/player.test.mjs`, which runs the page's shim and player scripts in `node:vm`.
 
 ```sh
-PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
-  node scripts/browser_check.mjs
+PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromium \
+  node scripts/browser_check.mjs   # or firefox, webkit; CI runs all three
 ```
 
 ## Integration checklist for a real NFT (such as Beasts)
