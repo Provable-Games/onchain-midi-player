@@ -12,13 +12,16 @@
 //   - an animation_url: data:text/html;base64,...
 //   - the animation_url page, decoded (or the class's fixed page, tests/fixtures/page.html)
 //
-// It takes the page's one <script type="text/javascript+gzip" src="data:text/javascript;base64,...">
-// tag, base64-decodes the payload (strictly), gunzips it (which checks the gzip CRC-32 and length) and
-// prints the SHA-256 and length of:
+// It takes the one <script type="text/javascript+gzip" src="data:text/javascript;base64,..."> tag of
+// the fixed page (PAGE: everything up to the settings block and its alignment spaces; the token's
+// settings, MIDI and art follow it as raw text, so they are never searched), base64-decodes its
+// payload (strictly), gunzips it (which checks the gzip CRC-32 and length) and prints the SHA-256 and
+// length of:
 //   - the gzip payload: page_data::GZIP_SHA256 and GZIP_LEN;
 //   - the engine it inflates to: script_sha256(), and the fork's webaudio-tinysynth.min.js;
-//   - the fixed page (PAGE: everything up to the settings block and its alignment spaces):
-//     scripts/page_versions.json.
+//   - the fixed page: scripts/page_versions.json. A matching fixed page proves the rest: that the
+//     tag is the page's own engine tag, not text in a comment, and that the shim and the player
+//     around it are the class's.
 // Compare them with the README's "Versions" table. With --expect, it exits 1 unless the engine's
 // SHA-256 equals the given value: hex, with or without 0x, as script_sha256() prints it.
 
@@ -74,25 +77,27 @@ export function pageFromInput(input) {
 
 /**
  * The SHA-256 and length of the gzip payload, the engine and the fixed page in a page's HTML.
- * Throws if the page has no or several gzip tags, or the payload does not inflate.
+ * Throws if the page has no settings block, if its fixed part has no or several gzip tags outside
+ * HTML comments, or if the payload does not inflate.
  * @param {string} html latin1 string, one character per byte
  */
 export function verifyEngine(html) {
-  const tags = [...html.matchAll(GZIP_TAG)];
-  if (tags.length !== 1) throw new Error(`expected one text/javascript+gzip script tag, found ${tags.length}`);
-  const payload = strictBase64(tags[0][1], "the gzip payload");
-  const engine = gunzipSync(payload);
   // PAGE ends with the settings block's opening tag and its alignment spaces; D follows with digits.
   const settings = html.indexOf(SETTINGS_OPEN);
-  let page = null;
-  if (settings >= 0) {
-    let end = settings + SETTINGS_OPEN.length;
-    while (html[end] === " ") end++;
-    page = Buffer.from(html.slice(0, end), "latin1");
-  }
+  if (settings < 0) throw new Error("no settings block: not an onchain TinySynth page");
+  let end = settings + SETTINGS_OPEN.length;
+  while (html[end] === " ") end++;
+  const page = Buffer.from(html.slice(0, end), "latin1");
+  // Only the fixed page is markup with the engine's tag; a tag inside an HTML comment does not run.
+  const head = html.slice(0, settings);
+  const inComment = (/** @type {number} */ at) => head.lastIndexOf("<!--", at) > head.lastIndexOf("-->", at);
+  const tags = [...head.matchAll(GZIP_TAG)].filter((m) => !inComment(m.index));
+  if (tags.length !== 1) throw new Error(`expected one text/javascript+gzip script tag in the fixed page, found ${tags.length}`);
+  const payload = strictBase64(tags[0][1], "the gzip payload");
+  const engine = gunzipSync(payload);
   /** @param {Uint8Array} b */
   const digest = (b) => ({ sha256: sha256(b), length: b.length });
-  return { gzip: digest(payload), engine: digest(engine), page: page && digest(page) };
+  return { gzip: digest(payload), engine: digest(engine), page: digest(page) };
 }
 
 /**
@@ -117,7 +122,7 @@ function main() {
   const { gzip, engine, page } = verifyEngine(pageFromInput(readFileSync(args[0] === "-" ? 0 : args[0])));
   console.log(`gzip payload  sha256 ${gzip.sha256}  ${gzip.length} bytes`);
   console.log(`engine        sha256 ${engine.sha256}  ${engine.length} bytes`);
-  if (page) console.log(`fixed page    sha256 ${page.sha256}  ${page.length} bytes`);
+  console.log(`fixed page    sha256 ${page.sha256}  ${page.length} bytes`);
   if (expect !== null) {
     if (engine.sha256 !== expect) {
       console.error(`MISMATCH: the engine's SHA-256 is not ${expect}`);

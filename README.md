@@ -336,13 +336,13 @@ What a class hash fixes, and what the consumer supplies:
    ```sh
    cut -d, -f2- token_uri.txt | base64 -d \
      | grep -o '"animation_url": *"data:text/html;base64,[^"]*' | cut -d, -f2- | base64 -d \
-     | grep -o 'type="text/javascript+gzip" src="data:text/javascript;base64,[^"]*' | cut -d, -f2- \
-     | base64 -d > engine.js.gz
+     | grep -o 'type="text/javascript+gzip" src="data:text/javascript;base64,[^"]*' | head -n 1 \
+     | cut -d, -f2- | base64 -d > engine.js.gz
    sha256sum engine.js.gz              # the gzip payload
    gunzip -c engine.js.gz | sha256sum  # the engine: script_sha256()
    ```
 
-   The first `grep` expects the JSON to write `/` unescaped, as the Beasts layout does. Python's standard library parses the JSON properly, and `gzip.decompress` checks the gzip CRC-32 and length:
+   The first `grep` expects the JSON to write `/` unescaped, as the Beasts layout does. The gzip tag is the page's first: `PAGE` comes before all per-token data, so text in the art cannot take its place. Python's standard library parses the JSON properly, and `gzip.decompress` checks the gzip CRC-32 and length:
 
    ```sh
    python3 - token_uri.txt <<'EOF'
@@ -358,7 +358,7 @@ What a class hash fixes, and what the consumer supplies:
    EOF
    ```
 
-   Or, with Node 22 or later, [`scripts/verify_engine.mjs`](scripts/verify_engine.mjs) (Node built-ins only, so the file can be copied and run on its own; it also accepts the token JSON, the `animation_url` or the decoded page, and decodes base64 strictly):
+   Or, with Node 22 or later, [`scripts/verify_engine.mjs`](scripts/verify_engine.mjs) (Node built-ins only, so the file can be copied and run on its own). It also accepts the token JSON, the `animation_url` or the decoded page, decodes base64 strictly, and looks for the tag only in the fixed page, outside HTML comments:
 
    ```sh
    node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256()>
@@ -377,7 +377,7 @@ What a class hash fixes, and what the consumer supplies:
    ```
 
    The fork's `package.json` accepts any Terser 5 from 5.14.0, so the command pins the version the build was reproduced with (5.51.2). A tagged fork release with a published SHA-256 is roadmap phase 0.
-5. **Optionally, check the rest of the page and the class.** `verify_engine.mjs` also prints the SHA-256 and length of the fixed page `PAGE` (the decoded page up to the opening tag of the settings block and its alignment spaces), which [`scripts/page_versions.json`](scripts/page_versions.json) records for every `version()`. To check the class itself, check out this repository at the row's release tag, rebuild the page with `npm ci && npm run check:page` (the pinned Terser and fflate; it fails on any difference from the committed `PAGE` and `src/page_data.cairo`), run `scarb build`, compute the class hash (for example with `sncast utils class-hash --contract-name <the class's contract>`), and compare it with the row's class hash.
+5. **Optionally, check the rest of the page and the class.** `verify_engine.mjs` also prints the SHA-256 and length of the fixed page `PAGE` (the decoded page up to the opening tag of the settings block and its alignment spaces), which [`scripts/page_versions.json`](scripts/page_versions.json) records for every `version()`. A matching `PAGE` also proves that the payload you hashed sits in the page's own engine tag, the one that runs, and that the shim and the player around it are the class's. To check the class itself, check out this repository at the row's release tag, rebuild the page with `npm ci && npm run check:page` (the pinned Terser and fflate; it fails on any difference from the committed `PAGE` and `src/page_data.cairo`), run `scarb build`, compute the class hash (for example with `sncast utils class-hash --contract-name <the class's contract>`), and compare it with the row's class hash.
 
 ## Versioning
 

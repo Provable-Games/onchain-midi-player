@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ENGINE_PIN } from "./engine.mjs";
-import { pageHtml, withGzipPayload } from "./page.mjs";
+import { GZIP_OPEN, pageHtml, withGzipPayload } from "./page.mjs";
 import { normalizeSha256, pageFromInput, verifyEngine } from "./verify_engine.mjs";
 
 const SCRIPT = fileURLToPath(new URL("./verify_engine.mjs", import.meta.url));
@@ -80,6 +80,23 @@ test("a corrupt, missing or doubled gzip payload fails", () => {
   assert.throws(() => verifyEngine(withGzipPayload(page, () => null)), /found 0/);
   const tag = page.slice(page.indexOf("<script type=\"text/javascript+gzip\""), page.indexOf("</script>") + 9);
   assert.throws(() => verifyEngine(tag + page), /found 2/);
+});
+
+test("text in the art or in an HTML comment is never taken for the engine's tag", () => {
+  const html = read(`${EXAMPLE}/animation.html`).toString("latin1");
+  const at = html.indexOf(GZIP_OPEN);
+  const tag = html.slice(at, html.indexOf('"', at + GZIP_OPEN.length) + 1) + ">"; // the real tag, unclosed
+  const decoy = `${GZIP_OPEN}AA==">`;
+  // Art-safe SVGs (no `</script`) that mention a gzip tag: the token still verifies.
+  for (const extra of [`<!-- ${decoy} -->`, `<desc><![CDATA[${decoy}]]></desc>`, `<!-- ${tag} -->`]) {
+    assert.doesNotMatch(extra, /<\/script/i);
+    assert.deepEqual(verifyEngine(html.replace(/<\/svg>$/, `${extra}</svg>`)), pageData());
+  }
+  // A page without its engine tag fails, even with a copy of the tag in the art or in a comment.
+  const withoutTag = html.slice(0, at) + html.slice(html.indexOf("</script>", at) + "</script>".length);
+  assert.throws(() => verifyEngine(withoutTag.replace(/<\/svg>$/, `<!-- ${tag} --></svg>`)), /found 0/);
+  assert.throws(() => verifyEngine(withoutTag.replace("<head>", `<head><!-- ${tag} -->`)), /found 0/);
+  assert.throws(() => verifyEngine(html.replace('<script type="text/plain" id="settings">', "")), /no settings block/);
 });
 
 test("normalizeSha256 accepts a u256 printed as hex", () => {
