@@ -125,7 +125,7 @@ describe("the pinned engine behaves as the README's MIDI contract says", () => {
     assert.deepEqual(held(), [60], "one melodic note is left, and no drum voice");
   });
 
-  test("GS scale tuning survives a reload (each ▶); RPN coarse tuning does not", () => {
+  test("a reload (each ▶) resets GS scale tuning and RPN coarse tuning", () => {
     // Tick 0: C4 on channel 1; tick 96: GS scale tuning of C on part 1 (channel 1), +12 cents.
     const gs = [0xf0, 0x0a, 0x41, 0x10, 0x42, 0x12, 0x40, 0x11, 0x40, 0x4c, 0x23, 0xf7];
     const midi = smf({ ppq: PPQ, tracks: [[[0, 0x90, 60, 100], [96, 0x80, 60, 0], [0, ...gs], [96, ...EOT]]] });
@@ -137,11 +137,12 @@ describe("the pinned engine behaves as the README's MIDI contract says", () => {
     e.synth.send([0xb0, 101, 0], 1); // RPN 2, coarse tuning +1 semitone: reset by the reload
     e.synth.send([0xb0, 100, 2], 1);
     e.synth.send([0xb0, 6, 65], 1);
-    e.play(midi); // ▶ again: loadMIDI resets the channels
+    e.play(midi); // ▶ again: loadMIDI resets the channels and the scale tuning
     e.run(e.ctx.currentTime + 0.1);
+    assert.ok(near(e.synth.scaleTuning[0][0], 0), "the tuning was reset");
     const [first, second] = e.notes;
     assert.ok(near(first.freq, 440 * 2 ** (-9 / 12)), `first start: ${first.freq} Hz`);
-    assert.ok(near(second.freq, 440 * 2 ** ((-9 + 0.12) / 12)), `second start: ${second.freq} Hz, C still 12 cents sharp`);
+    assert.ok(near(second.freq, 440 * 2 ** (-9 / 12)), `second start: ${second.freq} Hz, C back in tune`);
   });
 
   test("CC123 cuts the channel's notes when scheduled; CC121 leaves sustained notes held", () => {

@@ -418,7 +418,7 @@ The kick and snare are in `scripts/settings_fixtures.mjs`. `npm run render-check
 
 What a composer can rely on, and what the page rejects. The `midi` argument of `midi_segment` is a Standard MIDI File passed as a `ByteArray`. The class embeds it as base64 and never parses it, so a file that breaks a rule here does not revert: the page shows the error, ▶ stays disabled, and the art still shows. Check files before they go onchain with [`scripts/check_midi.mjs`](#checking-midi-files), which runs the page's own check.
 
-Every rule below is fixed per class hash: the checks are `checkMidi` and `decodeMidi` in [`player/player.js`](player/player.js), and playback is the pinned TinySynth (`b70ba90`) driven by that player. A later engine pin can change the playback rules. [`scripts/engine_contract.test.mjs`](scripts/engine_contract.test.mjs) pins the less obvious ones on the pinned engine, so a re-pin that changes one of them fails `npm test`.
+Every rule below is fixed per class hash: the checks are `checkMidi` and `decodeMidi` in [`player/player.js`](player/player.js), and playback is the pinned TinySynth (`4b29ff1`) driven by that player. A later engine pin can change the playback rules. [`scripts/engine_contract.test.mjs`](scripts/engine_contract.test.mjs) pins the less obvious ones on the pinned engine, so a re-pin that changes one of them fails `npm test`.
 
 ### Accepted format
 
@@ -451,7 +451,7 @@ The rules follow from how TinySynth reads a file: it stops reading a track at En
 
 ### Playback
 
-- **Start.** Nothing plays until ▶ is pressed (a click or tap). Each ▶ reloads the MIDI and plays it from tick 0, after resetting every channel: program 0, volume (CC7) 100, pan (CC10) 64, expression (CC11) 127, modulation 0, sustain off, pitch bend centred, bend range MSB 2 (see RPN 0 below), fine, coarse and master tuning 0, and channel 10 as the only drum channel. GS scale tuning is not reset: it keeps its last value across ▶. The tempo is 120 BPM until the first tempo event. A rest before the first event is kept.
+- **Start.** Nothing plays until ▶ is pressed (a click or tap). Each ▶ reloads the MIDI and plays it from tick 0, after resetting every channel: program 0, volume (CC7) 100, pan (CC10) 64, expression (CC11) 127, modulation 0, sustain off, pitch bend centred, bend range MSB 2 (see RPN 0 below), fine, coarse, master and GS scale tuning 0, and channel 10 as the only drum channel. The tempo is 120 BPM until the first tempo event. A rest before the first event is kept.
 - **Tracks.** TinySynth merges all tracks into one list by tick; events at the same tick keep file order, track by track. A track does not loop on its own: if it ends before the others, it sends no more events until the next pass, but notes it left sounding (with no note-off yet) keep sounding.
 - **Tempo.** A tempo change takes effect at its tick, from any track. The BPM is 60,000,000 divided by the tempo value, kept fractional.
 - **Loop.** The song always loops. A pass ends at `maxTick`, the latest End-of-Track tick of any track (the player calls `setLoop(1)` and `setLoopEnd(maxTick)`), and the next pass starts at tick 0, keeping the rest before the first event.
