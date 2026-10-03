@@ -151,8 +151,9 @@ pub trait IOnchainTinySynth<T> {
     /// (the 3 Beast reference sounds: 334 bytes). Validating and encoding 6 timbres costs about
     /// 3.3M L2 gas; the largest valid `SETTINGS` (8,192 bytes) about 51M, and 32 timbres of 8
     /// operators about 56M. Base64 is the rest: with the temporary stand-in encoder (see
-    /// `base64`), about 320M for the largest real Beast score (3,716 bytes) with the reference
-    /// sounds, and about 740M with 8,192 bytes of `SETTINGS` (measurements in the README).
+    /// `base64`), about 320M for a score the size of the largest Beast score (3,716 bytes) with
+    /// the reference sounds, and about 740M with 8,192 bytes of `SETTINGS` (measurements in the
+    /// README).
     fn midi_segment(self: @T, midi: ByteArray, settings: SynthSettings) -> ByteArray;
 
     // ------------------------------------------------------------------------------------

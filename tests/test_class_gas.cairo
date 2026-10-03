@@ -5,12 +5,13 @@
 //! - `gas_lc_*`: each entry point through the library dispatcher on the declared class, the way a
 //!   consumer calls it. `gas_lc_declare` is the baseline (declaring only). The figures include
 //!   serializing the arguments and the result, which a consumer pays too.
-//! - `gas_ms_*`: `midi_segment` across MIDI sizes (no MIDI, then the real Beast scores of 816 to
-//!   3,716 bytes) and `SETTINGS` sizes (16, 334, 504, 7,437 and 8,192 bytes), called directly. Per
-//!   cell, `build` only builds the inputs (the baseline), `d` builds `D` (validation, `SETTINGS`,
-//!   `b64(midi)` and the appends), and `full` is the whole `midi_segment`; `full - d` is the two
-//!   outer base64 passes. `gas_b64_midi_*` is `b64(midi)` alone, net of building the MIDI.
-//!   `validate` and `encode` alone are in `test_settings_gas.cairo`.
+//! - `gas_ms_*`: `midi_segment` across MIDI sizes (no MIDI, then the synthetic scores of 816 to
+//!   3,716 bytes, the sizes of the production Beast scores) and `SETTINGS` sizes (16, 334, 504,
+//!   7,437 and 8,192 bytes), called directly. Per cell, `build` only builds the inputs (the
+//!   baseline), `d` builds `D` (validation, `SETTINGS`, `b64(midi)` and the appends), and `full` is
+//!   the whole `midi_segment`; `full - d` is the two outer base64 passes. `gas_b64_midi_*` is
+//!   `b64(midi)` alone, net of building the MIDI. `validate` and `encode` alone are in
+//!   `test_settings_gas.cairo`.
 
 use onchain_tinysynth::base64::bytes_base64_encode;
 use onchain_tinysynth::interface::IOnchainTinySynthDispatcherTrait;
