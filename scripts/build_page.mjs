@@ -41,8 +41,8 @@ import { ENGINE_PIN, engineSource } from "./engine.mjs";
 import { pageFixtures } from "./gen_page_fixtures.mjs";
 import {
   GZIP_CLOSE, GZIP_OPEN, PAGE_PATH, PAGE_VERSIONS_PATH, SETTINGS_OPEN, SHIM_PIN, VERSION, b64, blen, bytes,
-  cairoByteArrayConst, checkPage, checkPageVersion, countCI, licenseText, padLen, pageScripts, segmentFor, sha256,
-  shimLicense, spaces,
+  cairoBase64Literal, cairoByteArrayConst, checkPage, checkPageVersion, countCI, licenseText, padLen, pageScripts,
+  segmentFor, sha256, shimLicense, spaces,
 } from "./page.mjs";
 import { gunzip } from "../player/gunzip.js";
 import { PLAY_ICON } from "../player/player.js";
@@ -255,8 +255,10 @@ pub const GZIP_LEN: u32 = ${sizes.gzip};
 /// \`version()\`: the engine pin and the page version.
 pub const VERSION: felt252 = '${VERSION}';
 
-${cairoByteArrayConst("animation_url_segment", "ANIMATION_URL_SEGMENT", segment, [
+${cairoBase64Literal("animation_url_segment", segment, [
   "The `animation_url` JSON member, pre-encoded at both layers, left open for `midi_segment()`.",
+  "A string literal: the compiler stores its words as constants, which is the cheapest way to",
+  "materialize it (see `cairoBase64Literal` in scripts/page.mjs).",
 ])}
 
 ${cairoByteArrayConst("license", "LICENSE", license, [
@@ -265,7 +267,8 @@ ${cairoByteArrayConst("license", "LICENSE", license, [
 ])}
 `;
   // scarb fmt rewraps comment lines longer than 100 characters; keep the output formatter-stable.
-  const long = src.split("\n").find((line) => line.length > 100);
+  // It leaves string literals alone: the segment's base64 literal is the only long line.
+  const long = src.split("\n").find((line) => line.length > 100 && !/^ {4}"[A-Za-z0-9+/=]*"$/.test(line));
   if (long) throw new Error(`generated Cairo line longer than 100 characters: ${long}`);
   return src;
 }

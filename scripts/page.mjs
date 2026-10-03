@@ -382,6 +382,21 @@ export function constFeltArray(name, felts) {
 }
 
 /**
+ * A ByteArray constant as a string literal in a function body. The compiler lowers a literal to
+ * the ByteArray's words as constants, so materializing it costs a fraction of deserializing a
+ * `const` felt array (0.28M against 3.70M L2 gas for the 42,644-byte segment), for a larger class
+ * (about 2,100 more CASM felts). Only for base64 text, which needs no escaping; `scarb fmt` leaves
+ * the long literal line alone.
+ * @param {string} fnName
+ * @param {string} text
+ * @param {string[]} doc
+ */
+export function cairoBase64Literal(fnName, text, doc) {
+  if (!/^[A-Za-z0-9+/=]*$/.test(text)) throw new Error(`${fnName}: not base64 text`);
+  return [...doc.map((l) => (l ? `/// ${l}` : "///")), `pub fn ${fnName}() -> ByteArray {`, `    "${text}"`, "}"].join("\n");
+}
+
+/**
  * A ByteArray constant: its Serde felts in a `const` fixed-size array (stored once in the class's
  * bytecode, the cheapest form of constant data in Cairo) and a function that deserializes it.
  * Formatter-stable output.
