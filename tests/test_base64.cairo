@@ -1,7 +1,7 @@
-//! Correctness of the crate's base64 encoder (`base64::bytes_base64_encode`), which is a temporary
-//! stand-in for the optimized encoder (see `src/base64.cairo`). These tests guard whatever encoder
-//! is in place: they must pass unchanged after the swap. Expected outputs come from RFC 4648 and
-//! from Node's encoder (the JS reference, `tests/class_fixtures.cairo`).
+//! Correctness of the crate's base64 encoder (`base64::bytes_base64_encode`, re-exported from the
+//! `game_components_encoding` package; see `src/base64.cairo`). These tests guard whatever encoder
+//! is in place: they passed unchanged when it replaced the byte-wise stand-in. Expected outputs
+//! come from RFC 4648 and from Node's encoder (the JS reference, `tests/class_fixtures.cairo`).
 
 use onchain_tinysynth::base64::bytes_base64_encode;
 use onchain_tinysynth::interface::IOnchainTinySynthDispatcherTrait;

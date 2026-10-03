@@ -1,16 +1,16 @@
-//! Gas of the class (`snforge test gas_`), in L2 gas. Results are in the README, labelled "with the
-//! stand-in encoder (v1)" where base64 is involved: they change when the optimized encoder replaces
-//! the stand-in (`src/base64.cairo`).
+//! Gas of the class (`snforge test gas_`), in L2 gas, with the optimized encoder
+//! (`game_components_encoding`, see `src/base64.cairo`). Results are in the README.
 //!
 //! - `gas_lc_*`: each entry point through the library dispatcher on the declared class, the way a
 //!   consumer calls it. `gas_lc_declare` is the baseline (declaring only). The figures include
 //!   serializing the arguments and the result, which a consumer pays too.
-//! - `gas_ms_*`: `midi_segment` across MIDI sizes (no MIDI, then the real Beast scores of 816 to
-//!   3,716 bytes) and `SETTINGS` sizes (16, 334, 504, 7,437 and 8,192 bytes), called directly. Per
-//!   cell, `build` only builds the inputs (the baseline), `d` builds `D` (validation, `SETTINGS`,
-//!   `b64(midi)` and the appends), and `full` is the whole `midi_segment`; `full - d` is the two
-//!   outer base64 passes. `gas_b64_midi_*` is `b64(midi)` alone, net of building the MIDI.
-//!   `validate` and `encode` alone are in `test_settings_gas.cairo`.
+//! - `gas_ms_*`: `midi_segment` across MIDI sizes (no MIDI, then the synthetic scores of 816 to
+//!   3,716 bytes, the sizes of the production Beast scores) and `SETTINGS` sizes (16, 334, 504,
+//!   7,437 and 8,192 bytes), called directly. Per cell, `build` only builds the inputs (the
+//!   baseline), `d` builds `D` (validation, `SETTINGS`, `b64(midi)` and the appends), and `full` is
+//!   the whole `midi_segment`; `full - d` is the two outer base64 passes. `gas_b64_midi_*` is
+//!   `b64(midi)` alone, net of building the MIDI. `validate` and `encode` alone are in
+//!   `test_settings_gas.cairo`.
 
 use onchain_tinysynth::base64::bytes_base64_encode;
 use onchain_tinysynth::interface::IOnchainTinySynthDispatcherTrait;
@@ -128,7 +128,7 @@ fn gas_lc_version() {
 
 #[test]
 fn gas_lc_license() {
-    assert(class().license().len() == 4104, 'license');
+    assert(class().license().len() == 5721, 'license');
 }
 
 // ------------------------------------------------------------------------------------------------

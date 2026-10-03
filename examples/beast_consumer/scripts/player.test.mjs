@@ -36,7 +36,7 @@ for (const id of [1, 2, 3]) {
   });
 }
 
-test('token 4 (a real Beast): its SVG shown, ▶ installs the reference sounds and loops at the score\'s End-of-Track', async () => {
+test('token 4 (a full-size Beast): its SVG shown, ▶ installs the reference sounds and loops at the score\'s End-of-Track', async () => {
   const p = tokenParts(4);
   const h = runPage(animationHtml(4), { engine: 'real' });
   h.ready();
@@ -50,7 +50,7 @@ test('token 4 (a real Beast): its SVG shown, ▶ installs the reference sounds a
   assert.equal(synth.drummap[36 - 35].p[0].p, 0.2813, 'reference kick on drum 36 (pitch drop)');
   assert.equal(synth.drummap[38 - 35].p[1].p, 0.55, 'reference snare on drum 38 (square body)');
   assert.equal(synth.loop, 1);
-  assert.equal(synth.loopEnd, 49440, 'End-of-Track of the heaviest score');
+  assert.equal(synth.loopEnd, 58560, 'End-of-Track of the heaviest score');
   assert.deepEqual(h.consoleErrors, []);
 });
 

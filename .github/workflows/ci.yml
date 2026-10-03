@@ -145,6 +145,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # The synthetic MIDI scores (tests/fixtures/midi/scores.json), which the example's fixtures and
+      # the class fixtures (check:page) are built from. Node built-ins only; needs no npm install.
+      - name: Regenerate the synthetic MIDI scores
+        run: node scripts/gen_midi_fixtures.mjs
+
       # Reads the committed page (tests/fixtures/page.html); needs no npm install.
       - name: Regenerate the example's fixtures
         working-directory: examples/beast_consumer

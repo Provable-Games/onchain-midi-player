@@ -13,8 +13,8 @@
   "segment_prefix": "\"animation_url\":\"data:text/html;base64,",
   "segment_len": 42644,
   "segment_sha256": "8ba25cffc222810ca13377e1926381430d5e695deacc3af237f16acb2dfe74a9",
-  "license_len": 4104,
-  "license_sha256": "cf777078129bb712f5f61cc244d873a46a74df80af48b1b738fe47e4e1381a39"
+  "license_len": 5721,
+  "license_sha256": "856d913e6f456f47482db298ac88cf523fadca9e395f6e47ec2882620b77afad"
  },
  "valid": [
   {

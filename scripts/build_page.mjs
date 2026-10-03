@@ -266,7 +266,8 @@ ${cairoBase64Literal("animation_url_segment", segment, [
 
 ${cairoByteArrayConst("license", "LICENSE", license, [
   "`license()`: the Apache-2.0 notice for this library and the embedded engine, including the",
-  `fork's list of modifications (${sizes.license} bytes).`,
+  "fork's list of modifications, then the MIT licenses of fflate (the gunzip shim) and",
+  `game-components (the base64 encoder) (${sizes.license} bytes).`,
 ])}
 `;
   // scarb fmt rewraps comment lines longer than 100 characters; keep the output formatter-stable.
