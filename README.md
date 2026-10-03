@@ -450,7 +450,7 @@ The rules follow from how TinySynth reads a file: it stops reading a track at En
 ### Playback
 
 - **Start.** Nothing plays until ▶ is pressed (a click or tap). Each ▶ reloads the MIDI and plays it from tick 0, after resetting every channel: program 0, volume (CC7) 100, pan (CC10) 64, expression (CC11) 127, modulation 0, sustain off, pitch bend centred, bend range MSB 2 (see RPN 0 below), fine, coarse and master tuning 0, and channel 10 as the only drum channel. GS scale tuning is not reset: it keeps its last value across ▶. The tempo is 120 BPM until the first tempo event. A rest before the first event is kept.
-- **Tracks.** TinySynth merges all tracks into one list by tick; events at the same tick keep file order, track by track. A track does not loop on its own: if it ends before the others, it is silent until the pass ends.
+- **Tracks.** TinySynth merges all tracks into one list by tick; events at the same tick keep file order, track by track. A track does not loop on its own: if it ends before the others, it sends no more events until the next pass, but notes it left sounding (with no note-off yet) keep sounding.
 - **Tempo.** A tempo change takes effect at its tick, from any track. The BPM is 60,000,000 divided by the tempo value, kept fractional.
 - **Loop.** The song always loops. A pass ends at `maxTick`, the latest End-of-Track tick of any track (the player calls `setLoop(1)` and `setLoopEnd(maxTick)`), and the next pass starts at tick 0, keeping the rest before the first event.
 - **State between passes.** At each loop point the tempo returns to 120 BPM, and a tempo event at tick 0 applies at once. Nothing else is reset: programs, controllers, pitch bend, RPN settings and tuning carry over from the end of the previous pass, and notes still sounding at End-of-Track keep sounding. Events at tick 0 run again on every pass, so a song that sets its state at tick 0 starts every pass the same way. Otherwise the first pass starts from the defaults above, and later passes from wherever the previous one ended.
@@ -545,10 +545,11 @@ npm run check-midi -- song.mid                        # the same, through npm
     32 bytes
   ```
 - **Exit status.** 0 if every score passes, 1 if any fails, and 2 for a usage error or an input it cannot read (a missing file, invalid JSON, or JSON with no `midi_b64` string), so it can gate another repository's CI.
-- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player: for a declared class version, check out its release tag (see [Versions](#versions)). In another repository's CI, for example:
+- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player, and a declared class keeps the player it was declared with. So pin the checkout to the release tag of the class version your consumer stores (see [Versions](#versions)). Until a class is declared there is no tag, and `main` is the only choice; it tracks the page under development. In another repository's CI, for example:
 
   ```sh
-  git clone --depth 1 https://github.com/Provable-Games/onchain-tinysynth "$RUNNER_TEMP/onchain-tinysynth"
+  TAG=main   # the release tag of the class version you target, from the Versions table, once one is declared
+  git clone --depth 1 --branch "$TAG" https://github.com/Provable-Games/onchain-tinysynth "$RUNNER_TEMP/onchain-tinysynth"
   node "$RUNNER_TEMP/onchain-tinysynth/scripts/check_midi.mjs" path/to/*.mid
   ```
 

@@ -84,6 +84,17 @@ describe("the pinned engine behaves as the README's MIDI contract says", () => {
     assert.ok(near(e.offs[1] - second.t, 0.5), `note-off ${e.offs[1] - second.t} s after the note`);
   });
 
+  test("a track that ends early sends no more events, but a note it left sounding keeps sounding", () => {
+    // Track 1: a note with no note-off, End-of-Track at 96 (0.5 s). Track 2: End-of-Track at 384 (2 s).
+    const midi = smf({ format: 1, ppq: PPQ, tracks: [[[0, 0x90, 60, 100], [96, ...EOT]], [[384, ...EOT]]] });
+    const e = engine();
+    e.play(midi);
+    e.run(1.8); // past the early End-of-Track, before the pass ends at 2.1 s
+    const held = Array.from(e.synth.notetab, (/** @type {any} */ n) => [n.n, n.f, n.e]);
+    assert.deepEqual(held, [[60, 0, 99999]], "still held: no note-off, no release");
+    assert.deepEqual(e.offs, []);
+  });
+
   test("the voice limit cuts a note when the new note is scheduled, before it sounds", () => {
     // voices 1: a held note at tick 0, and a second note at tick 192 (1 s later).
     const midi = smf({ ppq: PPQ, tracks: [[[0, 0x90, 60, 100], [192, 0x90, 64, 100], [96, 0x80, 60, 0], [0, 0x80, 64, 0], [96, ...EOT]]] });
