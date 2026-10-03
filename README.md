@@ -356,6 +356,18 @@ A stub class serving only the `page_data` constants (`animation_url_segment`, `s
 
 The constants take about 8% of the class size limit and 4% of the bytecode limit.
 
+### Segment gas
+
+The segment's size sets its cost at every step of a consumer's `token_uri`: the class materializes it, the library call returns it, the consumer appends it to its `ByteArray`, and `token_uri` returns it again. [`tests/test_page_gas.cairo`](tests/test_page_gas.cairo) (`snforge test gas_segment`) measures materializing and appending it, in L2 gas:
+
+| | L2 gas |
+| --- | --- |
+| Materializing `animation_url_segment()` (78,804 bytes) | 6.83M |
+| Appending it to a `ByteArray` with no pending bytes (word-aligned) | +4.00M |
+| Appending it after the 29-byte `data:application/json;base64,` (unaligned) | +17.25M |
+
+The library call that returns it to a consumer costs 10.82M in the example's gas report (see [`examples/beast_consumer`](examples/beast_consumer/README.md#gas-informational)).
+
 ## Roadmap
 
 0. **Fork release with fixes** (in the `webaudio-tinysynth` fork): MIDI parser bounds fix (#4), pinned tagged build with a published SHA-256 (#5), deterministic reverb and noise buffers (#7), custom waveform API (#26) and per-operator filter (#27). Fractional tempo and `loopEnd` are already merged.
