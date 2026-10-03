@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // @ts-check
-// Optional headless check: renders the Beast reference timbres with the real TinySynth in headless
-// Chromium, through the player's own decodeSettings + createSynth, into an OfflineAudioContext, and
+// Optional headless check: renders the Beast reference timbres with the real TinySynth in a headless
+// browser (Chromium, Firefox or WebKit), through the player's own decodeSettings + createSynth, into
+// an OfflineAudioContext, and
 // measures the audio. The engine is loaded as PAGE carries it: PAGE's gzip tag and gunzip shim,
 // which inflate the vendored fork build (scripts/engine.mjs) in the browser; the check first confirms
 // that the shim replaced the tag with the engine, byte for byte. Then:
@@ -13,25 +14,21 @@
 //              3x by 100-150 ms; silent after 200 ms
 //
 // The noise buffers are random until fork #7, so the checks use tolerances. Playwright is not a
-// dependency of this repository; point the script at an existing install:
+// dependency of this repository; point the script at an existing install, and pick the engine
+// (scripts/browsers.mjs):
 //
 //   PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core \
-//   CHROME=/path/to/chrome-headless-shell [LD_LIBRARY_PATH=...] \
+//   PLAYWRIGHT_BROWSER=chromium|firefox|webkit \
+//   [CHROME=/path/to/chrome-headless-shell] [LD_LIBRARY_PATH=...] \
 //   node scripts/render_check.mjs
 //
-// Exits 0 when every check passes, 1 when one fails, 2 when PLAYWRIGHT_CORE is not set.
+// Exits 0 when every check passes, 1 when one fails, 2 when PLAYWRIGHT_CORE is not set or
+// PLAYWRIGHT_BROWSER names no supported engine.
 
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { launchBrowser } from "./browsers.mjs";
 import { engineSource } from "./engine.mjs";
 import { GZIP_CLOSE, GZIP_OPEN, pageHtml, pageScripts } from "./page.mjs";
-
-const { PLAYWRIGHT_CORE, CHROME } = process.env;
-if (!PLAYWRIGHT_CORE) {
-  console.error("set PLAYWRIGHT_CORE to a playwright-core directory (and CHROME to a Chromium binary)");
-  process.exit(2);
-}
-const { chromium } = createRequire(import.meta.url)(PLAYWRIGHT_CORE);
 
 const fixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/settings.json", import.meta.url), "utf8"));
 const beastText = fixtures.valid.find((/** @type {any} */ f) => f.name === "beast_reference").settings_text;
@@ -39,7 +36,7 @@ const beastText = fixtures.valid.find((/** @type {any} */ f) => f.name === "beas
 const playerModule = readFileSync(new URL("../player/settings.js", import.meta.url), "utf8") +
   "\nwindow.__player = { decodeSettings, createSynth };\n";
 
-const browser = await chromium.launch(CHROME ? { executablePath: CHROME } : {});
+const { browser } = await launchBrowser();
 let failed = 0;
 try {
   const page = await browser.newPage();
