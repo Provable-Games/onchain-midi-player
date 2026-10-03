@@ -86,14 +86,14 @@ Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) recor
 
 | | Bytes |
 | --- | --- |
-| `PAGE` | 45,297 |
+| `PAGE` | 45,315 |
 | of which the engine | 37,060 |
-| of which the player (minified) | 7,041 |
-| `PAGE` without the player's settings range re-check (`validateSettings`) | 44,010 (1,287 less) |
-| `animation_url_segment()` | 80,580 |
+| of which the player (minified) | 7,064 |
+| `PAGE` without the player's settings range re-check (`validateSettings`) | 44,037 (1,278 less) |
+| `animation_url_segment()` | 80,612 |
 | `license()` | 2,594 |
 
-The range re-check stays for now (spec Q4); dropping it would save the 1,287 bytes above.
+The range re-check stays for now (spec Q4); dropping it would save the 1,278 bytes above.
 
 The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own minified player script in `node:vm` against a fake DOM, with a recording engine and with the real engine on a WebAudio mock) and in headless Chromium (`npm run page-check`: as an offline `data:` URI, in a sandboxed iframe and under a strict CSP; the loop period against `maxTick x tick2Time`, the art restart by screenshots of a probe animation, and the failure paths).
 
@@ -334,7 +334,7 @@ The engine tests, the page build and the page checks use the vendored engine (`t
    - [`src/page_data.cairo`](src/page_data.cairo) (generated, do not edit): `animation_url_segment()` pre-encoded at both base64 layers, `PAGE_LEN`, `SEGMENT_LEN`, `ENGINE_SHA256`, `VERSION` and `license()`. The large constants are `const` felt arrays (stored once as data in the class bytecode) deserialized into a `ByteArray`; materializing the segment costs about 7.0M L2 gas;
    - the golden fixtures for the class: [`tests/fixtures/page.json`](tests/fixtures/page.json) and [`tests/page_fixtures.cairo`](tests/page_fixtures.cairo) (below).
 
-`VERSION` is `tinysynth-<engine ref>+page.<PAGE_VERSION>`; bump `PAGE_VERSION` in [`scripts/page.mjs`](scripts/page.mjs) whenever the page changes in a class that will be declared.
+`VERSION` is `tinysynth-<engine ref>+page.<PAGE_VERSION>`. [`scripts/page_versions.json`](scripts/page_versions.json) records the SHA-256 of `PAGE` for every `VERSION`, and the build (and `check:page`) fails if the page changes while `VERSION` stays the same. To change the page: bump `PAGE_VERSION` in [`scripts/page.mjs`](scripts/page.mjs) (a re-pin changes `VERSION` by itself), then run `npm run gen:page -- --record`.
 
 ### Golden fixtures
 
@@ -351,9 +351,9 @@ A stub class serving only the `page_data` constants (`animation_url_segment`, `s
 
 | | Stub class | Same class, empty constants | Limit |
 | --- | --- | --- | --- |
-| Sierra program | 7,370 felts | 204 felts | |
+| Sierra program | 7,372 felts | 204 felts | |
 | Contract class as declared (Sierra, entry points, ABI) | 324 KB | 9 KB | 4,089,446 bytes |
-| CASM bytecode | 3,738 felts | 311 felts | 81,920 felts |
+| CASM bytecode | 3,739 felts | 311 felts | 81,920 felts |
 
 The constants take about 8% of the class size limit and 4% of the bytecode limit.
 

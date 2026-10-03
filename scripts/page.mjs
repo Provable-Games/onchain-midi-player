@@ -22,11 +22,38 @@ import { ENGINE_PIN, engineNotice } from "./engine.mjs";
 export const PAGE_PATH = new URL("../tests/fixtures/page.html", import.meta.url);
 
 /**
- * Version of the page (player, markup and styles). Bump it whenever PAGE changes in a class that will
- * be declared. VERSION, returned by version(), combines it with the engine pin.
+ * Version of the page (player, markup and styles). VERSION, returned by version(), combines it with
+ * the engine pin. scripts/page_versions.json records the SHA-256 of PAGE for every VERSION, and the
+ * build fails when PAGE changes under a recorded VERSION: bump PAGE_VERSION (or re-pin the engine),
+ * then record the new VERSION with `npm run gen:page -- --record`.
  */
 export const PAGE_VERSION = 1;
 export const VERSION = `tinysynth-${ENGINE_PIN.ref}+page.${PAGE_VERSION}`;
+export const PAGE_VERSIONS_PATH = new URL("./page_versions.json", import.meta.url);
+
+/**
+ * Checks that `version` names exactly this PAGE in the record of versions (VERSION -> sha256(PAGE)),
+ * so version() can never stay the same while the page changes. With `record`, a VERSION not yet in
+ * it is added. Returns the (possibly extended) record; throws if the page changed under a recorded
+ * VERSION, or if VERSION is new and `record` is false.
+ * @param {Record<string, string>} versions
+ * @param {string} version
+ * @param {string} digest sha256(PAGE)
+ * @param {{record?: boolean}} [options]
+ */
+export function checkPageVersion(versions, version, digest, { record = false } = {}) {
+  const known = versions[version];
+  if (known === digest) return versions;
+  if (known !== undefined) {
+    throw new Error(`PAGE changed (sha256 ${digest}) but VERSION ${version} is recorded for sha256 ${known}: ` +
+      "bump PAGE_VERSION in scripts/page.mjs (or re-pin the engine), then run npm run gen:page -- --record");
+  }
+  for (const [v, d] of Object.entries(versions)) {
+    if (d === digest) throw new Error(`this PAGE is already recorded as ${v}; VERSION ${version} would name it twice`);
+  }
+  if (!record) throw new Error(`VERSION ${version} is not recorded in scripts/page_versions.json: run npm run gen:page -- --record`);
+  return { ...versions, [version]: digest };
+}
 
 /** The text license() returns: this library's notice and license, then the embedded engine's. */
 export function licenseText() {

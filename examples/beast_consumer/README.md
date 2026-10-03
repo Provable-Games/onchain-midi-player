@@ -64,9 +64,9 @@ The three example tokens are chosen so that every pad length occurs:
 
 | token | name | head pad | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 0 | 2 | 4 | 85,437 |
-| 2 | Night's Wyvern | 2 | 0 | 5 | 85,465 |
-| 3 | Fen-Troll | 1 | 1 | 6 | 85,449 |
+| 1 | Warlock | 0 | 2 | 4 | 85,469 |
+| 2 | Night's Wyvern | 2 | 0 | 5 | 85,497 |
+| 3 | Fen-Troll | 1 | 1 | 6 | 85,481 |
 
 Only `reverb` varies between tokens (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding.
 

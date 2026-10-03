@@ -265,6 +265,9 @@ export function startPlayer() {
           synth.loadMIDI(midi);
           synth.setLoop(1);
           synth.setLoopEnd(synth.maxTick);
+          // loadMIDI leaves playTick at the first event's tick; playMIDI resets it to 0 when that
+          // is End-of-Track's tick.
+          const first = synth.playTick;
           synth.playMIDI();
           // The art restarts with tick 0: TinySynth plays from playTime, plus the output latency.
           const delay = synth.playTime - ctx.currentTime + (ctx.outputLatency || 0);
@@ -272,7 +275,8 @@ export function startPlayer() {
           // TinySynth plays the first event at playTime whatever its tick, so a leading rest
           // would be lost on the first pass. Restore it, timed as TinySynth times it on every
           // later pass (at the starting 120 BPM: no tempo event can precede the first event).
-          synth.playTime += synth.playTick * synth.tick2Time;
+          synth.playTick = first;
+          synth.playTime += first * synth.tick2Time;
         }).catch((/** @type {unknown} */ e) => {
           setPlaying(false);
           fail(e);

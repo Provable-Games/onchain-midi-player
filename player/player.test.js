@@ -348,6 +348,21 @@ describe("the page's player script, real engine", () => {
     assert.ok(Math.abs(ons[1] - (tick0 + 1.5)) < 1e-9, "the next pass keeps the rest too");
   });
 
+  test("a leading rest is kept when the only event is at End-of-Track's tick", async () => {
+    // A drum hit at tick 96 (0.5 s), then End-of-Track at the same tick: a 0.5 s loop.
+    const midi = smf({ ppq: 96, tracks: [[[96, 0x99, 36, 100], [0, 0xff, 0x2f, 0]]] });
+    const h = runPage(edited(CASES.default_120bpm, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0 });
+    h.ready();
+    h.click();
+    const tick0 = h.synths[0].getAudioContext().currentTime + 0.1;
+    await h.flush();
+    h.advance(1.8);
+    /** @type {number[]} */
+    const hits = h.synths[0].sent.filter((/** @type {any} */ [m]) => m[0] === 0x99).map((/** @type {any} */ x) => x[1] - tick0);
+    assert.ok(hits.length >= 3);
+    hits.slice(0, 3).forEach((t, i) => assert.ok(Math.abs(t - 0.5 * (i + 1)) < 1e-9, `hit ${i} at ${t} s, expected ${0.5 * (i + 1)} s`));
+  });
+
   test("the custom timbres are installed in the real engine", async () => {
     const h = runPage(htmlOf(CASES.beast_140bpm), { engine: "real" });
     h.ready();

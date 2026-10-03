@@ -20,6 +20,10 @@
 // Usage (repository root, after `npm ci`):
 //   node scripts/build_page.mjs           write the files and print the sizes   (npm run gen:page)
 //   node scripts/build_page.mjs --check   exit 1 if any file is out of date     (npm run check:page)
+//   node scripts/build_page.mjs --record  also record a new VERSION in scripts/page_versions.json
+//
+// Every run fails if PAGE changed while VERSION stayed the same (scripts/page_versions.json maps
+// each VERSION to the SHA-256 of its PAGE): bump PAGE_VERSION in scripts/page.mjs, then --record.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -27,8 +31,8 @@ import { minify } from "terser";
 import { ENGINE_PIN, engineSource } from "./engine.mjs";
 import { pageFixtures } from "./gen_page_fixtures.mjs";
 import {
-  PAGE_PATH, SETTINGS_OPEN, VERSION, blen, cairoByteArrayConst, checkPage, countCI, licenseText, padLen, segmentFor,
-  sha256, spaces,
+  PAGE_PATH, PAGE_VERSIONS_PATH, SETTINGS_OPEN, VERSION, blen, cairoByteArrayConst, checkPage, checkPageVersion,
+  countCI, licenseText, padLen, segmentFor, sha256, spaces,
 } from "./page.mjs";
 import { PLAY_ICON } from "../player/player.js";
 
@@ -195,8 +199,17 @@ ${cairoByteArrayConst("license", "LICENSE", license, [
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { page, cairo, fixtures, sizes } = await build();
+  const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
+  let recorded;
+  try {
+    recorded = checkPageVersion(versions, VERSION, sha256(page), { record: process.argv.includes("--record") });
+  } catch (e) {
+    console.error(/** @type {Error} */ (e).message);
+    process.exit(1);
+  }
   const files = /** @type {Array<[URL, string]>} */ ([
     [PAGE_PATH, page], [CAIRO_PATH, cairo], [FIXTURES_JSON_PATH, fixtures.json], [FIXTURES_CAIRO_PATH, fixtures.cairo],
+    [PAGE_VERSIONS_PATH, JSON.stringify(recorded, null, 2) + "\n"],
   ]);
   if (process.argv.includes("--check")) {
     const stale = files.filter(([path, text]) => {

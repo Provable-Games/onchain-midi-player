@@ -26,5 +26,6 @@ To a later commit, or to a tagged fork release once the fork publishes them:
    `npm ci && npm run build`, compare).
 2. `node scripts/vendor_engine.mjs <fork checkout> <commit or tag>` copies the two files here (named after the short
    commit or the tag) and prints the new `ENGINE_PIN` line. It only reads the checkout.
-3. Replace the `ENGINE_PIN` line in `scripts/engine.mjs`, delete the old files here, and run `npm run gen:page`. The
+3. Replace the `ENGINE_PIN` line in `scripts/engine.mjs`, delete the old files here, and run
+   `npm run gen:page -- --record` (the new engine ref is a new `VERSION`). The
    page, `src/page_data.cairo` (including `VERSION`, `ENGINE_SHA256` and the license text) and the fixtures follow.
