@@ -37,9 +37,9 @@ pub const PAGE_SHA256: u256 = 0x60e4ff78b0f686f4d646e9ec80948ab7b0843cff0c3ed2f2
 /// SHA-256 of `animation_url_segment()`, 42644 bytes.
 pub const SEGMENT_SHA256: u256 = 0x8ba25cffc222810ca13377e1926381430d5e695deacc3af237f16acb2dfe74a9;
 
-/// SHA-256 of `license()`, 4104 bytes.
-pub const LICENSE_SHA256: u256 = 0xcf777078129bb712f5f61cc244d873a46a74df80af48b1b738fe47e4e1381a39;
-pub const LICENSE_LEN: u32 = 4104;
+/// SHA-256 of `license()`, 5721 bytes.
+pub const LICENSE_SHA256: u256 = 0x856d913e6f456f47482db298ac88cf523fadca9e395f6e47ec2882620b77afad;
+pub const LICENSE_LEN: u32 = 5721;
 
 /// SHA-256 of the engine (the pinned fork build, commit b70ba90).
 pub const ENGINE_SHA256: u256 = 0x5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c;

@@ -199,6 +199,7 @@ pub trait IOnchainTinySynth<T> {
     /// Returns the license notice for this class: Apache License 2.0, covering both this
     /// library and the embedded TinySynth engine (upstream copyright notice plus the
     /// notice describing the modifications made in the Provable-Games fork), then the MIT
-    /// License of fflate, from which the page's gunzip shim is derived.
+    /// License of fflate, from which the page's gunzip shim is derived, and the MIT License of
+    /// game-components, whose base64 encoder (`game_components_encoding`) the class embeds.
     fn license(self: @T) -> ByteArray;
 }

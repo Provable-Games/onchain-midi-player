@@ -9,7 +9,8 @@
 //! 652b349baa0059f1c51a060676068bf6180fd895; SHA-256 of its `src/encoding.cairo`
 //! ef6d2fc50e1b5d1d81cd81091d3c34402ad41ebcd670d03e38a2a82b74c13883). It encodes 93-byte blocks
 //! into four 31-byte words, and uses the unstable corelib features `bounded-int-utils`,
-//! `byte-span` and `corelib-get-trait`.
+//! `byte-span` and `corelib-get-trait`. It is MIT licensed: its notice is in NOTICE and in
+//! `license()`.
 //!
 //! This module re-exports it, so the crate keeps one path for its encoder. The tests in
 //! `tests/test_base64.cairo` and every golden fixture check its output.
