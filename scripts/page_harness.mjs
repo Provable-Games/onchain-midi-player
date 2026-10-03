@@ -205,13 +205,13 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
         return Promise.resolve();
       } };
       /** @type {Record<string, any>} */
-      const synth = { opts, ctx, maxTick: 0, playTime: 0, timbres: [] };
+      const synth = { opts, ctx, maxTick: 0, playTime: 0, playTick: 0, tick2Time: 0.01, timbres: [] };
       const record = (/** @type {string} */ name, /** @type {(...a: any[]) => void} */ f = () => {}) => (/** @type {any[]} */ ...args) => { calls.push([name, ...args]); f(...args); };
       Object.assign(synth, {
         getAudioContext: () => ctx,
         setQuality: record("setQuality"), setMasterVol: record("setMasterVol"), setReverbLev: record("setReverbLev"),
         setVoices: record("setVoices"), setTimbre: record("setTimbre"), setLoop: record("setLoop"), setLoopEnd: record("setLoopEnd"),
-        loadMIDI: record("loadMIDI", (/** @type {Uint8Array} */ bytes) => { synth.maxTick = 4242; synth.midi = bytes; }),
+        loadMIDI: record("loadMIDI", (/** @type {Uint8Array} */ bytes) => { synth.maxTick = 4242; synth.playTick = 0; synth.midi = bytes; }),
         playMIDI: record("playMIDI", () => { synth.playTime = ctx.currentTime + 0.1; }),
         stopMIDI: record("stopMIDI"),
       });

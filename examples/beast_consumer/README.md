@@ -64,9 +64,9 @@ The three example tokens are chosen so that every pad length occurs:
 
 | token | name | head pad | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 0 | 2 | 4 | 85,277 |
-| 2 | Night's Wyvern | 2 | 0 | 5 | 85,305 |
-| 3 | Fen-Troll | 1 | 1 | 6 | 85,289 |
+| 1 | Warlock | 0 | 2 | 4 | 85,437 |
+| 2 | Night's Wyvern | 2 | 0 | 5 | 85,465 |
+| 3 | Fen-Troll | 1 | 1 | 6 | 85,449 |
 
 Only `reverb` varies between tokens (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding.
 
@@ -162,8 +162,8 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
 
 | Call | L2 gas |
 | --- | --- |
-| `BeastLikeNft.token_uri`, tokens 1-3 | 131.7M-132.1M |
-| of which `animation_url_segment` (materializing the 80 KB constant and returning it through the library call) | 11.0M |
+| `BeastLikeNft.token_uri`, tokens 1-3 | 131.8M-132.2M |
+| of which `animation_url_segment` (materializing the 80 KB constant and returning it through the library call) | 11.1M |
 | of which `midi_segment` (validation, `SETTINGS`, two base64 passes) | 26.6M |
 | of which 5 `base64` library calls (SVG, `S`, head, `',  '`, `'}'`) | about 61M in total, the largest single call 31M |
 

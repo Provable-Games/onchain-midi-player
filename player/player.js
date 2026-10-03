@@ -17,9 +17,10 @@
  * 3. ▶ (a click or tap): the first one constructs TinySynth with the settings (`createSynth`).
  *    Every ▶ resumes the AudioContext inside the gesture, reloads the MIDI (back to tick 0 at the
  *    song's starting tempo), loops at End-of-Track (`setLoop(1)`, `setLoopEnd(maxTick)`), starts
- *    playback, and restarts the art when the first note is heard: after TinySynth's scheduling
- *    offset (`playTime - currentTime`) plus the context's output latency.
- * 4. ■ stops playback. The art keeps running.
+ *    playback (keeping any rest before the first event), and restarts the art when tick 0 is
+ *    heard: after TinySynth's scheduling offset (`playTime - currentTime`) plus the context's
+ *    output latency.
+ * 4. ■ stops playback and cancels a pending art restart. The art keeps running.
  *
  * Plain browser JavaScript: no modules in the page, no eval, no network requests, no storage. Works
  * in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles
@@ -59,9 +60,9 @@ export function decodeMidi(text) {
  * TinySynth's parser stops reading a track only at an End-of-Track event (not at the chunk length),
  * starts running status at 0x90, keeps it across meta and SysEx events, and assumes a 3-byte tempo.
  * So this rejects, beyond plain format errors: running status with no channel status before it in
- * the track, or after a meta or SysEx event; a tempo event that is not 3 bytes or is 0; status bytes
- * F1-F6 and F8-FE; data bytes above 127; a track without End-of-Track exactly at its end; format 2
- * and SMPTE timing; and a loop of under 50 ms (End-of-Track at tick 0, or a tempo so fast that one
+ * the track, or after a meta or SysEx event; a tempo event that is not 3 bytes (with a one-byte
+ * length) or is 0; status bytes F1-F6 and F8-FE; data bytes above 127; a track without
+ * End-of-Track exactly at its end; format 2 and SMPTE timing; and a loop of under 50 ms (End-of-Track at tick 0, or a tempo so fast that one
  * pass takes almost no time), on which the looping scheduler would never catch up.
  * @param {Uint8Array} u
  * @returns {{maxTick: number, seconds: number}}
@@ -119,13 +120,15 @@ export function checkMidi(u) {
       }
       if (st === 0xff) {
         const type = byte();
+        const at = p;
         const n = vlq();
         if (type === 0x2f) {
           if (n || p !== end) fail("End-of-Track is not at the end of its track");
           break;
         }
         if (type === 0x51) {
-          if (n !== 3 || !(u[p] | u[p + 1] | u[p + 2])) fail("bad tempo");
+          // TinySynth reads the tempo at a fixed offset: its length must be the single byte 03.
+          if (n !== 3 || p !== at + 1 || !(u[p] | u[p + 1] | u[p + 2])) fail("bad tempo");
           tempos.push([tick, (u[p] << 16) | (u[p + 1] << 8) | u[p + 2]]);
         }
         skip(n);
@@ -188,28 +191,38 @@ export function startPlayer() {
       console.error(e);
     };
 
+    let run = 0; // every press of ▶/■ invalidates a pending start and art restart
+
     // 1. Art first, on its own.
     /** @type {HTMLImageElement | null} */
     let art = null;
     let svg = "";
     let restarts = 0;
-    const showArt = () => {
-      const img = document.createElement("img");
-      img.alt = "";
-      img.src = artUrl(svg, restarts++);
-      if (art) {
-        const old = art;
-        // Swap once decoded, so the art never blinks out.
-        img.onload = img.onerror = () => old.replaceWith(img);
-      } else document.body.prepend(img);
-      art = img;
-    };
     try {
       svg = $("art").textContent || "";
-      showArt();
+      art = document.createElement("img");
+      art.alt = "";
+      art.src = artUrl(svg);
+      document.body.prepend(art);
     } catch (e) {
       console.error(e);
     }
+    /**
+     * Restarts the art: a new <img> with a distinct URL, swapped in once decoded (so the art never
+     * blinks out), unless ▶/■ was pressed again in the meantime.
+     * @param {number} current the press that scheduled it
+     */
+    const restartArt = (current) => {
+      if (!art) return;
+      const img = document.createElement("img");
+      img.alt = "";
+      img.onload = () => {
+        if (current !== run || !art) return;
+        art.replaceWith(img);
+        art = img;
+      };
+      img.src = artUrl(svg, ++restarts);
+    };
 
     // 2. Settings and MIDI; on failure ▶ stays disabled and no synth is created.
     /** @type {import("./settings.js").SynthSettings} */
@@ -228,7 +241,6 @@ export function startPlayer() {
     /** @type {any} */
     let synth = null;
     let playing = false;
-    let run = 0; // invalidates a pending start or art restart on every press
     let timer = 0;
     /** @param {boolean} on */
     const setPlaying = (on) => {
@@ -254,8 +266,13 @@ export function startPlayer() {
           synth.setLoop(1);
           synth.setLoopEnd(synth.maxTick);
           synth.playMIDI();
+          // The art restarts with tick 0: TinySynth plays from playTime, plus the output latency.
           const delay = synth.playTime - ctx.currentTime + (ctx.outputLatency || 0);
-          timer = window.setTimeout(showArt, Math.max(0, delay * 1000));
+          timer = window.setTimeout(() => restartArt(current), Math.max(0, delay * 1000));
+          // TinySynth plays the first event at playTime whatever its tick, so a leading rest
+          // would be lost on the first pass. Restore it, timed as TinySynth times it on every
+          // later pass (at the starting 120 BPM: no tempo event can precede the first event).
+          synth.playTime += synth.playTick * synth.tick2Time;
         }).catch((/** @type {unknown} */ e) => {
           setPlaying(false);
           fail(e);

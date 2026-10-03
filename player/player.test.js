@@ -86,6 +86,7 @@ describe("decodeMidi and checkMidi", () => {
     ["running status after SysEx", track([0x00, 0x90, 60, 100, 0x00, 0xf0, 0x01, 0xf7, 0x10, 60, 0, ...EOT]), /running status without a channel status/],
     ["2-byte tempo", track([0x00, 0xff, 0x51, 0x02, 0x07, 0xa1, ...note, ...EOT]), /bad tempo/],
     ["tempo 0", track([0x00, 0xff, 0x51, 0x03, 0, 0, 0, ...note, ...EOT]), /bad tempo/],
+    ["tempo length as a 2-byte VLQ (80 03)", track([0x00, 0xff, 0x51, 0x80, 0x03, 0x07, 0xa1, 0x20, ...note, ...EOT]), /bad tempo/],
     ["status byte F1", track([0x00, 0xf1, 0x00, ...EOT]), /unexpected status byte/],
     ["status byte FE", track([0x00, 0xfe, ...EOT]), /unexpected status byte/],
     ["data byte above 127", track([0x00, 0x90, 60, 0xc8, ...EOT]), /bad data byte/],
@@ -200,6 +201,25 @@ describe("the page's player script, fake engine", () => {
     assert.match(h.art()?.src || "", /^data:image\/svg\+xml;r=2;base64,/, "every restart gets a new URL");
   });
 
+  test("■ while the restarted art is still decoding: the art is not swapped; a stale decode never wins", async () => {
+    const c = CASES.default_120bpm;
+    const h = runPage(htmlOf(c));
+    h.ready();
+    const first = h.art();
+    h.click(); // ▶
+    await h.flush();
+    h.runTimers(); // the restart image is created and starts decoding
+    h.click(); // ■ before it has decoded
+    h.loadImages();
+    assert.equal(h.art(), first, "stopped: the art is not reset");
+    h.click(); // ▶ again
+    await h.flush();
+    h.runTimers();
+    h.loadImages();
+    assert.match(h.art()?.src || "", /;r=2;base64,/);
+    assert.equal(h.page.body.filter((e) => e.tag === "img").length, 1);
+  });
+
   test("▶ then ■ before the AudioContext has resumed: nothing starts", async () => {
     const h = runPage(htmlOf(CASES.default_120bpm));
     h.ready();
@@ -309,6 +329,24 @@ describe("the page's player script, real engine", () => {
       assert.equal(synth.sent.length, sent, "nothing scheduled after ■");
     });
   }
+
+  test("a leading rest is kept: the first note sounds after it, the art restarts at tick 0", async () => {
+    // PPQ 96, 120 BPM by default: a note at tick 96 (0.5 s) and End-of-Track at tick 192 (1 s).
+    const midi = smf({ ppq: 96, tracks: [[[96, 0x90, 60, 100], [48, 0x80, 60, 0], [48, 0xff, 0x2f, 0]]] });
+    const c = CASES.default_120bpm;
+    const h = runPage(edited(c, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0 });
+    h.ready();
+    h.click();
+    const ctx = h.synths[0].getAudioContext();
+    const tick0 = ctx.currentTime + 0.1;
+    await h.flush();
+    assert.ok(Math.abs([...h.timers.values()][0].delay - 100) < 1e-6, "art restart at tick 0 (+100 ms)");
+    h.advance(2.5);
+    const ons = h.synths[0].sent.filter((/** @type {any} */ [m]) => m[0] === 0x90 && m[2] > 0).map((/** @type {any} */ x) => x[1]);
+    assert.ok(ons.length >= 2);
+    assert.ok(Math.abs(ons[0] - (tick0 + 0.5)) < 1e-9, `first note at ${ons[0] - tick0} s after tick 0`);
+    assert.ok(Math.abs(ons[1] - (tick0 + 1.5)) < 1e-9, "the next pass keeps the rest too");
+  });
 
   test("the custom timbres are installed in the real engine", async () => {
     const h = runPage(htmlOf(CASES.beast_140bpm), { engine: "real" });
