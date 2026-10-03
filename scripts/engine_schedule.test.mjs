@@ -138,6 +138,25 @@ describe("reference timbres in the real engine", () => {
     assert.equal(src.f / 440, 0.6);
   });
 
+  test("a MIDI program change selects a custom program; a drum note selects a custom drum", () => {
+    const { Synth, log, nodes } = loadEngine();
+    const lead80 = { ...BEAST_SETTINGS.timbres[0], slot: 80 };
+    const synth = createSynth(Synth, parseSettings(encodeSettings({ ...BEAST_SETTINGS, timbres: [lead80, BEAST_SETTINGS.timbres[1]] })));
+    synth.send([0xc0, 80]); // program change, channel 1
+    let from = log.length;
+    synth.send([0x90, 69, 100], T); // note on
+    const lfo = log.slice(from).filter((c) => c[1] === "create" && c[0].startsWith("osc")).map((c) => c[0])[1];
+    assert.ok(lfo && nodes[lfo].frequency.value === 6, "program 80 plays the custom lead (6 Hz LFO)");
+    synth.send([0xc0, 0]); // program 0 is back to the built-in piano
+    from = log.length;
+    synth.send([0x90, 69, 100], T);
+    assert.ok(!log.slice(from).some((c) => c[0].startsWith("osc") && c[1] === "create" && nodes[c[0]].frequency.value === 6));
+    from = log.length;
+    synth.send([0x99, 36, 100], T); // drum note 36, channel 10
+    const target = log.slice(from).find((c) => c[0].endsWith(".frequency") && c[1] === "target");
+    assert.ok(target && Math.abs(target[2] - 45.008) < 1e-9, "drum 36 plays the custom kick");
+  });
+
   test("setQuality resets the custom timbres; installSettings restores them", () => {
     const { Synth } = loadEngine();
     const synth = createSynth(Synth, settings);

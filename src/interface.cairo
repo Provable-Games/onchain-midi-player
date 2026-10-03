@@ -139,7 +139,8 @@ pub trait IOnchainTinySynth<T> {
     /// `len(midi) + len(SETTINGS)` bytes; independent of engine size. `SETTINGS` is 16 bytes
     /// with defaults, plus about 6 bytes per timbre and 50 per operator (the 3 Beast
     /// reference sounds: 334 bytes). Validating and encoding 6 timbres costs about 3.3M L2
-    /// gas; the largest valid `SETTINGS` (8,192 bytes) about 54M, before base64.
+    /// gas; the largest valid `SETTINGS` (8,192 bytes) about 51M, and 32 timbres of 8
+    /// operators about 56M, before base64.
     fn midi_segment(self: @T, midi: ByteArray, settings: SynthSettings) -> ByteArray;
 
     // ------------------------------------------------------------------------------------
