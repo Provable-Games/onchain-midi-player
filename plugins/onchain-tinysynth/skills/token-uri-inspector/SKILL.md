@@ -41,7 +41,7 @@ For a local contract, print the `token_uri` from an snforge test instead, as the
 node examples/beast_consumer/scripts/decode.mjs token_uri.txt out/   # out/token.json, out/image.svg, out/animation.html
 ```
 
-It checks that every base64 layer is canonical standard base64 and that the JSON is valid UTF-8. A failure here means the consumer's splicing is wrong: usually a piece that is not a multiple of 3 bytes, which leaves `=` padding mid-stream (README: [Integration guide](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#integration-guide)).
+It writes `out/image.svg` only when the `image` is a base64 SVG data URI, as when the consumer reuses its onchain SVG as the art. For any other `image` (an external URL, a PNG) it prints the value and writes no `image.svg`: the art then comes only from the page (step 4). It checks that every base64 layer is canonical standard base64 and that the JSON is valid UTF-8. A failure here means the consumer's splicing is wrong: usually a piece that is not a multiple of 3 bytes, which leaves `=` padding mid-stream (README: [Integration guide](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#integration-guide)).
 
 ## 3. Verify the engine
 
@@ -55,17 +55,18 @@ It prints the SHA-256 and length of the gzip payload, the engine and the fixed `
 
 ```sh
 node $I/split_page.mjs out/animation.html out/image.svg   # writes out/settings.txt, out/midi.b64, out/art.svg
+# no out/image.svg (the image is not an onchain SVG)? leave it off: node $I/split_page.mjs out/animation.html
 npm run check-midi -- out/midi.b64
 ```
 
-- `split_page.mjs` checks the art contains no `</script` and that the art block holds exactly the `image` bytes. A failure means the page shows a broken image even though marketplaces show the `image` fine (README: [Art (SVG) requirements](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#art-svg-requirements)).
+- `split_page.mjs` checks the art contains no `</script` and, given `image.svg`, that the art block holds exactly the `image` bytes. A failure means the page shows a broken image even though marketplaces show the `image` fine (README: [Art (SVG) requirements](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#art-svg-requirements)).
 - `check-midi` runs the page's own MIDI check. A failure is the error the page shows with ▶ disabled ([midi-guide](../midi-guide/SKILL.md)).
 - `out/settings.txt` is the token's `SETTINGS`; the class validated it before writing it ([sound-design](../sound-design/SKILL.md)).
 
 ## 5. Rebuild the page from its blocks
 
 ```sh
-npm run preview -- out/midi.b64 --settings out/settings.txt --svg out/image.svg --out out/rebuilt.html
+npm run preview -- out/midi.b64 --settings out/settings.txt --svg out/art.svg --out out/rebuilt.html
 cmp out/rebuilt.html out/animation.html && echo identical
 ```
 

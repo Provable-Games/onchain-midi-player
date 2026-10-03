@@ -61,7 +61,16 @@ With the player, the one structural change is to encode in pieces whose lengths 
 - **`<pad>`** is spaces between JSON tokens, never inside a string, so each of your pieces is a multiple of 3 bytes: one space before the 35-byte image key, for example. Only the final `'fQ=='` may end in `=`.
 - **The class's pieces are aligned already**, at both base64 layers. Append them as they come; never base64-encode them yourself.
 - **`animation_url` must be the last member.** Its string is left open by the segment, and the second `b64(S)` closes it: at the HTML layer `b64(svg)` decodes to the raw SVG, the last block of the page, and the `"` ends both the HTML data URI and the JSON string. Strict JSON validators that require a fixed key order will reject this metadata.
-- **`b64(S)` twice** is an optimization for an onchain SVG `image`: encode it once, append it twice. If your `image` is an external URL or another format, put `"image":…` among your members and append `b64(S)` once, after `midi_segment`: the art block still needs an SVG (step 3).
+- **`b64(S)` twice** is an optimization for an onchain SVG `image`: encode it once, append it twice. If your `image` is an external URL or another format, the art block still needs an SVG (step 3), so the layout drops the image-key piece, the first `b64(S)` and the separate comma piece; the segment then follows your members directly:
+
+  ```text
+  "data:application/json;base64,"
+    ++ b64('{' your members, including "image":… ',' <pad>)
+    ++ animation_url_segment()
+    ++ midi_segment(midi, settings)
+    ++ b64(S)                       S = b64(art_svg) '"' <pad>
+    ++ 'fQ=='
+  ```
 - **Word alignment (optional gas tip).** A Cairo `ByteArray` appends whole 31-byte words only when it ends on a word boundary. Groups of 3 spaces encode to the constant `'ICAg'`, and `',  '` to `'LCAg'`, so you can add them, without encoding anything, until your largest appends (the first `b64(S)` and the segment) start on a word. See `align_to_word` in the reference implementation and the README's figures.
 - **Your own encoder** works if it is standard RFC 4648 base64. Compiled into your contract it saves the library-call overhead, but it adds about 11K CASM felts ([Class size](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#class-size)), which matters near the 81,920-felt CASM limit. The class's `base64` entry point costs you nothing in class size.
 
