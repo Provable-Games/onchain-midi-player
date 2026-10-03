@@ -2,14 +2,14 @@
 name: token-uri-inspector
 description: Inspect a deployed or local NFT token_uri built with the onchain TinySynth player (Provable-Games/onchain-tinysynth). Fetch it with sncast or a raw starknet_call, decode its JSON, image and animation_url page, verify the embedded engine against the published hash, check the embedded MIDI and SETTINGS, check the art is safe, rebuild and view the page in a browser, and find which RPC providers can serve it. Use when a token's animation does not play or looks wrong, when verifying a token against a class version, or when checking RPC call gas caps.
 license: Apache-2.0
-compatibility: Needs Node 22 or later, a clone of https://github.com/Provable-Games/onchain-tinysynth checked out at the commit that matches the class's version(), curl or sncast, and network access to a Starknet RPC.
+compatibility: Needs Node 22 or later, a clone of https://github.com/Provable-Games/onchain-tinysynth whose VERSION in src/page_data.cairo equals the class's version(), curl or sncast, and network access to a Starknet RPC.
 ---
 
 # Inspecting a `token_uri`
 
 A `token_uri` from this player is `data:application/json;base64,` + JSON whose `animation_url` is `data:text/html;base64,` + one HTML page: the fixed `PAGE` (engine gzipped, player), then the token's `SETTINGS`, MIDI and SVG art blocks. README: [Consumer `token_uri` layout](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#consumer-token_uri-layout-the-beasts-layout) and [Verifying the engine](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#verifying-the-engine).
 
-Run everything from a clone checked out at the commit that built the class (README [Versions](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#versions) tag, or [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments) for interim test classes); `grep 'pub const VERSION' src/page_data.cairo` must equal the class's `version()`. Node 22 or later; no `npm ci`. `I=plugins/onchain-tinysynth/skills/token-uri-inspector/scripts` below.
+Run everything from a clone whose `grep 'pub const VERSION' src/page_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed (README [Agent skills](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#agent-skills)). The same `VERSION` always means the same page bytes, and newer commits have the tools. Node 22 or later; no `npm ci`. `I=plugins/onchain-tinysynth/skills/token-uri-inspector/scripts` below.
 
 ## 1. Fetch
 

@@ -2,7 +2,7 @@
 name: midi-guide
 description: Drive the onchain TinySynth NFT player (Provable-Games/onchain-tinysynth) with Standard MIDI Files. Preview a .mid offline in the exact page the chain serves, check it against the player's strict MIDI contract, and learn only where the player differs from standard MIDI players and upstream TinySynth (End-of-Track looping, sounds set by the contract, ignored controllers, pinned engine quirks, gas per byte, keeping the tempo in sync with animated SVG or GIF art). Use when composing, converting or debugging MIDI for an NFT that uses this player, when check-midi fails, or when music and art drift apart.
 license: Apache-2.0
-compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-tinysynth checked out at the commit that matches the class's version().
+compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-tinysynth whose VERSION in src/page_data.cairo equals the class's version().
 ---
 
 # Driving the onchain TinySynth player with MIDI
@@ -17,7 +17,7 @@ Preview the score in the page the chain serves, and check it, before anything go
 
 ```sh
 git clone https://github.com/Provable-Games/onchain-tinysynth && cd onchain-tinysynth
-git checkout <commit>                      # see "Get the tools" below
+grep 'pub const VERSION' src/page_data.cairo   # must print the class's version(); see "Get the tools"
 npm run check-midi -- song.mid             # the page's own MIDI check
 npm run preview -- song.mid --settings sound.json --svg art.svg --serve
 ```
@@ -27,7 +27,7 @@ Open the printed URL and press ▶. If it plays right there, it plays the same f
 ### Get the tools
 
 - Node 22 or later. `check-midi` and `preview` need no `npm ci`.
-- Check out the commit that built the class you target: its release tag in the README's [Versions](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#versions) table, or, for the interim test deployments, the commit in [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments). Then `grep 'pub const VERSION' src/page_data.cairo` must equal the class's `version()`. `preview` prints the same string.
+- Use a clone whose `PAGE` is your class's: `grep 'pub const VERSION' src/page_data.cairo` must print the class's `version()` (`preview` prints it too). The same `VERSION` always means the same `PAGE` bytes, so the newest commit with it has both the tools and the right page: `main` while its `VERSION` matches, otherwise the last commit before `VERSION` changed (`git log --oneline -- src/page_data.cairo`). A class's "Built from" commit in [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments) can predate the tools. Details: README [Agent skills](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#agent-skills).
 
 ## What the offline check guarantees
 

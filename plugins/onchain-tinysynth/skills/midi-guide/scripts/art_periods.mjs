@@ -50,6 +50,38 @@ export function gifDelays(bytes) {
 }
 
 /**
+ * The durations of every CSS animation in a text: each entry of an `animation` shorthand list (its
+ * first time value is the duration; a second one is the delay) and of an `animation-duration` list.
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function cssDurations(text) {
+  /** @type {string[]} */
+  const durations = [];
+  for (const [, property, value] of text.matchAll(/(?<![\w-])(?:-webkit-)?animation(-duration)?\s*:\s*([^;}'"]+)/g)) {
+    // Split the list at top-level commas only: cubic-bezier(...) and steps(...) hold commas too.
+    let depth = 0;
+    let entry = "";
+    const entries = [];
+    for (const c of value) {
+      if (c === "(") depth++;
+      if (c === ")") depth--;
+      if (c === "," && depth === 0) {
+        entries.push(entry);
+        entry = "";
+      } else entry += c;
+    }
+    entries.push(entry);
+    for (const e of entries) {
+      const time = e.replace(/\([^)]*\)/g, "").match(/(?<![\w.-])(\d*\.?\d+m?s)(?!\w)/);
+      if (time) durations.push(time[1]);
+      else if (property) durations.push(e.trim());
+    }
+  }
+  return durations;
+}
+
+/**
  * The report lines for an SVG's text.
  * @param {string} svg
  * @returns {string[]}
@@ -63,7 +95,7 @@ export function artPeriods(svg) {
     lines.push(`GIF: ${delays.length} frames, delays ${delays.join(", ")} ms, loop ${loop} ms`);
   }
   for (const [, dur] of svg.matchAll(/\bdur\s*=\s*['"]([^'"]+)['"]/g)) lines.push(`SMIL dur ${dur}`);
-  for (const [, dur] of svg.matchAll(/animation(?:-duration)?\s*:[^;'"}]*?(\d*\.?\d+m?s)\b/g)) lines.push(`CSS animation ${dur}`);
+  for (const dur of cssDurations(svg)) lines.push(`CSS animation ${dur}`);
   if (!lines.length) lines.push("no GIF, SMIL or CSS animation found");
   return lines;
 }

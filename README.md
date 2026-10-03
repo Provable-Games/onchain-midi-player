@@ -565,7 +565,7 @@ npm run check-midi -- song.mid                        # the same, through npm
 
 ### Previewing a score
 
-[`scripts/preview.mjs`](scripts/preview.mjs) writes the page a token would get, offline: `PAGE ++ D ++ SVG`, byte for byte as the class and a Beasts-layout consumer produce it (built with [`scripts/page.mjs`](scripts/page.mjs)). It needs Node 22 or later and no `npm install`; like `check_midi.mjs`, run it from a checkout pinned to your class's version.
+[`scripts/preview.mjs`](scripts/preview.mjs) writes the page a token would get, offline: `PAGE ++ D ++ SVG`, byte for byte as the class and a Beasts-layout consumer produce it (built with [`scripts/page.mjs`](scripts/page.mjs)). It needs Node 22 or later and no `npm install`. Run it from a checkout whose `VERSION` (in `src/page_data.cairo`) is your class's `version()` (see [Agent skills](#agent-skills)).
 
 ```sh
 npm run preview -- song.mid                                        # default settings, placeholder art
@@ -682,6 +682,7 @@ Where the class and the example are declared or deployed. A consumer stores a cl
 | Sepolia and mainnet | Release `OnchainTinySynth` | not declared yet | | | |
 
 - **Interim.** The Sepolia class was declared only to test explorers and RPC providers against a real class (issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). The Versions table's "not for declaration" means not as a release: the release class needs the engine re-pinned to a tagged fork release, which gives a new `version()` and class hash.
+- **Built from** is the commit to rebuild each class from. It predates `npm run preview` and the agent skills: run those from the newest commit with the same `VERSION` (see [Agent skills](#agent-skills)).
 - **The inspection instance** is a deployment of the class (no storage, no constructor), so explorers and RPC can call `version()`, `script_sha256()` and `license()`. Consumers still `library_call` the class hash.
 - **RPC providers** (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)). Through zan.top, Cartridge and dRPC, all four example tokens came back byte-identical to the JS reference. PublicNode served tokens 1–3 but reverted `Out of gas` on token 4, the full-size Beast (about 286.5M L2 gas). Providers cap `starknet_call` gas differently: check a full-size token through the providers your marketplaces and indexers use.
 
@@ -830,7 +831,7 @@ The plugin sets no `version`, so Claude Code versions it by commit: `claude plug
 
 **Without Claude Code.** Each `SKILL.md` follows the open [Agent Skills](https://agentskills.io/specification) format (YAML frontmatter with `name` and `description`, then Markdown), so any agent can read the files. Copying a skill folder into another agent's skills directory, or into a project's `.claude/skills/`, also works; copy the whole `skills/` folder to keep the links between skills.
 
-**The tools the skills use** (`check-midi`, `preview`, `verify_engine.mjs`, the example's `decode.mjs`) need a clone of this repository at the commit of the class's `version()`, and Node 22 or later; none needs `npm ci`. The skills' own helper scripts use Node built-ins only.
+**The tools the skills use** (`check-midi`, `preview`, `verify_engine.mjs`, the example's `decode.mjs`, and the skills' helper scripts) need Node 22 or later and a clone whose `PAGE` is the class's: `grep 'pub const VERSION' src/page_data.cairo` must print the class's `version()`. Every commit with the same `VERSION` has the same `PAGE`, byte for byte (the build fails if `PAGE` changes under a `VERSION` recorded in [`scripts/page_versions.json`](scripts/page_versions.json)), so use the newest such commit: `main` while its `VERSION` matches, otherwise the last commit before `VERSION` changed (`git log --oneline -- src/page_data.cairo`). A class's "Built from" commit in [Deployments](#deployments) is for rebuilding the class and can predate the tools. None of the tools needs `npm ci`, and the helper scripts use Node built-ins only.
 
 **Drift guards.** [`scripts/skills.test.mjs`](scripts/skills.test.mjs), run by `npm test`, checks that the frontmatter and the plugin manifests follow the formats, that every README anchor and repository path the skills link to exists, that the MIDI reference lists every `checkMidi` message, that the operator table matches the validator, that every gas figure in the skills appears in this README, and that the skills hardcode nothing a re-pin changes (`VERSION`, the engine commit, page and segment sizes, long hex hashes).
 

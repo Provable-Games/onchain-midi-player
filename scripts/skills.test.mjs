@@ -23,7 +23,7 @@ import { ENGINE_PIN, engineSource } from "./engine.mjs";
 import { VERSION, byteArrayFelts } from "./page.mjs";
 import { buildPreview, settingsFromText } from "./preview.mjs";
 import { DEFAULT_OPERATOR } from "./settings_fixtures.mjs";
-import { artPeriods, gifDelays } from "../plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs";
+import { artPeriods, cssDurations, gifDelays } from "../plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs";
 import { byteArrayFromFelts, tokenUriFromCall } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/bytearray.mjs";
 import { checkArt, splitPage } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/split_page.mjs";
 
@@ -254,6 +254,10 @@ describe("the skills' helper scripts", () => {
     const svg = read("tests/fixtures/beasts/warlock_shiny_animated.svg");
     assert.deepEqual(artPeriods(svg), ["GIF: 4 frames, delays 200, 200, 200, 200 ms, loop 800 ms", "SMIL dur 2.2s", "SMIL dur 6s", "SMIL dur 3s"]);
     assert.deepEqual(artPeriods("<svg><style>.a{animation: spin 1.5s linear infinite}</style></svg>"), ["CSS animation 1.5s"]);
+    // Every entry of a list, with commas inside timing functions, and the duration before a delay.
+    const css = ".a{animation: fade 1s cubic-bezier(0.1, 0.7, 1, 0.1) 0.5s infinite, spin 2400ms steps(4, end) infinite}" +
+      ".b{animation-duration: 1s, 3s; animation-name: x, y; animation-delay: 9s}.c{-webkit-animation:pulse .8s}";
+    assert.deepEqual(cssDurations(css), ["1s", "2400ms", "1s", "3s", ".8s"]);
     assert.throws(() => gifDelays(Buffer.from("PNG")), /not a GIF/);
   });
 
