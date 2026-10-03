@@ -21,9 +21,10 @@
 //!   opening of the settings text block). It ends with the opening tag
 //!   `<script type="text/plain" id="settings">`, followed by any alignment `<pad>` (which
 //!   then falls inside the settings block and is ignored by the player).
-//! - `SETTINGS`: the ASCII encoding of a `SynthSettings` value (see `types.cairo`). It
-//!   contains only digits, `-` and separators, so it can never close its block. The
-//!   exact format belongs to the page version and is specified with issue #1.
+//! - `SETTINGS`: the ASCII encoding of a `SynthSettings` value (see `types.cairo`), format
+//!   version 1, as specified in `settings.cairo` (issue #1): comma-separated canonical
+//!   decimal integers, at most 8,192 bytes. It contains only digits, `-` and `,`, so it can
+//!   never close its block. Example (default settings): `1,1,30,40,64,0,0`.
 //! - `D`: the per-token HTML fragment
 //!   `SETTINGS '</script><script type="text/plain" id="midi">' b64(midi) <pad>
 //!   '</script><script type="text/plain" id="art">'`.
@@ -112,8 +113,10 @@ pub trait IOnchainTinySynth<T> {
     ///   are embedded verbatim (as base64 text); this function does not parse or validate
     ///   them.
     /// - `settings`: engine settings and optional custom sounds (see `types.cairo`).
-    ///   Every field is range-checked; out-of-range values revert with a descriptive
-    ///   error, so an invalid setting can never reach the page.
+    ///   Every field is range-checked by `settings::validate`; out-of-range values revert
+    ///   with a `'TS: ...'` short string followed by the 0-based indices of the offending
+    ///   wave, timbre or operator, so an invalid setting can never reach the page. The
+    ///   checks, their order and their messages are listed in `settings.cairo`.
     ///
     /// Output (bytes, ASCII base64 text):
     ///
@@ -133,8 +136,10 @@ pub trait IOnchainTinySynth<T> {
     ///   `b64(S)` supplies the art and closes both data URIs.
     ///
     /// Cost: validation of `settings`, plus two base64 passes over roughly
-    /// `len(midi) + len(SETTINGS)` bytes; independent of engine size. Custom sounds add
-    /// roughly 100–200 bytes of `SETTINGS` each.
+    /// `len(midi) + len(SETTINGS)` bytes; independent of engine size. `SETTINGS` is 16 bytes
+    /// with defaults, plus about 6 bytes per timbre and 50 per operator (the 3 Beast
+    /// reference sounds: 334 bytes). Validating and encoding 6 timbres costs about 3.3M L2
+    /// gas; the largest valid `SETTINGS` (8,192 bytes) about 54M, before base64.
     fn midi_segment(self: @T, midi: ByteArray, settings: SynthSettings) -> ByteArray;
 
     // ------------------------------------------------------------------------------------

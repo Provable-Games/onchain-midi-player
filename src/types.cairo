@@ -1,8 +1,10 @@
 //! Consumer-supplied sound settings for `midi_segment`.
 //!
-//! Declarations only. The ranges below are the proposed validation rules; they are
-//! finalized in issues #1 (custom sounds), #2 (custom waveforms) and #3 (filters).
-//! `midi_segment` will revert with a descriptive error when any value is out of range.
+//! The ranges below are the validation rules applied by `crate::settings::validate`
+//! (issue #1). Custom waveforms (issue #2) and filters (issue #3) are part of the types and
+//! of the `SETTINGS` grammar already, but are rejected until those issues land.
+//! `midi_segment` reverts with a descriptive error when any value is out of range; the
+//! exact checks, their order and their messages are listed in `crate::settings`.
 //!
 //! # Fixed-point numbers
 //!
@@ -13,11 +15,16 @@
 //! # How settings reach the browser
 //!
 //! The class writes the settings into the page next to the MIDI, as an inert block of
-//! ASCII digits and separators. The player reads that block, configures TinySynth, then
-//! installs each `Timbre` with `setTimbre`. Values are treated as data only, never
-//! evaluated. Custom timbres are installed after construction and after the quality mode
-//! is applied, because TinySynth's `setQuality()` resets every program and drum to the
-//! built-ins.
+//! ASCII digits, `-` and `,` (the `SETTINGS` format, specified in `crate::settings`). The
+//! player reads that block, configures TinySynth, registers the custom waves, then installs
+//! each `Timbre` with `setTimbre`. Values are treated as data only, never evaluated. Custom
+//! timbres are installed after construction and after the quality mode is applied, because
+//! TinySynth's `setQuality()` resets every program and drum to the built-ins.
+//!
+//! # Wire tags
+//!
+//! The variant order of `Waveform`, `WaveDef` and `FilterKind` is their tag in `SETTINGS`.
+//! Variants must never be reordered or inserted; a new variant may only be appended.
 //!
 //! # Consistency
 //!
@@ -30,9 +37,9 @@ pub const FIXED_POINT_SCALE: u32 = 10_000;
 
 /// Engine-wide settings plus optional custom sounds, passed to `midi_segment`.
 ///
-/// Suggested defaults: `quality: 1, reverb: 30, master_vol: 40, voices: 64,
-/// timbres: [].span()`. The volume default is below TinySynth's 50 because dense
-/// passages clipped at 50 in quality 1.
+/// Defaults (`crate::settings::default_settings()`): `quality: 1, reverb: 30,
+/// master_vol: 40, voices: 64, waves: [].span(), timbres: [].span()`. The volume default
+/// is below TinySynth's 50 because dense passages clipped at 50 in quality 1.
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub struct SynthSettings {
     /// Built-in timbre set: 0 = chip-tune (one oscillator per note), 1 = FM (two or more).
@@ -44,8 +51,14 @@ pub struct SynthSettings {
     pub master_vol: u8,
     /// Maximum simultaneous notes; the oldest note is cut beyond this. Range: 1..=64.
     pub voices: u8,
+    /// Custom waveforms shared by every timbre in this call; operators select one with
+    /// `Waveform::Custom(index)`, 0-based. 0..=16 entries; unused and repeated entries are
+    /// allowed; each is registered once, in order, before any timbre is installed.
+    /// Must be empty until issue #2 lands (`'TS: custom wave unsupported'`).
+    pub waves: Span<WaveDef>,
     /// Custom sounds replacing built-in programs or drum notes. Empty means built-ins only.
-    /// Proposed maximum: 32 timbres per call. Each `(drum, slot)` pair may appear once.
+    /// At most 32 timbres per call. Each `(drum, slot)` pair may appear once. The encoded
+    /// `SETTINGS` must not exceed 8,192 bytes (about 50 bytes per operator plus 6 per timbre).
     pub timbres: Span<Timbre>,
 }
 
@@ -77,7 +90,8 @@ pub struct Timbre {
 pub struct Operator {
     /// [`g`] Where the output goes. 0 = audio output. 1..=10 = modulates the frequency
     /// (FM) of operator `route` (1-based). 11..=18 = modulates the volume (AM) of operator
-    /// `route - 10`. FM and AM targets must be earlier operators in the same timbre.
+    /// `route - 10`. FM and AM targets must be earlier operators in the same timbre, so the
+    /// first operator always has `route == 0`.
     pub route: u8,
     /// [`w`] Waveform.
     pub wave: Waveform,
@@ -91,32 +105,32 @@ pub struct Operator {
     /// [`f`] Frequency offset in Hz, fixed-point. Range: -20_000.0..=20_000.0.
     pub offset_hz: i32,
     /// [`a`] Attack time in seconds, fixed-point; 0 jumps straight to full level.
-    /// Range: 0..=10.0.
+    /// Range: 0..=20.0.
     pub attack: u32,
-    /// [`h`] Hold time in seconds, fixed-point. Range: 0..=10.0.
+    /// [`h`] Hold time in seconds, fixed-point. Range: 0..=20.0.
     pub hold: u32,
-    /// [`d`] Decay time constant in seconds, fixed-point. Range: 0..=10.0.
+    /// [`d`] Decay time constant in seconds, fixed-point. Range: 0..=20.0.
     pub decay: u32,
     /// [`s`] Sustain level as a multiple of `volume`, fixed-point. Range: 0..=100.0.
     pub sustain: u32,
     /// [`r`] Release time constant in seconds, fixed-point. TinySynth cuts the voice at
-    /// 3.5 times this. Range: 0..=10.0.
+    /// 3.5 times this. Range: 0..=20.0.
     pub release: u32,
     /// [`p`] Pitch envelope target as a multiple of the starting frequency, fixed-point.
     /// 1 = no pitch change; below 1 = pitch drop (kicks, toms). Range: 0..=16.0.
     pub pitch_ratio: u32,
-    /// [`q`] Pitch envelope time constant in seconds, fixed-point. Range: 0..=10.0.
+    /// [`q`] Pitch envelope time constant in seconds, fixed-point. Range: 0..=20.0.
     pub pitch_time: u32,
     /// [`k`] Volume key scaling, fixed-point: level is multiplied by
     /// `2^((note - 60) / 12 * key_scale)`. Negative values soften high notes.
     /// Range: -8.0..=8.0.
     pub key_scale: i32,
     /// Optional fixed filter on this operator's output (issue #3). Allowed only when
-    /// `route == 0`.
+    /// `route == 0`. Must be `None` until issue #3 lands (`'TS: filter unsupported'`).
     pub filter: Option<Filter>,
 }
 
-/// Operator waveform.
+/// Operator waveform. Variant order is the wire tag (0..=6).
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub enum Waveform {
     Sine,
@@ -127,12 +141,20 @@ pub enum Waveform {
     WhiteNoise,
     /// Metallic noise (TinySynth `n1`). Deterministic once fork issue #7 lands.
     MetallicNoise,
-    /// Custom band-limited wave from harmonic amplitudes (issue #2): element `i` is the
-    /// relative amplitude of harmonic `i + 1`. Range: 1..=64 elements.
+    /// Entry `index` (0-based) of `SynthSettings::waves` (issue #2). Rejected until #2 lands
+    /// (`'TS: custom wave unsupported'`).
+    Custom: u8,
+}
+
+/// A custom waveform definition, shared through `SynthSettings::waves` (issue #2).
+#[derive(Copy, Drop, Serde, PartialEq, Debug)]
+pub enum WaveDef {
+    /// Band-limited wave from harmonic amplitudes: element `i` is the relative amplitude of
+    /// harmonic `i + 1`. Range: 1..=64 elements.
     Harmonics: Span<u16>,
-    /// Custom single-cycle wave from samples, played sample-and-hold at the note's pitch,
-    /// giving exact chip waveforms such as a 4-bit stepped triangle or a 12.5% pulse
-    /// (issue #2). Each sample maps -128..=127 to -1.0..=1.0. Range: 2..=256 samples.
+    /// Single-cycle wave from samples, played sample-and-hold at the note's pitch, giving
+    /// exact chip waveforms such as a 4-bit stepped triangle or a 12.5% pulse. Each sample
+    /// maps -128..=127 to -1.0..=1.0. Range: 2..=256 samples.
     Samples: Span<i8>,
 }
 
