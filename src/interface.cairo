@@ -68,6 +68,10 @@
 //! `<script type="text/plain" id="art">` element (a raw-text element, so the SVG markup
 //! is inert). Because `svg_b64` is the end of that stream, trailing `=` padding in it is
 //! legal. `b64(PAGE)` and `b64(D)` are mid-stream and are always unpadded.
+//!
+//! The HTML parser ends the art element at the first `</script`, so the SVG must never contain
+//! `</script` in any letter case. The class never sees the SVG: the consumer checks this in its
+//! own tests (see "Art (SVG) requirements" in the README).
 
 use crate::types::SynthSettings;
 

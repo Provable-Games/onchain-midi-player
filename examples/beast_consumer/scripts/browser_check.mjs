@@ -3,20 +3,24 @@
 // repo). The page is the real one (engine and player); the repository's scripts/page_check.mjs
 // checks it in depth (sandboxed iframe, strict CSP, loop timing, art restart).
 //
-// Loads the page six ways: fixtures/animation.html from disk, the exact
+// Loads the page seven ways: fixtures/animation.html from disk, the exact
 // data:text/html;base64,... animation_url from fixtures/token.json, a variant whose MIDI block holds
 // a file with two SysEx (F0) events (same notes, same End-of-Track), a variant with settings that
 // do not parse (1,1,30,40,64,0: a token missing), a variant whose gzipped engine is corrupt
-// (one payload byte changed), and token 4's page (a real Beast SVG, the largest real score and the
-// reference sounds, from the reference: its art renders, and ▶ installs the reference sounds and
-// loops at the score's End-of-Track). For the valid pages it checks that the page's shim inflated the
+// (one payload byte changed), a variant whose SVG breaks the art rule (a <script> element in
+// it), and token 4's page (a real Beast SVG, the largest real score and the reference sounds: its
+// art renders, and ▶ installs the reference sounds and loops at the score's End-of-Track). For the
+// valid pages it checks that the page's shim inflated the
 // engine (its gzip tag replaced by an inline script), that the art rendered (including the PNG
 // inside the SVG's foreignObject, by sampling a screenshot pixel), that ▶ is enabled and starts
 // TinySynth with the token's settings (custom lead on program 80, custom kick on drum 36, reverb,
 // End-of-Track loop at tick 192), that there are no console errors, and that nothing was requested
 // over the network (nor the gzip tag's data: URI, seen through the DevTools protocol). For the
 // invalid variants it checks that the page fails closed: the art still renders, ▶ stays disabled,
-// the error is shown, no synth exists.
+// the error is shown, no synth exists. For the unsafe SVG it checks the failure the art rule
+// prevents: the parser ends the art block at the SVG's `</script>` (as parseArtBlock in
+// reference.mjs predicts), the art <img> is broken, and the rest of the SVG is parsed as page
+// markup.
 //
 // Usage (from examples/beast_consumer):
 //   PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core \
@@ -30,7 +34,9 @@ import { dirname, join } from 'node:path';
 import { decodePng } from '../../../scripts/png.mjs';
 import { ENGINE_MISSING } from '../../../player/player.js';
 import { engineSource } from '../../../scripts/engine.mjs';
-import { animationHtml, midiWithSysex, withGzipPayload } from './reference.mjs';
+import {
+  ART_OPEN, TOKENS, animationHtml, midiWithSysex, parseArtBlock, unsafeSvg, withGzipPayload,
+} from './reference.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { PLAYWRIGHT_CORE, CHROME } = process.env;
@@ -75,22 +81,30 @@ const corruptHtml = withGzipPayload(html, (p) => {
   b[b.length >> 1] ^= 0x55;
   return b.toString('base64');
 });
+// Token 1's SVG with a <script> element in it, in place of the art block, which runs to the end of
+// the page: the parser ends the block at the SVG's `</script>` and reads the rest as markup.
+const unsafeHtml = html.slice(0, html.indexOf(ART_OPEN) + ART_OPEN.length) + unsafeSvg(TOKENS[1].name, TOKENS[1].tier);
+const unsafeArt = parseArtBlock(unsafeHtml);
+if (!unsafeArt.rest) throw new Error('unsafe SVG variant not truncated');
 const asData = (h) => 'data:text/html;base64,' + Buffer.from(h, 'latin1').toString('base64');
-// [label, url, expected error (an invalid variant) and what the console logs, real Beast (token 4)]
+// [label, url, expected error (an invalid variant) and what the console logs, or the truncated art,
+// or a real Beast (token 4)]
 const targets = [
   ['fixtures/animation.html (file://)', pathToFileURL(join(root, 'fixtures', 'animation.html')).href],
   ['token.json animation_url (data: URI)', token.animation_url],
   ['SysEx MIDI variant (data: URI)', asData(sysexHtml)],
   ['unparsable settings variant 1,1,30,40,64,0 (data: URI)', asData(invalidHtml), { error: INVALID_ERROR, logged: [INVALID_ERROR] }],
   ['corrupt gzipped engine variant (data: URI)', asData(corruptHtml), { error: ENGINE_MISSING, logged: ['gunzip:', ENGINE_MISSING] }],
+  ['unsafe SVG variant, a <script> element in the art (data: URI)', asData(unsafeHtml), { truncatedArt: unsafeArt.art }],
   // UTF-8 bytes as latin1 characters, so asData's latin1 round trip keeps them.
-  ['token 4, a real Beast (data: URI)', asData(Buffer.from(animationHtml(4), 'utf8').toString('latin1')), undefined, true],
+  ['token 4, a real Beast (data: URI)', asData(Buffer.from(animationHtml(4), 'utf8').toString('latin1')), { real: true }],
 ];
 
 const browser = await chromium.launch({ executablePath: CHROME || undefined, env: process.env });
 let failed = false;
-for (const [label, url, invalid, real] of targets) {
+for (const [label, url, expected] of targets) {
   console.log(label);
+  const invalid = expected?.error ? expected : undefined, truncatedArt = expected?.truncatedArt, real = expected?.real;
   // The art is 250x350: at this viewport the <img> shows it at 1:1.
   const context = await browser.newContext({ viewport: { width: 250, height: 350 } });
   await context.addInitScript(instrument);
@@ -119,19 +133,37 @@ for (const [label, url, invalid, real] of targets) {
     });
     await page.waitForFunction(() => document.querySelector('img')?.complete);
     const dims = await page.$eval('img', (e) => [e.naturalWidth, e.naturalHeight]);
-    check(dims[0] === 250 && dims[1] === 350, `art <img> loaded (${dims.join('x')})`);
     const png = decodePng(await page.screenshot());
     if (shotDir) writeFileSync(join(shotDir, `${name}_page.png`), await page.screenshot());
+    const red = png.pixel(125, 129), card = png.pixel(30, 250); // clear of the ▶ button and the error line
     if (real) {
+      check(dims[0] === 250 && dims[1] === 350, `art <img> loaded (${dims.join('x')})`);
       // The Beast card: not the black page background in the middle of the art.
       const mid = png.pixel(125, 175);
       check(mid.join() !== '0,0,0', `real Beast art rendered (pixel ${mid})`);
-    } else {
-      const red = png.pixel(125, 129), card = png.pixel(30, 250); // clear of the ▶ button and the error line
+    } else if (truncatedArt === undefined) {
+      check(dims[0] === 250 && dims[1] === 350, `art <img> loaded (${dims.join('x')})`);
       check(red[0] > 240 && red[1] < 20 && red[2] < 20, `foreignObject PNG rendered (pixel ${red})`);
       check(card.join() === '30,30,34', `card background rendered (pixel ${card})`);
     }
-    if (invalid) {
+    if (truncatedArt !== undefined) {
+      const st = await page.evaluate(() => {
+        // Everything the parser put after the art block: the rest of the SVG, as page elements.
+        const leaked = [...document.querySelectorAll('#art ~ *, #art ~ * *')];
+        return {
+          art: document.getElementById('art').textContent,
+          leaked: leaked.map((e) => e.localName),
+          text: leaked.find((e) => e.localName === 'text')?.textContent,
+          gzipTags: document.querySelectorAll('script[type="text/javascript+gzip"]').length,
+        };
+      });
+      check(st.art === truncatedArt, `the parser ended the art block at the SVG's </script> (${st.art.length} bytes kept, as parseArtBlock predicts)`);
+      check(dims[0] === 0 && dims[1] === 0, 'the art <img> is broken: the truncated SVG does not parse');
+      check(st.leaked.includes('style') && st.text === TOKENS[1].name,
+        `the rest of the SVG became page markup (${st.leaked.length} elements, including <style> and <text>${st.text}</text>)`);
+      check(st.gzipTags === 0 && !(await page.$eval('#play', (b) => b.disabled)), 'the engine loaded and ▶ is enabled: only the art is broken');
+      check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
+    } else if (invalid) {
       check(await page.$eval('#play', (b) => b.disabled), '▶ is disabled');
       const shown = await page.textContent('#error');
       check(shown === invalid.error && (await page.isVisible('#error')) && (await page.$eval('#play', (b) => b.title)) === invalid.error,
