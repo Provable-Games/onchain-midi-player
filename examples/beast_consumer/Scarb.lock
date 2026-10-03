@@ -12,7 +12,7 @@ dependencies = [
 [[package]]
 name = "game_components_encoding"
 version = "2.7.0"
-source = "git+https://github.com/Provable-Games/game-components?rev=66ce934e750f8162de4f6a377357b2b8f8e5c4c0#66ce934e750f8162de4f6a377357b2b8f8e5c4c0"
+source = "git+https://github.com/Provable-Games/game-components?tag=v3.1.0#66ce934e750f8162de4f6a377357b2b8f8e5c4c0"
 
 [[package]]
 name = "onchain_tinysynth"

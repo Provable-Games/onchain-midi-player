@@ -12,9 +12,9 @@ Implemented:
 - **The offline build pipeline (issue #9):** the pinned engine, the page build, the generated [`src/page_data.cairo`](src/page_data.cairo) and the golden fixtures for the class. See [Build pipeline](#build-pipeline).
 - **The gzipped engine (issue #14):** `PAGE` carries the engine gzipped, with a small gunzip shim, which nearly halves the segment and its gas. See [The gzipped engine](#the-gzipped-engine).
 - **The class (issue #10):** `OnchainTinySynth` in [`src/contract.cairo`](src/contract.cairo), with `midi_segment` in [`src/segment.cairo`](src/segment.cairo). It matches every golden fixture byte for byte, directly and through a library call. See [Gas and limits](#gas-and-limits).
-- **The optimized base64 encoder:** the maintainer's `game_components_encoding` package, a pinned dependency that [`src/base64.cairo`](src/base64.cairo) re-exports. A full-size Beast `token_uri` costs 0.29B L2 gas. See [The base64 encoder](#the-base64-encoder).
+- **The optimized base64 encoder:** the maintainer's `game_components_encoding` package, from the game-components release `v3.1.0`, which [`src/base64.cairo`](src/base64.cairo) re-exports. A full-size Beast `token_uri` costs 0.29B L2 gas. See [The base64 encoder](#the-base64-encoder).
 
-> **Not ready to declare: the encoder must come from a tagged release.** No game-components release tag contains the encoder yet, so [`Scarb.toml`](Scarb.toml) pins it by `rev`. The release gate (issue #12) requires a tagged game-components release in place of the `rev` pin. See [The base64 encoder](#the-base64-encoder).
+> **Release gate (issue #12), the encoder: satisfied.** The stand-in encoder is gone, and the encoder is a tagged release: game-components `v3.1.0`, which resolves to commit `66ce934e750f8162de4f6a377357b2b8f8e5c4c0` (recorded in `Scarb.lock`). The gate's other items in issue #12 still apply before the class is declared.
 
 See [Roadmap](#roadmap).
 
@@ -147,9 +147,9 @@ The class is `onchain_tinysynth::contract::OnchainTinySynth`: an empty `#[storag
 All base64 in the class goes through one function, `onchain_tinysynth::base64::bytes_base64_encode(_bytes: ByteArray) -> ByteArray`: `midi_segment` (three passes) and the `base64` entry point.
 
 - **The encoder: `game_components_encoding`.** [`src/base64.cairo`](src/base64.cairo) re-exports `bytes_base64_encode` from the maintainer's optimized word-wise encoder, the zero-dependency package `game_components_encoding` (`packages/encoding` in [game-components](https://github.com/Provable-Games/game-components)). It encodes 93-byte blocks into four 31-byte words. For large inputs it costs about 3.3K L2 gas per input byte, or 3.6K through the library call. It uses the unstable corelib features `bounded-int-utils`, `byte-span` and `corelib-get-trait`, which compile as a dependency under Scarb 2.20.1. It is MIT licensed: its license is [vendored](tests/vendor/game-components.LICENSE) and in `license()`.
-- **The pin.** [`Scarb.toml`](Scarb.toml) pins it by `rev` to `66ce934e750f8162de4f6a377357b2b8f8e5c4c0`, because no game-components release tag contains it yet. The SHA-256 of its `packages/encoding/src/encoding.cairo` is `ef6d2fc50e1b5d1d81cd81091d3c34402ad41ebcd670d03e38a2a82b74c13883`. `Scarb.lock` records the same commit.
+- **The pin.** [`Scarb.toml`](Scarb.toml) pins it to the game-components release tag `v3.1.0`. `Scarb.lock` records the commit the tag resolves to, `66ce934e750f8162de4f6a377357b2b8f8e5c4c0`, and CI fails if a build changes the lockfile. The SHA-256 of its `packages/encoding/src/encoding.cairo` is `ef6d2fc50e1b5d1d81cd81091d3c34402ad41ebcd670d03e38a2a82b74c13883`.
 - **The output did not change.** It replaced a byte-wise stand-in, copied from game-components' utilities, which cost about 19.6K L2 gas per input byte. The encoder's tests ([`tests/test_base64.cairo`](tests/test_base64.cairo)) cover RFC 4648 vectors, every byte value, every length from 0 to 100, the 31/62/93-byte word boundaries, 1-16 KB inputs, and PAGE encoded twice at call time equal to the pre-encoded segment. They passed unchanged, and so did every golden fixture.
-- **Release gate.** The class must not be declared (issue #12) from the `rev` pin. Before declaring, switch it to the game-components release tag that contains this commit.
+- **Release gate.** Issue #12 required the stand-in to be replaced by the released encoder before declaring. That item is satisfied: the encoder is game-components `v3.1.0` (commit `66ce934`).
 
 ## Integration guide
 
@@ -507,7 +507,7 @@ The class is declared but never deployed, so block explorers cannot call it (`st
 | `tinysynth-b70ba90+page.6` | not declared yet | not declared yet | not declared yet | `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c` | `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` / 9,862 bytes | [`b70ba90`](https://github.com/Provable-Games/webaudio-tinysynth/commit/b70ba90d63c5ea657cb67ca98de90d7f778c29bd) in [Provable-Games/webaudio-tinysynth](https://github.com/Provable-Games/webaudio-tinysynth) |
 
 - The hashes and the length are the build's, from [`src/page_data.cairo`](src/page_data.cairo) (`VERSION`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`); `npm test` fails if the row for the current `version()` disagrees with them. The SHA-256 of the whole `PAGE` for each `version()` is in [`scripts/page_versions.json`](scripts/page_versions.json).
-- **A row is final only once its class is declared.** The class hash covers the class's Cairo code as well as the page. That includes the base64 encoder dependency, which is pinned by `rev` until a game-components release tag contains it; the release gate requires the tag. So the class hashes and the tag are filled in at declaration (roadmap phase 6), and until then the row can still change: a different encoder build changes the class hash, and a re-pinned engine or a new page changes `version()` and the hashes. Once declared, a row never changes.
+- **A row is final only once its class is declared.** The class hash covers the class's Cairo code as well as the page. That includes the base64 encoder dependency, game-components `v3.1.0` (commit `66ce934`, recorded in `Scarb.lock`). So the class hashes and the tag are filled in at declaration (roadmap phase 6), and until then the row can still change: a different encoder build changes the class hash, and a re-pinned engine or a new page changes `version()` and the hashes. Once declared, a row never changes.
 - `page.1` to `page.5` were development builds of the page and were never declared.
 
 ## Toolchain
@@ -603,7 +603,7 @@ The consumer's whole library call, including reading the result, is 6.2M (see [G
 3. **Offline build pipeline** (done, issue #9): verifies the pinned engine by SHA-256, gzips it (issue #14), assembles and aligns the page, and generates the pre-encoded Cairo constants plus golden fixtures (reference outputs for sample MIDI and art).
 4. **Cairo class implementation** (done, issue #10): the class, `midi_segment`, `SynthSettings` validation and encoding (issue #1), byte-for-byte parity with the JS reference fixtures directly and through `library_call`, the example ported to the class, the optimized base64 encoder (`game_components_encoding`), and gas and class-size measurements.
 5. **Browser validation**: Chromium, Firefox and WebKit; playback, looping, art sync, and offline behaviour.
-6. **Docs and declaration**: switch the encoder dependency from its `rev` pin to a tagged game-components release, finalize docs, declare on Sepolia, then on mainnet, and publish the class hashes.
+6. **Docs and declaration**: finalize docs, declare on Sepolia, then on mainnet, and publish the class hashes.
 
 ## Open decisions
 

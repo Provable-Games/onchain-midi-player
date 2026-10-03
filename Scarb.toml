@@ -10,12 +10,10 @@ license = "Apache-2.0"
 
 [dependencies]
 starknet = "2.20.1"
-# The base64 encoder (src/base64.cairo re-exports it): `packages/encoding` of game-components
-# (added in PR #160), at a commit that includes its LICENSE (added in PR #161). No release tag
-# contains this commit yet, so it is pinned by `rev`.
-# TODO: switch to the release tag that contains this commit once it is published. The release
-# gate (issue #12) requires a tagged dependency: the class must not be declared from a `rev` pin.
-game_components_encoding = { git = "https://github.com/Provable-Games/game-components", rev = "66ce934e750f8162de4f6a377357b2b8f8e5c4c0" }
+# The base64 encoder (src/base64.cairo re-exports it): `packages/encoding` of game-components, at
+# the release tag v3.1.0. Scarb.lock records the commit it resolves to,
+# 66ce934e750f8162de4f6a377357b2b8f8e5c4c0, and CI fails if a build changes the lockfile.
+game_components_encoding = { git = "https://github.com/Provable-Games/game-components", tag = "v3.1.0" }
 
 [dev-dependencies]
 snforge_std = "0.64.0"
