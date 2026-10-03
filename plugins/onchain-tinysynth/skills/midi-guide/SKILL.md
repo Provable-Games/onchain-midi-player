@@ -26,12 +26,12 @@ Open the printed URL and press ▶. If it plays right there, it plays the same f
 
 ### Get the tools
 
-- Node 22 or later. `check-midi` and `preview` need no `npm ci`.
+- Node 22 or later. `check-midi` and `preview` need no `npm ci`. While the repository is private, cloning it needs GitHub access.
 - Use a clone whose `PAGE` is your class's: `grep 'pub const VERSION' src/page_data.cairo` must print the class's `version()` (`preview` prints it too). The same `VERSION` always means the same `PAGE` bytes, so the newest commit with it has both the tools and the right page: `main` while its `VERSION` matches, otherwise the last commit before `VERSION` changed (`git log --oneline -- src/page_data.cairo`). A class's "Built from" commit in [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments) can predate the tools. Details: README [Agent skills](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#agent-skills).
 
 ## What the offline check guarantees
 
-- **Bytes.** `preview` writes exactly the decoded `animation_url` page (`PAGE ++ D ++ SVG`) that the class and a Beasts-layout consumer produce for the same MIDI, settings and SVG. `npm test` checks this against the example contract's golden output, and on Sepolia the deployed example's `token_uri` came back byte-identical through several RPC providers (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)).
+- **Bytes.** `preview` writes exactly the decoded `animation_url` page (`PAGE ++ D ++ SVG`) that the class and a consumer produce for the same MIDI, settings and SVG. `npm test` checks this against the example contract's golden output, and on Sepolia the deployed example's `token_uri` came back byte-identical through several RPC providers (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)).
 - **Playback.** Every browser runs the same engine and player code, but audio can differ slightly across browsers and sample rates (README: [The player page](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-player-page)).
 - **Noise and reverb** vary slightly from load to load until fork issue [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7) (deterministic reverb and noise buffers) lands.
 - **A bad file does not revert.** The class embeds the MIDI without parsing it. The page shows the error, ▶ stays disabled and the art still shows. Only an offline check catches it before mint.

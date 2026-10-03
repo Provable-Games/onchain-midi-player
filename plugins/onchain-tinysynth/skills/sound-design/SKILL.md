@@ -96,15 +96,15 @@ fn token_settings() -> SynthSettings {
 }
 ```
 
-To keep each token's sound fixed, pass constants or values derived only from permanent traits: for a given class hash, the same settings and MIDI always give the same sound. The example derives only `reverb` from the token's tier ([`examples/beast_consumer/src/sound.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/examples/beast_consumer/src/sound.cairo)).
+Fixed or live: for a given class hash, the same settings and MIDI always give the same sound. Pass constants or values from permanent traits and a token sounds the same forever; derive them from state that changes and the sound follows it (emit an ERC-4906 metadata update when it does; see the [integrator-guide](../integrator-guide/SKILL.md)). The example derives only `reverb` from the token's tier ([`examples/beast_consumer/src/sound.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/examples/beast_consumer/src/sound.cairo)).
 
-## Reference timbres
+## Example timbres
 
-The Beast reference sounds are a 2-operator lead on program 0, a kick on drum 36 and a snare on drum 38: `BEAST_LEAD`, `BEAST_KICK` and `BEAST_SNARE` in [`scripts/settings_fixtures.mjs`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/scripts/settings_fixtures.mjs), and the `beast_reference` entry of `tests/fixtures/settings.json`. Preview them with any score (`preview` accepts a whole fixture entry):
+The repository's test fixtures include three example sounds, a 2-operator lead on program 0, a kick on drum 36 and a snare on drum 38. They are examples for testing and measurement, not canonical sounds for any collection: `BEAST_LEAD`, `BEAST_KICK` and `BEAST_SNARE` in [`scripts/settings_fixtures.mjs`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/scripts/settings_fixtures.mjs), and the `beast_reference` entry of `tests/fixtures/settings.json`. Preview them with any score, or start your own from them (`preview` accepts a whole fixture entry):
 
 ```sh
-node -e 'const j = require("./tests/fixtures/settings.json"); console.log(JSON.stringify(j.valid.find((v) => v.name === "beast_reference")))' > beast.json
-npm run preview -- song.mid --settings beast.json --serve
+node -e 'const j = require("./tests/fixtures/settings.json"); console.log(JSON.stringify(j.valid.find((v) => v.name === "beast_reference")))' > example.json
+npm run preview -- song.mid --settings example.json --serve
 ```
 
 `npm run render-check` renders the three in a headless browser and measures them (optional; needs Playwright, see the README).
