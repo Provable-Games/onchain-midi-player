@@ -219,3 +219,51 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTI
 ## Examples
 
 - [`examples/beast_consumer`](examples/beast_consumer): a runnable end-to-end example of a Beasts-style NFT assembling its `token_uri` with library calls, against a mock of this class, with golden fixtures and decoded output.
+
+## CI
+
+GitHub Actions runs on every pull request and on pushes to `main`, on `ubuntu-24.04-arm`, with every action pinned to a commit SHA ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+| Job | What it checks |
+| --- | --- |
+| `cairo` | Scarb 2.20.1 and snforge 0.64.0 from `.tool-versions`: `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer`; the Scarb lockfiles stay unchanged |
+| `javascript` | Node 24: the example's Node tests; `npm ci` (when `package-lock.json` exists) and `npm test` when the root `package.json` has a `test` script; `tsc --checkJs` on `player/` when it exists |
+| `generated` | Reruns the example's `gen_page.mjs` and `gen_fixtures.mjs`, and `npm run check:settings` when that script exists, then fails on any diff |
+| `browser` | Installs Playwright's Chromium headless shell with its system libraries, then runs the example's `browser_check.mjs` and, when that script exists, `npm run render-check`. Firefox and WebKit follow in roadmap phase 5 |
+
+The optional steps switch on by themselves when the root `package.json`, its scripts or `player/` exist ([`.github/scripts/ci-detect.sh`](.github/scripts/ci-detect.sh)). TypeScript, `@types/node` and `playwright-core` are pinned in [`.github/ci-tools`](.github/ci-tools); Dependabot updates them and the actions monthly.
+
+Codex and Claude review each same-repository pull request ([`.github/workflows/codex-review.yml`](.github/workflows/codex-review.yml), [`claude-review.yml`](.github/workflows/claude-review.yml)) and post one comment each. A HIGH or CRITICAL finding fails that provider's `… review gate` check. Fork and Dependabot pull requests get no review credentials, so their gates fail with a request for manual review. `Review helper tests` checks the review scripts and lints every workflow. Setup, the trust model and the policies are in [`.github/scripts/README.md`](.github/scripts/README.md). The reviews need these secrets and Actions variables (organization or repository level); without them a review is skipped with a warning:
+
+| Name | Kind | Use |
+| --- | --- | --- |
+| `CLAUDE_CODE_OAUTH_TOKEN` | secret | Claude Code OAuth token |
+| `CODEX_AUTH_DOT_JSON` | secret | Codex `auth.json` (ChatGPT login) |
+| `CLAUDE_REVIEW_MODEL`, `CLAUDE_REVIEW_EFFORT` | variables | Claude model ID and effort |
+| `CODEX_REVIEW_MODEL`, `CODEX_REVIEW_EFFORT` | variables | Codex model ID and reasoning effort |
+
+Run the same checks locally from the repository root (Scarb and snforge from `.tool-versions`, Node 24):
+
+```sh
+scarb fmt --check && scarb build && snforge test
+(cd examples/beast_consumer && scarb fmt --check && scarb build && snforge test)
+(cd examples/beast_consumer && node --test scripts/*.test.mjs \
+  && node scripts/gen_page.mjs && node scripts/gen_fixtures.mjs)
+git diff --exit-code                     # generators left no drift
+npm test && npm run check:settings       # once the root package.json exists
+
+# Pinned tools for the type check and the browser checks
+(cd .github/ci-tools && npm ci --ignore-scripts)
+T=.github/ci-tools/node_modules
+$T/.bin/tsc --noEmit --allowJs --checkJs --target es2022 --module nodenext \
+  --moduleResolution nodenext --lib es2022,dom --typeRoots $T/@types --types node player/*.js
+(cd .github/ci-tools && npx playwright-core install --only-shell chromium)   # add --with-deps for system libraries
+PLAYWRIGHT_CORE="$PWD/$T/playwright-core" sh -c \
+  'cd examples/beast_consumer && node scripts/browser_check.mjs'
+PLAYWRIGHT_CORE="$PWD/$T/playwright-core" npm run render-check   # once the script exists
+
+# Review helpers
+python3 -I -B -m unittest discover -s .github/scripts -p 'test_*.py'
+```
+
+To use a Chromium you already have, set `CHROME=/path/to/chrome-headless-shell` (and `LD_LIBRARY_PATH` if it needs extra libraries) instead of installing one.
