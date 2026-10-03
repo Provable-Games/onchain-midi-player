@@ -555,6 +555,21 @@ npm run check-midi -- song.mid                        # the same, through npm
   node "$RUNNER_TEMP/onchain-tinysynth/scripts/check_midi.mjs" path/to/*.mid
   ```
 
+### Previewing a score
+
+[`scripts/preview.mjs`](scripts/preview.mjs) writes the page a token would get, offline: `PAGE ++ D ++ SVG`, byte for byte as the class and a Beasts-layout consumer produce it (built with [`scripts/page.mjs`](scripts/page.mjs)). It needs Node 22 or later and no `npm install`; like `check_midi.mjs`, run it from a checkout pinned to your class's version.
+
+```sh
+npm run preview -- song.mid                                        # default settings, placeholder art
+npm run preview -- song.mid --settings sound.json --svg art.svg   # the token's settings and art
+npm run preview -- song.mid --serve                                # also serve it on http://127.0.0.1:8000/
+```
+
+- **Checks first.** It runs the MIDI through `checkMidi` and reports it as `check_midi.mjs` does; the settings through `player/validate.js` and `player/encode.js`, the JS reference of `settings::validate` and the encoder, printing the panic data `midi_segment` would revert with; and the SVG through the [art rule](#art-svg-requirements). Any failure exits 1 and writes nothing.
+- **Inputs.** The MIDI in any form `check_midi.mjs` reads (one score). `--settings` takes a `SynthSettings` value as JSON, in the shape of the `settings` objects in [`tests/fixtures/settings.json`](tests/fixtures/settings.json) (a whole fixture entry also works; every field is required and unknown fields are rejected), or a page's `SETTINGS` text, so a deployed token's page can be rebuilt from its blocks. `--out` defaults to `preview.html`; `--serve` takes an optional port (0 picks a free one).
+- **Identity.** `npm test` checks that, for the example's token 1, the output equals [`examples/beast_consumer/fixtures/animation.html`](examples/beast_consumer/fixtures/animation.html), decoded from the golden `token_uri` the contract matches byte for byte, and that the `token_uri` around token 4's page has the digest the contract's is tested against.
+- **Playback** is the same engine and player code as in every token. Audio can still differ slightly across browsers and sample rates, and noise and reverb vary per load until the fork's deterministic buffers land (roadmap phase 0).
+
 ## Art (SVG) requirements
 
 The consumer's SVG must never contain `</script`, in any letter case.
@@ -672,6 +687,7 @@ node scripts/gen_midi_fixtures.mjs   # regenerate the synthetic scores (then gen
 npm ci && npm run gen:page   # rebuild the page, src/page_data.cairo and the page fixtures
 npm run check:page       # fail if any of them is out of date
 npm run check-midi -- song.mid   # check MIDI files against the page's MIDI contract
+npm run preview -- song.mid      # write (and optionally serve) the page a token with that MIDI gets
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromium \
   npm run render-check   # optional: render the reference timbres in a headless browser
 PLAYWRIGHT_CORE=... PLAYWRIGHT_BROWSER=firefox npm run page-check   # optional: the page; chromium, firefox or webkit
