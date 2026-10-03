@@ -1,12 +1,13 @@
 //! Consumer-supplied sound settings for `midi_segment`.
 //!
-//! The ranges below are the validation rules applied by `crate::settings::validate`
-//! (issue #1). Custom waveforms (issue #2) and filters (issue #3) are part of the types and
-//! of the `SETTINGS` grammar already, but are rejected until those issues land.
-//! `midi_segment` reverts with a descriptive error when any value is out of range; the
-//! exact checks, their order and their messages are listed in `crate::settings`. This is the
-//! only place they are enforced: the player page parses `SETTINGS` strictly but does not
-//! repeat the range checks.
+//! `crate::settings::validate` checks only what the format or the engine requires: `quality`
+//! is 0 or 1, `voices` at least 1, the counts, slots and routes, and the gates below. Every
+//! other numeric field takes any value of its integer type, since the engine accepts them all.
+//! Custom waveforms (issue #2) and filters (issue #3) are part of the types and of the
+//! `SETTINGS` grammar already, but are rejected until those issues land. `midi_segment` reverts
+//! with a descriptive error when a check fails; the exact checks, their order and their
+//! messages are listed in `crate::settings`. This is the only place they are enforced: the
+//! player page parses `SETTINGS` strictly but does not repeat them.
 //!
 //! # Fixed-point numbers
 //!
@@ -47,20 +48,23 @@ pub struct SynthSettings {
     /// Built-in timbre set: 0 = chip-tune (one oscillator per note), 1 = FM (two or more).
     /// Range: 0 or 1.
     pub quality: u8,
-    /// Reverb level in percent. 0 turns reverb off. Range: 0..=100.
+    /// Reverb level in percent. 0 turns reverb off. Any `u8`: 100 is TinySynth's full level,
+    /// and higher values are louder still.
     pub reverb: u8,
-    /// Master volume in percent of full scale. Range: 0..=100.
+    /// Master volume in percent of full scale. Any `u8`; above 100 can clip.
     pub master_vol: u8,
-    /// Maximum simultaneous notes; the oldest note is cut beyond this. Range: 1..=64.
+    /// Maximum simultaneous notes; the oldest note is cut beyond this. At least 1, any `u8`.
     pub voices: u8,
     /// Custom waveforms shared by every timbre in this call; operators select one with
-    /// `Waveform::Custom(index)`, 0-based. 0..=16 entries; unused and repeated entries are
-    /// allowed; each is registered once, in order, before any timbre is installed.
+    /// `Waveform::Custom(index)`, 0-based. 0..=256 entries, all that `Custom(u8)` can index;
+    /// unused and repeated entries are allowed; each is registered once, in order, before any
+    /// timbre is installed.
     /// Must be empty until issue #2 lands (`'TS: custom wave unsupported'`).
     pub waves: Span<WaveDef>,
     /// Custom sounds replacing built-in programs or drum notes. Empty means built-ins only.
-    /// At most 32 timbres per call. Each `(drum, slot)` pair may appear once. The encoded
-    /// `SETTINGS` must not exceed 8,192 bytes (about 50 bytes per operator plus 6 per timbre).
+    /// At most 175 timbres per call: each `(drum, slot)` pair may appear once, and there are 128
+    /// programs and 47 drum notes. The encoded `SETTINGS` has no byte cap; it is about 50 bytes per
+    /// operator plus 6 per timbre, and its gas grows with it (see the README).
     pub timbres: Span<Timbre>,
 }
 
@@ -98,34 +102,33 @@ pub struct Operator {
     /// [`w`] Waveform.
     pub wave: Waveform,
     /// [`v`] Level, fixed-point. For an audio-output operator this is loudness; for a
-    /// modulator it is depth. Range: 0..=100.0.
+    /// modulator it is depth. No limit.
     pub volume: u32,
     /// [`t`] Frequency multiple of the note, fixed-point. 0 makes the frequency fixed at
     /// `offset_hz`, which is how LFOs (for example 6 Hz vibrato) are built.
-    /// Range: 0..=64.0.
+    /// No limit.
     pub ratio: u32,
-    /// [`f`] Frequency offset in Hz, fixed-point. Range: -20_000.0..=20_000.0.
+    /// [`f`] Frequency offset in Hz, fixed-point. No limit: Web Audio clamps frequencies.
     pub offset_hz: i32,
     /// [`a`] Attack time in seconds, fixed-point; 0 jumps straight to full level.
-    /// Range: 0..=20.0.
+    /// No limit.
     pub attack: u32,
-    /// [`h`] Hold time in seconds, fixed-point. Range: 0..=20.0.
+    /// [`h`] Hold time in seconds, fixed-point. No limit.
     pub hold: u32,
-    /// [`d`] Decay time constant in seconds, fixed-point. Range: 0..=20.0.
+    /// [`d`] Decay time constant in seconds, fixed-point. No limit.
     pub decay: u32,
-    /// [`s`] Sustain level as a multiple of `volume`, fixed-point. Range: 0..=100.0.
+    /// [`s`] Sustain level as a multiple of `volume`, fixed-point. No limit.
     pub sustain: u32,
     /// [`r`] Release time constant in seconds, fixed-point. TinySynth cuts the voice at
-    /// 3.5 times this. Range: 0..=20.0.
+    /// 3.5 times this. No limit.
     pub release: u32,
     /// [`p`] Pitch envelope target as a multiple of the starting frequency, fixed-point.
-    /// 1 = no pitch change; below 1 = pitch drop (kicks, toms). Range: 0..=16.0.
+    /// 1 = no pitch change; below 1 = pitch drop (kicks, toms). No limit.
     pub pitch_ratio: u32,
-    /// [`q`] Pitch envelope time constant in seconds, fixed-point. Range: 0..=20.0.
+    /// [`q`] Pitch envelope time constant in seconds, fixed-point. No limit.
     pub pitch_time: u32,
     /// [`k`] Volume key scaling, fixed-point: level is multiplied by
-    /// `2^((note - 60) / 12 * key_scale)`. Negative values soften high notes.
-    /// Range: -8.0..=8.0.
+    /// `2^((note - 60) / 12 * key_scale)`. Negative values soften high notes. No limit.
     pub key_scale: i32,
     /// Optional fixed filter on this operator's output (issue #3). Allowed only when
     /// `route == 0`. Must be `None` until issue #3 lands (`'TS: filter unsupported'`).
@@ -152,11 +155,12 @@ pub enum Waveform {
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub enum WaveDef {
     /// Band-limited wave from harmonic amplitudes: element `i` is the relative amplitude of
-    /// harmonic `i + 1`. Range: 1..=64 elements.
+    /// harmonic `i + 1`. Range: 1..=256 elements, the engine's limit (fork issue #26).
     Harmonics: Span<u16>,
     /// Single-cycle wave from samples, played sample-and-hold at the note's pitch, giving
     /// exact chip waveforms such as a 4-bit stepped triangle or a 12.5% pulse. Each sample
-    /// maps -128..=127 to -1.0..=1.0. Range: 2..=256 samples.
+    /// maps -128..=127 to -1.0..=1.0. Range: 2..=1024 samples, the engine's limit (fork issue
+    /// #26).
     Samples: Span<i8>,
 }
 
