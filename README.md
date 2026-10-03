@@ -80,7 +80,7 @@ Alignment. The consumer's own pieces (`'{' ... base64,'`, `S`, `',' <pad>`) must
 `PAGE` is [`tests/fixtures/page.html`](tests/fixtures/page.html), byte for byte: head and styles, the engine gzipped in a `<script type="text/javascript+gzip" src="data:text/javascript;base64,...">` tag (it inflates to the pinned fork build's exact bytes), the gunzip shim `<script>`, a small ▶/■ button, the player `<script>` (not compressed), then the opening of the settings block and its alignment spaces. The per-token `D` and the SVG follow it at call time. The shim inflates the engine while the page is parsed (see [The gzipped engine](#the-gzipped-engine)). The player ([`player/player.js`](player/player.js) and [`player/settings.js`](player/settings.js), flattened into one plain script and minified) starts on DOMContentLoaded:
 
 - **Art first.** It shows the art block in an `<img>` as `data:image/svg+xml;base64,...` (the SVG re-encoded as UTF-8), before and independently of the settings and the MIDI. The art fills the frame; the button overlays the bottom-right corner.
-- **Settings and MIDI.** It parses `SETTINGS` strictly (`decodeSettings`: the grammar, canonical integers, Cairo type bounds, count caps, known tags, every token consumed). Range and semantic validation is Cairo's alone: the class runs `settings::validate` before writing `SETTINGS`, and the page does not repeat it (spec Q4, reversed). It decodes the MIDI block (strict base64 after trimming the alignment spaces) and checks it (`checkMidi`). The check guarantees that TinySynth's parser reads the file as written and that looping is safe: it rejects running status without a channel status, tempo events that are not 3 bytes (with a one-byte length) or are 0, text events over 4 KB, F7 events and SysEx split over several events, a track without End-of-Track at its end, format 2, SMPTE timing, and a loop shorter than 50 ms.
+- **Settings and MIDI.** It parses `SETTINGS` strictly (`decodeSettings`: the grammar, canonical integers, Cairo type bounds, count caps, known tags, every token consumed). Range and semantic validation is Cairo's alone: the class runs `settings::validate` before writing `SETTINGS`, and the page does not repeat it (spec Q4, reversed). It decodes the MIDI block (strict base64 after trimming the alignment spaces) and checks it (`checkMidi`). The check guarantees that TinySynth's parser reads the file as written and that looping is safe; its rules and error messages are in the [MIDI contract](#midi-contract).
 - **Fail closed (spec D9).** If the engine did not load (its gzip payload did not inflate, or the engine failed when it ran: `engine: TinySynth did not load`), and on any parse or MIDI error, ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and logged. No synth is created. The art stays: the player that shows it is not compressed, so it never depends on inflation.
 - **▶** (a click or tap) constructs TinySynth on the first press (`createSynth`), resumes the `AudioContext` inside the gesture, reloads the MIDI (back to tick 0 at the song's starting tempo, keeping any rest before the first event), loops at End-of-Track with `setLoop(1)` and `setLoopEnd(maxTick)`, and starts playback. It then restarts the art when tick 0 is heard: after TinySynth's scheduling offset (`playTime - currentTime`, 100 ms) plus `AudioContext.outputLatency`, it re-creates the `<img>` with a distinct but equivalent URL (`data:image/svg+xml;r=<n>;base64,...`), so the browser starts a new animation timeline, and swaps it in once decoded.
 - **■** stops playback and cancels a pending art restart. It also cuts off every voice, including drum voices and notes already scheduled ahead (which TinySynth's `stopMIDI` leaves running), by replacing each channel's volume node, and drops the controller changes TinySynth had already scheduled, so nothing reaches the next playback. The art keeps running.
@@ -405,17 +405,107 @@ let lead = Timbre { drum: false, slot: 0, operators: [carrier, lfo].span() };
 
 The kick and snare are in `scripts/settings_fixtures.mjs`. `npm run render-check` renders all three sounds in headless Chromium and measures them (optional; needs Playwright). The checks: pitch and vibrato, the kick's pitch drop, and the snare's noise burst.
 
-## MIDI requirements
+## MIDI contract
 
-The `midi` argument must be a Standard MIDI File (SMF) passed as `ByteArray`:
+What a composer can rely on, and what the page rejects. The `midi` argument of `midi_segment` is a Standard MIDI File passed as a `ByteArray`. The class embeds it as base64 and never parses it, so a file that breaks a rule here does not revert: the page shows the error, ▶ stays disabled, and the art still shows.
 
-- PPQN (ticks-per-quarter-note) timing; SMPTE time division is not supported.
-- Every track ends with an End-of-Track meta event, and every `MTrk` chunk length is exact.
-- Tempo, program changes and controllers are set at tick 0.
-- Custom sounds are selected with program changes (0–127) or drum notes (35–81 on channel 10), matching the `slot` values in `SynthSettings`.
-- The player loops at the End-of-Track time, so End-of-Track should sit at the intended loop point, such as the end of the last bar.
+Every rule below is fixed per class hash: the checks are `checkMidi` and `decodeMidi` in [`player/player.js`](player/player.js), and playback is the pinned TinySynth (`b70ba90`) driven by that player.
 
-The class embeds the bytes as base64 text and does not parse or validate them. Invalid MIDI shows up as a player failure in the browser, not as a revert.
+### Accepted format
+
+`checkMidi` rejects a file unless it meets every rule below. Its errors read `midi: <message> (byte <offset>)`, where the offset is where reading stopped.
+
+| Rule | Message |
+| --- | --- |
+| The file starts with an `MThd` chunk of length 6. | `not a Standard MIDI File` |
+| Format 0 or 1. | `format 2 is not supported` (with the file's format number) |
+| At least one track, and exactly one in format 0. | `bad track count` |
+| The time division counts ticks per quarter note, 1–32,767. SMPTE timing (top bit set) and 0 are rejected. | `SMPTE or zero time division is not supported` |
+| Every chunk after the header, up to the declared number of tracks, is an `MTrk` chunk. | `expected MTrk` |
+| Each `MTrk` length stays inside the file. | `MTrk length past the end of the file` |
+| Every chunk ends inside the file, and every event inside its chunk. A track with no End-of-Track runs past its chunk and fails here. | `truncated` |
+| Delta times and lengths take at most 4 bytes. | `bad variable-length number` |
+| End-of-Track (`FF 2F 00`) is the last event of every chunk, so chunk lengths are exact. | `End-of-Track is not at the end of its track` |
+| Nothing follows the last track. | `trailing bytes after the last track` |
+| Running status follows a channel message in the same track: not at the start of a track, nor after a meta or SysEx event. | `running status without a channel status` |
+| Channel message data bytes are 0–127. | `bad data byte` |
+| Tempo is exactly `FF 51 03 tt tt tt` (the length a single byte) and not 0. | `bad tempo` |
+| Text, copyright, track name, instrument name and device name events (`FF 01`–`FF 04`, `FF 09`) are at most 4,096 bytes. | `text event longer than 4096 bytes` |
+| Each SysEx is one `F0` event that holds the whole message and ends with `F7`. | `SysEx not complete in one event` |
+| No `F7` events (SysEx continuation or escape). | `SysEx continuation or escape (F7) events are not supported` |
+| No other system status bytes as events (`F1`–`F6`, `F8`–`FE`). | `unexpected status byte` |
+| One pass lasts at least 50 ms: `maxTick` (see [Playback](#playback)) under the tempo map, which starts at 120 BPM. | `loop shorter than 50 ms` |
+
+Everything else is accepted: any channel message, other meta events and SysEx of any length, and tempo events in any track. The page also rejects a MIDI block that is not strict base64 (`midi: not base64`). The class always writes valid base64, so a file from the class never fails this way.
+
+The rules follow from how TinySynth reads a file: it stops reading a track at End-of-Track rather than at the chunk length, keeps running status across tracks and after meta and SysEx events, reads tempo at a fixed offset, and turns F7 events into SysEx. On a loop under 50 ms its scheduler would never catch up, and a longer text event can exceed a browser's argument limit.
+
+### Playback
+
+- **Start.** Nothing plays until ▶ is pressed (a click or tap). Each ▶ reloads the MIDI and plays it from tick 0, after resetting every channel: program 0, volume (CC7) 100, pan (CC10) 64, expression (CC11) 127, modulation 0, sustain off, pitch bend centred, bend range MSB 2 (see RPN 0 below), fine, coarse and master tuning 0, and channel 10 as the only drum channel. The tempo is 120 BPM until the first tempo event. A rest before the first event is kept.
+- **Tracks.** TinySynth merges all tracks into one list by tick; events at the same tick keep file order, track by track. A track does not loop on its own: if it ends before the others, it is silent until the pass ends.
+- **Tempo.** A tempo change takes effect at its tick, from any track. The BPM is 60,000,000 divided by the tempo value, kept fractional.
+- **Loop.** The song always loops. A pass ends at `maxTick`, the latest End-of-Track tick of any track (the player calls `setLoop(1)` and `setLoopEnd(maxTick)`), and the next pass starts at tick 0, keeping the rest before the first event.
+- **State between passes.** At each loop point the tempo returns to 120 BPM, and a tempo event at tick 0 applies at once. Nothing else is reset: programs, controllers, pitch bend, RPN settings and tuning carry over from the end of the previous pass, and notes still sounding at End-of-Track keep sounding. Events at tick 0 run again on every pass, so a song that sets its state at tick 0 starts every pass the same way. Otherwise the first pass starts from the defaults above, and later passes from wherever the previous one ended.
+- **■** stops playback, cuts every voice (drum hits and notes already scheduled ahead included), and cancels the volume, expression, pan and modulation changes TinySynth had already scheduled. The art keeps running.
+- **Scheduling.** TinySynth schedules events about 0.2 s ahead. Each message takes effect at its own time, except CC120, CC121 and CC123–127, which act when they are scheduled (see below).
+
+### Channels and instruments
+
+- **16 channels.** Port and channel-prefix meta events are ignored.
+- **Channel 10 (index 9) is percussion.** A note-on from 35 to 81 plays that drum; other notes are silent. Note-offs are ignored: a hit lasts 3.5 × the decay of its sound's first operator. Program changes on channel 10 have no effect.
+- **The other channels are melodic.** Program changes 0–127 select the General MIDI instrument, and notes 0–127 all play. Bank select (CC0, CC32) is ignored, so there are 128 programs.
+- **Built-in sounds.** `SynthSettings.quality` picks TinySynth's built-in set: 0 chip-tune (one oscillator per note), 1 FM.
+- **Custom sounds.** Each entry of `SynthSettings.timbres` replaces program `slot` (0–127) or drum note `slot` (35–81) for the whole song. The MIDI selects it the ordinary way: a program change to the slot, or that drum note on channel 10.
+
+### Messages TinySynth honours
+
+| Message | Effect |
+| --- | --- |
+| Note on (`9n`) | Velocity 1–127; velocity 0 is a note-off. Loudness follows velocity squared, (velocity / 128)²; FM depth does not change with velocity. |
+| Note off (`8n`) | Releases every note of that pitch on the channel that started at or before it and has had no note-off yet. Its velocity is ignored. |
+| Program change (`Cn`) | Selects the instrument for the channel's following notes. |
+| Pitch bend (`En`) | Shifts the channel's notes by (value − 8192) / 8192 × the bend range. |
+| CC1 modulation | Vibrato of ±(value × 100 / 127) cents from one 5 Hz sine LFO, shared by all channels. |
+| CC7 volume, CC11 expression | Channel gain 3 × (CC7 / 127)² × (CC11 / 127)². |
+| CC10 pan | Position (value − 64) / 64: 0 is left, 64 centre, 127 almost fully right. |
+| CC64 sustain | At 64 or more, notes that get a note-off keep sounding; below 64 releases them. |
+| CC101 and CC100 (RPN), CC6 and CC38 (data entry) | RPN 0, bend range: full scale is (MSB × 128 + LSB) × 100 / 127 cents, so the default MSB 2 gives about ±201.6 cents, not ±200. RPN 1, fine tuning: 14 bits, ±1 semitone around 8192. RPN 2, coarse tuning: MSB − 64 semitones. Other RPNs are ignored. |
+| CC98, CC99 (NRPN) | Deselect the RPN, so the data entry that follows is ignored. |
+| CC120, CC123–127 | Cut every melodic note on the channel at once, when scheduled: up to about 0.2 s before the message's time, including notes due in that window. Drum hits are not cut. |
+| CC121 reset all controllers | When scheduled: expression 127, modulation 0, RPN deselected, sustain off, and pitch bend centred for new notes. Notes held by sustain are not released: they sound until the next CC64 below 64, the voice limit or ■. |
+| SysEx `F0 7F dd 04 03 ll mm F7` | GM master fine tuning: (mm × 128 + ll − 8192) / 8192 semitones. |
+| SysEx `F0 7F dd 04 04 ll mm F7` | GM master coarse tuning: mm − 64 semitones. |
+| GS SysEx `F0 41 dd 42 12`, address, data, checksum, `F7`, at its standard length (device ID and checksum are not checked) | `40 00 00`: master tune, four data nibbles n, (n − 0x400) × 0.1 cent. `40 00 05`: master key-shift, data − 64 semitones. `40 1x 40` to `40 1x 4B`: scale tuning of C to B, data − 64 cents. `40 1x 15`: use for rhythm part, which makes part x's channel a drum channel (data not 0) or melodic (0); notes on a melodic channel 10 skip their release envelope. Part x: 0 is channel 10, 1–9 are channels 1–9, A–F channels 11–16. |
+| Meta `FF 51` (tempo), `FF 2F` (End-of-Track) | See [Playback](#playback). |
+
+Ignored, with no effect: every other controller, including bank select (CC0, CC32), CC91 reverb send (reverb is engine-wide: `SynthSettings.reverb`), CC93 chorus, portamento (CC5, CC65), CC66 sostenuto, CC67 soft pedal, the sound controllers (CC70–79) and CC122 local control; polyphonic aftertouch (`An`) and channel pressure (`Dn`); every other SysEx, including GM System On, GS Reset and GM Master Volume (master volume is `SynthSettings.master_vol`); and every other meta event (text, markers, lyrics, time and key signatures).
+
+### Limits
+
+- **Polyphony:** at most `SynthSettings.voices` (1–64) melodic notes at once, across all channels. A note beyond that cuts a released note first (the one ending soonest), otherwise the oldest held note. Drum hits do not count, and the limit never cuts them.
+- **Range:** 16 channels, programs 0–127, notes 0–127 (drum notes 35–81), and velocity 1–127, with loudness following its square.
+- **Timing:** 1–32,767 ticks per quarter note, tempo 1–16,777,215 µs per quarter note, and a pass of at least 50 ms.
+- **Size:** text events at most 4,096 bytes. Nothing else in the page limits the size; gas does (see the recommendations).
+- **Mix:** master volume and reverb are `SynthSettings.master_vol` and `SynthSettings.reverb`, the same for the whole song. MIDI cannot change them.
+
+### What's fixed and what's driven
+
+- **Fixed per class hash:** the engine, the player and the page, and so every rule in this section. A new engine or page means a new class hash and `version()`.
+- **Driven on each call:** the MIDI (by the composer), and the `SynthSettings` and the art (by the consumer).
+
+The full list is in [Verifying the engine](#verifying-the-engine).
+
+### Recommendations (optional)
+
+Nothing checks these; a file that ignores them still plays.
+
+- **Set the state at tick 0:** tempo, program, volume (CC7), pan (CC10) and any controller the song changes, so that every pass starts the same way.
+- **Put End-of-Track at the loop point:** the latest End-of-Track should sit exactly where the song loops, such as the last bar line.
+- **Release every note by End-of-Track:** a note still held there sounds into the next pass.
+- **Put the note-off first:** at one tick, put a note's note-off before the next note-on of the same pitch on that channel. The other way round, the note-off releases the new note too.
+- **Prefer note-offs to CC120–127, and avoid CC121** (see the table).
+- **Keep the file small:** `midi_segment` base64-encodes the MIDI at call time, once on its own and twice inside `D`, so gas grows with its length. That is about 81M L2 gas per 1,000 bytes with the stand-in encoder (5.2M with no MIDI and 305.1M with 3,716 bytes, in [the `midi_segment` table](#midi_segment-by-midi-and-settings-size)), and about 31M with the optimized encoder (projected).
 
 ## Art (SVG) requirements
 
