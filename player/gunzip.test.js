@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { describe, test } from "node:test";
-import { crc32, gunzipSync as zlibGunzip, gzipSync as zlibGzip } from "node:zlib";
+import { gunzipSync as zlibGunzip, gzipSync as zlibGzip } from "node:zlib";
 import { gzipSync } from "fflate";
 import { gunzip, gunzipScripts } from "./gunzip.js";
 import { gzipEngine, shimScript } from "../scripts/build_page.mjs";
@@ -17,6 +17,20 @@ import { SHIM_PIN, pageHtml, pageScripts, sha256 } from "../scripts/page.mjs";
 const engine = Buffer.from(engineSource());
 /** gunzip as a Buffer. */
 const inflate = (/** @type {Uint8Array} */ gz) => Buffer.from(gunzip(gz));
+/**
+ * CRC-32 (IEEE 802.3, as gzip uses it), bit by bit. Here rather than zlib.crc32, which Node 22.0
+ * and 22.1 lack (package.json allows Node 22 or later).
+ * @param {Uint8Array} d
+ */
+function crc32(d) {
+  let c = -1;
+  for (const b of d) {
+    c ^= b;
+    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  }
+  return ~c >>> 0;
+}
+
 /** Throws unless `fn` throws an Error whose message starts with "gunzip: ". */
 const throwsGunzip = (/** @type {() => unknown} */ fn, /** @type {string} */ label) =>
   assert.throws(fn, (e) => e instanceof Error && e.message.startsWith("gunzip: "), label);
