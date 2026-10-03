@@ -66,7 +66,7 @@ Where:
 - `PAGE` is the fixed HTML page. It ends by opening the settings text block (`<script type="text/plain" id="settings">`).
 - `animation_url_segment()` = `b64('"animation_url":"data:text/html;base64,' ++ b64(PAGE))`.
 - `midi_segment(midi, settings)` = `b64(b64(D))`, with `D = SETTINGS '</script><script type="text/plain" id="midi">' b64(midi) <pad> '</script><script type="text/plain" id="art">'`. `SETTINGS` is an ASCII encoding of the `SynthSettings` value (digits, `-` and separators only); its exact format is specified with issue #1.
-- `S = svg_b64 '"' <pad>` is encoded once and used twice. The first time it is the `image` value. The second time, at the HTML layer, it is the tail of the `animation_url` base64 stream: `svg_b64` decodes to the raw SVG, which becomes the contents of the open art block, and the `"` closes the `animation_url` string.
+- `S = svg_b64 '"' <pad>` is encoded once and used twice. The first time it is the `image` value. The second time, at the HTML layer, it is the tail of the `animation_url` base64 stream: `svg_b64` decodes to the raw SVG, which becomes the contents of the open art block, and the `"` closes the `animation_url` string. The SVG must therefore never contain `</script` (see [Art (SVG) requirements](#art-svg-requirements)).
 
 Decoded, the `animation_url` value after its `data:text/html;base64,` prefix is `b64(PAGE) ++ b64(D) ++ svg_b64`, which is standard base64 of `PAGE ++ D ++ SVG`. Since `svg_b64` ends that stream, it may end with `=` padding. `b64(PAGE)` and `b64(D)` are mid-stream and must be unpadded.
 
@@ -303,20 +303,97 @@ The `midi` argument must be a Standard MIDI File (SMF) passed as `ByteArray`:
 
 The class embeds the bytes as base64 text and does not parse or validate them. Invalid MIDI shows up as a player failure in the browser, not as a revert.
 
+## Art (SVG) requirements
+
+The consumer's SVG must never contain `</script`, in any letter case.
+
+- **Why.** In the `animation_url` page, the SVG is the raw contents of the final `<script type="text/plain" id="art">` block, which stays open until the end of the document (see [Consumer `token_uri` layout](#consumer-token_uri-layout-the-beasts-layout)). The HTML parser ends that block at the first `</script`. The art is cut short there, the player's `<img>` gets a truncated SVG and shows a broken image, and the rest of the SVG leaks into the page as markup. The `image` member still decodes to the whole SVG, so marketplaces' image views do not show the failure.
+- **In practice.** No `<script>` elements in the SVG, and no comments or CDATA sections containing `</script`. Nothing else needs care: SVG is XML, so any `<` in text content is already escaped as `&lt;`. Consumers lose nothing, because scripts inside an SVG never run when it is shown through `<img>`, which is how both this page and marketplaces' `image` views show it.
+- **Evidence.** Art Blocks' onchain generator broke all five of its `custom@na` projects on mainnet this way: each stored HTML document's own `</script>` ended the generator's `<script>` wrapper early, and the rest was parsed as page markup ([`GenArt721GeneratorV0-custom-na-upgrade.md`](https://github.com/ArtBlocks/artblocks-contracts/blob/main/packages/contracts/deployments/generator/GenArt721GeneratorV0-custom-na-upgrade.md) in `ArtBlocks/artblocks-contracts`).
+- **Test it in the consumer.** The class never sees the SVG: it returns the pieces around it, and the consumer splices the art in itself. So the rule belongs in the consumer's own tests, on its renderer's output. [`examples/beast_consumer`](examples/beast_consumer) shows how: `assertArtSafe` in its scripts and `contains_script_end_tag` in its Cairo tests check the rendered SVG; its Node tests and browser check show the truncated art an unsafe SVG produces. A renderer built from fixed, reviewed literals and validated fields meets the rule by construction. In Beasts, for example, names are limited to `A-Z a-z 0-9`, space, `'` and `-`, and art URIs are strict base64.
+- **`svg_b64`.** The SVG goes into `S` as `svg_b64`: standard RFC 4648 base64 of the exact SVG bytes, with no line breaks. It may end with `=` padding, because it ends the HTML-layer stream. It is also the `image` value, so marketplaces and the page show the same bytes.
+- **Rejected alternatives.** Ending the page with an obsolete `<plaintext>` element instead of the art block, and base64-encoding the art inside the page, which would encode the art again at call time, at both layers.
+
 ## Engine provenance and verification
 
 - Engine: TinySynth from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>. The fork removes the GUI and is licensed Apache-2.0, like upstream.
 - The class embeds the fork's own minified build at a pinned commit: currently `b70ba90` (`b70ba90d63c5ea657cb67ca98de90d7f778c29bd`), SHA-256 `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c`. It moves to a tagged release once the fork publishes one (roadmap phase 0); re-pinning is a one-line change (see [`tests/vendor/README.md`](tests/vendor/README.md)).
 - The build is offline: the minified file and the fork's NOTICE are vendored in [`tests/vendor/`](tests/vendor), and `ENGINE_PIN` in [`scripts/engine.mjs`](scripts/engine.mjs) checks both SHA-256 hashes on every load, failing before anything is generated.
-- Anyone can verify a declared class:
-  1. Check out the pinned commit or tag of the fork and run its build (`npm install && npm run build`) to reproduce `webaudio-tinysynth.min.js`.
-  2. Decode a consumer's `token_uri` offchain (JSON layer, then HTML layer). Take the `src` of the page's `<script type="text/javascript+gzip">` tag and base64-decode what follows `data:text/javascript;base64,`: that is the gzip payload, whose SHA-256 is `page_data::GZIP_SHA256`. Gunzip it (with any gzip tool) and compare the result byte for byte with the rebuilt file.
-  3. Compare the SHA-256 of both with `script_sha256()` (readable by a consumer contract or its tests).
-  4. Rebuild this repository at the matching commit (`npm ci && npm run gen:page`, then `scarb build`) and compare the resulting class hash with the declared one.
+- Anyone can check the engine in any token against these values, and rebuild it: see [Verifying the engine](#verifying-the-engine).
+
+## Verifying the engine
+
+The class is declared but never deployed, so an explorer cannot call `script_sha256()` on it. It does not need to: every token's `animation_url` carries the engine, and the steps below check it offline with standard tools, against the values in [Versions](#versions).
+
+What a class hash fixes, and what the consumer supplies:
+
+- **Fixed per class hash:** the engine (gzipped in the page), the gunzip shim, the player, and with them the whole fixed page `PAGE`, plus `version()`, `script_sha256()` and `license()`. The class hash also covers the class's Cairo code (its base64 encoder and settings validation), so it changes when that code changes, even if the page does not.
+- **Supplied by the consumer on each call:** the MIDI and the `SynthSettings` (through `midi_segment`), and the SVG art and the other JSON members (which the class never sees).
+
+1. **Get the `token_uri`.** Read it from the collection's contract, which is deployed: in an explorer's read tab, with `sncast call`, or from a marketplace's metadata view. Save the string, `data:application/json;base64,...`, to `token_uri.txt`.
+2. **Decode it and hash the engine.** The JSON layer, then the `animation_url` HTML layer, then the gzip payload of the page's `<script type="text/javascript+gzip" src="data:text/javascript;base64,...">` tag, base64-decoded and gunzipped. With a shell (GNU coreutils, grep and gzip):
+
+   ```sh
+   cut -d, -f2- token_uri.txt | base64 -d \
+     | grep -o '"animation_url": *"data:text/html;base64,[^"]*' | cut -d, -f2- | base64 -d \
+     | grep -o 'type="text/javascript+gzip" src="data:text/javascript;base64,[^"]*' | cut -d, -f2- \
+     | base64 -d > engine.js.gz
+   sha256sum engine.js.gz              # the gzip payload
+   gunzip -c engine.js.gz | sha256sum  # the engine: script_sha256()
+   ```
+
+   The first `grep` expects the JSON to write `/` unescaped, as the Beasts layout does. Python's standard library parses the JSON properly, and `gzip.decompress` checks the gzip CRC-32 and length:
+
+   ```sh
+   python3 - token_uri.txt <<'EOF'
+   import base64, gzip, hashlib, json, re, sys
+   uri = open(sys.argv[1]).read().strip()
+   token = json.loads(base64.b64decode(uri.split(",", 1)[1]))        # JSON layer
+   html = base64.b64decode(token["animation_url"].split(",", 1)[1])  # HTML layer, as bytes
+   tag = rb'<script type="text/javascript\+gzip" src="data:text/javascript;base64,([^"]*)"'
+   payload = base64.b64decode(re.search(tag, html).group(1))         # the gzip payload
+   engine = gzip.decompress(payload)                                 # the engine
+   print("gzip payload", hashlib.sha256(payload).hexdigest(), len(payload), "bytes")
+   print("engine      ", hashlib.sha256(engine).hexdigest(), len(engine), "bytes")
+   EOF
+   ```
+
+   Or, with Node 22 or later, [`scripts/verify_engine.mjs`](scripts/verify_engine.mjs) (Node built-ins only, so the file can be copied and run on its own; it also accepts the token JSON, the `animation_url` or the decoded page, and decodes base64 strictly):
+
+   ```sh
+   node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256()>
+   ```
+
+   For the current version, all three print the gzip payload's SHA-256 `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` (9,862 bytes) and the engine's `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c` (37,060 bytes).
+3. **Compare.** The engine's SHA-256 must equal the class's `script_sha256()` (the hex form of the `u256` is the `sha256sum` string; a consumer contract or its tests can read it) and the `script_sha256()` column of [Versions](#versions), in the row of the class's `version()`. The gzip payload's SHA-256 and length must match that row too.
+4. **Optionally, rebuild the engine** from the fork commit in that row. The fork commits its minified build, and rebuilding it from the source reproduces it:
+
+   ```sh
+   git clone https://github.com/Provable-Games/webaudio-tinysynth && cd webaudio-tinysynth
+   git checkout b70ba90d63c5ea657cb67ca98de90d7f778c29bd
+   sha256sum webaudio-tinysynth.min.js   # the committed build
+   npm install --no-save terser@5.51.2 && npm run build
+   sha256sum webaudio-tinysynth.min.js   # rebuilt: the same hash
+   ```
+
+   The fork's `package.json` accepts any Terser 5 from 5.14.0, so the command pins the version the build was reproduced with (5.51.2). A tagged fork release with a published SHA-256 is roadmap phase 0.
+5. **Optionally, check the rest of the page and the class.** `verify_engine.mjs` also prints the SHA-256 and length of the fixed page `PAGE` (the decoded page up to the opening tag of the settings block and its alignment spaces), which [`scripts/page_versions.json`](scripts/page_versions.json) records for every `version()`. To check the class itself, check out this repository at the row's release tag, rebuild the page with `npm ci && npm run check:page` (the pinned Terser and fflate; it fails on any difference from the committed `PAGE` and `src/page_data.cairo`), run `scarb build`, compute the class hash (for example with `sncast utils class-hash --contract-name <the class's contract>`), and compare it with the row's class hash.
 
 ## Versioning
 
-Class hashes are immutable. The engine and the player page are stored in the class when it is declared, so they are fixed per class version: a given class hash, called with the same MIDI and `SynthSettings`, always produces the same output and sound. Sound settings and custom sounds come from the consumer on each call, so they can change without a new class. A new engine or page means a new class hash and a new `version()` string. Consumers choose when to switch by updating the class hash they store; old tokens rendered with an old class hash keep working.
+Class hashes are immutable. The engine and the player page are stored in the class when it is declared, so they are fixed per class version: a given class hash, called with the same MIDI and `SynthSettings`, always produces the same output and sound. Sound settings and custom sounds come from the consumer on each call, so they can change without a new class. A new engine or page means a new class hash and a new `version()` string. Consumers choose when to switch by updating the class hash they store; old tokens rendered with an old class hash keep working. The versions and their hashes are listed in [Versions](#versions).
+
+## Versions
+
+The class is declared but never deployed, so block explorers cannot call it (`starknet_call` needs a contract address): `version()` and `script_sha256()` cannot be read there. This table is how collectors find these values for a class hash; [Verifying the engine](#verifying-the-engine) checks a token against them.
+
+| `version()` | Class hash (Sepolia) | Class hash (mainnet) | Release tag | `script_sha256()` (decompressed engine) | Gzip payload SHA-256 / length | Engine fork commit |
+| --- | --- | --- | --- | --- | --- | --- |
+| `tinysynth-b70ba90+page.6` | not declared yet | not declared yet | not declared yet | `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c` | `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` / 9,862 bytes | [`b70ba90`](https://github.com/Provable-Games/webaudio-tinysynth/commit/b70ba90d63c5ea657cb67ca98de90d7f778c29bd) in [Provable-Games/webaudio-tinysynth](https://github.com/Provable-Games/webaudio-tinysynth) |
+
+- The hashes and the length are the build's, from [`src/page_data.cairo`](src/page_data.cairo) (`VERSION`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`); `npm test` fails if the row for the current `version()` disagrees with them. The SHA-256 of the whole `PAGE` for each `version()` is in [`scripts/page_versions.json`](scripts/page_versions.json).
+- **A row is final only once its class is declared.** The class hash covers the class's Cairo code as well as the page, and the base64 encoder that phase 4 implements is temporary, until the maintainer's optimized encoder is published. So the class hashes and the tag are filled in at declaration (roadmap phase 6), and until then the row can still change: a new encoder changes the class hash, and a re-pinned engine or a new page changes `version()` and the hashes. Once declared, a row never changes.
+- `page.1` to `page.5` were development builds of the page and were never declared.
 
 ## Toolchain
 
