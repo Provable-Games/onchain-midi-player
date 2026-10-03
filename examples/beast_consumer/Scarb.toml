@@ -1,0 +1,24 @@
+[package]
+name = "beast_consumer"
+version = "0.1.0"
+edition = "2024_07"
+description = "End-to-end example: a Beasts-style NFT injecting the onchain TinySynth player into its token_uri, against a mock of the class library."
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+onchain_tinysynth = { path = "../.." }
+starknet = "2.20.1"
+
+[dev-dependencies]
+snforge_std = "0.64.0"
+assert_macros = "2.20.0"
+
+[[target.starknet-contract]]
+sierra = true
+
+[scripts]
+test = "snforge test"
+
+[tool.scarb]
+allow-prebuilt-plugins = ["snforge_std"]
