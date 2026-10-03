@@ -76,8 +76,8 @@ Alignment. The consumer's own pieces (`'{' ... base64,'`, `S`, `',' <pad>`) must
 `PAGE` is [`tests/fixtures/page.html`](tests/fixtures/page.html), byte for byte: head and styles, the engine `<script>` (the pinned fork build's exact bytes), a small ▶/■ button, the player `<script>`, then the opening of the settings block and its alignment spaces. The per-token `D` and the SVG follow it at call time. The player ([`player/player.js`](player/player.js) and [`player/settings.js`](player/settings.js), flattened into one plain script and minified) starts on DOMContentLoaded:
 
 - **Art first.** It shows the art block in an `<img>` as `data:image/svg+xml;base64,...` (the SVG re-encoded as UTF-8), before and independently of the settings and the MIDI. The art fills the frame; the button overlays the bottom-right corner.
-- **Settings and MIDI.** It parses and validates `SETTINGS` (`parseSettings`, with the same checks and messages as Cairo), and decodes the MIDI block (strict base64 after trimming the alignment spaces) and checks it (`checkMidi`). The check guarantees that TinySynth's parser reads the file as written and that looping is safe: it rejects running status without a channel status, tempo events that are not 3 bytes (with a one-byte length) or are 0, text events over 4 KB, F7 events and SysEx split over several events, a track without End-of-Track at its end, format 2, SMPTE timing, and a loop shorter than 50 ms.
-- **Fail closed (spec D9).** On any of these errors ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and logged. No synth is created. The art stays.
+- **Settings and MIDI.** It parses `SETTINGS` strictly (`decodeSettings`: the grammar, canonical integers, Cairo type bounds, count caps, known tags, every token consumed). Range and semantic validation is Cairo's alone: the class runs `settings::validate` before writing `SETTINGS`, and the page does not repeat it (spec Q4, reversed). It decodes the MIDI block (strict base64 after trimming the alignment spaces) and checks it (`checkMidi`). The check guarantees that TinySynth's parser reads the file as written and that looping is safe: it rejects running status without a channel status, tempo events that are not 3 bytes (with a one-byte length) or are 0, text events over 4 KB, F7 events and SysEx split over several events, a track without End-of-Track at its end, format 2, SMPTE timing, and a loop shorter than 50 ms.
+- **Fail closed (spec D9).** On any parse or MIDI error ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and logged. No synth is created. The art stays.
 - **▶** (a click or tap) constructs TinySynth on the first press (`createSynth`), resumes the `AudioContext` inside the gesture, reloads the MIDI (back to tick 0 at the song's starting tempo, keeping any rest before the first event), loops at End-of-Track with `setLoop(1)` and `setLoopEnd(maxTick)`, and starts playback. It then restarts the art when tick 0 is heard: after TinySynth's scheduling offset (`playTime - currentTime`, 100 ms) plus `AudioContext.outputLatency`, it re-creates the `<img>` with a distinct but equivalent URL (`data:image/svg+xml;r=<n>;base64,...`), so the browser starts a new animation timeline, and swaps it in once decoded.
 - **■** stops playback and cancels a pending art restart. It also cuts off every voice, including drum voices and notes already scheduled ahead (which TinySynth's `stopMIDI` leaves running), by replacing each channel's volume node, and drops the controller changes TinySynth had already scheduled, so nothing reaches the next playback. The art keeps running.
 - Plain JavaScript (`// @ts-check` and JSDoc), no modules, no `eval`, no network requests, no storage or cookies. It works in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles and `data:` images.
@@ -86,14 +86,13 @@ Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) recor
 
 | | Bytes |
 | --- | --- |
-| `PAGE` | 45,810 |
+| `PAGE` | 44,298 |
 | of which the engine | 37,060 |
-| of which the player (minified) | 7,552 |
-| `PAGE` without the player's settings range re-check (`validateSettings`) | 44,523 (1,287 less) |
-| `animation_url_segment()` | 81,492 |
+| of which the player (minified) | 6,047 |
+| `animation_url_segment()` | 78,804 |
 | `license()` | 2,594 |
 
-The range re-check stays for now (spec Q4); dropping it would save the 1,287 bytes above.
+The player does not re-check settings ranges: dropping that re-check (and the install path's custom-wave guards, which only repeated Cairo rules) saved 1,512 bytes of `PAGE` (45,810 to 44,298). The build fails if a validation rule reappears in the player.
 
 The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own minified player script in `node:vm` against a fake DOM, with a recording engine and with the real engine on a WebAudio mock) and in headless Chromium (`npm run page-check`: as an offline `data:` URI, in a sandboxed iframe and under a strict CSP; the loop period against `maxTick x tick2Time`, the art restart by screenshots of a probe animation, and the failure paths).
 
@@ -107,7 +106,7 @@ Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`.
 | `midi_segment(midi: ByteArray, settings: SynthSettings) -> ByteArray` | `b64(b64(D))`: the token's settings and MIDI blocks, then opens the art block. Validates `settings` and encodes only per-token data. |
 | `base64(data: ByteArray) -> ByteArray` | Standard RFC 4648 base64 with `=` padding, for consumers encoding their own JSON pieces. |
 | `script_sha256() -> u256` | Constant SHA-256 of the embedded engine JS (big-endian). |
-| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.4'` (see [Build pipeline](#build-pipeline)). |
+| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.5'` (see [Build pipeline](#build-pipeline)). |
 | `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice. |
 
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
@@ -217,13 +216,13 @@ Gas (snforge, L2 gas, net of building the input):
 Plain, dependency-free, CSP-safe JavaScript (`// @ts-check` with JSDoc, no `eval`), used by the page and by the tests:
 
 - [`player/settings.js`](player/settings.js) is the page's settings module. It provides:
-  - `parseSettings(text)`: a strict decoder, plus the same checks as Cairo with the same messages and indices; it throws a `SettingsError`;
+  - `decodeSettings(text)`: the strict parser (the grammar, canonical integers, Cairo type bounds, count caps, known tags, every token consumed); it throws a `SettingsError`. It does not repeat Cairo's range checks;
   - `createSynth(WebAudioTinySynth, settings)`: constructs TinySynth with `quality`, `useReverb` and `voices`, then calls `installSettings`;
   - `installSettings(synth, settings)`: calls `setQuality`, then sets master volume, reverb level and voices, then calls `setTimbre` for each timbre. Call it again after anything that changes the quality.
 
-  On any error the page fails closed: no audio, and a visible error.
+  On any parse error the page fails closed: no audio, and a visible error.
 - [`player/player.js`](player/player.js) is the rest of the page's player (see [The player page](#the-player-page)).
-- [`player/encode.js`](player/encode.js) is the reference encoder, for Node and tooling only.
+- [`player/validate.js`](player/validate.js) is the JS reference of Cairo's `settings::validate` (`validateSettings`, the same checks in the same order with the same messages and indices), and [`player/encode.js`](player/encode.js) the reference encoder. Both are for Node and tooling only (the fixture generators and parity tests), not the page.
 
 Shared fixtures keep Cairo and JavaScript byte-for-byte identical:
 - `scripts/settings_fixtures.mjs` defines them, including the Beast reference timbres.
@@ -331,7 +330,7 @@ The engine tests, the page build and the page checks use the vendored engine (`t
 3. Assembles `PAGE` and pads it with spaces to `len % 9 == 0`; the spaces fall inside the settings block, where the player trims them.
 4. Writes:
    - [`tests/fixtures/page.html`](tests/fixtures/page.html): `PAGE`;
-   - [`src/page_data.cairo`](src/page_data.cairo) (generated, do not edit): `animation_url_segment()` pre-encoded at both base64 layers, `PAGE_LEN`, `SEGMENT_LEN`, `ENGINE_SHA256`, `VERSION` and `license()`. The large constants are `const` felt arrays (stored once as data in the class bytecode) deserialized into a `ByteArray`; materializing the segment costs about 7.0M L2 gas;
+   - [`src/page_data.cairo`](src/page_data.cairo) (generated, do not edit): `animation_url_segment()` pre-encoded at both base64 layers, `PAGE_LEN`, `SEGMENT_LEN`, `ENGINE_SHA256`, `VERSION` and `license()`. The large constants are `const` felt arrays (stored once as data in the class bytecode) deserialized into a `ByteArray`; materializing the segment costs about 6.8M L2 gas;
    - the golden fixtures for the class: [`tests/fixtures/page.json`](tests/fixtures/page.json) and [`tests/page_fixtures.cairo`](tests/page_fixtures.cairo) (below).
 
 `VERSION` is `tinysynth-<engine ref>+page.<PAGE_VERSION>`. [`scripts/page_versions.json`](scripts/page_versions.json) records the SHA-256 of `PAGE` for every `VERSION`, and the build (and `check:page`) fails if the page changes while `VERSION` stays the same. To change the page: bump `PAGE_VERSION` in [`scripts/page.mjs`](scripts/page.mjs) (a re-pin changes `VERSION` by itself), then run `npm run gen:page -- --record`.
@@ -351,9 +350,9 @@ A stub class serving only the `page_data` constants (`animation_url_segment`, `s
 
 | | Stub class | Same class, empty constants | Limit |
 | --- | --- | --- | --- |
-| Sierra program | 7,443 felts | 204 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 328 KB | 9 KB | 4,089,446 bytes |
-| CASM bytecode | 3,767 felts | 311 felts | 81,920 felts |
+| Sierra program | 7,226 felts | 204 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 319 KB | 9 KB | 4,089,446 bytes |
+| CASM bytecode | 3,681 felts | 311 felts | 81,920 felts |
 
 The constants take about 8% of the class size limit and 4% of the bytecode limit.
 
@@ -370,7 +369,6 @@ The constants take about 8% of the class size limit and 4% of the bytecode limit
 ## Open decisions
 
 - **Custom waves and filters**: their types, ranges and encoding are fixed by issue #1, but accepting them, and their player side, belong to issues #2 and #3.
-- **The player's settings range re-check**: about 1.3 KB of `PAGE` (see [The player page](#the-player-page)). Kept for now.
 
 ## License
 

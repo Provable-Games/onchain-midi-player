@@ -64,9 +64,9 @@ The three example tokens are chosen so that every pad length occurs:
 
 | token | name | head pad | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 0 | 2 | 4 | 86,349 |
-| 2 | Night's Wyvern | 2 | 0 | 5 | 86,377 |
-| 3 | Fen-Troll | 1 | 1 | 6 | 86,361 |
+| 1 | Warlock | 0 | 2 | 4 | 83,661 |
+| 2 | Night's Wyvern | 2 | 0 | 5 | 83,689 |
+| 3 | Fen-Troll | 1 | 1 | 6 | 83,673 |
 
 Only `reverb` varies between tokens (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding.
 
@@ -130,15 +130,15 @@ The optional headless check loads the page four ways:
 - from disk;
 - from the exact `data:` URI in `token.json`;
 - as a variant whose MIDI block holds a file with SysEx (F0) events;
-- as a variant with invalid settings (`1,2,30,40,64,0,0`).
+- as a variant with settings that do not parse (`1,1,30,40,64,0`, a token missing).
 
 For the valid pages it confirms that the art renders (it samples a pixel of the PNG inside the SVG's `foreignObject`), that ▶ is enabled, and that ▶ starts TinySynth with the token's settings: the custom lead on program 80, the custom kick on drum 36, the reverb and volume, and the End-of-Track loop at tick 192.
 
-For the invalid variant it confirms that the page fails closed: the art still renders, ▶ is disabled, the validator's error is shown, and no synth is created.
+For the unparsable variant it confirms that the page fails closed: the art still renders, ▶ is disabled, the parser's error is shown, and no synth is created. (Range checks are Cairo's job: the page only parses `SETTINGS`.)
 
 Every page must make no network requests and log no console errors other than the expected one. The repository's `npm run page-check` checks the page in more depth: in a sandboxed iframe, under a strict CSP, the loop timing and the art restart.
 
-The same player paths (the tokens' settings, invalid or unparsable settings, corrupt MIDI) are also tested without a browser in `scripts/player.test.mjs`, which runs the page's player script in `node:vm`.
+The same player paths (the tokens' settings, unparsable settings, corrupt MIDI) are also tested without a browser in `scripts/player.test.mjs`, which runs the page's player script in `node:vm`.
 
 ```sh
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
@@ -162,8 +162,8 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
 
 | Call | L2 gas |
 | --- | --- |
-| `BeastLikeNft.token_uri`, tokens 1-3 | 132.3M-132.7M |
-| of which `animation_url_segment` (materializing the 80 KB constant and returning it through the library call) | 11.2M |
+| `BeastLikeNft.token_uri`, tokens 1-3 | 131.0M-131.2M |
+| of which `animation_url_segment` (materializing the 79 KB constant and returning it through the library call) | 10.8M |
 | of which `midi_segment` (validation, `SETTINGS`, two base64 passes) | 26.6M |
 | of which 5 `base64` library calls (SVG, `S`, head, `',  '`, `'}'`) | about 61M in total, the largest single call 31M |
 

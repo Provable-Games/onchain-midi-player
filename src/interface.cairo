@@ -116,7 +116,8 @@ pub trait IOnchainTinySynth<T> {
     ///   Every field is range-checked by `settings::validate`; out-of-range values revert
     ///   with a `'TS: ...'` short string followed by the 0-based indices of the offending
     ///   wave, timbre or operator, so an invalid setting can never reach the page. The
-    ///   checks, their order and their messages are listed in `settings.cairo`.
+    ///   checks, their order and their messages are listed in `settings.cairo`. They are
+    ///   enforced only here: the page parses `SETTINGS` strictly and trusts these ranges.
     ///
     /// Output (bytes, ASCII base64 text):
     ///
