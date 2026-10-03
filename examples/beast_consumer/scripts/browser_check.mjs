@@ -3,15 +3,18 @@
 // repo). The page is the real one (engine and player); the repository's scripts/page_check.mjs
 // checks it in depth (sandboxed iframe, strict CSP, loop timing, art restart).
 //
-// Loads the page four ways: fixtures/animation.html from disk, the exact
+// Loads the page five ways: fixtures/animation.html from disk, the exact
 // data:text/html;base64,... animation_url from fixtures/token.json, a variant whose MIDI block holds
-// a file with two SysEx (F0) events (same notes, same End-of-Track), and a variant with
-// settings that do not parse (1,1,30,40,64,0: a token missing). For the valid pages it checks that the art rendered
-// (including the PNG inside the SVG's foreignObject, by sampling a screenshot pixel), that ▶ is
-// enabled and starts TinySynth with the token's settings (custom lead on program 80, custom kick on
-// drum 36, reverb, End-of-Track loop at tick 192), that there are no console errors, and that
-// nothing was requested over the network. For the invalid variant it checks that the page fails
-// closed: the art still renders, ▶ stays disabled, the parser's error is shown, no synth exists.
+// a file with two SysEx (F0) events (same notes, same End-of-Track), a variant with settings that
+// do not parse (1,1,30,40,64,0: a token missing), and a variant whose gzipped engine is corrupt
+// (one payload byte changed). For the valid pages it checks that the page's shim inflated the
+// engine (its gzip tag replaced by an inline script), that the art rendered (including the PNG
+// inside the SVG's foreignObject, by sampling a screenshot pixel), that ▶ is enabled and starts
+// TinySynth with the token's settings (custom lead on program 80, custom kick on drum 36, reverb,
+// End-of-Track loop at tick 192), that there are no console errors, and that nothing was requested
+// over the network (nor the gzip tag's data: URI, seen through the DevTools protocol). For the
+// invalid variants it checks that the page fails closed: the art still renders, ▶ stays disabled,
+// the error is shown, no synth exists.
 //
 // Usage (from examples/beast_consumer):
 //   PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core \
@@ -23,7 +26,9 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { decodePng } from '../../../scripts/png.mjs';
-import { midiWithSysex } from './reference.mjs';
+import { ENGINE_MISSING } from '../../../player/player.js';
+import { engineSource } from '../../../scripts/engine.mjs';
+import { midiWithSysex, withGzipPayload } from './reference.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { PLAYWRIGHT_CORE, CHROME } = process.env;
@@ -61,13 +66,21 @@ if (sysexHtml === html) throw new Error('MIDI block not found');
 const invalidHtml = html.replace(/(id="settings">)[^<]*(<\/script>)/, '$1 1,1,30,40,64,0$2');
 if (invalidHtml === html) throw new Error('settings block not found');
 const INVALID_ERROR = 'settings: malformed: token 6';
+// The engine's gzip payload with one byte changed mid-stream: the shim rejects it (D9: the art
+// renders, ▶ stays disabled, the player's error is shown).
+const corruptHtml = withGzipPayload(html, (p) => {
+  const b = Buffer.from(p, 'base64');
+  b[b.length >> 1] ^= 0x55;
+  return b.toString('base64');
+});
 const asData = (h) => 'data:text/html;base64,' + Buffer.from(h, 'latin1').toString('base64');
-// [label, url, invalid settings?]
+// [label, url, expected error (an invalid variant) and what the console logs]
 const targets = [
   ['fixtures/animation.html (file://)', pathToFileURL(join(root, 'fixtures', 'animation.html')).href],
   ['token.json animation_url (data: URI)', token.animation_url],
   ['SysEx MIDI variant (data: URI)', asData(sysexHtml)],
-  ['unparsable settings variant 1,1,30,40,64,0 (data: URI)', asData(invalidHtml), true],
+  ['unparsable settings variant 1,1,30,40,64,0 (data: URI)', asData(invalidHtml), { error: INVALID_ERROR, logged: [INVALID_ERROR] }],
+  ['corrupt gzipped engine variant (data: URI)', asData(corruptHtml), { error: ENGINE_MISSING, logged: ['gunzip:', ENGINE_MISSING] }],
 ];
 
 const browser = await chromium.launch({ executablePath: CHROME || undefined, env: process.env });
@@ -86,6 +99,11 @@ for (const [label, url, invalid] of targets) {
   });
   const page = await context.newPage();
   page.on('request', (r) => requests.push(r.url().slice(0, 40)));
+  // Playwright's request events skip data: URLs; the DevTools protocol sees them.
+  const cdpRequests = [];
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Network.enable');
+  cdp.on('Network.requestWillBeSent', (e) => cdpRequests.push(e.request.url));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(String(e)));
   const name = label.split(' ')[0].replace(/\W/g, '_');
@@ -106,12 +124,18 @@ for (const [label, url, invalid] of targets) {
     if (invalid) {
       check(await page.$eval('#play', (b) => b.disabled), '▶ is disabled');
       const shown = await page.textContent('#error');
-      check(shown === INVALID_ERROR && (await page.isVisible('#error')) && (await page.$eval('#play', (b) => b.title)) === INVALID_ERROR,
+      check(shown === invalid.error && (await page.isVisible('#error')) && (await page.$eval('#play', (b) => b.title)) === invalid.error,
         `error shown: ${JSON.stringify(shown)}`);
       await page.click('#play', { force: true });
       check((await page.evaluate(() => window.__check.constructed)) === 0, 'clicking the disabled ▶ constructs no synth');
-      check(errors.length === 1 && errors[0].includes(INVALID_ERROR), `only the expected console error (${errors.length})`);
+      check(errors.length === invalid.logged.length && invalid.logged.every((m, i) => errors[i].includes(m)),
+        `only the expected console errors (${errors.map((e) => JSON.stringify(e.split('\n')[0])).join(', ')})`);
     } else {
+      const inflated = await page.evaluate(() => ({
+        tags: document.querySelectorAll('script[type="text/javascript+gzip"]').length,
+        engine: document.head.querySelector('script')?.textContent,
+      }));
+      check(inflated.tags === 0 && inflated.engine === engineSource(), `the shim inflated the gzipped engine (${inflated.engine?.length} bytes, the pinned build)`);
       check(!(await page.$eval('#play', (b) => b.disabled)), '▶ is enabled');
       await page.click('#play');
       await page.waitForTimeout(300);
@@ -130,6 +154,8 @@ for (const [label, url, invalid] of targets) {
       check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
     }
     check(blocked.length === 0, `no network requests (requests seen: ${[...new Set(requests.map((r) => r.split(':')[0] + ':'))].join(' ')})`);
+    check(cdpRequests.length > 0 && !cdpRequests.some((u) => u.startsWith('data:text/javascript')),
+      `the gzip tag's data: URI was never fetched (${cdpRequests.length} requests seen by the DevTools protocol)`);
   } catch (e) {
     failed = true;
     console.log(`  FAIL ${e.message}`);

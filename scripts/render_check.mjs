@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // @ts-check
-// Optional headless check: renders the Beast reference timbres with the real TinySynth (the
-// vendored fork build, scripts/engine.mjs) in headless Chromium, through the player's own
-// decodeSettings + createSynth, into an OfflineAudioContext, and measures the audio:
+// Optional headless check: renders the Beast reference timbres with the real TinySynth in headless
+// Chromium, through the player's own decodeSettings + createSynth, into an OfflineAudioContext, and
+// measures the audio. The engine is loaded as PAGE carries it: PAGE's gzip tag and gunzip shim,
+// which inflate the vendored fork build (scripts/engine.mjs) in the browser; the check first confirms
+// that the shim replaced the tag with the engine, byte for byte. Then:
 //
 //   lead (A4)  mean pitch within 3 cents of 440 Hz; vibrato depth 30 +- 3 cents at 6 +- 0.3 Hz
 //   kick       zero-crossing rate above 80 Hz at 20-40 ms and within 40-60 Hz at 100-160 ms;
@@ -22,6 +24,7 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { engineSource } from "./engine.mjs";
+import { GZIP_CLOSE, GZIP_OPEN, pageHtml, pageScripts } from "./page.mjs";
 
 const { PLAYWRIGHT_CORE, CHROME } = process.env;
 if (!PLAYWRIGHT_CORE) {
@@ -42,8 +45,18 @@ try {
   const page = await browser.newPage();
   const errors = /** @type {string[]} */ ([]);
   page.on("pageerror", (e) => errors.push(String(e)));
-  await page.setContent("<!doctype html><title>render check</title>");
-  await page.addScriptTag({ content: engineSource() });
+  // The engine's gzip tag and the shim, exactly as in PAGE.
+  const PAGE = pageHtml();
+  const tag = PAGE.slice(PAGE.indexOf(GZIP_OPEN), PAGE.indexOf(GZIP_CLOSE) + GZIP_CLOSE.length);
+  await page.setContent(`<!doctype html><title>render check</title>${tag}<script>${pageScripts(PAGE).shim}</script>`);
+  const loaded = await page.evaluate(() => ({
+    tags: document.querySelectorAll('script[type="text/javascript+gzip"]').length,
+    engine: document.head.querySelector("script")?.textContent,
+    defined: typeof (/** @type {any} */ (window).WebAudioTinySynth),
+  }));
+  const inflated = loaded.tags === 0 && loaded.engine === engineSource() && loaded.defined === "function";
+  if (!inflated) failed++;
+  console.log(`${inflated ? "PASS" : "FAIL"}  engine inflated from PAGE's gzip payload by PAGE's shim (${loaded.engine?.length} bytes)`);
   await page.addScriptTag({ type: "module", content: playerModule });
   await page.waitForFunction(() => "__player" in window);
 

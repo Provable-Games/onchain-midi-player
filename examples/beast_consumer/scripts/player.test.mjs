@@ -1,16 +1,18 @@
 // The real page's player on the example's tokens, without a browser: the page's own player script
 // runs in node:vm against a minimal fake DOM (the repository's scripts/page_harness.mjs). The art
 // must render first and independently; ▶ installs the token's settings and loops at End-of-Track;
-// a settings parse or MIDI error must leave ▶ disabled, show the error and construct no synth (spec
-// D9). Range checks are Cairo's job, not the page's.
+// a settings parse or MIDI error, or an engine that did not load (a corrupt gzip payload), must leave
+// ▶ disabled, show the error and construct no synth (spec D9). Range checks are Cairo's job, not the
+// page's.
 // The full player tests are in the repository's player/player.test.js.
 //
 // Run from examples/beast_consumer:  node --test scripts/*.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { ENGINE_MISSING } from '../../../player/player.js';
 import { runPage } from '../../../scripts/page_harness.mjs';
-import { ART_OPEN, MIDI, MIDI_OPEN, animationHtml, tokenParts } from './reference.mjs';
+import { ART_OPEN, MIDI, MIDI_OPEN, animationHtml, tokenParts, withGzipPayload } from './reference.mjs';
 
 const artSrc = (svg) => 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
 
@@ -64,3 +66,21 @@ for (const [label, blocks, message] of failures) {
     assert.deepEqual(h.calls, [], 'no synth constructed');
   });
 }
+
+test('a corrupt gzipped engine: art shown, ▶ disabled, the engine error shown, no synth', () => {
+  const html = withGzipPayload(animationHtml(1), (p) => {
+    const b = Buffer.from(p, 'base64');
+    b[b.length >> 1] ^= 0x55;
+    return b.toString('base64');
+  });
+  const h = runPage(html);
+  h.ready();
+  assert.equal(h.art().src, artSrc(svg), 'art rendered');
+  assert.equal(h.els.play.disabled, true);
+  assert.equal(h.els.error.textContent, ENGINE_MISSING);
+  assert.equal(h.consoleErrors.length, 2);
+  assert.match(h.consoleErrors[0], /^gunzip: /);
+  assert.equal(h.consoleErrors[1], ENGINE_MISSING);
+  h.click();
+  assert.deepEqual(h.calls, [], 'no synth constructed');
+});
