@@ -58,11 +58,23 @@ fn valid_settings_do_not_revert() {
     assert(synth().midi_segment(sound::midi(), sound::settings_for(1)).is_ok(), 'valid settings');
 }
 
+// Only what the format or the engine requires is checked: reverb, master volume, the upper end of
+// voices and the operator values take any value of their type.
 #[test]
-fn reverb_over_100_reverts() {
+#[feature("safe_dispatcher")]
+fn type_extremes_do_not_revert() {
     let mut s = sound::settings_for(1);
-    s.reverb = 101;
-    assert_midi_segment_reverts(s, ['TS: reverb out of range'].span());
+    s.reverb = 255;
+    s.master_vol = 255;
+    s.voices = 255;
+    let mut kick = *s.timbres.at(1);
+    let mut op = *kick.operators.at(0);
+    op.volume = 0xffffffff;
+    op.offset_hz = -0x80000000;
+    op.key_scale = 0x7fffffff;
+    kick.operators = [op].span();
+    s.timbres = [*s.timbres.at(0), kick].span();
+    assert(synth().midi_segment(sound::midi(), s).is_ok(), 'type extremes');
 }
 
 #[test]
@@ -91,10 +103,10 @@ fn operator_error_reports_timbre_and_operator() {
     let mut s = sound::settings_for(1);
     let mut kick = *s.timbres.at(1);
     let mut op = *kick.operators.at(0);
-    op.volume = 1_000_001;
+    op.route = 1; // FM on itself
     kick.operators = [op].span();
     s.timbres = [*s.timbres.at(0), kick].span();
-    assert_midi_segment_reverts(s, ['TS: volume out of range', 1, 0].span());
+    assert_midi_segment_reverts(s, ['TS: FM target not earlier', 1, 0].span());
 }
 
 // Custom waves are rejected until issue #2 lands.

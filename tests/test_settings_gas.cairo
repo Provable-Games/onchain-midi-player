@@ -4,7 +4,7 @@
 
 use onchain_tinysynth::settings::{encode, validate};
 use crate::settings_fixtures::{
-    valid_default, valid_max_count_min_width, valid_max_length, valid_six_timbres,
+    STRUCTURAL_MAX_LEN, structural_max, valid_default, valid_every_slot, valid_six_timbres,
 };
 
 
@@ -45,37 +45,37 @@ fn gas_6_timbres_encode() {
 }
 
 #[test]
-fn gas_32x8_min_width_build() {
-    let settings = valid_max_count_min_width();
-    assert(settings.timbres.len() == 32, 'timbres');
+fn gas_every_slot_build() {
+    let settings = valid_every_slot();
+    assert(settings.timbres.len() == 175, 'timbres');
 }
 
 #[test]
-fn gas_32x8_min_width_validate() {
-    let settings = valid_max_count_min_width();
+fn gas_every_slot_validate() {
+    let settings = valid_every_slot();
     validate(@settings);
 }
 
 #[test]
-fn gas_32x8_min_width_encode() {
-    let settings = valid_max_count_min_width();
-    assert(encode(@settings).len() == 7437, 'length');
+fn gas_every_slot_encode() {
+    let settings = valid_every_slot();
+    assert(encode(@settings).len() == 9836, 'length');
 }
 
 #[test]
-fn gas_max_length_build() {
-    let settings = valid_max_length();
-    assert(settings.timbres.len() == 32, 'timbres');
+fn gas_structural_max_build() {
+    let settings = structural_max();
+    assert(settings.timbres.len() == 175, 'timbres');
 }
 
 #[test]
-fn gas_max_length_validate() {
-    let settings = valid_max_length();
+fn gas_structural_max_validate() {
+    let settings = structural_max();
     validate(@settings);
 }
 
 #[test]
-fn gas_max_length_encode() {
-    let settings = valid_max_length();
-    assert(encode(@settings).len() == 8192, 'length');
+fn gas_structural_max_encode() {
+    let settings = structural_max();
+    assert(encode(@settings).len() == STRUCTURAL_MAX_LEN, 'length');
 }

@@ -553,7 +553,7 @@ async function checkFailures() {
   /** @type {Array<[string, string, string]>} */
   const variants = [
     ["truncated settings", withSettings(" 1,1,30,40,64,0"), "settings: malformed: token 6"],
-    ["settings with a count over its cap", withSettings("1,1,30,40,64,0,33"), "settings: TS: too many timbres"],
+    ["settings with a count over its bound", withSettings("1,1,30,40,64,0,176"), "settings: TS: too many timbres"],
     ["MIDI that is not base64", withMidi("@@not base64@@"), "midi: not base64"],
     ["MIDI cut after 4 bytes", withMidi("TVRoZA=="), "midi: truncated (byte 4)"],
     ["MIDI without End-of-Track", withMidi(noEot), "midi: truncated (byte 30)"],

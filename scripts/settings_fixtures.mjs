@@ -7,8 +7,6 @@
 // player/settings.js: waves as {Harmonics: [...]} / {Samples: [...]}, wave as a variant name or
 // {Custom: i}, filter as null or {kind, cutoff, key_track, q}.
 
-import { encodeSettings } from "../player/encode.js";
-
 /** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
 /** @typedef {import("../player/settings.js").Operator} Operator */
 /** @typedef {import("../player/settings.js").Timbre} Timbre */
@@ -99,74 +97,59 @@ const BASS = {
 /** Narrowest valid operator: every field 0 (28 bytes with its leading comma). */
 const NARROW = op({ volume: 0, ratio: 0, hold: 0, decay: 0, release: 0, pitch_ratio: 0, pitch_time: 0 });
 
-/** Widest valid operator at a given position: every field at its widest in-range value. */
-const wide = (/** @type {number} */ o) => op({
-  route: o === 0 ? 0 : 10 + o, wave: "MetallicNoise", volume: 1000000, ratio: 640000, offset_hz: -200000000,
-  attack: 200000, hold: 200000, decay: 200000, sustain: 1000000, release: 200000, pitch_ratio: 160000,
-  pitch_time: 200000, key_scale: -80000,
-});
-
-/** 32 timbres of 8 narrow operators: the most validation work (7,435 bytes). */
-const MAX_COUNT_MIN_WIDTH = settings({
-  timbres: Array.from({ length: 32 }, (_, i) => ({ drum: false, slot: 96 + i, operators: Array(8).fill(NARROW) })),
-});
+/** Integer type extremes: the only bounds of the numeric fields that the class does not check. */
+const U32_MAX = 4294967295;
+const I32_MIN = -2147483648;
+const I32_MAX = 2147483647;
 
 /**
- * 32 timbres filled with wide operators to exactly `target` bytes: the most encoding work.
- * Wide operators are added round-robin while they fit, the remainder is filled with narrow
- * operators, and the last few bytes by widening fields of narrow operators.
- * @param {number} target
+ * Widest valid operator at position `o` in v1: every field at its widest value (the type's
+ * extreme), and an AM route (two digits) after the first operator.
+ * @param {number} o
  */
-function filledTo(target) {
-  /** @type {Timbre[]} */
-  const timbres = Array.from({ length: 32 }, (_, i) => ({ drum: i % 2 === 1, slot: i % 2 ? 35 + i : i, operators: [] }));
-  const len = () => encodeSettings(settings({ timbres }), { limit: Infinity }).length;
-  const tryPush = (/** @type {Timbre} */ t, /** @type {(o: number) => Operator} */ make) => {
-    if (t.operators.length >= 8) return false;
-    t.operators.push(make(t.operators.length));
-    if (len() <= target) return true;
-    t.operators.pop();
-    return false;
-  };
-  for (let added = true; added;) {
-    added = false;
-    for (const t of timbres) added = tryPush(t, wide) || added;
-  }
-  for (let added = true; added;) {
-    added = false;
-    for (const t of timbres) added = tryPush(t, () => NARROW) || added;
-  }
-  // Widen fields that are 0 (to 10^k, adding k bytes) until the length is exact.
-  /** @type {Array<[string, number]>} field and the most digits it can gain within its range */
-  const widenable = [["volume", 6], ["sustain", 6], ["ratio", 5], ["attack", 5], ["hold", 5], ["decay", 5], ["release", 5]];
-  for (const t of timbres) {
-    for (let o = 0; o < t.operators.length && len() < target; o++) {
-      for (const [field, digits] of widenable) {
-        const slack = target - len();
-        if (slack === 0) break;
-        if (/** @type {any} */ (t.operators[o])[field] !== 0) continue;
-        t.operators[o] = op({ ...t.operators[o], [field]: 10 ** Math.min(slack, digits) });
-      }
-    }
-  }
-  const s = settings({ timbres });
-  if (len() !== target) throw new Error(`could not fill to ${target} bytes (got ${len()})`);
-  return s;
-}
+export const widestOperator = (o) => op({
+  route: o === 0 ? 0 : 10 + o, wave: "MetallicNoise", volume: U32_MAX, ratio: U32_MAX, offset_hz: I32_MIN,
+  attack: U32_MAX, hold: U32_MAX, decay: U32_MAX, sustain: U32_MAX, release: U32_MAX, pitch_ratio: U32_MAX,
+  pitch_time: U32_MAX, key_scale: I32_MIN,
+});
+
+/** Every timbre slot reachable from MIDI, in order: programs 0..=127, then drum notes 35..=81. */
+export const ALL_SLOTS = /** @type {Array<[boolean, number]>} */ ([
+  ...Array.from({ length: 128 }, (_, i) => [false, i]),
+  ...Array.from({ length: 47 }, (_, i) => [true, 35 + i]),
+]);
+
+/** One timbre on every slot (175, the cap), each with TinySynth's default operator. */
+const EVERY_SLOT = settings({ timbres: ALL_SLOTS.map(([drum, slot]) => ({ drum, slot, operators: [op({})] })) });
+
+/**
+ * The largest valid SETTINGS in v1, which is both the most validation work and the most encoding
+ * work: every slot (175 timbres), 8 operators each, every field at its widest. Too large for a
+ * Cairo literal, so the generator pins only its length and SHA-256, and tests/settings_fixtures.cairo
+ * builds the same value in a loop (`structural_max()`).
+ * @returns {SynthSettings}
+ */
+export const structuralMax = () => settings({
+  reverb: 255, master_vol: 255, voices: 255,
+  timbres: ALL_SLOTS.map(([drum, slot]) => ({ drum, slot, operators: Array.from({ length: 8 }, (_, o) => widestOperator(o)) })),
+});
 
 // ------------------------------------------------------------------------------------------
 // Boundaries.
 // ------------------------------------------------------------------------------------------
 
-/** Every field at its maximum, with routes at their limits (FM on op 7 from op 8, AM chains). */
+/**
+ * Every field at its maximum (its type's, for the fields the class does not range-check), with
+ * routes at their limits (FM on op 7 from op 8, AM chains).
+ */
 const MAX_FIELDS = settings({
-  quality: 1, reverb: 100, master_vol: 100, voices: 64,
+  quality: 1, reverb: 255, master_vol: 255, voices: 255,
   timbres: [{
     drum: false, slot: 127,
     operators: [0, 1, 2, 12, 4, 15, 6, 17].map((route) => op({
-      route, wave: "Sawtooth", volume: 1000000, ratio: 640000, offset_hz: 200000000, attack: 200000,
-      hold: 200000, decay: 200000, sustain: 1000000, release: 200000, pitch_ratio: 160000,
-      pitch_time: 200000, key_scale: 80000,
+      route, wave: "Sawtooth", volume: U32_MAX, ratio: U32_MAX, offset_hz: I32_MAX, attack: U32_MAX,
+      hold: U32_MAX, decay: U32_MAX, sustain: U32_MAX, release: U32_MAX, pitch_ratio: U32_MAX,
+      pitch_time: U32_MAX, key_scale: I32_MAX,
     })),
   }],
 });
@@ -174,7 +157,7 @@ const MAX_FIELDS = settings({
 /** Every field at its minimum. */
 const MIN_FIELDS = settings({
   quality: 0, reverb: 0, master_vol: 0, voices: 1,
-  timbres: [{ drum: true, slot: 35, operators: [op({ ...NARROW, offset_hz: -200000000, key_scale: -80000 })] }],
+  timbres: [{ drum: true, slot: 35, operators: [op({ ...NARROW, offset_hz: I32_MIN, key_scale: I32_MIN })] }],
 });
 
 /** Slot edges, and the same number in both banks (programs and drums are separate). */
@@ -223,8 +206,7 @@ export const VALID = [
   { name: "min_fields", settings: MIN_FIELDS },
   { name: "slot_edges", settings: SLOT_EDGES },
   { name: "all_builtin_waves", settings: ALL_WAVES },
-  { name: "max_count_min_width", settings: MAX_COUNT_MIN_WIDTH },
-  { name: "max_length", settings: filledTo(8192) },
+  { name: "every_slot", settings: EVERY_SLOT },
 ];
 
 /**
@@ -278,20 +260,28 @@ const routeAt = (/** @type {number} */ pos, /** @type {number} */ route) => sett
  * @type {Array<{name: string, settings: SynthSettings, error: [string, ...number[]]}>}
  */
 export const INVALID = [
-  // Settings-level checks (1-8).
+  // Settings-level checks (1-6).
   { name: "quality_2", settings: settings({ quality: 2 }), error: ["TS: quality out of range"] },
-  { name: "reverb_101", settings: settings({ reverb: 101 }), error: ["TS: reverb out of range"] },
-  { name: "master_vol_101", settings: settings({ master_vol: 101 }), error: ["TS: master_vol out of range"] },
   { name: "voices_0", settings: settings({ voices: 0 }), error: ["TS: voices out of range"] },
-  { name: "voices_65", settings: settings({ voices: 65 }), error: ["TS: voices out of range"] },
-  { name: "waves_17", settings: settings({ waves: Array(17).fill({ Harmonics: [1] }) }), error: ["TS: too many waves"] },
+  { name: "waves_257", settings: settings({ waves: Array(257).fill({ Harmonics: [1] }) }), error: ["TS: too many waves"] },
   { name: "harmonics_0", settings: settings({ waves: [{ Harmonics: [1] }, { Harmonics: [] }] }), error: ["TS: harmonics length", 1] },
-  { name: "harmonics_65", settings: settings({ waves: [{ Harmonics: Array(65).fill(1) }] }), error: ["TS: harmonics length", 0] },
-  { name: "samples_1", settings: settings({ waves: [{ Samples: [0, 0] }, { Harmonics: [1] }, { Samples: [0] }] }), error: ["TS: samples length", 2] },
-  { name: "samples_257", settings: settings({ waves: [{ Samples: Array(257).fill(0) }] }), error: ["TS: samples length", 0] },
-  { name: "waves_16_valid", settings: settings({ waves: [...Array(15).fill({ Harmonics: Array(64).fill(1) }), { Samples: Array(256).fill(-1) }] }), error: ["TS: custom wave unsupported"] },
-  { name: "timbres_33", settings: settings({ timbres: Array.from({ length: 33 }, (_, i) => ({ drum: false, slot: i, operators: [op({})] })) }), error: ["TS: too many timbres"] },
-  // Timbre checks (9-13).
+  { name: "samples_0", settings: settings({ waves: [{ Samples: [0] }, { Harmonics: [1] }, { Samples: [] }] }), error: ["TS: samples length", 2] },
+  {
+    // 256 waves, the shortest and some long ones (wave lengths have no upper bound): only the v1
+    // gate rejects it.
+    name: "waves_256_valid",
+    settings: settings({
+      waves: [...Array(253).fill({ Harmonics: [1] }), { Samples: [-128] }, { Harmonics: Array(300).fill(65535) }, { Samples: Array(2000).fill(-1) }],
+    }),
+    error: ["TS: custom wave unsupported"],
+  },
+  {
+    // One more timbre than there are slots, so a duplicate is unavoidable: the count fails first.
+    name: "timbres_176",
+    settings: settings({ timbres: [...EVERY_SLOT.timbres, { drum: false, slot: 0, operators: [op({})] }] }),
+    error: ["TS: too many timbres"],
+  },
+  // Timbre checks (7-11).
   { name: "program_slot_128", settings: onTimbre({ slot: 128 }), error: ["TS: program slot out of range", 0] },
   { name: "drum_slot_34", settings: onTimbre({ drum: true, slot: 34 }), error: ["TS: drum slot out of range", 0] },
   { name: "drum_slot_82", settings: onTimbre({ drum: true, slot: 82 }), error: ["TS: drum slot out of range", 0] },
@@ -304,7 +294,7 @@ export const INVALID = [
   { name: "duplicate_drum", settings: settings({ timbres: [BEAST_KICK, BEAST_SNARE, BEAST_KICK] }), error: ["TS: duplicate timbre slot", 2] },
   { name: "no_operators", settings: settings({ timbres: [BEAST_LEAD, { drum: false, slot: 1, operators: [] }] }), error: ["TS: no operators", 1] },
   { name: "operators_9", settings: onTimbre({ operators: Array(9).fill(op({})) }), error: ["TS: too many operators", 0] },
-  // Routing (14-16).
+  // Routing (12-14).
   { name: "route_19", settings: routeAt(8, 19), error: ["TS: route out of range", 0, 7] },
   { name: "route_255", settings: routeAt(1, 255), error: ["TS: route out of range", 0, 0] },
   { name: "fm_on_first_operator", settings: routeAt(1, 1), error: ["TS: FM target not earlier", 0, 0] },
@@ -313,36 +303,23 @@ export const INVALID = [
   { name: "am_on_first_operator", settings: routeAt(1, 11), error: ["TS: AM target not earlier", 0, 0] },
   { name: "am_on_itself", settings: routeAt(2, 12), error: ["TS: AM target not earlier", 0, 1] },
   { name: "am_route_18_at_8", settings: routeAt(8, 18), error: ["TS: AM target not earlier", 0, 7] },
-  // Custom wave (17).
+  // Custom wave (15).
   { name: "custom_wave", settings: one({ wave: { Custom: 0 } }), error: ["TS: custom wave unsupported", 0, 0] },
-  // Field ranges (19-29).
-  { name: "volume_max_plus_1", settings: one({ volume: 1000001 }), error: ["TS: volume out of range", 0, 0] },
-  { name: "ratio_max_plus_1", settings: one({ ratio: 640001 }), error: ["TS: ratio out of range", 0, 0] },
-  { name: "offset_hz_max_plus_1", settings: one({ offset_hz: 200000001 }), error: ["TS: offset_hz out of range", 0, 0] },
-  { name: "offset_hz_min_minus_1", settings: one({ offset_hz: -200000001 }), error: ["TS: offset_hz out of range", 0, 0] },
-  { name: "offset_hz_i32_min", settings: one({ offset_hz: -2147483648 }), error: ["TS: offset_hz out of range", 0, 0] },
-  { name: "attack_max_plus_1", settings: one({ attack: 200001 }), error: ["TS: attack out of range", 0, 0] },
-  { name: "hold_max_plus_1", settings: one({ hold: 200001 }), error: ["TS: hold out of range", 0, 0] },
-  { name: "decay_max_plus_1", settings: one({ decay: 200001 }), error: ["TS: decay out of range", 0, 0] },
-  { name: "sustain_max_plus_1", settings: one({ sustain: 1000001 }), error: ["TS: sustain out of range", 0, 0] },
-  { name: "release_max_plus_1", settings: one({ release: 200001 }), error: ["TS: release out of range", 0, 0] },
-  { name: "pitch_ratio_max_plus_1", settings: one({ pitch_ratio: 160001 }), error: ["TS: pitch_ratio out of range", 0, 0] },
-  { name: "pitch_time_max_plus_1", settings: one({ pitch_time: 200001 }), error: ["TS: pitch_time out of range", 0, 0] },
-  { name: "key_scale_max_plus_1", settings: one({ key_scale: 80001 }), error: ["TS: key_scale out of range", 0, 0] },
-  { name: "key_scale_min_minus_1", settings: one({ key_scale: -80001 }), error: ["TS: key_scale out of range", 0, 0] },
-  { name: "u32_max_volume", settings: one({ volume: 4294967295 }), error: ["TS: volume out of range", 0, 0] },
-  // Filter (30).
+  // Filter (17).
   { name: "filter", settings: one({ filter: { kind: "LowPass", cutoff: 10000000, key_track: false, q: 7071 } }), error: ["TS: filter unsupported", 0, 0] },
-  // Length (31): valid fields, one byte over the cap.
-  { name: "max_length_plus_1", settings: filledTo(8193), error: ["TS: settings too long"] },
   // Check order: the first failing check wins.
-  { name: "order_quality_before_reverb", settings: settings({ quality: 2, reverb: 101 }), error: ["TS: quality out of range"] },
+  { name: "order_quality_before_voices", settings: settings({ quality: 2, voices: 0 }), error: ["TS: quality out of range"] },
   { name: "order_voices_before_waves", settings: settings({ voices: 0, waves: [{ Harmonics: [] }] }), error: ["TS: voices out of range"] },
   { name: "order_wave_length_before_v1_gate", settings: settings({ waves: [{ Harmonics: [1] }, { Samples: [] }] }), error: ["TS: samples length", 1] },
   {
     name: "order_v1_wave_gate_before_timbres",
     settings: settings({ waves: [{ Harmonics: [1] }], timbres: [{ drum: false, slot: 200, operators: [] }] }),
     error: ["TS: custom wave unsupported"],
+  },
+  {
+    name: "order_timbre_count_before_slot",
+    settings: settings({ timbres: [{ drum: false, slot: 200, operators: [] }, ...EVERY_SLOT.timbres] }),
+    error: ["TS: too many timbres"],
   },
   {
     name: "order_slot_before_operators",
@@ -356,16 +333,18 @@ export const INVALID = [
   },
   {
     name: "order_timbre_0_before_timbre_1",
-    settings: settings({ timbres: [{ drum: false, slot: 5, operators: [op({}), op({ volume: 1000001 })] }, { drum: false, slot: 200, operators: [op({})] }] }),
-    error: ["TS: volume out of range", 0, 1],
+    settings: settings({ timbres: [{ drum: false, slot: 5, operators: [op({}), op({ route: 2 })] }, { drum: false, slot: 200, operators: [op({})] }] }),
+    error: ["TS: FM target not earlier", 0, 1],
   },
   {
     name: "order_operator_0_before_operator_1",
-    settings: settings({ timbres: [{ drum: false, slot: 5, operators: [op({ key_scale: 80001 }), op({ route: 9 })] }] }),
-    error: ["TS: key_scale out of range", 0, 0],
+    settings: settings({ timbres: [{ drum: false, slot: 5, operators: [op({ route: 19 }), op({ route: 9 })] }] }),
+    error: ["TS: route out of range", 0, 0],
   },
   { name: "order_route_before_wave", settings: one({ route: 1, wave: { Custom: 0 } }), error: ["TS: FM target not earlier", 0, 0] },
-  { name: "order_custom_before_fields", settings: one({ wave: { Custom: 0 }, volume: 1000001 }), error: ["TS: custom wave unsupported", 0, 0] },
-  { name: "order_volume_before_ratio", settings: one({ volume: 1000001, ratio: 640001 }), error: ["TS: volume out of range", 0, 0] },
-  { name: "order_key_scale_before_filter", settings: one({ key_scale: -80001, filter: { kind: "LowPass", cutoff: 1, key_track: false, q: 1 } }), error: ["TS: key_scale out of range", 0, 0] },
+  {
+    name: "order_custom_before_filter",
+    settings: one({ wave: { Custom: 0 }, filter: { kind: "LowPass", cutoff: 1, key_track: false, q: 1 } }),
+    error: ["TS: custom wave unsupported", 0, 0],
+  },
 ];

@@ -5,11 +5,12 @@
 //!   consumer calls it. `gas_lc_declare` is the baseline (declaring only). The figures include
 //!   serializing the arguments and the result, which a consumer pays too.
 //! - `gas_ms_*`: `midi_segment` across MIDI sizes (no MIDI, then the synthetic scores of 816 to
-//!   3,716 bytes, the sizes of the production Beast scores) and `SETTINGS` sizes (16, 334, 504,
-//!   7,437 and 8,192 bytes), called directly. Per cell, `build` only builds the inputs (the
-//!   baseline), `d` builds `D` (validation, `SETTINGS`, `b64(midi)` and the appends), and `full` is
-//!   the whole `midi_segment`; `full - d` is the two outer base64 passes. `gas_b64_midi_*` is
-//!   `b64(midi)` alone, net of building the MIDI. `validate` and `encode` alone are in
+//!   3,716 bytes, the sizes of the production Beast scores) and `SETTINGS` sizes (16, 334, 504 and
+//!   9,836 bytes, and the largest valid input, 127,086 bytes, with no MIDI and with the largest
+//!   score only), called directly. Per cell, `build` only builds the inputs (the baseline), `d`
+//!   builds `D` (validation, `SETTINGS`, `b64(midi)` and the appends), and `full` is the whole
+//!   `midi_segment`; `full - d` is the two outer base64 passes. `gas_b64_midi_*` is `b64(midi)`
+//!   alone, net of building the MIDI. `validate` and `encode` alone are in
 //!   `test_settings_gas.cairo`.
 
 use onchain_tinysynth::base64::bytes_base64_encode;
@@ -22,8 +23,7 @@ use crate::class_fixtures::{
 };
 use crate::helpers::{class, declare_class};
 use crate::settings_fixtures::{
-    valid_beast_reference, valid_default, valid_max_count_min_width, valid_max_length,
-    valid_six_timbres,
+    structural_max, valid_beast_reference, valid_default, valid_every_slot, valid_six_timbres,
 };
 
 fn midi(i: u32) -> ByteArray {
@@ -42,15 +42,15 @@ fn settings(j: u32) -> SynthSettings {
         0 => valid_default(),
         1 => valid_beast_reference(),
         2 => valid_six_timbres(),
-        3 => valid_max_count_min_width(),
-        _ => valid_max_length(),
+        3 => valid_every_slot(),
+        _ => structural_max(),
     }
 }
 
 fn build(i: u32, j: u32) {
     let m = midi(i);
     let s = settings(j);
-    assert(m.len() < 4000 && s.timbres.len() <= 32, 'inputs');
+    assert(m.len() < 4000 && s.timbres.len() <= 175, 'inputs');
 }
 
 fn d(i: u32, j: u32) {
@@ -76,7 +76,7 @@ fn gas_lc_declare() {
 
 #[test]
 fn gas_lc_animation_url_segment() {
-    assert(class().animation_url_segment().len() == 43940, 'segment');
+    assert(class().animation_url_segment().len() == 43988, 'segment');
 }
 
 #[test]
@@ -95,7 +95,7 @@ fn gas_lc_midi_segment_beast_heaviest() {
 #[test]
 fn gas_lc_midi_segment_max_heaviest() {
     let m = beast_midi_heaviest();
-    let s = valid_max_length();
+    let s = structural_max();
     assert(class().midi_segment(m, s).len() > 0, 'midi_segment');
 }
 
@@ -235,17 +235,17 @@ fn gas_ms_empty_six_full() {
 }
 
 #[test]
-fn gas_ms_empty_32x8_build() {
+fn gas_ms_empty_slots_build() {
     build(0, 3);
 }
 
 #[test]
-fn gas_ms_empty_32x8_d() {
+fn gas_ms_empty_slots_d() {
     d(0, 3);
 }
 
 #[test]
-fn gas_ms_empty_32x8_full() {
+fn gas_ms_empty_slots_full() {
     full(0, 3);
 }
 
@@ -310,33 +310,18 @@ fn gas_ms_genesis_six_full() {
 }
 
 #[test]
-fn gas_ms_genesis_32x8_build() {
+fn gas_ms_genesis_slots_build() {
     build(1, 3);
 }
 
 #[test]
-fn gas_ms_genesis_32x8_d() {
+fn gas_ms_genesis_slots_d() {
     d(1, 3);
 }
 
 #[test]
-fn gas_ms_genesis_32x8_full() {
+fn gas_ms_genesis_slots_full() {
     full(1, 3);
-}
-
-#[test]
-fn gas_ms_genesis_max_build() {
-    build(1, 4);
-}
-
-#[test]
-fn gas_ms_genesis_max_d() {
-    d(1, 4);
-}
-
-#[test]
-fn gas_ms_genesis_max_full() {
-    full(1, 4);
 }
 
 #[test]
@@ -385,33 +370,18 @@ fn gas_ms_threshold_1_six_full() {
 }
 
 #[test]
-fn gas_ms_threshold_1_32x8_build() {
+fn gas_ms_threshold_1_slots_build() {
     build(2, 3);
 }
 
 #[test]
-fn gas_ms_threshold_1_32x8_d() {
+fn gas_ms_threshold_1_slots_d() {
     d(2, 3);
 }
 
 #[test]
-fn gas_ms_threshold_1_32x8_full() {
+fn gas_ms_threshold_1_slots_full() {
     full(2, 3);
-}
-
-#[test]
-fn gas_ms_threshold_1_max_build() {
-    build(2, 4);
-}
-
-#[test]
-fn gas_ms_threshold_1_max_d() {
-    d(2, 4);
-}
-
-#[test]
-fn gas_ms_threshold_1_max_full() {
-    full(2, 4);
 }
 
 #[test]
@@ -460,33 +430,18 @@ fn gas_ms_threshold_3_six_full() {
 }
 
 #[test]
-fn gas_ms_threshold_3_32x8_build() {
+fn gas_ms_threshold_3_slots_build() {
     build(3, 3);
 }
 
 #[test]
-fn gas_ms_threshold_3_32x8_d() {
+fn gas_ms_threshold_3_slots_d() {
     d(3, 3);
 }
 
 #[test]
-fn gas_ms_threshold_3_32x8_full() {
+fn gas_ms_threshold_3_slots_full() {
     full(3, 3);
-}
-
-#[test]
-fn gas_ms_threshold_3_max_build() {
-    build(3, 4);
-}
-
-#[test]
-fn gas_ms_threshold_3_max_d() {
-    d(3, 4);
-}
-
-#[test]
-fn gas_ms_threshold_3_max_full() {
-    full(3, 4);
 }
 
 #[test]
@@ -535,33 +490,18 @@ fn gas_ms_veteran_six_full() {
 }
 
 #[test]
-fn gas_ms_veteran_32x8_build() {
+fn gas_ms_veteran_slots_build() {
     build(4, 3);
 }
 
 #[test]
-fn gas_ms_veteran_32x8_d() {
+fn gas_ms_veteran_slots_d() {
     d(4, 3);
 }
 
 #[test]
-fn gas_ms_veteran_32x8_full() {
+fn gas_ms_veteran_slots_full() {
     full(4, 3);
-}
-
-#[test]
-fn gas_ms_veteran_max_build() {
-    build(4, 4);
-}
-
-#[test]
-fn gas_ms_veteran_max_d() {
-    d(4, 4);
-}
-
-#[test]
-fn gas_ms_veteran_max_full() {
-    full(4, 4);
 }
 
 #[test]
@@ -610,17 +550,17 @@ fn gas_ms_heaviest_six_full() {
 }
 
 #[test]
-fn gas_ms_heaviest_32x8_build() {
+fn gas_ms_heaviest_slots_build() {
     build(5, 3);
 }
 
 #[test]
-fn gas_ms_heaviest_32x8_d() {
+fn gas_ms_heaviest_slots_d() {
     d(5, 3);
 }
 
 #[test]
-fn gas_ms_heaviest_32x8_full() {
+fn gas_ms_heaviest_slots_full() {
     full(5, 3);
 }
 

@@ -176,17 +176,17 @@ export const CASES = [
     members: '"name":"Waves","description":"Every built-in waveform"',
   },
   {
-    name: "max_length_settings",
+    name: "every_slot",
     dPad: 8,
-    settings: settingsNamed("max_length"),
+    settings: settingsNamed("every_slot"),
     midi: (label) => riff({ ppq: 96, us: 500000, label }),
     svg: cardSvg("Long"),
-    members: '"name":"Longest SETTINGS"',
+    members: '"name":"All timbre slots"',
   },
 ];
 
 /** Invalid settings: midi_segment must revert with the same panic data as `settings::validate`. */
-export const INVALID_CASES = ["quality_2", "volume_max_plus_1", "duplicate_drum", "custom_wave", "filter", "max_length_plus_1"].map((name) => {
+export const INVALID_CASES = ["quality_2", "fm_on_itself", "duplicate_drum", "custom_wave", "filter", "timbres_176"].map((name) => {
   const f = INVALID.find((v) => v.name === name);
   if (!f) throw new Error(`no invalid settings fixture ${name}`);
   return { name, settings: f.settings, error: f.error };

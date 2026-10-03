@@ -14,7 +14,7 @@
  * 1. Art first: the SVG is shown in an <img> as a base64 data URL, before and independently of
  *    everything else. Nothing that follows can hide it.
  * 2. The engine must have loaded (`WebAudioTinySynth` defined: the shim inflated it and it ran).
- *    SETTINGS is parsed strictly (`decodeSettings`: the grammar, Cairo types and count caps; the
+ *    SETTINGS is parsed strictly (`decodeSettings`: the grammar, Cairo types and count bounds; the
  *    class has already range-checked every value with `settings::validate`), and the MIDI is
  *    decoded and checked (`decodeMidi`). On any failure (spec D9) ▶ stays disabled, the exact
  *    error is shown and put in its title and logged, and no synth is ever created. Otherwise ▶ is
