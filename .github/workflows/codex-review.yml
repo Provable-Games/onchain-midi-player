@@ -21,8 +21,30 @@ defaults:
     shell: bash
 
 jobs:
+  # Reports only whether the secret is set. Any job that references a secret
+  # masks its value, line by line for a multi-line secret such as auth.json, and
+  # GitHub drops a job output that contains a masked string (for example "{"
+  # inside the matrix JSON). So the setup job never references the secret, and
+  # this job's only output is "true" or "false". If it fails or its output is
+  # dropped, setup fails, and so does the gate.
+  credential:
+    name: Codex review credential check
+    if: ${{ !(github.event.action == 'edited' && !github.event.changes.base) }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    steps:
+      - name: Check whether the secret is set
+        id: check
+        env:
+          PRESENT: ${{ secrets.CODEX_AUTH_DOT_JSON != '' }}
+        run: echo "present=$PRESENT" >> "$GITHUB_OUTPUT"
+
   prepare:
     name: Codex review setup
+    needs: credential
     # A title or body edit (no base change) starts nothing.
     if: ${{ !(github.event.action == 'edited' && !github.event.changes.base) }}
     runs-on: ubuntu-24.04-arm
@@ -93,10 +115,11 @@ jobs:
         env:
           CONFIG_SHA: ${{ steps.trust.outputs.config_sha }}
           BOOTSTRAP: ${{ steps.trust.outputs.bootstrap }}
-          # Only whether the secret is set reaches this job, never its value. When
-          # the secret or a variable is unset, the review is skipped (policy
-          # "unconfigured") and the gate passes with a warning.
-          REVIEW_SECRET_PRESENT: ${{ secrets.CODEX_AUTH_DOT_JSON != '' }}
+          # Only whether the secret is set reaches this job (see the credential
+          # job), never its value. When the secret or a variable is unset, the
+          # review is skipped (policy "unconfigured") and the gate passes with a
+          # warning.
+          REVIEW_SECRET_PRESENT: ${{ needs.credential.outputs.present }}
           CODEX_REVIEW_MODEL: ${{ vars.CODEX_REVIEW_MODEL }}
           CODEX_REVIEW_EFFORT: ${{ vars.CODEX_REVIEW_EFFORT }}
         run: >-

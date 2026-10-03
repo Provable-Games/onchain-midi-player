@@ -1029,12 +1029,20 @@ class WorkflowStructureTests(unittest.TestCase):
                                     for s in secrets_lines))
 
     def test_setup_job_sees_only_whether_the_secret_is_set(self):
+        # A job that references a secret masks it (line by line for auth.json) and
+        # drops outputs containing a masked string, such as "{" in the matrix.
         for provider, secret in (("codex", "CODEX_AUTH_DOT_JSON"), ("claude", "CLAUDE_CODE_OAUTH_TOKEN")):
             text = self.workflows()[f"{provider}-review.yml"]
+            credential = text.split("\n  credential:")[1].split("\n  prepare:")[0]
             prepare = text.split("\n  prepare:")[1].split("\n  review:")[0]
             with self.subTest(provider=provider):
-                self.assertEqual(re.findall(r".*secrets\.\w+.*", prepare),
-                                 [f"          REVIEW_SECRET_PRESENT: ${{{{ secrets.{secret} != '' }}}}"])
+                self.assertEqual(re.findall(r".*secrets\.\w+.*", credential),
+                                 [f"          PRESENT: ${{{{ secrets.{secret} != '' }}}}"])
+                self.assertIn("permissions: {}", credential)
+                self.assertNotIn("uses:", credential)
+                self.assertNotIn("secrets.", prepare)
+                self.assertIn("    needs: credential\n", prepare)
+                self.assertIn("REVIEW_SECRET_PRESENT: ${{ needs.credential.outputs.present }}", prepare)
                 self.assertIn(f"review.py prepare --config-root trusted --provider {provider}", prepare)
                 gate = text.split("\n  gate:")[1]
                 self.assertIn("MISSING: ${{ needs.prepare.outputs.missing }}", gate)
@@ -1055,7 +1063,7 @@ class WorkflowStructureTests(unittest.TestCase):
         texts = self.workflows()
         for provider, title in (("codex", "Codex"), ("claude", "Claude")):
             text = texts[f"{provider}-review.yml"]
-            for name in (f"{title} review comment", f"{title} review setup",
+            for name in (f"{title} review comment", f"{title} review setup", f"{title} review credential check",
                          f"{title} review / ${{{{ matrix.agent_id }}}}"):
                 self.assertIn(f"name: {name}\n", text)
             # The required gate keeps its exact name for every event except a title or body edit.
@@ -1186,7 +1194,7 @@ class PolicyEventTests(Workspace):
                 self.assertIn(f"${{{{ {METADATA_EDIT} && '-metadata' || '' }}}}\n  cancel-in-progress: true", text)
                 self.assertIn(f"if: ${{{{ !({METADATA_EDIT}) }}}}", text)
                 self.assertIn(f"if: ${{{{ always() && !({METADATA_EDIT}) }}}}", text)
-                self.assertEqual(text.count(METADATA_EDIT), 4)
+                self.assertEqual(text.count(METADATA_EDIT), 5)
 
     def test_dependabot_pull_requests_fail_explicitly(self):
         for kwargs in ({"author": "dependabot[bot]"}, {"sender": {"login": "dependabot[bot]"}}):

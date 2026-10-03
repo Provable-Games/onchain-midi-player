@@ -27,6 +27,7 @@ Each provider workflow runs four jobs. Require the two gates in the branch rules
 | --- | --- | --- |
 | `Codex review gate` | yes | Codex review outcome for this head |
 | `Claude review gate` | yes | Claude review outcome for this head |
+| `Codex review credential check`, `Claude review credential check` | no | Reports only whether the provider's secret is set |
 | `Codex review setup`, `Claude review setup` | no | Policy, trusted configuration and change detection |
 | `Codex review / onchain-tinysynth`, `Claude review / onchain-tinysynth` | no | The credential-bearing review run |
 | `Codex review comment`, `Claude review comment` | no | Publishes the bot comment |
@@ -69,8 +70,11 @@ If a provider's secret or either of its variables is not set (empty or not
 visible to this repository), that provider's setup job chooses the policy
 `unconfigured`: no review job runs, the setup job emits a warning naming what is
 missing, and the gate passes with "Review skipped: not configured for this
-repository (…)". The setup job receives only whether the secret is set
-(`secrets.NAME != ''`), never its value. This is deliberately not fail-closed:
+repository (…)". The setup job receives only whether the secret is set, from
+the separate credential-check job (`secrets.NAME != ''`), never its value. The
+setup job must not reference the secret itself: a job that references a secret
+masks it, line by line for the multi-line `auth.json`, and GitHub then drops any
+job output containing a masked string, such as `{` in the matrix JSON. This is deliberately not fail-closed:
 it lets the workflows land before the credentials exist. Once the gates are
 required checks, removing a secret turns them into skips, so watch for the
 warning.
@@ -232,7 +236,8 @@ completed", so an old `lgtm` never stays under a new head.
   job has `pull-requests: write`.
 - The review job runs only when the setup job chose the `review` policy and the
   head repository is this repository. Forks and Dependabot never reach a job with
-  secrets. The setup job sees only a true/false flag for the secret.
+  secrets. The setup job sees only a true/false flag for the secret, computed
+  by the credential-check job, which has no permissions and runs no code.
 - Configuration, prompts and helpers come from the pull request's **base
   revision**, checked out sparsely into `trusted/`. The head is checked out
   separately into `src/` with `persist-credentials: false` and is only read:
