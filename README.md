@@ -159,7 +159,7 @@ All base64 in the class goes through one function, `onchain_tinysynth::base64::b
 
 ## Integration guide
 
-How a consumer such as Beasts builds its `token_uri` (the layout above), with the word alignment described below. [`examples/beast_consumer`](examples/beast_consumer) runs exactly this against the class.
+How a consumer such as Beasts builds its `token_uri` (the layout above), with the word alignment described below. [`examples/beast_consumer`](examples/beast_consumer) runs exactly this against the class. AI agents can install the [`integrator-guide`](#agent-skills) skill, which walks through it.
 
 ```cairo
 use onchain_tinysynth::interface::{
@@ -245,6 +245,14 @@ At most 30 groups are needed in each place (120 characters), and the decoded JSO
 ## Gas and limits
 
 L2 gas, measured with snforge 0.64.0 and Scarb 2.20.1, with the optimized encoder (see [The base64 encoder](#the-base64-encoder)). Tables that involve base64 give its share. Where it matters, they also give the figure with the byte-wise stand-in encoder that the class used before (about 19.6K L2 gas per input byte, against about 3.3K now).
+
+### Measuring: Sierra gas, not Cairo steps
+
+Every figure here is Sierra gas, snforge's default. The accounting method changes the number about 2.5×. Measured on the example's full-size Beast (`snforge test gas_t4_token_uri`, the call with its test setup): about 299M with `--tracked-resource sierra-gas` and about 762M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M: that account's class is Sierra 1.6, which forces Cairo-steps (VM) accounting for the whole transaction. The same artifact produced the earlier 1.7–1.86B Beasts figures (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)).
+
+- Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
+- Treat devnet estimates through its predeployed accounts as inflated by about 2.0–2.6×.
+- RPC providers still cap `starknet_call` gas (see [Deployments](#deployments)).
 
 ### Entry points
 
@@ -555,6 +563,21 @@ npm run check-midi -- song.mid                        # the same, through npm
   node "$RUNNER_TEMP/onchain-tinysynth/scripts/check_midi.mjs" path/to/*.mid
   ```
 
+### Previewing a score
+
+[`scripts/preview.mjs`](scripts/preview.mjs) writes the page a token would get, offline: `PAGE ++ D ++ SVG`, byte for byte as the class and a Beasts-layout consumer produce it (built with [`scripts/page.mjs`](scripts/page.mjs)). It needs Node 22 or later and no `npm install`. Run it from a checkout whose `VERSION` (in `src/page_data.cairo`) is your class's `version()` (see [Agent skills](#agent-skills)).
+
+```sh
+npm run preview -- song.mid                                        # default settings, placeholder art
+npm run preview -- song.mid --settings sound.json --svg art.svg   # the token's settings and art
+npm run preview -- song.mid --serve                                # also serve it on http://127.0.0.1:8000/
+```
+
+- **Checks first.** It runs the MIDI through `checkMidi` and reports it as `check_midi.mjs` does; the settings through `player/validate.js` and `player/encode.js`, the JS reference of `settings::validate` and the encoder, printing the panic data `midi_segment` would revert with; and the SVG through the [art rule](#art-svg-requirements). Any failure exits 1 and writes nothing.
+- **Inputs.** The MIDI in any form `check_midi.mjs` reads (one score). `--settings` takes a `SynthSettings` value as JSON, in the shape of the `settings` objects in [`tests/fixtures/settings.json`](tests/fixtures/settings.json) (a whole fixture entry also works; every field is required and unknown fields are rejected), or a page's `SETTINGS` text, so a deployed token's page can be rebuilt from its blocks. `--out` defaults to `preview.html`; `--serve` takes an optional port (0 picks a free one).
+- **Identity.** `npm test` checks that, for the example's token 1, the output equals [`examples/beast_consumer/fixtures/animation.html`](examples/beast_consumer/fixtures/animation.html), decoded from the golden `token_uri` the contract matches byte for byte, and that the `token_uri` around token 4's page has the digest the contract's is tested against.
+- **Playback** is the same engine and player code as in every token. Audio can still differ slightly across browsers and sample rates, and noise and reverb vary per load until the fork's deterministic buffers land (roadmap phase 0).
+
 ## Art (SVG) requirements
 
 The consumer's SVG must never contain `</script`, in any letter case.
@@ -648,6 +671,21 @@ The class is declared but never deployed, so block explorers cannot call it (`st
 - **`tinysynth-4b29ff1+page.6` is interim** (`improve/integration` commit, not a release; not for declaration). It pins the engine to a commit of the fork's `improve/integration` branch to test the fork's fixes against this class early (see [Engine provenance](#engine-provenance-and-verification)). Its class must never be declared: the release gate (issue #12) requires the engine re-pinned to a tagged fork release, which gives a new `version()`.
 - `page.1` to `page.5` were development builds of the page, and `tinysynth-b70ba90+page.6` the same page with the engine at fork commit `b70ba90` (`script_sha256()` `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c`, gzip payload `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` / 9,862 bytes). None was declared.
 
+## Deployments
+
+Where the class and the example are declared or deployed. A consumer stores a class hash from this table; [Versions](#versions) gives each `version()`'s hashes, and [Verifying the engine](#verifying-the-engine) checks a token against them.
+
+| Network | What | Class hash | Contract address | Built from | Status |
+| --- | --- | --- | --- | --- | --- |
+| Sepolia | `OnchainTinySynth`, `version()` `tinysynth-4b29ff1+page.6` | `0x442cab13e9049a2eed9e508273ccfad626e690da394de58ba4f62d675b4f85a` | `0x064b629e081c108fef2a39fbd314a792d78be06339a6edc32c397bb7e8aab97d` (inspection instance) | [`d735793`](https://github.com/Provable-Games/onchain-tinysynth/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) | **INTERIM**: engine `4b29ff1`, `page.6`, not for production; superseded by `page.7` once [#28](https://github.com/Provable-Games/onchain-tinysynth/pull/28) merges, redeploy pending |
+| Sepolia | Example `BeastLikeNft` ([`examples/beast_consumer`](examples/beast_consumer)), library-calling the class above | `0x7f290530571bdfd547b05125ff87ac54b5b395f580e41c64226e06f3a3b725c` | `0x066dd6aa3b669e66df4cf6fc74cf18a335a95268154292e44ea0c59227caea92` | [`d735793`](https://github.com/Provable-Games/onchain-tinysynth/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) | **INTERIM** test consumer of the `page.6` class, not for production; redeploy pending with `page.7` |
+| Sepolia and mainnet | Release `OnchainTinySynth` | not declared yet | | | |
+
+- **Interim.** The Sepolia class was declared only to test explorers and RPC providers against a real class (issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). The Versions table's "not for declaration" means not as a release: the release class needs the engine re-pinned to a tagged fork release, which gives a new `version()` and class hash.
+- **Built from** is the commit to rebuild each class from. It predates `npm run preview` and the agent skills: run those from the newest commit with the same `VERSION` (see [Agent skills](#agent-skills)).
+- **The inspection instance** is a deployment of the class (no storage, no constructor), so explorers and RPC can call `version()`, `script_sha256()` and `license()`. Consumers still `library_call` the class hash.
+- **RPC providers** (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)). Through zan.top, Cartridge and dRPC, all four example tokens came back byte-identical to the JS reference. PublicNode served tokens 1–3 but reverted `Out of gas` on token 4, the full-size Beast (about 286.5M L2 gas). Providers cap `starknet_call` gas differently: check a full-size token through the providers your marketplaces and indexers use.
+
 ## Toolchain
 
 - Scarb 2.20.1 (Cairo 2.20)
@@ -672,6 +710,7 @@ node scripts/gen_midi_fixtures.mjs   # regenerate the synthetic scores (then gen
 npm ci && npm run gen:page   # rebuild the page, src/page_data.cairo and the page fixtures
 npm run check:page       # fail if any of them is out of date
 npm run check-midi -- song.mid   # check MIDI files against the page's MIDI contract
+npm run preview -- song.mid      # write (and optionally serve) the page a token with that MIDI gets
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromium \
   npm run render-check   # optional: render the reference timbres in a headless browser
 PLAYWRIGHT_CORE=... PLAYWRIGHT_BROWSER=firefox npm run page-check   # optional: the page; chromium, firefox or webkit
@@ -799,6 +838,43 @@ The Beast and MIDI test fixtures are Apache-2.0 as well. The Beast SVG in [`test
 ## Examples
 
 - [`examples/beast_consumer`](examples/beast_consumer): a runnable end-to-end example of a Beasts-style NFT assembling its `token_uri` with library calls to this class (declared, never deployed), word-aligned, with golden fixtures and decoded output, and a full-size Beast token (a real Beast SVG and a synthetic score of the largest production size) for the full-size gas measurement.
+
+## Agent skills
+
+Four skills help AI agents working in other repositories, such as an NFT contract, integrate the player and drive it with MIDI. They live in [`plugins/onchain-tinysynth/skills/`](plugins/onchain-tinysynth/skills), summarise this README and link to it, and never hardcode class hashes: they point to [Deployments](#deployments).
+
+| Skill | For |
+| --- | --- |
+| [`integrator-guide`](plugins/onchain-tinysynth/skills/integrator-guide/SKILL.md) | Adding the player to a contract's `token_uri`: the library dispatcher, holding the class hash, the Beasts layout, the art rule, snforge tests, gas and RPC caps |
+| [`midi-guide`](plugins/onchain-tinysynth/skills/midi-guide/SKILL.md) | Writing MIDI for the player: previewing offline, where it differs from standard MIDI players, every `checkMidi` rule, keeping the music in sync with the art |
+| [`sound-design`](plugins/onchain-tinysynth/skills/sound-design/SKILL.md) | The `SynthSettings` a contract passes: engine settings, custom timbres, `'TS: …'` errors, building settings in Cairo |
+| [`token-uri-inspector`](plugins/onchain-tinysynth/skills/token-uri-inspector/SKILL.md) | Fetching, decoding, verifying, rebuilding and viewing a deployed or local `token_uri`, and checking RPC call caps |
+
+**Install in Claude Code.** The repository is a plugin marketplace ([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)) with one plugin, `onchain-tinysynth`. In the other project:
+
+```sh
+claude plugin marketplace add Provable-Games/onchain-tinysynth    # or Provable-Games/onchain-tinysynth#<tag> to pin a ref
+claude plugin install onchain-tinysynth@onchain-tinysynth --scope project
+```
+
+Inside a session, `/plugin marketplace add Provable-Games/onchain-tinysynth` and `/plugin install onchain-tinysynth@onchain-tinysynth` do the same. The skills then run as `/onchain-tinysynth:midi-guide` and so on, and Claude loads them when a task matches. To offer them to everyone who opens the project, commit this to its `.claude/settings.json`. Claude Code prompts each collaborator to install plugins from a marketplace the project declares, and a plugin like this one, kept inside its marketplace, then loads without a per-user install. Cloud sessions skip project marketplaces: they never show the workspace trust dialog.
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "onchain-tinysynth": { "source": { "source": "github", "repo": "Provable-Games/onchain-tinysynth" } }
+  },
+  "enabledPlugins": { "onchain-tinysynth@onchain-tinysynth": true }
+}
+```
+
+The plugin sets no `version`, so Claude Code versions it by commit: `claude plugin update onchain-tinysynth@onchain-tinysynth` brings the latest skills (auto-update is off by default for third-party marketplaces).
+
+**Without Claude Code.** Each `SKILL.md` follows the open [Agent Skills](https://agentskills.io/specification) format (YAML frontmatter with `name` and `description`, then Markdown), so any agent can read the files. Copying a skill folder into another agent's skills directory, or into a project's `.claude/skills/`, also works; copy the whole `skills/` folder to keep the links between skills.
+
+**The tools the skills use** (`check-midi`, `preview`, `verify_engine.mjs`, the example's `decode.mjs`, and the skills' helper scripts) need Node 22 or later and a clone whose `PAGE` is the class's: `grep 'pub const VERSION' src/page_data.cairo` must print the class's `version()`. Every commit with the same `VERSION` has the same `PAGE`, byte for byte (the build fails if `PAGE` changes under a `VERSION` recorded in [`scripts/page_versions.json`](scripts/page_versions.json)), so use the newest such commit: `main` while its `VERSION` matches, otherwise the last commit before `VERSION` changed (`git log --oneline -- src/page_data.cairo`). A class's "Built from" commit in [Deployments](#deployments) is for rebuilding the class and can predate the tools. None of the tools needs `npm ci`, and the helper scripts use Node built-ins only.
+
+**Drift guards.** [`scripts/skills.test.mjs`](scripts/skills.test.mjs), run by `npm test`, checks that the frontmatter and the plugin manifests follow the formats, that every README anchor and repository path the skills link to exists, that the MIDI reference lists every `checkMidi` message, that the operator table matches the validator, that every gas figure in the skills appears in this README, that the skills name the settings limits by their `src/settings.cairo` constants rather than as numbers, and that they hardcode nothing a re-pin changes (`VERSION`, the engine commit, page and segment sizes, long hex hashes).
 
 ## CI
 

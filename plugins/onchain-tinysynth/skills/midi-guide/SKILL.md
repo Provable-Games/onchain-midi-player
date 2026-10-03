@@ -1,0 +1,98 @@
+---
+name: midi-guide
+description: Drive the onchain TinySynth NFT player (Provable-Games/onchain-tinysynth) with Standard MIDI Files. Preview a .mid offline in the exact page the chain serves, check it against the player's strict MIDI contract, and learn only where the player differs from standard MIDI players and upstream TinySynth (End-of-Track looping, sounds set by the contract, ignored controllers, pinned engine quirks, gas per byte, keeping the tempo in sync with animated SVG or GIF art). Use when composing, converting or debugging MIDI for an NFT that uses this player, when check-midi fails, or when music and art drift apart.
+license: Apache-2.0
+compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-tinysynth whose VERSION in src/page_data.cairo equals the class's version().
+---
+
+# Driving the onchain TinySynth player with MIDI
+
+This guide is for experienced MIDI authors. It lists only what differs from standard MIDI players and upstream TinySynth. The source of truth is the README's [MIDI contract](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#midi-contract); read it when a detail matters.
+
+Boundaries: this skill covers what goes in the `.mid` (notes, program changes, controllers, tempo, loop point). The contract's `SynthSettings` (which sounds the programs and drums play, reverb, volume, voices) is the [sound-design](../sound-design/SKILL.md) skill. Wiring the player into a contract is the [integrator-guide](../integrator-guide/SKILL.md) skill.
+
+## Start offchain
+
+Preview the score in the page the chain serves, and check it, before anything goes onchain:
+
+```sh
+git clone https://github.com/Provable-Games/onchain-tinysynth && cd onchain-tinysynth
+grep 'pub const VERSION' src/page_data.cairo   # must print the class's version(); see "Get the tools"
+npm run check-midi -- song.mid             # the page's own MIDI check
+npm run preview -- song.mid --settings sound.json --svg art.svg --serve
+```
+
+Open the printed URL and press ▶. If it plays right there, it plays the same from the token. `--settings` and `--svg` are optional (defaults: the class's default settings and a placeholder SVG). In a dev container, forward the port first: a `/tmp` file link does not open on the host.
+
+### Get the tools
+
+- Node 22 or later. `check-midi` and `preview` need no `npm ci`.
+- Use a clone whose `PAGE` is your class's: `grep 'pub const VERSION' src/page_data.cairo` must print the class's `version()` (`preview` prints it too). The same `VERSION` always means the same `PAGE` bytes, so the newest commit with it has both the tools and the right page: `main` while its `VERSION` matches, otherwise the last commit before `VERSION` changed (`git log --oneline -- src/page_data.cairo`). A class's "Built from" commit in [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments) can predate the tools. Details: README [Agent skills](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#agent-skills).
+
+## What the offline check guarantees
+
+- **Bytes.** `preview` writes exactly the decoded `animation_url` page (`PAGE ++ D ++ SVG`) that the class and a Beasts-layout consumer produce for the same MIDI, settings and SVG. `npm test` checks this against the example contract's golden output, and on Sepolia the deployed example's `token_uri` came back byte-identical through several RPC providers (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)).
+- **Playback.** Every browser runs the same engine and player code, but audio can differ slightly across browsers and sample rates (README: [The player page](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-player-page)).
+- **Noise and reverb** vary slightly from load to load until fork issue [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7) (deterministic reverb and noise buffers) lands.
+- **A bad file does not revert.** The class embeds the MIDI without parsing it. The page shows the error, ▶ stays disabled and the art still shows. Only an offline check catches it before mint.
+
+## Where the player is not a standard MIDI player
+
+Rows trace to the README's MIDI contract and to [`scripts/engine_contract.test.mjs`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/scripts/engine_contract.test.mjs), which pins the less obvious ones on the pinned engine.
+
+| Behaviour | What to do | Why |
+| --- | --- | --- |
+| Instruments come from `SynthSettings`: `quality` picks the built-in set (0 chip-tune, 1 FM), and each custom timbre replaces program `slot` 0–127 or drum note `slot` 35–81 for the whole song. | Select sounds the ordinary way (program change, drum note on channel 10). Agree the slots with whoever writes the settings. | Onchain control: the contract decides the sound. |
+| Reverb, master volume and voices are `SynthSettings.reverb`, `master_vol` and `voices`. CC91, CC93, GM Master Volume, GM System On and GS Reset do nothing. | Balance with CC7, CC11 and velocity. Stay within `voices` notes at once. | Onchain control. |
+| Bank select (CC0, CC32) is ignored: 128 programs. | Do not rely on banks or GS variations. | Engine: TinySynth has one bank. Those 128 programs and drums 35–81 are also the only slots `SynthSettings` can replace. |
+| The song always loops. A pass ends at `maxTick`, the latest End-of-Track of any track, not at the last note. | Put the latest End-of-Track exactly on the loop point, such as the last bar line. | Looping with the art: the page repeats the music while the art runs, and the End-of-Track sets the pass length exactly. |
+| At each loop point the tempo returns to 120 BPM; a tempo event at tick 0 applies at once. Programs, controllers, bend, RPNs and tuning carry over, and held notes keep sounding. Each ▶ resets the channels and plays from tick 0. | Set every state the song changes at tick 0. Release every note by End-of-Track. | Engine: its loop restarts only the tempo map. |
+| A track that ends early sends nothing more until the next pass, but its held notes keep sounding. | Release notes before a track's End-of-Track. | Engine: it merges all tracks into one event list. |
+| Parsing is strict: files many players accept are rejected (running status after a meta or SysEx event, F7 events, a missing or misplaced End-of-Track, trailing bytes, a tempo event that is not 3 bytes, text over 4,096 bytes, SMPTE timing, format 2, a pass under 50 ms). | Run `check-midi`. The rules and fixes are in [references/checkmidi-rules.md](references/checkmidi-rules.md). | Verifiability: the page must read the file exactly as the pinned TinySynth parser does, and fail closed with a visible error instead of misplaying. |
+| Bend range full scale is (MSB × 128 + LSB) × 100 / 127 cents, so the default MSB 2 gives about ±201.6 cents. | For exactly ±s semitones, send RPN 0 with MSB × 128 + LSB = 127 × s (±2: MSB 1, LSB 126). | Pinned engine, documented rather than patched. |
+| Pitch bend retunes only the oscillator operators of melodic notes already sounding. Held noise operators and drum hits keep the bend they started with. | Bend before a noise note or drum hit starts. | Pinned engine. |
+| Channel 10 note-offs are ignored: a hit lasts 3.5 × the decay of its sound's first operator. Notes outside 35–81 are silent. Program changes there do nothing. | Shape drum length in the timbre (sound-design), not with note-offs. | Pinned engine. |
+| A note-off releases every note of that pitch on the channel that started at or before it. | At one tick, put the note-off before the next note-on of the same pitch. | Pinned engine. |
+| The voice limit cuts a note when the new note is scheduled, up to about 0.2 s before it sounds. A drum hit takes no voice but applies the limit, so with `voices` 1 every hit cuts the melody. | Leave headroom under `voices`. | Pinned engine: it schedules about 0.2 s ahead. |
+| CC120 and CC123–127 cut the channel's melodic notes when scheduled (up to about 0.2 s early), not drums. CC121 leaves notes held by sustain sounding. | Prefer note-offs. Avoid CC121. | Pinned engine. |
+| CC1 is one 5 Hz LFO shared by all channels, ±(value × 100 / 127) cents. Loudness follows velocity squared; FM depth ignores velocity. Aftertouch, channel pressure, portamento, sostenuto and soft pedal are ignored. | Write vibrato and dynamics with that in mind. | Pinned engine. |
+| Nothing plays until the viewer taps ▶. | Do not count on autoplay or on the first beat landing at page load. | Browser rule: audio starts only from a user gesture. |
+| Every byte costs gas: `midi_segment` base64-encodes the MIDI at call time, once alone and twice inside the page fragment. About 14M L2 gas per 1,000 bytes ([README](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#midi_segment-by-midi-and-settings-size)). | Strip text, marker, lyric and name events (the player ignores them). Use running status, with note-on velocity 0 as note-off. | Gas: the contract pays per byte on every `token_uri` call. |
+
+The full list of honoured and ignored messages is in the README: [Messages TinySynth honours](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#messages-tinysynth-honours) and [Limits](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#limits).
+
+## Practical recommendations
+
+- Set tempo, programs, CC7, CC10 and any controller or tuning the song changes at tick 0, so every pass and every ▶ starts the same way.
+- End-of-Track at the loop point; give no track a later End-of-Track.
+- A pass length that is a whole multiple of the art's loop (next section).
+- Note-off before note-on at the same tick and pitch.
+- Read the `check-midi` report: loop length, `maxTick`, each track's End-of-Track, and drum notes flagged silent.
+
+## Syncing with the art
+
+The player restarts the art only on ▶, timed to when tick 0 is heard. It does not restart the art at loop points: after ▶, music and art stay in step only if the music's timing matches the art's animation periods. If they do not match, they drift visibly. That is a period mismatch, not clock drift.
+
+1. **Measure the art's periods:** GIF frame delays (in 10 ms units), SMIL `dur` (one repeat of the animation's `values`), and CSS animation durations (one iteration; with `alternate` or `alternate-reverse` the art repeats every two iterations). From the checkout, `node plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs art.svg` prints them. Ignore animations that change nothing visible.
+2. **Choose the tempo:** make the beat, or a subdivision of it, a whole number of frames.
+3. **Choose the pass length:** make it (the `loop` that `check-midi` prints, `maxTick` × the tick time) a whole multiple of every visible art period, so every pass starts in phase.
+
+A beat of `b` ms (tempo in µs per quarter / 1000) lines up with an art loop of `P` ms every lcm(`b`, `P`) ms. With 200 ms GIF frames:
+
+| Tempo (µs per quarter) | Beat | Lines up with a 0.4 / 0.6 / 0.8 / 1.2 s loop every | 4/4 bar |
+| --- | --- | --- | --- |
+| 100 BPM (600,000) | 600 ms, 3 frames | 1.2 / 0.6 / 2.4 / 1.2 s | 2.4 s: in phase with all four |
+| 150 BPM (400,000) | 400 ms, 2 frames | 0.4 / 1.2 / 0.8 / 1.2 s | 1.6 s: in phase with 0.4 and 0.8 |
+| 75 BPM (800,000) | 800 ms, 4 frames | 0.8 / 2.4 / 0.8 / 2.4 s | 3.2 s: in phase with 0.4 and 0.8 |
+| 120 BPM (500,000) | 500 ms, 2.5 frames | 2 / 3 / 4 / 6 s | 2 s: in phase with 0.4 only |
+| 131.87 BPM (455,000) | 455 ms, 2.275 frames | 36.4 / 54.6 / 72.8 / 109.2 s | 1.82 s: none |
+
+Retuning the music is usually better than retuning the art: GIF delays come in 10 ms steps, so matching an arbitrary beat needs uneven frames, and the change hits every token's art. Wrapper SVG durations are cheap to set to the music's grid. The Beast worked example, with measured numbers, is in [references/art-sync.md](references/art-sync.md).
+
+Why the art restarts only on ▶: it keeps the player simple and the art independent of the audio. Restarting at every loop would make a visible jump whenever the periods do not match.
+
+## Reference files
+
+- [references/checkmidi-rules.md](references/checkmidi-rules.md): every `checkMidi` rule and error message, with the usual cause and fix.
+- [references/art-sync.md](references/art-sync.md): measuring art periods, the Beast worked example, and when to change the art instead.
+- [scripts/art_periods.mjs](scripts/art_periods.mjs): prints the GIF frame delays, SMIL durations and CSS animation durations in an SVG. Node built-ins only.

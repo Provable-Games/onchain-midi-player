@@ -1,0 +1,16 @@
+{
+  "name": "onchain-tinysynth",
+  "description": "Agent skills for integrating the onchain TinySynth NFT music player and driving it with MIDI.",
+  "owner": {
+    "name": "Provable Games",
+    "url": "https://github.com/Provable-Games"
+  },
+  "plugins": [
+    {
+      "name": "onchain-tinysynth",
+      "source": "./plugins/onchain-tinysynth",
+      "description": "Integrate the onchain TinySynth player into an NFT's token_uri, write MIDI and SynthSettings for it, and inspect deployed tokens.",
+      "category": "development"
+    }
+  ]
+}

@@ -16,7 +16,8 @@
     "render-check": "node scripts/render_check.mjs",
     "page-check": "node scripts/page_check.mjs",
     "drift-check": "node scripts/drift_check.mjs",
-    "check-midi": "node scripts/check_midi.mjs"
+    "check-midi": "node scripts/check_midi.mjs",
+    "preview": "node scripts/preview.mjs"
   },
   "devDependencies": {
     "fflate": "0.8.3",
