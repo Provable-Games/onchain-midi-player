@@ -10,8 +10,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "game_components_encoding"
+version = "2.7.0"
+source = "git+https://github.com/Provable-Games/game-components?rev=652b349baa0059f1c51a060676068bf6180fd895#652b349baa0059f1c51a060676068bf6180fd895"
+
+[[package]]
 name = "onchain_tinysynth"
 version = "0.1.0"
+dependencies = [
+ "game_components_encoding",
+]
 
 [[package]]
 name = "snforge_scarb_plugin"
