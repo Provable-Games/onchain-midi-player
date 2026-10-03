@@ -225,7 +225,7 @@ fn token_uri(
 | Append | Word-aligned | Unaligned |
 | --- | --- | --- |
 | The 42,644-byte `animation_url_segment()` ([`tests/test_page_gas.cairo`](tests/test_page_gas.cairo)) | 2.2M | 9.3M |
-| Every append of a real Beast's `token_uri`: two 40,420-character `b64(S)`, the segment, `midi_segment`, the small pieces (the example's `gas_t4_appends_*`) | 16.0M | 29.9M |
+| Every append of a full-size Beast's `token_uri`: two 40,420-character `b64(S)`, the segment, `midi_segment`, the small pieces (the example's `gas_t4_appends_*`) | 16.0M | 29.9M |
 
 The consumer chooses where its large pieces land by adding spaces between JSON tokens, 3 at a time: 3 spaces are one 3-byte group, so they keep every piece a multiple of 3, and they encode to the constant `'ICAg'`, so they are never base64-encoded at call time. It does this in two places:
 
@@ -247,7 +247,7 @@ Through `IOnchainTinySynthLibraryDispatcher` on the declared class, as a consume
 | Entry point | L2 gas | Base64 share |
 | --- | --- | --- |
 | `animation_url_segment()` | 6.2M: 0.3M to materialize the constant, the rest to return its 42,644 bytes | none |
-| `midi_segment(midi, settings)` | 1.6M with no MIDI and the default settings; 60.7M with the largest real Beast score (3,716 bytes) and the 3 reference sounds (324.3M with the stand-in); 178.2M with that score and 8,192 bytes of `SETTINGS` (739.6M with the stand-in; table below) | 51-98% |
+| `midi_segment(midi, settings)` | 1.6M with no MIDI and the default settings; 60.7M with a score the size of the largest Beast score (3,716 bytes) and the 3 reference sounds (324.3M with the stand-in); 178.2M with that score and 8,192 bytes of `SETTINGS` (739.6M with the stand-in; table below) | 51-98% |
 | `base64(data)` | 0.2M for 3 bytes, 3.8M for 1,023 bytes, and about 3.6K per input byte for large inputs (20.5M for 1,023 bytes with the stand-in) | nearly all |
 | `script_sha256()` | 0.1M | none |
 | `version()` | 0.1M | none |
@@ -255,7 +255,7 @@ Through `IOnchainTinySynthLibraryDispatcher` on the declared class, as a consume
 
 ### `midi_segment` by MIDI and `SETTINGS` size
 
-Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`). Rows are real Beast scores from the onchain composer ([`tests/fixtures/beasts/`](tests/fixtures/beasts/README.md)); columns are `SETTINGS` sizes: the defaults, the 3 Beast reference sounds, 6 timbres, 32 timbres of 8 minimal operators (the most validation work) and the largest valid input (the most encoding work). Each cell is the total, then the base64 share (`b64(midi)` plus the two passes over `D`):
+Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`). Rows are synthetic scores with the sizes of the onchain composer's production Beast scores ([`tests/fixtures/midi/`](tests/fixtures/midi/README.md)): the gas depends only on the MIDI's length; columns are `SETTINGS` sizes: the defaults, the 3 Beast reference sounds, 6 timbres, 32 timbres of 8 minimal operators (the most validation work) and the largest valid input (the most encoding work). Each cell is the total, then the base64 share (`b64(midi)` plus the two passes over `D`):
 
 | MIDI | 16 bytes | 334 bytes | 504 bytes | 7,437 bytes | 8,192 bytes |
 | --- | --- | --- | --- | --- | --- |
@@ -264,16 +264,16 @@ Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`)
 | 1,541 bytes | 23.0M (97%) | 27.8M (90%) | 30.0M (87%) | 135.8M (59%) | 136.5M (62%) |
 | 2,266 bytes | 33.4M (97%) | 37.4M (92%) | 40.3M (90%) | 146.0M (61%) | 146.7M (65%) |
 | 2,991 bytes | 43.0M (97%) | 47.6M (93%) | 49.9M (92%) | 155.9M (64%) | 156.2M (67%) |
-| 3,716 bytes (the largest real score) | 53.5M (98%) | 57.9M (94%) | 60.5M (93%) | 166.3M (66%) | 167.0M (69%) |
+| 3,716 bytes (the largest Beast score's size) | 53.5M (98%) | 57.9M (94%) | 60.5M (93%) | 166.3M (66%) | 167.0M (69%) |
 | 3,716 bytes, with the stand-in encoder | 305.1M (100%) | 321.5M (99%) | 330.4M (99%) | 699.0M (92%) | 728.4M (93%) |
 
 The rest is validating and encoding `SETTINGS` (see [Sound settings](#sound-settings-and-custom-sounds)) and assembling `D`. The library call adds the cost of passing the inputs: 2.8M for the score with the reference sounds, 11.2M with 8,192 bytes of `SETTINGS`.
 
 ### A full Beasts `token_uri` against the 1B target
 
-Token 4 of the example ([`examples/beast_consumer`](examples/beast_consumer/README.md#gas)) is a real Beast:
+Token 4 of the example ([`examples/beast_consumer`](examples/beast_consumer/README.md#gas)) is a full-size Beast:
 - **art:** the Beasts renderer's SVG for a shiny, animated Warlock, 22,733 bytes;
-- **music:** the largest real score, 3,716 bytes;
+- **music:** a synthetic score the size of the largest Beast score, 3,716 bytes;
 - **sounds:** the 3 reference sounds, 334 bytes of `SETTINGS`;
 - **layout:** word-aligned.
 
@@ -288,7 +288,7 @@ Its `token_uri` is 133,525 characters. The whole call is from `snforge test toke
 | The appends (word-aligned layout; 29.9M unaligned) | 16.0M | none | 16.0M |
 | The rest: SVG and score constants, members, name check | about 10M | none | about 10M |
 
-- **A real Beast costs 0.29B, well under budget:** less than a third of the 1B target, or of Starknet's limit of 1.1×10^9 L2 gas per transaction. With the stand-in encoder it cost 1.41B, over both. The projection from the encoder's lab figures (62% less encoding gas) was about 0.57B; measured, encoding costs about 83% less per byte than with the stand-in.
+- **A full-size Beast costs 0.29B, well under budget:** less than a third of the 1B target, or of Starknet's limit of 1.1×10^9 L2 gas per transaction. With the stand-in encoder it cost 1.41B, over both. The projection from the encoder's lab figures (62% less encoding gas) was about 0.57B; measured, encoding costs about 83% less per byte than with the stand-in.
 - **Most of it is still the SVG.** Base64 is 84% of the total, and the two passes over the SVG are 67%. These are the same two passes Beasts' metadata makes today: it encodes the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 82M (346M with the stand-in).
 - **The sample tokens are cheaper:** a 1 KB SVG and a 112-byte MIDI cost 30.1M to 30.2M (90.2M to 90.6M with the stand-in).
 
@@ -296,9 +296,9 @@ Its `token_uri` is 133,525 characters. The whole call is from `snforge test toke
 
 - **Cost per size.** Every 1,000 bytes of `SETTINGS` add about 14M to `midi_segment` (52M with the stand-in). About 6M of that is validating and encoding. The rest is base64, because `SETTINGS` sits inside `D`, which is encoded twice.
 - **Realistic settings are cheap.** The 3 reference sounds (334 bytes) or 6 timbres (504 bytes) add 4-7M over the defaults, about 2% of a full Beast `token_uri`.
-- **Worst case at the cap: about 0.4B.** The largest real score with 8,192 bytes of `SETTINGS` costs 178.2M through the library call (739.6M with the stand-in). In the full Beast `token_uri` above, it replaces the reference sounds' 60.1M, which gives 404.3M (1.83B with the stand-in). A direct measurement agrees: token 4 with the 8,192-byte fixture `valid_max_length` in place of the reference sounds gives a 147,493-character `token_uri` that costs 407.4M.
+- **Worst case at the cap: about 0.4B.** A score of the largest Beast score's size with 8,192 bytes of `SETTINGS` costs 178.2M through the library call (739.6M with the stand-in). In the full Beast `token_uri` above, it replaces the reference sounds' 60.1M, which gives 404.3M (1.83B with the stand-in). A direct measurement agrees: token 4 with the 8,192-byte fixture `valid_max_length` in place of the reference sounds gives a 147,493-character `token_uri` that costs 407.4M.
 - **Larger art.** Each byte of SVG costs about 9K L2 gas in the full `token_uri`: the consumer's two base64 passes through the library call, plus appending `b64(S)` twice. At that rate, the worst case reaches 1B only with an SVG of roughly 85 KB, almost 4 times the animated Warlock's 22.7 KB. This is an extrapolation: the release gate (issue #12) still measures a full-size Beast `token_uri` through the RPC providers.
-- **Recommendation: keep 8,192 bytes.** The worst case is 0.41B measured: the cap, the largest real score and a full-size animated Beast SVG together. That is less than half the 1B target. Lowering the cap to 4,096 bytes would save at most about 60M (the full token at about 0.34B). Realistic sounds are far below either cap: the reference sounds are 334 bytes, and a full per-type pack of about 20 two- or three-operator timbres would be about 2.6 KB.
+- **Recommendation: keep 8,192 bytes.** The worst case is 0.41B measured: the cap, a score of the largest Beast score's size and a full-size animated Beast SVG together. That is less than half the 1B target. Lowering the cap to 4,096 bytes would save at most about 60M (the full token at about 0.34B). Realistic sounds are far below either cap: the reference sounds are 334 bytes, and a full per-type pack of about 20 two- or three-operator timbres would be about 2.6 KB.
 
 ## Sound settings and custom sounds
 
@@ -530,6 +530,7 @@ The tests and the example need only Node, no `npm install`. Rebuilding the page,
 npm test                 # node --test "player/**/*.test.js" "scripts/**/*.test.mjs"
 npm run gen:settings     # regenerate tests/fixtures/settings.json and tests/settings_fixtures.cairo
 npm run check:settings   # fail if they are out of date
+node scripts/gen_midi_fixtures.mjs   # regenerate the synthetic scores (then gen:page)
 npm ci && npm run gen:page   # rebuild the page, src/page_data.cairo and the page fixtures
 npm run check:page       # fail if any of them is out of date
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
@@ -551,7 +552,7 @@ The engine tests, the page build and the page checks use the vendored engine (`t
    - [`tests/fixtures/page.html`](tests/fixtures/page.html): `PAGE`;
    - [`src/page_data.cairo`](src/page_data.cairo) (generated, do not edit): `animation_url_segment()` pre-encoded at both base64 layers, `PAGE_LEN`, `SEGMENT_LEN`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`, `VERSION` and `license()`. The segment is a string literal: the compiler stores its words as constants, so materializing it costs 0.28M L2 gas, against 3.70M for a `const` felt array deserialized into a `ByteArray`, for a larger class (see [Class size](#class-size)). `license()`, rarely called, stays a `const` felt array;
    - the golden fixtures for the class: [`tests/fixtures/page.json`](tests/fixtures/page.json) and [`tests/page_fixtures.cairo`](tests/page_fixtures.cairo) (below);
-   - the class's test fixtures, [`tests/class_fixtures.cairo`](tests/class_fixtures.cairo): the raw `PAGE`, base64 vectors from Node's encoder, and the real Beast scores of [`tests/fixtures/beasts/`](tests/fixtures/beasts/README.md).
+   - the class's test fixtures, [`tests/class_fixtures.cairo`](tests/class_fixtures.cairo): the raw `PAGE`, base64 vectors from Node's encoder, and the synthetic scores of [`tests/fixtures/midi/`](tests/fixtures/midi/README.md).
 
 `VERSION` is `tinysynth-<engine ref>+page.<PAGE_VERSION>`. [`scripts/page_versions.json`](scripts/page_versions.json) records the SHA-256 of `PAGE` for every `VERSION`, and the build (and `check:page`) fails if the page changes while `VERSION` stays the same. To change the page: bump `PAGE_VERSION` in [`scripts/page.mjs`](scripts/page.mjs) (a re-pin changes `VERSION` by itself), then run `npm run gen:page -- --record`.
 
@@ -613,9 +614,11 @@ The consumer's whole library call, including reading the result, is 6.2M (see [G
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The embedded TinySynth engine is also Apache-2.0: copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games in <https://github.com/Provable-Games/webaudio-tinysynth>. The page's gunzip shim is derived from fflate, MIT License, Copyright (c) 2026 Arjun Barrett ([text](tests/vendor/fflate-0.8.3.LICENSE)). The class's base64 encoder is the `game_components_encoding` package of [game-components](https://github.com/Provable-Games/game-components), MIT License, Copyright (c) 2026 Provable Games ([text](tests/vendor/game-components.LICENSE)). `license()` includes all four notices.
 
+The Beast and MIDI test fixtures are Apache-2.0 as well. The Beast SVG in [`tests/fixtures/beasts/`](tests/fixtures/beasts/README.md) is Beasts artwork that Provable Games licenses under Apache-2.0 for this repository, and the MIDI scores in [`tests/fixtures/midi/`](tests/fixtures/midi/README.md) are synthetic, generated by `scripts/gen_midi_fixtures.mjs`. Neither is part of the class.
+
 ## Examples
 
-- [`examples/beast_consumer`](examples/beast_consumer): a runnable end-to-end example of a Beasts-style NFT assembling its `token_uri` with library calls to this class (declared, never deployed), word-aligned, with golden fixtures and decoded output, and a real Beast token for the full-size gas measurement.
+- [`examples/beast_consumer`](examples/beast_consumer): a runnable end-to-end example of a Beasts-style NFT assembling its `token_uri` with library calls to this class (declared, never deployed), word-aligned, with golden fixtures and decoded output, and a full-size Beast token (a real Beast SVG and a synthetic score of the largest production size) for the full-size gas measurement.
 
 ## CI
 
@@ -625,7 +628,7 @@ GitHub Actions runs on every pull request and on pushes to `main`, on `ubuntu-24
 | --- | --- |
 | `cairo` | Scarb 2.20.1 and snforge 0.64.0 from `.tool-versions`: `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer`; the Scarb lockfiles stay unchanged |
 | `javascript` | Node 24: the example's Node tests; `npm ci` (when `package-lock.json` exists) and `npm test` when the root `package.json` has a `test` script; `tsc --checkJs` on `player/` when it exists |
-| `generated` | Reruns the example's `gen_fixtures.mjs`, then `npm run check:settings` and `npm run check:page` (the engine hash, the page, `src/page_data.cairo` and the page fixtures) when those scripts exist, then fails on any diff |
+| `generated` | Reruns `scripts/gen_midi_fixtures.mjs` (the synthetic scores) and the example's `gen_fixtures.mjs`, then `npm run check:settings` and `npm run check:page` (the engine hash, the page, `src/page_data.cairo` and the page fixtures) when those scripts exist, then fails on any diff |
 | `browser` | Installs Playwright's Chromium headless shell with its system libraries, then runs the example's `browser_check.mjs` and, when those scripts exist, `npm run render-check` and `npm run page-check`. Firefox and WebKit follow in roadmap phase 5 |
 
 The optional steps switch on by themselves when the root `package.json`, its scripts or `player/` exist ([`.github/scripts/ci-detect.sh`](.github/scripts/ci-detect.sh)). TypeScript, `@types/node` and `playwright-core` are pinned in [`.github/ci-tools`](.github/ci-tools); Dependabot updates them and the actions monthly.
@@ -644,6 +647,7 @@ Run the same checks locally from the repository root (Scarb and snforge from `.t
 ```sh
 scarb fmt --check && scarb build && snforge test
 (cd examples/beast_consumer && scarb fmt --check && scarb build && snforge test)
+node scripts/gen_midi_fixtures.mjs
 (cd examples/beast_consumer && node --test scripts/*.test.mjs && node scripts/gen_fixtures.mjs)
 npm ci && npm test && npm run check:settings && npm run check:page
 git diff --exit-code                     # generators left no drift

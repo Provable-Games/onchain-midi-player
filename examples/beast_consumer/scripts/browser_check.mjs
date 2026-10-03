@@ -8,9 +8,9 @@
 // a file with two SysEx (F0) events (same notes, same End-of-Track), a variant with settings that
 // do not parse (1,1,30,40,64,0: a token missing), a variant whose gzipped engine is corrupt
 // (one payload byte changed), a variant whose SVG breaks the art rule (a <script> element in
-// it), and token 4's page (a real Beast SVG, the largest real score and the reference sounds: its
-// art renders, and ▶ installs the reference sounds and loops at the score's End-of-Track). For the
-// valid pages it checks that the page's shim inflated the
+// it), and token 4's page (a real Beast SVG, the synthetic 3,716-byte score and the reference
+// sounds: its art renders, and ▶ installs the reference sounds and loops at the score's
+// End-of-Track). For the valid pages it checks that the page's shim inflated the
 // engine (its gzip tag replaced by an inline script), that the art rendered (including the PNG
 // inside the SVG's foreignObject, by sampling a screenshot pixel), that ▶ is enabled and starts
 // TinySynth with the token's settings (custom lead on program 80, custom kick on drum 36, reverb,
@@ -88,7 +88,7 @@ const unsafeArt = parseArtBlock(unsafeHtml);
 if (!unsafeArt.rest) throw new Error('unsafe SVG variant not truncated');
 const asData = (h) => 'data:text/html;base64,' + Buffer.from(h, 'latin1').toString('base64');
 // [label, url, expected error (an invalid variant) and what the console logs, or the truncated art,
-// or a real Beast (token 4)]
+// or the full-size Beast (token 4)]
 const targets = [
   ['fixtures/animation.html (file://)', pathToFileURL(join(root, 'fixtures', 'animation.html')).href],
   ['token.json animation_url (data: URI)', token.animation_url],
@@ -97,7 +97,7 @@ const targets = [
   ['corrupt gzipped engine variant (data: URI)', asData(corruptHtml), { error: ENGINE_MISSING, logged: ['gunzip:', ENGINE_MISSING] }],
   ['unsafe SVG variant, a <script> element in the art (data: URI)', asData(unsafeHtml), { truncatedArt: unsafeArt.art }],
   // UTF-8 bytes as latin1 characters, so asData's latin1 round trip keeps them.
-  ['token 4, a real Beast (data: URI)', asData(Buffer.from(animationHtml(4), 'utf8').toString('latin1')), { real: true }],
+  ['token 4, a full-size Beast (data: URI)', asData(Buffer.from(animationHtml(4), 'utf8').toString('latin1')), { real: true }],
 ];
 
 const browser = await chromium.launch({ executablePath: CHROME || undefined, env: process.env });
@@ -193,7 +193,7 @@ for (const [label, url, expected] of targets) {
         check(JSON.stringify(st.opts) === '{"quality":1,"useReverb":0,"voices":64}' && st.masterVol === 0.4,
           'constructed with the reference settings: quality 1, no reverb, volume 40, 64 voices');
         check(st.lfo === 6 && st.kick === 0.2813, 'reference lead on program 0 (6 Hz LFO) and reference kick on drum 36 installed');
-        check(st.loop === 1 && st.loopEnd === 49440, 'loops at the score\'s End-of-Track (tick 49440)');
+        check(st.loop === 1 && st.loopEnd === 58560, 'loops at the score\'s End-of-Track (tick 58560)');
       } else {
         check(JSON.stringify(st.opts) === '{"quality":1,"useReverb":1,"voices":64}' && st.reverbLev === 1 && st.masterVol === 0.4,
           'constructed with the token settings: quality 1, reverb 100, volume 40, 64 voices');

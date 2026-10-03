@@ -37,9 +37,9 @@
 //! largest appends, the first `b64(S)` and the segment, start on a word boundary. None of these
 //! spaces is base64-encoded at call time.
 //!
-//! The renderer is unchanged: `render_svg` returns raw SVG exactly as before. Token 4 is a real
-//! Beast instead: the Beasts renderer's own SVG output, the largest real score and the reference
-//! sounds, to measure a full-size `token_uri`.
+//! The renderer is unchanged: `render_svg` returns raw SVG exactly as before. Token 4 is a
+//! full-size Beast instead: the Beasts renderer's own SVG output, a synthetic score the size of the
+//! largest production score and the reference sounds, to measure a full-size `token_uri`.
 
 use core::num::traits::Zero;
 use core::panic_with_felt252;
