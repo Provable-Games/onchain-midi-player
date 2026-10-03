@@ -246,6 +246,14 @@ At most 30 groups are needed in each place (120 characters), and the decoded JSO
 
 L2 gas, measured with snforge 0.64.0 and Scarb 2.20.1, with the optimized encoder (see [The base64 encoder](#the-base64-encoder)). Tables that involve base64 give its share. Where it matters, they also give the figure with the byte-wise stand-in encoder that the class used before (about 19.6K L2 gas per input byte, against about 3.3K now).
 
+### Measuring: Sierra gas, not Cairo steps
+
+Every figure here is Sierra gas, snforge's default. The accounting method changes the number about 2.5×. Measured on the example's full-size Beast (`snforge test gas_t4_token_uri`, the call with its test setup): about 299M with `--tracked-resource sierra-gas` and about 762M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M: that account's class is Sierra 1.6, which forces Cairo-steps (VM) accounting for the whole transaction. The same artifact produced the earlier 1.7–1.86B Beasts figures (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)).
+
+- Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
+- Treat devnet estimates through its predeployed accounts as inflated by about 2.0–2.6×.
+- RPC providers still cap `starknet_call` gas (see [Deployments](#deployments)).
+
 ### Entry points
 
 Through `IOnchainTinySynthLibraryDispatcher` on the declared class, as a consumer calls them, including passing the arguments and the result ([`tests/test_class_gas.cairo`](tests/test_class_gas.cairo), `snforge test gas_lc`):
@@ -662,6 +670,20 @@ The class is declared but never deployed, so block explorers cannot call it (`st
 - **A row is final only once its class is declared.** The class hash covers the class's Cairo code as well as the page. That includes the base64 encoder dependency, game-components `v3.1.0` (commit `66ce934`, recorded in `Scarb.lock`). So the class hashes and the tag are filled in at declaration (roadmap phase 6), and until then the row can still change: a different encoder build changes the class hash, and a re-pinned engine or a new page changes `version()` and the hashes. Once declared, a row never changes.
 - **`tinysynth-4b29ff1+page.6` is interim** (`improve/integration` commit, not a release; not for declaration). It pins the engine to a commit of the fork's `improve/integration` branch to test the fork's fixes against this class early (see [Engine provenance](#engine-provenance-and-verification)). Its class must never be declared: the release gate (issue #12) requires the engine re-pinned to a tagged fork release, which gives a new `version()`.
 - `page.1` to `page.5` were development builds of the page, and `tinysynth-b70ba90+page.6` the same page with the engine at fork commit `b70ba90` (`script_sha256()` `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c`, gzip payload `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` / 9,862 bytes). None was declared.
+
+## Deployments
+
+Where the class and the example are declared or deployed. A consumer stores a class hash from this table; [Versions](#versions) gives each `version()`'s hashes, and [Verifying the engine](#verifying-the-engine) checks a token against them.
+
+| Network | What | Class hash | Contract address | Built from | Status |
+| --- | --- | --- | --- | --- | --- |
+| Sepolia | `OnchainTinySynth`, `version()` `tinysynth-4b29ff1+page.6` | `0x442cab13e9049a2eed9e508273ccfad626e690da394de58ba4f62d675b4f85a` | `0x064b629e081c108fef2a39fbd314a792d78be06339a6edc32c397bb7e8aab97d` (inspection instance) | [`d735793`](https://github.com/Provable-Games/onchain-tinysynth/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) | **INTERIM**: engine `4b29ff1`, not for production |
+| Sepolia | Example `BeastLikeNft` ([`examples/beast_consumer`](examples/beast_consumer)), library-calling the class above | `0x7f290530571bdfd547b05125ff87ac54b5b395f580e41c64226e06f3a3b725c` | `0x066dd6aa3b669e66df4cf6fc74cf18a335a95268154292e44ea0c59227caea92` | [`d735793`](https://github.com/Provable-Games/onchain-tinysynth/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) | **INTERIM** test consumer, not for production |
+| Sepolia and mainnet | Release `OnchainTinySynth` | not declared yet | | | |
+
+- **Interim.** The Sepolia class was declared only to test explorers and RPC providers against a real class (issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). The Versions table's "not for declaration" means not as a release: the release class needs the engine re-pinned to a tagged fork release, which gives a new `version()` and class hash.
+- **The inspection instance** is a deployment of the class (no storage, no constructor), so explorers and RPC can call `version()`, `script_sha256()` and `license()`. Consumers still `library_call` the class hash.
+- **RPC providers** (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)). Through zan.top, Cartridge and dRPC, all four example tokens came back byte-identical to the JS reference. PublicNode served tokens 1–3 but reverted `Out of gas` on token 4, the full-size Beast (about 286.5M L2 gas). Providers cap `starknet_call` gas differently: check a full-size token through the providers your marketplaces and indexers use.
 
 ## Toolchain
 
