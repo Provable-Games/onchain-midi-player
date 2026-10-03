@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { artOffsetMs, barX, clockAt, clockDrift, fitLine, leads, median, passGrid, passStarts, trend, wrap } from "./drift.mjs";
+import { artOffsetMs, barX, clockAt, clockDrift, fitLine, largestStep, leads, median, passGrid, passStarts, trend, wrap } from "./drift.mjs";
 
 const close = (/** @type {number} */ a, /** @type {number} */ b, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 
@@ -121,4 +121,17 @@ test("trend: drift over the checkpoints and the largest residual", () => {
   const flat = trend([[0, -9], [10, -9], [20, -9]]);
   close(flat.driftMs, 0);
   close(flat.maxResidualMs, 0);
+});
+
+test("largestStep: a 30 ms stall of the audio clock, among 10 ms quantization", () => {
+  /** @type {number[][]} */
+  const samples = [];
+  for (let p = 0; p < 60000; p += 251.3) samples.push([p, Math.floor((p < 30000 ? p : p - 30) / 10) / 100]);
+  const r = largestStep(samples, 8);
+  close(r.stepMs, -30, 6);
+  close(r.atMs, 30000, 1000);
+  // Steady clocks: no step beyond the quantization.
+  const steady = largestStep(samples.filter(([p]) => p < 29000), 8);
+  assert.ok(Math.abs(steady.stepMs) < 6, String(steady.stepMs));
+  assert.deepEqual(largestStep(samples.slice(0, 10), 8), { stepMs: 0, atMs: 0 });
 });

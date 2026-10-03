@@ -154,3 +154,23 @@ export function clockDrift(samples, windowMs) {
   const last = pts.filter(([p]) => p >= p1 - windowMs).map((q) => q[1]);
   return { driftMs: median(last) - median(first), ppm: fitLine(pts).slope * 1e6, seconds: (p1 - p0) / 1000 };
 }
+
+/**
+ * The largest step in the audio clock against the page clock: over samples [performance.now() in
+ * ms, currentTime], the largest change in the median offset (1000 x currentTime - performance.now())
+ * from the `n` samples before a point to the `n` from it on. A stall of the audio clock (an
+ * underrun: currentTime stops while the page clock runs) shows as a negative step.
+ * @param {number[][]} samples
+ * @param {number} n
+ * @returns {{stepMs: number, atMs: number}} the step (0 if there are under 2n samples) and the
+ *   page time where it happened
+ */
+export function largestStep(samples, n) {
+  const off = samples.map(([p, t]) => 1000 * t - p);
+  let best = { stepMs: 0, atMs: samples.length ? samples[0][0] : 0 };
+  for (let i = n; i + n <= off.length; i++) {
+    const step = median(off.slice(i, i + n)) - median(off.slice(i - n, i));
+    if (Math.abs(step) > Math.abs(best.stepMs)) best = { stepMs: step, atMs: samples[i][0] };
+  }
+  return best;
+}

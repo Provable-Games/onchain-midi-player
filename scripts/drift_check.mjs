@@ -19,7 +19,10 @@
 //                      no pass missing: the tempo stays right and the loop seamless all session.
 //   the scheduler      No message is scheduled behind the audio clock (a late note).
 //   the clocks         Printed: the audio clock against the page clock (performance.now()), as the
-//                      change in their offset over the session and as a rate in ppm.
+//                      change in their offset over the session, as a rate in ppm and as its largest
+//                      step (a stall of the audio clock, an underrun, is a negative one), and the
+//                      art against the page clock. The art's offset from the sound is the sum of
+//                      the two, so a failure shows which side moved.
 //
 // It also checks that the page still plays at the end, that ■ stops it, and that nothing is logged
 // as an error or requested over the network.
@@ -44,7 +47,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { collectErrors, launchBrowser } from "./browsers.mjs";
-import { artOffsetMs, barX, clockAt, clockDrift, leads, median, passGrid, passStarts, trend } from "./drift.mjs";
+import { artOffsetMs, barX, clockAt, clockDrift, largestStep, leads, median, passGrid, passStarts, trend } from "./drift.mjs";
 import { fixtureCase, tokenPage } from "./fixture_pages.mjs";
 import { ART_OPEN, HTML_PREFIX, VERSION, b64 } from "./page.mjs";
 import { decodePng } from "./png.mjs";
@@ -182,6 +185,8 @@ async function checkpoint(k, t, start, last) {
   const row = {
     k, t: Math.round(t * 10) / 10, found,
     offsetMs: found ? median(offsets) : NaN,
+    // The audio clock against the page clock around the screenshots, for the art against the page.
+    clockMs: median(samples.map((/** @type {number[]} */ c) => 1000 * c[1] - c[0])),
     spreadMs: found ? Math.max(...offsets) - Math.min(...offsets) : NaN,
     shotMs: Math.max(...shots.map((s) => s.span)),
     outputLatencyMs: 1000 * shots[0].outputLatency,
@@ -249,8 +254,18 @@ try {
   check(lead.late === 0, `no message scheduled late: ${end.sends.length} messages, the closest ${ms(lead.min)} ms ahead of the audio clock`);
 
   const clocks = clockDrift(end.clock, Math.min(10000, (minutes * 60000) / 4));
-  Object.assign(summary, { clockDriftMs: clocks.driftMs, clockPpm: clocks.ppm });
-  info(`audio clock - page clock: ${clocks.driftMs >= 0 ? "+" : ""}${clocks.driftMs.toFixed(1)} ms over ${clock(clocks.seconds)} (${clocks.ppm.toFixed(1)} ppm, ${end.clock.length} samples)`);
+  // Past the first 5 s, while the audio clock settles after resume().
+  const step = largestStep(end.clock.filter((/** @type {number[]} */ c) => c[0] >= end.clock[0][0] + 5000), 8);
+  const stepAt = (step.atMs - end.clock[0][0]) / 1000;
+  Object.assign(summary, { clockDriftMs: clocks.driftMs, clockPpm: clocks.ppm, clockStepMs: step.stepMs, clockStepAt: stepAt });
+  info(`audio clock - page clock: ${clocks.driftMs >= 0 ? "+" : ""}${clocks.driftMs.toFixed(1)} ms over ${clock(clocks.seconds)} (${clocks.ppm.toFixed(1)} ppm, ${end.clock.length} samples); ` +
+    `largest step ${step.stepMs >= 0 ? "+" : ""}${step.stepMs.toFixed(1)} ms, ${clock(stepAt)} after ▶`);
+  if (found) {
+    // art - sound = (art - page clock) + (page clock - audio clock), against the first checkpoint.
+    const page_ = trend(rows.map((r) => [r.t, r.offsetMs + (r.clockMs - rows[0].clockMs)]));
+    Object.assign(summary, { artPageDriftMs: page_.driftMs });
+    info(`the art against the page clock: ${page_.driftMs >= 0 ? "+" : ""}${page_.driftMs.toFixed(1)} ms over the session (trend); the rest of the art's drift from the sound is the audio clock's`);
+  }
 
   check(end.constructed === 1 && end.plays === 1 && end.playing && end.state === "running", `still playing at the end (one synth, one ▶, AudioContext ${end.state})`);
   await page.click("#play");
