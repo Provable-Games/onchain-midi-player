@@ -10,4 +10,5 @@
 pub mod base64;
 pub mod interface;
 pub mod page_data;
+pub mod settings;
 pub mod types;

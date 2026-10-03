@@ -4,7 +4,8 @@
 // side produces:
 //
 //   - the mock PAGE (what the real phase-3 build pipeline will assemble around the TinySynth engine)
-//   - MockOnchainTinySynth: SETTINGS serialization, D, midi_segment, animation_url_segment
+//   - MockOnchainTinySynth: D, midi_segment, animation_url_segment (SETTINGS itself comes from the
+//     repository's reference encoder, player/encode.js, which the root parity tests tie to Cairo)
 //   - BeastLikeNft: token table, render_svg, JSON members, MIDI, SynthSettings
 //
 // gen_page.mjs turns PAGE into the generated Cairo constant. gen_fixtures.mjs builds every token's
@@ -13,6 +14,9 @@
 // test fails.
 
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { encodeSettings } from '../../../player/encode.js';
+import { validateSettings } from '../../../player/settings.js';
 
 // ---------------------------------------------------------------------------------------------
 // Bytes and base64
@@ -42,6 +46,10 @@ export const MOCK_ENGINE_JS =
   ' pinned release, SHA-256 = script_sha256()) here. This stand-in keeps the same global and the few' +
   ' methods the player calls, and makes no sound. */' +
   'window.WebAudioTinySynth=function(o){this.opts=o||{};this.timbres=[];this.midi=null;' +
+  'this.calls=[];this.setQuality=function(q){this.calls.push(["setQuality",q])};' +
+  'this.setMasterVol=function(v){this.calls.push(["setMasterVol",v])};' +
+  'this.setReverbLev=function(v){this.calls.push(["setReverbLev",v])};' +
+  'this.setVoices=function(v){this.calls.push(["setVoices",v])};' +
   'this.setTimbre=function(drum,slot,ops){this.timbres.push({drum:drum,slot:slot,ops:ops})};' +
   'this.loadMIDI=function(b){this.midi=b};this.playMIDI=function(){};this.stopMIDI=function(){}};';
 
@@ -66,35 +74,38 @@ if(p!==end)throw new Error("bad MTrk length")}
 m.bars=m.endTick/(m.ppq*4);return m}
 `;
 
+// The real player settings module (player/settings.js: strict parser, validator, installer), as a
+// plain script: comments and `export` keywords removed, otherwise unchanged.
+export const PLAYER_SETTINGS_JS = readFileSync(new URL('../../../player/settings.js', import.meta.url), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '')
+  .replace(/^export /gm, '')
+  .split('\n')
+  .map((l) => l.trim())
+  .filter(Boolean)
+  .join('\n') + '\n';
+
 // Runs on DOMContentLoaded: the settings, MIDI and art blocks come after this script in the
 // document (the art block is unclosed and ends at EOF), so they exist only once parsing is done.
-const PLAYER_JS = `(function(){"use strict";
-var FX=10000,WAVES=["sine","square","sawtooth","triangle","n0","n1"];
-function $(i){return document.getElementById(i)}
-function nums(t){return t.split(",").map(Number)}
-function parseSettings(text){
-var parts=text.trim().split(";"),g=nums(parts[0]);
-var s={quality:g[0],reverb:g[1],masterVol:g[2],voices:g[3],timbres:[]};
-for(var i=1;i<parts.length;i++){var ops=parts[i].split(":"),h=nums(ops[0]),tm={drum:h[0]===1,slot:h[1],ops:[]};
-for(var j=1;j<ops.length;j++){var v=nums(ops[j]);
-tm.ops.push({g:v[0],w:WAVES[v[1]],v:v[2]/FX,t:v[3]/FX,f:v[4]/FX,a:v[5]/FX,h:v[6]/FX,d:v[7]/FX,s:v[8]/FX,r:v[9]/FX,p:v[10]/FX,q:v[11]/FX,k:v[12]/FX})}
-s.timbres.push(tm)}
-return s}
+// The art is shown first and independently; a settings or MIDI error leaves Play disabled and shows
+// the error (fail closed), and the art stays visible.
+export const PLAYER_JS = `(function(){"use strict";
+${PLAYER_SETTINGS_JS}function $(i){return document.getElementById(i)}
 function b64ToBytes(t){var bin=atob(t.replace(/\\s+/g,"")),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u}
 function textToB64(t){var u=new TextEncoder().encode(t),bin="";for(var i=0;i<u.length;i++)bin+=String.fromCharCode(u[i]);return btoa(bin)}
 ${PARSE_MIDI_JS}var state={ready:false};window.__player=state;
-document.addEventListener("DOMContentLoaded",function(){try{
-var settings=parseSettings($("settings").textContent),midi=b64ToBytes($("midi").textContent),art=$("art").textContent;
-var info=parseMidi(midi);
-$("view").src="data:image/svg+xml;base64,"+textToB64(art);
-$("settings-out").textContent="raw (mock format): "+$("settings").textContent.trim()+"\\n\\nparsed: "+JSON.stringify(settings,null,1);
+document.addEventListener("DOMContentLoaded",function(){var play=$("play");play.disabled=true;
+try{var art=$("art").textContent;$("view").src="data:image/svg+xml;base64,"+textToB64(art);state.artChars=art.length}
+catch(e){state.artError=String(e&&e.message||e);console.error(e)}
+try{
+var settings=parseSettings($("settings").textContent),midi=b64ToBytes($("midi").textContent),info=parseMidi(midi);
+$("settings-out").textContent="raw: "+$("settings").textContent.trim()+"\\n\\nparsed: "+JSON.stringify(settings,null,1);
 $("midi-out").textContent=midi.length+" bytes: format "+info.format+", "+info.tracks+" track(s), PPQ "+info.ppq+", "+info.bpm+" BPM, "+info.notes+" melody notes, "+info.drumHits+" drum hits, End-of-Track at tick "+info.endTick+" ("+info.bars+" bar(s))";
-state.settings=settings;state.midiBytes=midi.length;state.midi=info;state.artChars=art.length;state.ready=true;
-$("play").onclick=function(){var synth=new window.WebAudioTinySynth({quality:settings.quality,useReverb:settings.reverb>0,voices:settings.voices});
-settings.timbres.forEach(function(t){synth.setTimbre(t.drum?1:0,t.slot,t.ops)});synth.loadMIDI(midi);synth.playMIDI();
-state.played=true;$("status").textContent="MOCK: no audio. The real player would now start TinySynth with "+synth.timbres.length+" custom timbre(s) and loop at tick "+info.endTick+"."};
-$("status").textContent="Ready (mock player).";
-}catch(e){state.error=String(e);$("status").textContent="Error: "+e;console.error(e)}});
+state.settings=settings;state.midiBytes=midi.length;state.midi=info;state.ready=true;
+play.onclick=function(){var synth=createSynth(window.WebAudioTinySynth,settings);synth.loadMIDI(midi);synth.playMIDI();
+state.played=true;state.engine={opts:synth.opts,calls:synth.calls,timbres:synth.timbres};$("status").textContent="MOCK: no audio. The real player would now start TinySynth with "+synth.timbres.length+" custom timbre(s) and loop at tick "+info.endTick+"."};
+play.disabled=false;$("status").textContent="Ready (mock player).";
+}catch(e){state.error=String(e&&e.message||e);if(e instanceof SettingsError)state.errorCode=e.code,state.errorIndices=e.indices;$("status").textContent="Error: "+state.error;console.error(e)}});
 })();`;
 
 const PAGE_STYLE =
@@ -132,7 +143,7 @@ export function pageUnpadded() {
     `<script>${MOCK_ENGINE_JS}</script>` +
     '</head><body><div id="card"><img id="view" alt="token art">' +
     '<div id="info"><h1>TinySynth player <b>MOCK</b></h1>' +
-    '<button id="play">Play (mock: no audio)</button><p id="status">Loading...</p>' +
+    '<button id="play" disabled>Play (mock: no audio)</button><p id="status">Loading...</p>' +
     '<h2>Settings</h2><pre id="settings-out"></pre><h2>MIDI</h2><pre id="midi-out"></pre>' +
     '</div></div>' +
     `<script>${PLAYER_JS}</script>` +
@@ -168,30 +179,13 @@ export const animationUrlSegment = () => segmentFor(page());
 // MockOnchainTinySynth.midi_segment
 // ---------------------------------------------------------------------------------------------
 
-export const WAVE_CODE = { Sine: 0, Square: 1, Sawtooth: 2, Triangle: 3, WhiteNoise: 4, MetallicNoise: 5 };
-const OP_FIELDS = [
-  'route', 'wave', 'volume', 'ratio', 'offset_hz', 'attack', 'hold', 'decay', 'sustain', 'release',
-  'pitch_ratio', 'pitch_time', 'key_scale',
-];
-
 /**
- * Mock SETTINGS format (placeholder; the real format is specified with issue #1):
- *
- *   quality,reverb,master_vol,voices{;drum,slot{:op}}
- *   op = route,wave,volume,ratio,offset_hz,attack,hold,decay,sustain,release,pitch_ratio,pitch_time,key_scale
- *
- * Decimal integers (fixed-point fields stay in 1/10000 units), `-` for negatives, `,` `;` `:` as
- * separators. `drum` is 0/1; `wave` is 0..5 (Sine..MetallicNoise).
+ * SETTINGS: the real format (issue #1, format version 1), from the repository's reference encoder
+ * (player/encode.js) after the reference validator, which mirror src/settings.cairo check for check.
  */
 export function settingsAscii(s) {
-  let out = [s.quality, s.reverb, s.master_vol, s.voices].join(',');
-  for (const t of s.timbres) {
-    out += `;${t.drum ? 1 : 0},${t.slot}`;
-    for (const op of t.operators) {
-      out += ':' + OP_FIELDS.map((f) => (f === 'wave' ? WAVE_CODE[op.wave] : op[f])).join(',');
-    }
-  }
-  if (!/^[0-9,;:-]*$/.test(out)) throw new Error('SETTINGS charset');
+  const out = encodeSettings(validateSettings(s));
+  if (!/^[0-9,-]*$/.test(out)) throw new Error('SETTINGS charset');
   return out;
 }
 
@@ -311,7 +305,7 @@ export const TIMBRES = [
 export const REVERB_BY_TIER = { 1: 100, 2: 30, 3: 5 };
 
 export function settingsFor(tier) {
-  return { quality: 1, reverb: REVERB_BY_TIER[tier], master_vol: 40, voices: 64, timbres: TIMBRES };
+  return { quality: 1, reverb: REVERB_BY_TIER[tier], master_vol: 40, voices: 64, waves: [], timbres: TIMBRES };
 }
 
 /** Checks the MIDI fixture: chunk lengths, End-of-Track on a bar boundary, running status used. */

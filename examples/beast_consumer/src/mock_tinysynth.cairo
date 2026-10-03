@@ -5,19 +5,20 @@
 //! the real class hash is swapped in. What is mocked:
 //!
 //! - `animation_url_segment()` returns a pre-encoded constant, as the real class will, but the page
-//!   is a ~5 KB mock (engine placeholder + mock player) instead of TinySynth + the real player. It
+//!   is a mock (engine placeholder + mock player around the real settings parser) instead of
+//!   TinySynth + the real player. It
 //!   is generated offline by `scripts/gen_page.mjs` into `mock_page_data.cairo`.
-//! - `midi_segment()` validates only a few `SynthSettings` ranges, rejects `Harmonics`, `Samples`
-//!   and filters (issues #2 and #3), and serializes `SETTINGS` in a placeholder format (the real
-//!   format is specified with issue #1).
+//! - `midi_segment()` is real apart from `base64()`: it uses the crate's `settings::validate` and
+//!   `settings::encode` (issue #1), so `SETTINGS` is the real format and invalid settings revert
+//!   with the real `'TS: ...'` messages.
 //! - `base64()` is a straightforward byte-wise encoder; the real class plans a word-wise one.
 //! - `script_sha256()`, `version()` and `license()` return mock constants.
 //!
 //! Like the real class, it has no storage and no constructor, and it is declared but never
 //! deployed: consumers reach it only through `library_call`.
 
-use core::panic_with_felt252;
-use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, Waveform};
+use onchain_tinysynth::settings;
+use onchain_tinysynth::types::SynthSettings;
 
 /// Closes the settings block and opens the MIDI block.
 pub fn midi_open() -> ByteArray {
@@ -84,142 +85,14 @@ pub fn base64(data: @ByteArray) -> ByteArray {
 }
 
 // ------------------------------------------------------------------------------------------------
-// SynthSettings: demo validation and the placeholder SETTINGS format
+// SynthSettings: the real validation and SETTINGS encoding
 // ------------------------------------------------------------------------------------------------
 
-/// A few range checks, enough to show that invalid settings revert before reaching the page. The
-/// real class checks every field (ranges in `types.cairo`, finalized in issues #1-#3).
-pub fn validate(settings: @SynthSettings) {
-    assert(*settings.quality <= 1, 'mock: quality > 1');
-    assert(*settings.reverb <= 100, 'mock: reverb > 100');
-    assert(*settings.master_vol <= 100, 'mock: master_vol > 100');
-    assert(*settings.voices >= 1 && *settings.voices <= 64, 'mock: voices not in 1..=64');
-    assert((*settings.timbres).len() <= 32, 'mock: more than 32 timbres');
-    for timbre in *settings.timbres {
-        if *timbre.drum {
-            assert(*timbre.slot >= 35 && *timbre.slot <= 81, 'mock: drum slot not in 35..=81');
-        } else {
-            assert(*timbre.slot <= 127, 'mock: program slot > 127');
-        }
-        let n_ops = (*timbre.operators).len();
-        assert(n_ops >= 1 && n_ops <= 8, 'mock: operators not in 1..=8');
-        for op in *timbre.operators {
-            assert(*op.route <= 18, 'mock: route > 18');
-            match op.wave {
-                Waveform::Harmonics(_) => panic_with_felt252('mock: Harmonics unsupported'),
-                Waveform::Samples(_) => panic_with_felt252('mock: Samples unsupported'),
-                _ => {},
-            }
-            assert(op.filter.is_none(), 'mock: filters unsupported');
-        }
-    }
-}
-
-fn wave_code(wave: @Waveform) -> u32 {
-    match wave {
-        Waveform::Sine => 0,
-        Waveform::Square => 1,
-        Waveform::Sawtooth => 2,
-        Waveform::Triangle => 3,
-        Waveform::WhiteNoise => 4,
-        Waveform::MetallicNoise => 5,
-        // Rejected by `validate` (issue #2 is not mocked).
-        Waveform::Harmonics(_) => panic_with_felt252('mock: Harmonics unsupported'),
-        Waveform::Samples(_) => panic_with_felt252('mock: Samples unsupported'),
-    }
-}
-
-/// Appends `v` in decimal.
-fn append_u64(ref out: ByteArray, v: u64) {
-    if v == 0 {
-        out.append_byte('0');
-        return;
-    }
-    let mut digits: Array<u8> = array![];
-    let mut x = v;
-    while x != 0 {
-        digits.append((x % 10).try_into().unwrap() + '0');
-        x /= 10;
-    }
-    let mut i = digits.len();
-    while i != 0 {
-        i -= 1;
-        out.append_byte(*digits[i]);
-    }
-}
-
-fn append_i32(ref out: ByteArray, v: i32) {
-    let wide: i64 = v.into();
-    if wide < 0 {
-        out.append_byte('-');
-        append_u64(ref out, (-wide).try_into().unwrap());
-    } else {
-        append_u64(ref out, wide.try_into().unwrap());
-    }
-}
-
-fn append_operator(ref out: ByteArray, op: @Operator) {
-    out.append_byte(':');
-    let fields: [u32; 2] = [(*op.route).into(), wave_code(op.wave)];
-    for f in fields.span() {
-        append_u64(ref out, (*f).into());
-        out.append_byte(',');
-    }
-    append_u64(ref out, (*op.volume).into());
-    out.append_byte(',');
-    append_u64(ref out, (*op.ratio).into());
-    out.append_byte(',');
-    append_i32(ref out, *op.offset_hz);
-    let rest: [u32; 7] = [
-        *op.attack, *op.hold, *op.decay, *op.sustain, *op.release, *op.pitch_ratio, *op.pitch_time,
-    ];
-    for f in rest.span() {
-        out.append_byte(',');
-        append_u64(ref out, (*f).into());
-    }
-    out.append_byte(',');
-    append_i32(ref out, *op.key_scale);
-}
-
-fn append_timbre(ref out: ByteArray, timbre: @Timbre) {
-    out.append_byte(';');
-    out.append_byte(if *timbre.drum {
-        '1'
-    } else {
-        '0'
-    });
-    out.append_byte(',');
-    append_u64(ref out, (*timbre.slot).into());
-    for op in *timbre.operators {
-        append_operator(ref out, op);
-    }
-}
-
-/// Mock `SETTINGS` format. PLACEHOLDER: the real format belongs to the page version and is
-/// specified with issue #1.
-///
-/// ```text
-/// quality,reverb,master_vol,voices{;drum,slot{:op}}
-/// op = route,wave,volume,ratio,offset_hz,attack,hold,decay,sustain,release,pitch_ratio,
-///      pitch_time,key_scale
-/// ```
-///
-/// Decimal integers (fixed-point fields stay in 1/10_000 units), `-` for negatives, `,` `;` `:`
-/// as separators. `drum` is 0 or 1; `wave` is 0..=5 (Sine, Square, Sawtooth, Triangle,
-/// WhiteNoise, MetallicNoise). Only digits, `-` and separators, so it can never close its block.
+/// The real `SETTINGS` (issue #1, format version 1), from the crate's `settings::encode`.
+/// `midi_segment` runs `settings::validate` first, which checks every field and reverts with the
+/// real `'TS: ...'` messages.
 pub fn settings_ascii(settings: @SynthSettings) -> ByteArray {
-    let mut out: ByteArray = "";
-    append_u64(ref out, (*settings.quality).into());
-    out.append_byte(',');
-    append_u64(ref out, (*settings.reverb).into());
-    out.append_byte(',');
-    append_u64(ref out, (*settings.master_vol).into());
-    out.append_byte(',');
-    append_u64(ref out, (*settings.voices).into());
-    for timbre in *settings.timbres {
-        append_timbre(ref out, timbre);
-    }
-    out
+    settings::encode(settings)
 }
 
 /// `D = SETTINGS '</script><script type="text/plain" id="midi">' b64(midi) <pad>
@@ -263,7 +136,7 @@ pub mod MockOnchainTinySynth {
         fn midi_segment(
             self: @ContractState, midi: ByteArray, settings: SynthSettings,
         ) -> ByteArray {
-            super::validate(@settings);
+            onchain_tinysynth::settings::validate(@settings);
             let d = super::d_fragment(@midi, @settings);
             super::base64(@super::base64(@d))
         }

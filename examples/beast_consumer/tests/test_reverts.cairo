@@ -7,7 +7,7 @@ use core::panic_with_felt252;
 use onchain_tinysynth::interface::{
     IOnchainTinySynthSafeDispatcherTrait, IOnchainTinySynthSafeLibraryDispatcher,
 };
-use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, Waveform};
+use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, WaveDef, Waveform};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 
 fn mock() -> IOnchainTinySynthSafeLibraryDispatcher {
@@ -16,11 +16,19 @@ fn mock() -> IOnchainTinySynthSafeLibraryDispatcher {
     IOnchainTinySynthSafeLibraryDispatcher { class_hash }
 }
 
+/// Asserts that `midi_segment` reverts with panic data starting with `expected`: the short
+/// string, then the 0-based wave, timbre or (timbre, operator) indices. The library call appends
+/// `'ENTRYPOINT_FAILED'` after them.
 #[feature("safe_dispatcher")]
-fn assert_midi_segment_reverts(settings: SynthSettings, expected: felt252) {
+fn assert_midi_segment_reverts(settings: SynthSettings, expected: Span<felt252>) {
     match mock().midi_segment(sound::midi(), settings) {
         Result::Ok(_) => panic_with_felt252('should have reverted'),
-        Result::Err(panic_data) => assert(*panic_data.at(0) == expected, *panic_data.at(0)),
+        Result::Err(panic_data) => {
+            assert(panic_data.len() >= expected.len(), 'panic data too short');
+            for i in 0..expected.len() {
+                assert(*panic_data.at(i) == *expected.at(i), *panic_data.at(i));
+            }
+        },
     }
 }
 
@@ -54,35 +62,54 @@ fn valid_settings_do_not_revert() {
 fn reverb_over_100_reverts() {
     let mut s = sound::settings_for(1);
     s.reverb = 101;
-    assert_midi_segment_reverts(s, 'mock: reverb > 100');
+    assert_midi_segment_reverts(s, ['TS: reverb out of range'].span());
 }
 
 #[test]
 fn quality_over_1_reverts() {
     let mut s = sound::settings_for(1);
     s.quality = 2;
-    assert_midi_segment_reverts(s, 'mock: quality > 1');
+    assert_midi_segment_reverts(s, ['TS: quality out of range'].span());
 }
 
 #[test]
 fn zero_voices_reverts() {
     let mut s = sound::settings_for(1);
     s.voices = 0;
-    assert_midi_segment_reverts(s, 'mock: voices not in 1..=64');
+    assert_midi_segment_reverts(s, ['TS: voices out of range'].span());
 }
 
 #[test]
 fn drum_slot_out_of_range_reverts() {
     let mut s = sound::settings_for(1);
     s.timbres = one_op_timbre(true, 34, Waveform::Sine);
-    assert_midi_segment_reverts(s, 'mock: drum slot not in 35..=81');
+    assert_midi_segment_reverts(s, ['TS: drum slot out of range', 0].span());
 }
 
 #[test]
-fn harmonics_wave_reverts_in_mock() {
+fn operator_error_reports_timbre_and_operator() {
     let mut s = sound::settings_for(1);
-    s.timbres = one_op_timbre(false, 80, Waveform::Harmonics(array![100_u16, 50].span()));
-    assert_midi_segment_reverts(s, 'mock: Harmonics unsupported');
+    let mut kick = *s.timbres.at(1);
+    let mut op = *kick.operators.at(0);
+    op.volume = 1_000_001;
+    kick.operators = [op].span();
+    s.timbres = [*s.timbres.at(0), kick].span();
+    assert_midi_segment_reverts(s, ['TS: volume out of range', 1, 0].span());
+}
+
+// Custom waves are rejected until issue #2 lands.
+#[test]
+fn custom_wave_reverts_until_issue_2() {
+    let mut s = sound::settings_for(1);
+    s.timbres = one_op_timbre(false, 80, Waveform::Custom(0));
+    assert_midi_segment_reverts(s, ['TS: custom wave unsupported', 0, 0].span());
+}
+
+#[test]
+fn custom_wave_table_reverts_until_issue_2() {
+    let mut s = sound::settings_for(1);
+    s.waves = [WaveDef::Harmonics([100_u16, 50].span())].span();
+    assert_midi_segment_reverts(s, ['TS: custom wave unsupported'].span());
 }
 
 #[test]

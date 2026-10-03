@@ -72,16 +72,41 @@ const html = readFileSync(join(root, 'fixtures', 'animation.html'), 'latin1');
 const sysex = midiWithSysex();
 const sysexHtml = html.replace(/(id="midi">)[^<]*(<\/script>)/, `$1${sysex.toString('base64')}$2`);
 if (sysexHtml === html) throw new Error('MIDI block not found');
-// [label, url, expected MIDI byte count]
+// Settings that fail validation (quality 2): the art must still render, Play stays disabled and
+// the validator's error is shown (spec D9).
+const INVALID_SETTINGS = '1,2,30,40,64,0,0';
+const invalidHtml = html.replace(/(id="settings">)[^<]*(<\/script>)/, `$1 ${INVALID_SETTINGS}$2`);
+if (invalidHtml === html) throw new Error('settings block not found');
+const INVALID_ERROR = 'settings: TS: quality out of range';
+// [label, url, expected MIDI byte count, invalid settings?]
 const targets = [
   ['fixtures/animation.html (file://)', pathToFileURL(join(root, 'fixtures', 'animation.html')).href, 112],
   ['token.json animation_url (data: URI)', token.animation_url, 112],
   ['SysEx MIDI variant (data: URI)', 'data:text/html;base64,' + Buffer.from(sysexHtml, 'latin1').toString('base64'), sysex.length],
+  [`invalid settings variant ${INVALID_SETTINGS} (data: URI)`, 'data:text/html;base64,' + Buffer.from(invalidHtml, 'latin1').toString('base64'), 112, true],
 ];
+
+/** The invalid-settings variant: art visible, Play disabled, the error shown and nothing else. */
+async function checkInvalid(page, errors, requests, blocked) {
+  const st = await page.evaluate(() => window.__player);
+  check(st.error === INVALID_ERROR && st.errorCode === 'TS: quality out of range' && !st.ready,
+    `player failed closed: state.error = ${JSON.stringify(st.error)}`);
+  await page.waitForFunction(() => document.getElementById('view').complete);
+  const dims = await page.$eval('#view', (e) => [e.naturalWidth, e.naturalHeight]);
+  check(dims[0] === 250 && dims[1] === 350, `art <img> still loaded (${dims.join('x')})`);
+  check(await page.$eval('#play', (b) => b.disabled), 'Play is disabled');
+  const status = await page.textContent('#status');
+  check(status === 'Error: ' + INVALID_ERROR && (await page.isVisible('#status')), `error shown: ${JSON.stringify(status)}`);
+  await page.click('#play', { force: true });
+  check(!(await page.evaluate(() => window.__player.played)), 'clicking the disabled Play does nothing');
+  const unexpected = errors.filter((e) => !e.includes(INVALID_ERROR));
+  check(errors.length === 1 && unexpected.length === 0, `only the expected console error (${errors.length} error(s): ${errors.map((e) => e.split('\n')[0]).join(' | ')})`);
+  check(blocked.length === 0, `no network requests (requests seen: ${[...new Set(requests.map((r) => r.split(':')[0] + ':'))].join(' ')})`);
+}
 
 const browser = await chromium.launch({ executablePath: CHROME || undefined, env: process.env });
 let failed = false;
-for (const [label, url, midiBytes] of targets) {
+for (const [label, url, midiBytes, invalid] of targets) {
   console.log(label);
   const context = await browser.newContext({ viewport: { width: 800, height: 600 } });
   const requests = [], blocked = [], errors = [];
@@ -98,15 +123,22 @@ for (const [label, url, midiBytes] of targets) {
   try {
     await page.goto(url);
     await page.waitForFunction(() => window.__player && (window.__player.ready || window.__player.error));
+    if (invalid) {
+      await checkInvalid(page, errors, requests, blocked);
+      await context.close();
+      continue;
+    }
     const st = await page.evaluate(() => window.__player);
     check(!st.error, `player initialised${st.error ? ': ' + st.error : ''}`);
     const s = st.settings;
-    check(s.quality === 1 && s.reverb === 100 && s.masterVol === 40 && s.voices === 64, 'settings: quality 1, reverb 100, volume 40, 64 voices');
+    check(s.quality === 1 && s.reverb === 100 && s.master_vol === 40 && s.voices === 64 && s.waves.length === 0,
+      'settings: quality 1, reverb 100, volume 40, 64 voices, no custom waves');
     const lead = s.timbres[0], kick = s.timbres[1];
-    check(s.timbres.length === 2 && !lead.drum && lead.slot === 80 && lead.ops.length === 2 &&
-      lead.ops[0].w === 'triangle' && lead.ops[1].g === 1 && lead.ops[1].t === 0 && lead.ops[1].f === 6,
+    check(s.timbres.length === 2 && !lead.drum && lead.slot === 80 && lead.operators.length === 2 &&
+      lead.operators[0].wave === 'Triangle' && lead.operators[1].route === 1 && lead.operators[1].ratio === 0 &&
+      lead.operators[1].offset_hz === 60000,
     'settings: chip lead on program 80 (triangle + 6 Hz LFO, route 1)');
-    check(kick.drum && kick.slot === 36 && kick.ops[0].p === 0.25, 'settings: custom kick on drum 36');
+    check(kick.drum && kick.slot === 36 && kick.operators[0].pitch_ratio === 2500, 'settings: custom kick on drum 36');
     const m = st.midi;
     check(st.midiBytes === midiBytes && m.format === 0 && m.ppq === 48 && m.bpm === 120, `MIDI: ${midiBytes} bytes, format 0, PPQ 48, 120 BPM`);
     check(m.notes === 4 && m.drumHits === 4 && m.endTick === 192 && m.bars === 1, 'MIDI: 4 notes, 4 drum hits, End-of-Track at tick 192 (1 bar)');
@@ -121,9 +153,17 @@ for (const [label, url, midiBytes] of targets) {
     const red = png.pixel(125, 129), card = png.pixel(30, 300);
     check(red[0] > 240 && red[1] < 20 && red[2] < 20, `foreignObject PNG rendered (pixel ${red})`);
     check(card.join() === '30,30,34', `card background rendered (pixel ${card})`);
+    check(!(await page.$eval('#play', (b) => b.disabled)), 'Play is enabled');
     await page.click('#play');
     const status = await page.textContent('#status');
     check((await page.evaluate(() => window.__player.played)) && status.includes('MOCK'), 'Play (mock) runs');
+    const eng = await page.evaluate(() => window.__player.engine);
+    check(JSON.stringify(eng.opts) === '{"quality":1,"useReverb":1,"voices":64}' &&
+      JSON.stringify(eng.calls) === '[["setQuality",1],["setMasterVol",0.4],["setReverbLev",1],["setVoices",64]]',
+    'installSettings: constructor options, then quality, volume, reverb and voices');
+    const ops = eng.timbres.map((t) => t.ops);
+    check(eng.timbres.length === 2 && ops[0][1].g === 1 && ops[0][1].t === 0 && ops[0][1].f === 6 &&
+      ops[0][0].w === 'triangle' && ops[1][0].p === 0.25, 'installSettings: timbres converted for setTimbre');
     if (shotDir) await page.screenshot({ path: join(shotDir, label.split(' ')[0].replace(/\W/g, '_') + '_page.png') });
     check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
     check(blocked.length === 0, `no network requests (requests seen: ${[...new Set(requests.map((r) => r.split(':')[0] + ':'))].join(' ')})`);
