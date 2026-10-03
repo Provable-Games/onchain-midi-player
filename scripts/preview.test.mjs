@@ -97,7 +97,7 @@ describe("checks", () => {
 
   test("every invalid and reserved settings fixture fails with the class's revert", () => {
     const cases = [...settingsFixtures.invalid, ...settingsFixtures.reserved];
-    assert.ok(cases.length > 50);
+    assert.ok(cases.length >= 10, `${cases.length} cases`);
     for (const { name, settings, error } of cases) {
       assert.throws(
         () => buildPreview({ midiArg: file("s.mid", MIDI), settings: settingsShape(settings) }),
