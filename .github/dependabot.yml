@@ -27,7 +27,8 @@ updates:
       codex-cli:
         patterns: ["*"]
 
-  # The root package.json has one devDependency, Terser, pinned exactly: its
-  # version determines the bytes of the page the class embeds, so it changes
-  # only deliberately (npm run gen:page, then a new PAGE_VERSION), not through
-  # Dependabot.
+  # The root package.json has two devDependencies, Terser and fflate, pinned
+  # exactly: their versions determine the bytes of the page the class embeds,
+  # so they change only deliberately (npm run gen:page, then a new
+  # PAGE_VERSION; for fflate also a re-derived, re-pinned gunzip shim), not
+  # through Dependabot.

@@ -17,6 +17,7 @@
     "page-check": "node scripts/page_check.mjs"
   },
   "devDependencies": {
+    "fflate": "0.8.3",
     "terser": "5.51.2"
   }
 }

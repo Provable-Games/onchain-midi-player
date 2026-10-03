@@ -47,7 +47,7 @@ function tunedMidi(c) {
 /**
  * Every fixture, computed and cross-checked.
  * @param {string} page PAGE
- * @param {{version: string, license: string, engineCommit: string, engineSha256: string}} meta
+ * @param {{version: string, license: string, engineCommit: string, engineSha256: string, gzipSha256: string, gzipLen: number, shimSha256: string}} meta
  */
 export function pageFixtures(page, meta) {
   const segment = segmentFor(page);
@@ -104,6 +104,9 @@ export function pageFixtures(page, meta) {
       version: meta.version,
       engine_commit: meta.engineCommit,
       engine_sha256: meta.engineSha256,
+      gzip_len: meta.gzipLen,
+      gzip_sha256: meta.gzipSha256,
+      shim_sha256: meta.shimSha256,
       page_len: page.length,
       page_sha256: sha256(page),
       page_pad: page.length - page.trimEnd().length,
@@ -192,6 +195,10 @@ function cairoSource(json, cases) {
     `/// SHA-256 of the engine (the pinned fork build, commit ${pg.engine_commit.slice(0, 7)}).`,
     `pub const ENGINE_SHA256: u256 = ${u256(pg.engine_sha256)};`,
     "",
+    `/// SHA-256 of the engine's gzip payload in PAGE, ${pg.gzip_len} bytes.`,
+    `pub const GZIP_SHA256: u256 = ${u256(pg.gzip_sha256)};`,
+    `pub const GZIP_LEN: u32 = ${pg.gzip_len};`,
+    "",
     "#[test]",
     "fn page_data_segment_matches_the_build() {",
     "    let segment = page_data::animation_url_segment();",
@@ -209,12 +216,14 @@ function cairoSource(json, cases) {
     "}",
     "",
     "#[test]",
-    "fn page_data_license_version_and_engine_hash_match_the_build() {",
+    "fn page_data_license_version_and_engine_hashes_match_the_build() {",
     "    let license = page_data::license();",
     "    assert_eq!(license.len(), LICENSE_LEN);",
     "    assert(sha256(@license) == LICENSE_SHA256, 'license sha256');",
     `    assert(page_data::VERSION == '${pg.version}', 'version');`,
     "    assert(page_data::ENGINE_SHA256 == ENGINE_SHA256, 'engine sha256');",
+    "    assert(page_data::GZIP_SHA256 == GZIP_SHA256, 'gzip sha256');",
+    "    assert_eq!(page_data::GZIP_LEN, GZIP_LEN);",
     "}",
   ];
   for (const c of cases) {

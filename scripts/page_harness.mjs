@@ -1,15 +1,17 @@
 // @ts-check
-// Runs the real page's player script (the second <script> of PAGE, byte for byte) in node:vm
-// against a minimal fake DOM, for the player tests (player/player.test.js). The engine is either a
-// recording fake (`engine: "fake"`) or the real pinned TinySynth on a WebAudio mock
-// (`engine: "real"`), whose 60 ms sequencer interval the test drives by hand (`advance`).
+// Runs the real page's scripts (PAGE's gunzip shim and player, byte for byte) in node:vm against a
+// minimal fake DOM, in document order, for the player tests (player/player.test.js). The shim
+// inflates the engine's gzip tag and inserts the engine as an inline script, which the fake DOM runs
+// at once, as a browser does; the player then runs. Once the inflated engine has defined
+// `WebAudioTinySynth`, it is either replaced by a recording fake (`engine: "fake"`) or kept and
+// recorded (`engine: "real"`, on a WebAudio mock whose 60 ms sequencer interval the test drives by
+// hand with `advance`). If the engine did not load, `WebAudioTinySynth` stays undefined.
 
 import vm from "node:vm";
-import { engineSource } from "./engine.mjs";
-import { ART_OPEN, MIDI_OPEN, SETTINGS_OPEN, pageScripts } from "./page.mjs";
+import { ART_OPEN, MIDI_OPEN, SETTINGS_OPEN } from "./page.mjs";
 import { webAudioMock } from "./webaudio_mock.mjs";
 
-/** A fake DOM element: the handful of properties and methods the player uses. */
+/** A fake DOM element: the handful of properties and methods the shim and the player use. */
 class El {
   /**
    * @param {string} tag
@@ -33,6 +35,12 @@ class El {
     this.onload = null;
     /** @type {null | (() => void)} */
     this.onerror = null;
+    /** @type {El[] | null} the head or body list holding it */
+    this.parent = null;
+  }
+  /** @param {string} name */
+  getAttribute(name) {
+    return name in this.attributes ? this.attributes[name] : null;
   }
   get textContent() {
     this.page.events.push(["read", this.attributes.id || this.tag]);
@@ -52,29 +60,45 @@ class El {
   setAttribute(name, value) {
     this.attributes[name] = String(value);
   }
-  /** @param {El} other */
+  /**
+   * Replaces this element in its list. An inserted <script> runs at once, as in a browser.
+   * @param {El} other
+   */
   replaceWith(other) {
-    const i = this.page.body.indexOf(this);
-    if (i < 0) throw new Error("replaceWith: element not in the body");
-    this.page.body[i] = other;
-    this.page.events.push(["replace", other.src]);
+    const list = this.parent;
+    const i = list ? list.indexOf(this) : -1;
+    if (!list || i < 0) throw new Error("replaceWith: element not in the document");
+    list[i] = other;
+    other.parent = list;
+    this.parent = null;
+    if (other.tag === "script") {
+      this.page.events.push(["script", other._text.length]);
+      this.page.runScript(other._text);
+    } else this.page.events.push(["replace", other.src]);
   }
 }
 
 /**
  * @typedef {object} Page
  * @property {Record<string, El>} elements
+ * @property {El[]} head
  * @property {El[]} body
- * @property {any[][]} events  reads of blocks, img src assignments, replacements, in order
+ * @property {any[][]} events  reads of blocks, img src assignments, inserted scripts, replacements
+ *   and DOMContentLoaded listeners, in order
+ * @property {(code: string) => void} runScript  runs an inserted script
  */
 
 /**
- * Splits a decoded animation_url HTML (PAGE ++ D ++ SVG) into the player script and the three
- * blocks, as the HTML parser would.
+ * Splits a decoded animation_url HTML (PAGE ++ D ++ SVG) into its scripts and the three blocks, as
+ * the HTML parser would. Tolerant of edited pages: any number of `<script type=... src=...>` tags
+ * (normally the engine's one gzip tag), whatever their payload.
  * @param {string} html
  */
 export function parseDocument(html) {
-  const { player } = pageScripts(html);
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  if (scripts.length !== 2) throw new Error("expected two plain <script> elements: the shim and the player");
+  const [shim, player] = scripts;
+  const srcTags = [...html.matchAll(/<script type="([^"]*)" src="([^"]*)"><\/script>/g)].map((m) => ({ type: m[1], src: m[2] }));
   const s = html.indexOf(SETTINGS_OPEN) + SETTINGS_OPEN.length;
   const m = html.indexOf(MIDI_OPEN, s);
   const a = html.indexOf(ART_OPEN, m);
@@ -84,7 +108,9 @@ export function parseDocument(html) {
   const icon = html.match(/<path id="icon" d="([^"]*)"/);
   if (!icon) throw new Error("no icon");
   return {
+    shim,
     player,
+    srcTags,
     settings: html.slice(s, m),
     midi: html.slice(m + MIDI_OPEN.length, a),
     art: html.slice(a + ART_OPEN.length),
@@ -94,7 +120,7 @@ export function parseDocument(html) {
 }
 
 /**
- * Runs the page's player on `html`. Returns the fake DOM, the engine's record and controls.
+ * Runs the page's shim and player on `html`. Returns the fake DOM, the engine's record and controls.
  * @param {string} html
  * @param {{engine?: "fake" | "real", outputLatency?: number, constructError?: string, resumeError?: string}} [options]
  *   constructError: the fake engine's constructor throws this message; resumeError: its
@@ -102,8 +128,29 @@ export function parseDocument(html) {
  */
 export function runPage(html, { engine = "fake", outputLatency = 0.02, constructError, resumeError } = {}) {
   const doc = parseDocument(html);
+  /** @type {string[]} errors thrown by inserted scripts, which a browser reports as uncaught */
+  const uncaught = [];
+  /** @type {Record<string, any>} */
+  let sandbox = {};
   /** @type {Page} */
-  const page = { elements: {}, body: [], events: [] };
+  const page = {
+    elements: {}, head: [], body: [], events: [],
+    // A script inserted by another runs at once; what it throws is reported, not propagated to the
+    // script that inserted it.
+    runScript(code) {
+      try {
+        vm.runInContext(code, sandbox, { filename: "page-inserted.js" });
+      } catch (e) {
+        uncaught.push(String((e && /** @type {Error} */ (e).message) || e));
+      }
+    },
+  };
+  for (const { type, src } of doc.srcTags) {
+    const tag = new El("script", page);
+    Object.assign(tag.attributes, { type, src });
+    tag.parent = page.head;
+    page.head.push(tag);
+  }
   const el = (/** @type {string} */ tag, /** @type {string} */ id, text = "") => {
     const e = new El(tag, page, text);
     e.attributes.id = id;
@@ -119,6 +166,7 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
   el("script", "midi", doc.midi);
   el("script", "art", doc.art);
   page.body.push(button, error);
+  button.parent = error.parent = page.body;
 
   /** @type {Array<() => void>} */
   let ready = [];
@@ -136,21 +184,29 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
   /** @type {El[]} */
   const created = [];
 
-  /** @type {Record<string, any>} */
-  const sandbox = {
+  sandbox = {
     document: {
-      body: { prepend: (/** @type {El} */ e) => { page.body.unshift(e); page.events.push(["prepend", e.src]); } },
+      body: { prepend: (/** @type {El} */ e) => { page.body.unshift(e); e.parent = page.body; page.events.push(["prepend", e.src]); } },
       getElementById: (/** @type {string} */ id) => page.elements[id] || null,
       createElement: (/** @type {string} */ tag) => {
         const e = new El(tag, page);
         created.push(e);
         return e;
       },
-      addEventListener: (/** @type {string} */ type, /** @type {() => void} */ fn) => { if (type === "DOMContentLoaded") ready.push(fn); },
+      // Only the selector form the shim uses: script[type="..."].
+      querySelectorAll: (/** @type {string} */ selector) => {
+        const m = /^script\[type="([^"]*)"\]$/.exec(selector);
+        if (!m) throw new Error(`fake DOM: unsupported selector ${selector}`);
+        return [...page.head, ...page.body].filter((e) => e.tag === "script" && e.attributes.type === m[1]);
+      },
+      addEventListener: (/** @type {string} */ type, /** @type {() => void} */ fn) => {
+        page.events.push(["listen", type]);
+        if (type === "DOMContentLoaded") ready.push(fn);
+      },
     },
     setTimeout: (/** @type {() => void} */ fn, /** @type {number} */ delay) => { timers.set(++timerId, { fn, delay }); return timerId; },
     clearTimeout: (/** @type {number} */ id) => { timers.delete(id); },
-    atob, btoa, TextEncoder,
+    atob, btoa, TextEncoder, TextDecoder,
     console: { error: (/** @type {any} */ e) => consoleErrors.push(String((e && e.message) || e)), log() {}, warn() {} },
   };
   sandbox.window = sandbox;
@@ -165,8 +221,15 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
       setInterval: (/** @type {() => void} */ fn) => { interval = fn; return 1; },
       clearInterval() {},
     });
-    vm.createContext(sandbox);
-    vm.runInContext(engineSource(), sandbox);
+  }
+  vm.createContext(sandbox);
+  // The shim, as the page runs it while parsing <head>: it inflates the engine, which runs at once.
+  // Errors in the shim and the player themselves propagate, so a test sees them.
+  vm.runInContext(doc.shim, sandbox, { filename: "page-shim.js" });
+  const loaded = typeof sandbox.WebAudioTinySynth === "function";
+  if (!loaded) {
+    // The engine did not load: the player must fail closed.
+  } else if (engine === "real") {
     // Record what the page does with the engine, and every MIDI message it schedules.
     const Real = sandbox.WebAudioTinySynth;
     sandbox.WebAudioTinySynth = function (/** @type {any} */ opts) {
@@ -195,7 +258,6 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
       return synth;
     };
   } else {
-    vm.createContext(sandbox);
     sandbox.WebAudioTinySynth = function FakeSynth(/** @type {any} */ opts) {
       if (constructError) throw new Error(constructError);
       const ctx = {
@@ -242,8 +304,11 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     calls,
     synths,
     consoleErrors,
+    uncaught,
     timers,
     audio,
+    /** Whether the inflated engine defined WebAudioTinySynth. */
+    engineLoaded: loaded,
     /** The current art <img> (first element of the body), if any. */
     art: () => page.body.find((e) => e.tag === "img") || null,
     /** Fires DOMContentLoaded. */

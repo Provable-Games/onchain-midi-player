@@ -9,3 +9,8 @@ Tatsuya Shinyagaito (g200kg), https://github.com/g200kg/webaudio-tinysynth,
 licensed under the Apache License, Version 2.0. The modified version is
 maintained at https://github.com/Provable-Games/webaudio-tinysynth; see that
 repository's NOTICE file for the list of modifications.
+
+The player page also embeds a gunzip routine derived from fflate by
+Arjun Barrett, https://github.com/101arrowz/fflate, licensed under the
+MIT License (Copyright (c) 2026 Arjun Barrett; the full text is in
+tests/vendor/fflate-0.8.3.LICENSE and in the class's license()).

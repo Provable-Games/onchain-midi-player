@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { ENGINE_SHA256, engineSource } from '../../../scripts/engine.mjs';
 import {
-  MIDI, TOKENS, animationHtml, blen, bytes, cairoByteArrayFn, decodeTokenUri, page, sha256, tokenJsonCompact,
+  MIDI, TOKENS, animationHtml, blen, bytes, cairoByteArrayFn, decodeTokenUri, page, pageScripts, sha256, tokenJsonCompact,
   tokenParts, tokenUriNaive, tokenUriSpliced, validateMidi,
 } from './reference.mjs';
 
@@ -86,10 +86,11 @@ writeFileSync(join(root, 'tests', 'golden.cairo'), goldenSrc);
 // Human-inspectable layers for the sample token, decoded from the token_uri string.
 const uri = tokenUriSpliced(SAMPLE_TOKEN);
 const dec = decodeTokenUri(uri);
-// Verification story of the class: the first <script> of the page is the pinned engine, byte for
-// byte, and its SHA-256 is what script_sha256() returns.
-const engine = dec.html.match(/<script>([\s\S]*?)<\/script>/)[1];
-check(engine === engineSource() && sha256(engine) === ENGINE_SHA256, 'first <script> of the page is the pinned engine');
+// Verification story of the class: the page's text/javascript+gzip tag carries the gzip payload,
+// which inflates to the pinned engine, byte for byte; its SHA-256 is what script_sha256() returns.
+const { engine, engineGzip } = pageScripts(dec.html);
+check(engine === engineSource() && sha256(engine) === ENGINE_SHA256, 'the page\'s gzip payload inflates to the pinned engine');
+console.log(`gzip payload sha256 (GZIP_SHA256): ${sha256(engineGzip)}, ${engineGzip.length} bytes`);
 console.log(`engine script sha256 (script_sha256): ${sha256(engine)}`);
 const fx = join(root, 'fixtures');
 mkdirSync(fx, { recursive: true });

@@ -10,6 +10,7 @@ Implemented so far:
 - **Settings (issue #1):** validation and the `SETTINGS` encoding in [`src/settings.cairo`](src/settings.cairo), with its JavaScript counterpart in [`player/`](player). See [Sound settings and custom sounds](#sound-settings-and-custom-sounds).
 - **The player page (issue #8):** [`player/player.js`](player/player.js), with the settings module, in the fixed page `PAGE`. See [The player page](#the-player-page).
 - **The offline build pipeline (issue #9):** the pinned engine, the page build, the generated [`src/page_data.cairo`](src/page_data.cairo) and the golden fixtures for the class. See [Build pipeline](#build-pipeline).
+- **The gzipped engine (issue #14):** `PAGE` carries the engine gzipped, with a small gunzip shim, which nearly halves the segment and its gas. See [The gzipped engine](#the-gzipped-engine).
 
 The class itself (`midi_segment`, the fast `base64`, the contract) is not implemented yet (phase 4, issue #10). See [Roadmap](#roadmap).
 
@@ -31,7 +32,7 @@ The output uses standard nested base64 data URIs:
 
 - `token_uri` is `data:application/json;base64,` followed by the token JSON.
 - The JSON's `animation_url` is `data:text/html;base64,` followed by the HTML page.
-- The HTML page is TinySynth + the player + the token's MIDI (in an inert text block) + the token's SVG art (in an inert text block, shown through an `<img>`).
+- The HTML page is TinySynth (gzipped, with a gunzip shim that inflates it in the browser) + the player + the token's MIDI (in an inert text block) + the token's SVG art (in an inert text block, shown through an `<img>`).
 
 ### Pre-encoding the fixed page
 
@@ -73,28 +74,52 @@ Alignment. The consumer's own pieces (`'{' ... base64,'`, `S`, `',' <pad>`) must
 
 ### The player page
 
-`PAGE` is [`tests/fixtures/page.html`](tests/fixtures/page.html), byte for byte: head and styles, the engine `<script>` (the pinned fork build's exact bytes), a small ▶/■ button, the player `<script>`, then the opening of the settings block and its alignment spaces. The per-token `D` and the SVG follow it at call time. The player ([`player/player.js`](player/player.js) and [`player/settings.js`](player/settings.js), flattened into one plain script and minified) starts on DOMContentLoaded:
+`PAGE` is [`tests/fixtures/page.html`](tests/fixtures/page.html), byte for byte: head and styles, the engine gzipped in a `<script type="text/javascript+gzip" src="data:text/javascript;base64,...">` tag (it inflates to the pinned fork build's exact bytes), the gunzip shim `<script>`, a small ▶/■ button, the player `<script>` (not compressed), then the opening of the settings block and its alignment spaces. The per-token `D` and the SVG follow it at call time. The shim inflates the engine while the page is parsed (see [The gzipped engine](#the-gzipped-engine)). The player ([`player/player.js`](player/player.js) and [`player/settings.js`](player/settings.js), flattened into one plain script and minified) starts on DOMContentLoaded:
 
 - **Art first.** It shows the art block in an `<img>` as `data:image/svg+xml;base64,...` (the SVG re-encoded as UTF-8), before and independently of the settings and the MIDI. The art fills the frame; the button overlays the bottom-right corner.
 - **Settings and MIDI.** It parses `SETTINGS` strictly (`decodeSettings`: the grammar, canonical integers, Cairo type bounds, count caps, known tags, every token consumed). Range and semantic validation is Cairo's alone: the class runs `settings::validate` before writing `SETTINGS`, and the page does not repeat it (spec Q4, reversed). It decodes the MIDI block (strict base64 after trimming the alignment spaces) and checks it (`checkMidi`). The check guarantees that TinySynth's parser reads the file as written and that looping is safe: it rejects running status without a channel status, tempo events that are not 3 bytes (with a one-byte length) or are 0, text events over 4 KB, F7 events and SysEx split over several events, a track without End-of-Track at its end, format 2, SMPTE timing, and a loop shorter than 50 ms.
-- **Fail closed (spec D9).** On any parse or MIDI error ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and logged. No synth is created. The art stays.
+- **Fail closed (spec D9).** If the engine did not load (its gzip payload did not inflate, or the engine failed when it ran: `engine: TinySynth did not load`), and on any parse or MIDI error, ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and logged. No synth is created. The art stays: the player that shows it is not compressed, so it never depends on inflation.
 - **▶** (a click or tap) constructs TinySynth on the first press (`createSynth`), resumes the `AudioContext` inside the gesture, reloads the MIDI (back to tick 0 at the song's starting tempo, keeping any rest before the first event), loops at End-of-Track with `setLoop(1)` and `setLoopEnd(maxTick)`, and starts playback. It then restarts the art when tick 0 is heard: after TinySynth's scheduling offset (`playTime - currentTime`, 100 ms) plus `AudioContext.outputLatency`, it re-creates the `<img>` with a distinct but equivalent URL (`data:image/svg+xml;r=<n>;base64,...`), so the browser starts a new animation timeline, and swaps it in once decoded.
 - **■** stops playback and cancels a pending art restart. It also cuts off every voice, including drum voices and notes already scheduled ahead (which TinySynth's `stopMIDI` leaves running), by replacing each channel's volume node, and drops the controller changes TinySynth had already scheduled, so nothing reaches the next playback. The art keeps running.
 - Plain JavaScript (`// @ts-check` and JSDoc), no modules, no `eval`, no network requests, no storage or cookies. It works in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles and `data:` images.
 
-Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) records them):
+Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) records them), against the previous, uncompressed page (`page.5`):
 
-| | Bytes |
-| --- | --- |
-| `PAGE` | 44,298 |
-| of which the engine | 37,060 |
-| of which the player (minified) | 6,047 |
-| `animation_url_segment()` | 78,804 |
-| `license()` | 2,594 |
+| | `page.5` (bytes) | Now (bytes) |
+| --- | --- | --- |
+| `PAGE` | 44,298 | 23,958 |
+| of which the engine | 37,060 | 13,152: 9,862 bytes of gzip, as base64 |
+| of which the gunzip shim (minified) | | 3,247 |
+| of which the player (minified) | 6,047 | 6,144 |
+| `animation_url_segment()` | 78,804 | 42,644 |
+| `license()` | 2,594 | 4,104 |
 
-The player does not re-check settings ranges: dropping that re-check (and the install path's custom-wave guards, which only repeated Cairo rules) saved 1,512 bytes of `PAGE` (45,810 to 44,298). The build fails if a validation rule reappears in the player.
+The player does not re-check settings ranges: dropping that re-check (and the install path's custom-wave guards, which only repeated Cairo rules) saved 1,512 bytes of the uncompressed `PAGE` (45,810 to 44,298). The build fails if a validation rule reappears in the player.
 
-The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own minified player script in `node:vm` against a fake DOM, with a recording engine and with the real engine on a WebAudio mock) and in headless Chromium (`npm run page-check`: as an offline `data:` URI, in a sandboxed iframe and under a strict CSP; the loop period against `maxTick x tick2Time`, the art restart by screenshots of a probe animation, and the failure paths).
+The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own shim and minified player script in `node:vm` against a fake DOM, the shim inflating the real engine from the page's payload, with a recording engine and with the real engine on a WebAudio mock; [`player/gunzip.test.js`](player/gunzip.test.js): the shim's inflation) and in headless Chromium (`npm run page-check`: as an offline `data:` URI, in a sandboxed iframe and under a strict CSP; the inflation and its order, the loop period against `maxTick x tick2Time`, the art restart by screenshots of a probe animation, and the failure paths, including a corrupt, truncated or missing gzip payload).
+
+### The gzipped engine
+
+The engine was 37,060 of the uncompressed page's 44,298 bytes, and the segment's size sets its gas at every step of a consumer's `token_uri` (see [Segment gas](#segment-gas)), so `PAGE` carries it gzipped. The markup follows the convention of Art Blocks' `GenArt721GeneratorV0` and scripty.sol's `gunzipScripts`:
+
+```html
+<script type="text/javascript+gzip" src="data:text/javascript;base64,H4sIAAAAAAACA..."></script>
+<script>/* the gunzip shim */</script>
+```
+
+- **Inert until inflated.** A browser neither runs nor fetches a `<script>` of an unknown type, so the tag is just data. The payload is base64, whose alphabet (`A-Z a-z 0-9 + / =`) has no `<`, `"` or `&`: it can close neither its tag nor its attribute.
+- **The shim** ([`player/gunzip.js`](player/gunzip.js), 3,247 bytes minified) runs next, while `<head>` is parsed. For each `text/javascript+gzip` tag it base64-decodes the `src`, gunzips it, and replaces the tag with an inline `<script>` holding the source. A script inserted that way runs synchronously, so the engine has run before the shim returns, before the player's `<script>` is parsed, and so before the player registers its DOMContentLoaded listener (`npm run page-check` asserts this order). No `eval` or `Function`: the source becomes a script element's text, which a CSP allowing inline scripts permits, also in `<iframe sandbox="allow-scripts">`. No network requests, and the output depends only on the payload.
+- **Integrity.** The shim checks the CRC-32 and the length in the gzip trailer. Most single-byte changes deep in a deflate stream still inflate, to wrong bytes; the CRC-32 rejects them. On any failure the shim logs the error and leaves the tag; the player then finds no engine and fails closed (D9).
+- **What is not compressed:** the player, so the art and its errors never depend on inflation. Compressing the player with the engine would save about 1.7 KB of `PAGE` (about 3 KB of segment, 7%), but needs a second, raw copy of the art and error code to keep D9.
+- **Provenance.** The shim is derived from [fflate](https://github.com/101arrowz/fflate) 0.8.3's `gunzipSync` (MIT, Copyright (c) 2026 Arjun Barrett; the license is [vendored](tests/vendor/fflate-0.8.3.LICENSE) and in `license()`), trimmed to one-shot inflation, with the trailer checks added; [`player/gunzip.js`](player/gunzip.js) lists every change. The build minifies it with the pinned Terser and checks the result against `SHIM_PIN` in [`scripts/page.mjs`](scripts/page.mjs) (SHA-256 `bf6316a818dc7519afafa5af7bf826af5280c9950d208f0a2822f4295ab0d4df`), so the bytes that inflate the engine in every token change only deliberately.
+- **Compression.** The pinned fflate (pure JavaScript, in `package-lock.json` with Terser) compresses at level 9 with no timestamp and no file name, so the payload depends only on the engine bytes, never on the system zlib or the OS.
+- **Cost in the browser:** inflating the 9,862-byte payload takes about 2 ms cold (0.4 ms warm) in headless Chromium, and the page is ready (▶ enabled) about 3 ms later than the uncompressed one: a median of 12.1 ms instead of 9.2 ms after navigation, as an offline `data:` URI. `npm run page-check` prints the figure for its `data:` page.
+
+| Hash (SHA-256) | Of | Where |
+| --- | --- | --- |
+| `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c` | the engine, decompressed: the fork's `webaudio-tinysynth.min.js` at `b70ba90` | `script_sha256()`, `page_data::ENGINE_SHA256` |
+| `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` | the gzip payload in `PAGE` (9,862 bytes) | `page_data::GZIP_SHA256`, `page_data::GZIP_LEN` |
+| `bf6316a818dc7519afafa5af7bf826af5280c9950d208f0a2822f4295ab0d4df` | the minified gunzip shim | `SHIM_PIN` in [`scripts/page.mjs`](scripts/page.mjs) |
 
 ## Interface
 
@@ -105,9 +130,9 @@ Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`.
 | `animation_url_segment() -> ByteArray` | Fixed `"animation_url":"data:text/html;base64,<page>` JSON member, pre-encoded at both layers. No encoding at call time. |
 | `midi_segment(midi: ByteArray, settings: SynthSettings) -> ByteArray` | `b64(b64(D))`: the token's settings and MIDI blocks, then opens the art block. Validates `settings` and encodes only per-token data. |
 | `base64(data: ByteArray) -> ByteArray` | Standard RFC 4648 base64 with `=` padding, for consumers encoding their own JSON pieces. |
-| `script_sha256() -> u256` | Constant SHA-256 of the embedded engine JS (big-endian). |
-| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.5'` (see [Build pipeline](#build-pipeline)). |
-| `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice. |
+| `script_sha256() -> u256` | Constant SHA-256 of the embedded engine JS, decompressed (big-endian). |
+| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.6'` (see [Build pipeline](#build-pipeline)). |
+| `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice, then the MIT license of fflate, from which the page's gunzip shim derives. |
 
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
 
@@ -222,6 +247,7 @@ Plain, dependency-free, CSP-safe JavaScript (`// @ts-check` with JSDoc, no `eval
 
   On any parse error the page fails closed: no audio, and a visible error.
 - [`player/player.js`](player/player.js) is the rest of the page's player (see [The player page](#the-player-page)).
+- [`player/gunzip.js`](player/gunzip.js) is the page's gunzip shim (see [The gzipped engine](#the-gzipped-engine)): `gunzip(bytes)`, derived from fflate, and `gunzipScripts()`, which replaces each `text/javascript+gzip` tag with the inflated inline script.
 - [`player/validate.js`](player/validate.js) is the JS reference of Cairo's `settings::validate` (`validateSettings`, the same checks in the same order with the same messages and indices), and [`player/encode.js`](player/encode.js) the reference encoder. Both are for Node and tooling only (the fixture generators and parity tests), not the page.
 
 Shared fixtures keep Cairo and JavaScript byte-for-byte identical:
@@ -284,7 +310,7 @@ The class embeds the bytes as base64 text and does not parse or validate them. I
 - The build is offline: the minified file and the fork's NOTICE are vendored in [`tests/vendor/`](tests/vendor), and `ENGINE_PIN` in [`scripts/engine.mjs`](scripts/engine.mjs) checks both SHA-256 hashes on every load, failing before anything is generated.
 - Anyone can verify a declared class:
   1. Check out the pinned commit or tag of the fork and run its build (`npm install && npm run build`) to reproduce `webaudio-tinysynth.min.js`.
-  2. Decode a consumer's `token_uri` offchain (JSON layer, then HTML layer), extract the engine script (the page's first `<script>`), and compare it byte for byte with the rebuilt file.
+  2. Decode a consumer's `token_uri` offchain (JSON layer, then HTML layer). Take the `src` of the page's `<script type="text/javascript+gzip">` tag and base64-decode what follows `data:text/javascript;base64,`: that is the gzip payload, whose SHA-256 is `page_data::GZIP_SHA256`. Gunzip it (with any gzip tool) and compare the result byte for byte with the rebuilt file.
   3. Compare the SHA-256 of both with `script_sha256()` (readable by a consumer contract or its tests).
   4. Rebuild this repository at the matching commit (`npm ci && npm run gen:page`, then `scarb build`) and compare the resulting class hash with the declared one.
 
@@ -306,7 +332,7 @@ snforge test     # Cairo tests, including the generated parity fixtures and the 
 scarb fmt        # format
 ```
 
-The tests and the example need only Node, no `npm install`. Rebuilding the page needs the pinned Terser (`npm ci`, once):
+The tests and the example need only Node, no `npm install`. Rebuilding the page, and the shim's tests in `npm test`, need the pinned Terser and fflate (`npm ci`, once):
 
 ```sh
 npm test                 # node --test "player/**/*.test.js" "scripts/**/*.test.mjs"
@@ -326,11 +352,12 @@ The engine tests, the page build and the page checks use the vendored engine (`t
 [`scripts/build_page.mjs`](scripts/build_page.mjs) (`npm run gen:page`, or `npm run check:page` to verify) is offline and reproducible: running it twice gives byte-identical files.
 
 1. Loads the pinned engine and its NOTICE; a hash mismatch fails here.
-2. Flattens `player/settings.js` and `player/player.js` into one script (their `import` lines and `export` keywords removed) and minifies it with Terser, pinned exactly in `package-lock.json`.
-3. Assembles `PAGE` and pads it with spaces to `len % 9 == 0`; the spaces fall inside the settings block, where the player trims them.
-4. Writes:
+2. Gzips the engine with fflate, pinned exactly in `package-lock.json` (level 9, no timestamp, no file name), and checks that the payload inflates back to the engine with both Node's zlib and the page's shim.
+3. Flattens `player/gunzip.js` into a plain script and minifies it with Terser, pinned exactly in `package-lock.json`, then checks it against `SHIM_PIN`. Flattens `player/settings.js` and `player/player.js` into one script (their `import` lines and `export` keywords removed) and minifies it.
+4. Assembles `PAGE` and pads it with spaces to `len % 9 == 0`; the spaces fall inside the settings block, where the player trims them.
+5. Writes:
    - [`tests/fixtures/page.html`](tests/fixtures/page.html): `PAGE`;
-   - [`src/page_data.cairo`](src/page_data.cairo) (generated, do not edit): `animation_url_segment()` pre-encoded at both base64 layers, `PAGE_LEN`, `SEGMENT_LEN`, `ENGINE_SHA256`, `VERSION` and `license()`. The large constants are `const` felt arrays (stored once as data in the class bytecode) deserialized into a `ByteArray`; materializing the segment costs about 6.8M L2 gas;
+   - [`src/page_data.cairo`](src/page_data.cairo) (generated, do not edit): `animation_url_segment()` pre-encoded at both base64 layers, `PAGE_LEN`, `SEGMENT_LEN`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`, `VERSION` and `license()`. The large constants are `const` felt arrays (stored once as data in the class bytecode) deserialized into a `ByteArray`; materializing the segment costs about 3.7M L2 gas;
    - the golden fixtures for the class: [`tests/fixtures/page.json`](tests/fixtures/page.json) and [`tests/page_fixtures.cairo`](tests/page_fixtures.cairo) (below).
 
 `VERSION` is `tinysynth-<engine ref>+page.<PAGE_VERSION>`. [`scripts/page_versions.json`](scripts/page_versions.json) records the SHA-256 of `PAGE` for every `VERSION`, and the build (and `check:page`) fails if the page changes while `VERSION` stays the same. To change the page: bump `PAGE_VERSION` in [`scripts/page.mjs`](scripts/page.mjs) (a re-pin changes `VERSION` by itself), then run `npm run gen:page -- --record`.
@@ -340,28 +367,41 @@ The engine tests, the page build and the page checks use the vendored engine (`t
 Computed by the JS reference ([`scripts/page.mjs`](scripts/page.mjs)) from the inputs in [`scripts/page_fixtures.mjs`](scripts/page_fixtures.mjs). Nine valid cases (MIDI, settings, SVG, JSON members) cover every `D` padding length (0-8) and every consumer padding length (0-2 for the head and for `S`); six invalid cases cover settings reverts. Per valid case:
 
 - the expected `midi_segment(midi, settings)` in full, with `SETTINGS`, `D` and its pad;
-- the decoded `animation_url` HTML (`PAGE ++ D ++ SVG`) and the Beasts-layout `token_uri`, as length and SHA-256. They are 46-110 KB each and fully determined by stored pieces, so they are pinned by digest rather than stored. The example's three tokens hold complete `token_uri` goldens.
+- the decoded `animation_url` HTML (`PAGE ++ D ++ SVG`) and the Beasts-layout `token_uri`, as length and SHA-256. They are 25-60 KB each and fully determined by stored pieces, so they are pinned by digest rather than stored. The example's three tokens hold complete `token_uri` goldens.
 
-Per invalid case: the settings and the panic data `midi_segment` must revert with. `tests/page_fixtures.cairo` has the same data as Cairo functions, plus the tests that already apply: `page_data` against the build (lengths, SHA-256 of the segment and the license, version, engine hash) and each case's settings against `src/settings.cairo`.
+Per invalid case: the settings and the panic data `midi_segment` must revert with. `tests/page_fixtures.cairo` has the same data as Cairo functions, plus the tests that already apply: `page_data` against the build (lengths, SHA-256 of the segment and the license, version, engine and gzip payload hashes) and each case's settings against `src/settings.cairo`.
 
 ### Class size
 
 A stub class serving only the `page_data` constants (`animation_url_segment`, `script_sha256`, `version`, `license`), compiled with Scarb 2.20.1, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info):
 
-| | Stub class | Same class, empty constants | Limit |
-| --- | --- | --- | --- |
-| Sierra program | 7,226 felts | 204 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 319 KB | 9 KB | 4,089,446 bytes |
-| CASM bytecode | 3,681 felts | 311 felts | 81,920 felts |
+| | Stub class | Same class, `page.5` (uncompressed) | Same class, empty constants | Limit |
+| --- | --- | --- | --- | --- |
+| Sierra program | 4,369 felts | 7,226 felts | 204 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 191 KB | 319 KB | 9 KB | 4,089,446 bytes |
+| CASM bytecode | 2,563 felts | 3,681 felts | 311 felts | 81,920 felts |
 
-The constants take about 8% of the class size limit and 4% of the bytecode limit.
+The constants take about 5% of the class size limit and 3% of the bytecode limit.
+
+### Segment gas
+
+The segment's size sets its cost at every step of a consumer's `token_uri`: the class materializes it, the library call returns it, the consumer appends it to its `ByteArray`, and `token_uri` returns it again. [`tests/test_page_gas.cairo`](tests/test_page_gas.cairo) (`snforge test gas_segment`) measures materializing and appending it, in L2 gas, now and with the uncompressed `page.5` page:
+
+| | `page.5` (78,804 bytes) | Now (42,644 bytes) |
+| --- | --- | --- |
+| Materializing `animation_url_segment()` | 6.83M | 3.70M |
+| Appending it to a `ByteArray` with no pending bytes (word-aligned) | +4.00M | +2.16M |
+| Appending it after the 29-byte `data:application/json;base64,` (unaligned) | +17.25M | +9.34M |
+| The library call that returns it to a consumer (the example's gas report) | 10.82M | 5.86M |
+
+The example's whole `token_uri` went from 131.0M-131.2M to 113.1M-113.5M (see [`examples/beast_consumer`](examples/beast_consumer/README.md#gas-informational)).
 
 ## Roadmap
 
 0. **Fork release with fixes** (in the `webaudio-tinysynth` fork): MIDI parser bounds fix (#4), pinned tagged build with a published SHA-256 (#5), deterministic reverb and noise buffers (#7), custom waveform API (#26) and per-operator filter (#27). Fractional tempo and `loopEnd` are already merged.
 1. **Scaffold** (this): repository layout, toolchain, interface declarations, README.
 2. **Player page JS** (done, issue #8): MIDI decode, tap-to-start, play/stop, End-of-Track looping, latency-compensated art restart, offline only.
-3. **Offline build pipeline** (done, issue #9): verifies the pinned engine by SHA-256, assembles and aligns the page, and generates the pre-encoded Cairo constants plus golden fixtures (reference outputs for sample MIDI and art).
+3. **Offline build pipeline** (done, issue #9): verifies the pinned engine by SHA-256, gzips it (issue #14), assembles and aligns the page, and generates the pre-encoded Cairo constants plus golden fixtures (reference outputs for sample MIDI and art).
 4. **Cairo class implementation**: `SynthSettings` validation and encoding (issues #1–#3), byte-for-byte parity tests against the JS reference fixtures, a `library_call` test from a mock consumer, and measurements of gas per call and class size.
 5. **Browser validation**: Chromium, Firefox and WebKit; playback, looping, art sync, and offline behaviour.
 6. **Docs and declaration**: finalize docs, declare on Sepolia, then on mainnet, and publish the class hashes.
@@ -372,7 +412,7 @@ The constants take about 8% of the class size limit and 4% of the bytecode limit
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The embedded TinySynth engine is also Apache-2.0: copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games in <https://github.com/Provable-Games/webaudio-tinysynth>.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The embedded TinySynth engine is also Apache-2.0: copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games in <https://github.com/Provable-Games/webaudio-tinysynth>. The page's gunzip shim is derived from fflate, MIT License, Copyright (c) 2026 Arjun Barrett ([text](tests/vendor/fflate-0.8.3.LICENSE)); `license()` includes all three notices.
 
 ## Examples
 

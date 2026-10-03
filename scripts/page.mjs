@@ -4,8 +4,10 @@
 // only: it reads the built PAGE from tests/fixtures/page.html (written by scripts/build_page.mjs)
 // and needs no `npm install`, so the beast_consumer example and the tests can use it directly.
 //
-//   PAGE                     fixed HTML: head and styles, engine <script>, player <script>, then
-//                            the opening of the settings block and 0..8 alignment spaces
+//   PAGE                     fixed HTML: head and styles, the engine gzipped in a
+//                            <script type="text/javascript+gzip" src="data:...">, the gunzip
+//                            shim <script>, the player <script>, then the opening of the settings
+//                            block and 0..8 alignment spaces
 //   animation_url_segment    b64('"animation_url":"data:text/html;base64,' ++ b64(PAGE))
 //   D                        SETTINGS MIDI_OPEN b64(midi) <pad> ART_OPEN, len(D) % 9 == 0
 //   midi_segment             b64(b64(D))
@@ -13,6 +15,7 @@
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { encodeSettings } from "../player/encode.js";
 import { validateSettings } from "../player/validate.js";
 import { ENGINE_PIN, engineNotice } from "./engine.mjs";
@@ -27,9 +30,32 @@ export const PAGE_PATH = new URL("../tests/fixtures/page.html", import.meta.url)
  * build fails when PAGE changes under a recorded VERSION: bump PAGE_VERSION (or re-pin the engine),
  * then record the new VERSION with `npm run gen:page -- --record`.
  */
-export const PAGE_VERSION = 5;
+export const PAGE_VERSION = 6;
 export const VERSION = `tinysynth-${ENGINE_PIN.ref}+page.${PAGE_VERSION}`;
 export const PAGE_VERSIONS_PATH = new URL("./page_versions.json", import.meta.url);
+
+/**
+ * The gunzip shim in PAGE: player/gunzip.js (derived from fflate 0.8.3, MIT), flattened and minified
+ * by scripts/build_page.mjs with the pinned Terser. Its SHA-256 is pinned here, so the bytes that
+ * inflate the engine in every token's page change only deliberately: the build fails when the
+ * minified shim differs (after an edit to player/gunzip.js, or a Terser or option change). Review
+ * the new minified shim, then update `sha256`. `license` is the vendored fflate LICENSE that goes
+ * into license(), also SHA-256 checked; `fflate` is the version the shim derives from and the build
+ * compresses with (package-lock.json pins it).
+ */
+export const SHIM_PIN = {
+  fflate: "0.8.3",
+  sha256: "bf6316a818dc7519afafa5af7bf826af5280c9950d208f0a2822f4295ab0d4df",
+  license: new URL("../tests/vendor/fflate-0.8.3.LICENSE", import.meta.url),
+  licenseSha256: "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+};
+
+/** fflate's MIT license as distributed in the pinned version, after checking its SHA-256. */
+export function shimLicense() {
+  const text = readFileSync(SHIM_PIN.license, "utf8");
+  if (sha256(text) !== SHIM_PIN.licenseSha256) throw new Error(`${SHIM_PIN.license.pathname}: sha256 ${sha256(text)}, expected ${SHIM_PIN.licenseSha256} (SHIM_PIN in scripts/page.mjs)`);
+  return text;
+}
 
 /**
  * Checks that `version` names exactly this PAGE in the record of versions (VERSION -> sha256(PAGE)),
@@ -55,7 +81,10 @@ export function checkPageVersion(versions, version, digest, { record = false } =
   return { ...versions, [version]: digest };
 }
 
-/** The text license() returns: this library's notice and license, then the embedded engine's. */
+/**
+ * The text license() returns: this library's notice and license, then the embedded engine's, then
+ * the gunzip shim's.
+ */
 export function licenseText() {
   const notice = readFileSync(new URL("../NOTICE", import.meta.url), "utf8").trimEnd();
   return [
@@ -77,10 +106,33 @@ export function licenseText() {
     "",
     engineNotice().trimEnd(),
     "",
+    `The page also embeds a gunzip routine derived from fflate ${SHIM_PIN.fflate} (https://github.com/101arrowz/fflate),`,
+    "which inflates the engine in the browser. Its license follows.",
+    "",
+    shimLicense().trimEnd(),
+    "",
   ].join("\n");
 }
 
 export const SETTINGS_OPEN = '<script type="text/plain" id="settings">';
+/** Opens the engine's tag: the gzip payload's base64 follows, then GZIP_CLOSE. */
+export const GZIP_OPEN = '<script type="text/javascript+gzip" src="data:text/javascript;base64,';
+export const GZIP_CLOSE = '"></script>';
+
+/**
+ * A page or decoded animation_url HTML with its gzip tag's base64 payload replaced by
+ * `edit(payload)`, or the whole tag removed when `edit` returns null: the failure variants of the
+ * page tests.
+ * @param {string} html
+ * @param {(payload: string) => string | null} edit
+ */
+export function withGzipPayload(html, edit) {
+  const at = html.indexOf(GZIP_OPEN);
+  const end = html.indexOf(GZIP_CLOSE, at);
+  if (at < 0 || end < 0) throw new Error("no gzip tag");
+  const payload = edit(html.slice(at + GZIP_OPEN.length, end));
+  return html.slice(0, at) + (payload === null ? "" : GZIP_OPEN + payload + GZIP_CLOSE) + html.slice(end + GZIP_CLOSE.length);
+}
 export const MIDI_OPEN = '</script><script type="text/plain" id="midi">';
 export const ART_OPEN = '</script><script type="text/plain" id="art">';
 export const URL_KEY = '"animation_url":"data:text/html;base64,';
@@ -138,8 +190,9 @@ export function checkPage(page) {
   if (page.length % 9) throw new Error("PAGE not 9-aligned");
   const pad = page.length - page.trimEnd().length;
   if (pad > 8 || !page.trimEnd().endsWith(SETTINGS_OPEN)) throw new Error("PAGE must end with the settings block opening and 0..8 spaces");
-  // The engine and the player, and nothing else, close a <script> element.
-  if (countCI(page, "</script") !== 2) throw new Error("unexpected </script in PAGE");
+  // The engine's gzip tag, the shim and the player, and nothing else, close a <script> element.
+  if (countCI(page, "</script") !== 3) throw new Error("unexpected </script in PAGE");
+  if (page.split(GZIP_OPEN).length !== 2) throw new Error("PAGE must have exactly one gzip tag");
   return pad;
 }
 
@@ -151,13 +204,19 @@ export function pageHtml() {
 }
 
 /**
- * The engine and player scripts of a PAGE (the contents of its first two <script> elements).
+ * The scripts of a PAGE (or of a decoded animation_url HTML, which starts with PAGE): the engine's
+ * gzip payload (the bytes its tag's data: URI carries) and the engine it inflates to (Node's zlib,
+ * which checks the gzip CRC-32 and length), and the contents of the two plain <script> elements,
+ * the shim and the player.
  * @param {string} page
  */
 export function pageScripts(page) {
+  const tags = [...page.matchAll(/<script type="text\/javascript\+gzip" src="data:text\/javascript;base64,([^"]*)"><\/script>/g)];
+  if (tags.length !== 1) throw new Error("PAGE must have exactly one gzip tag");
   const scripts = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
   if (scripts.length !== 2) throw new Error("PAGE must have exactly two plain <script> elements");
-  return { engine: scripts[0], player: scripts[1] };
+  const engineGzip = strictB64Decode(tags[0][1]);
+  return { engineGzip, engine: gunzipSync(engineGzip).toString("utf8"), shim: scripts[0], player: scripts[1] };
 }
 
 /**
