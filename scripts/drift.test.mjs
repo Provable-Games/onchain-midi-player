@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { artOffsetMs, barX, checkpointTimes, clockAt, clockDrift, fitLine, largestStep, leads, median, passGrid, passStarts, trend, wrap } from "./drift.mjs";
+import { DRIFT_LIMITS, artOffsetMs, barX, checkpointTimes, clockAt, clockDrift, fitLine, largestStep, leads, median, passGrid, passStarts, trend, withinDriftLimits, wrap } from "./drift.mjs";
 
 const close = (/** @type {number} */ a, /** @type {number} */ b, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 
@@ -147,4 +147,18 @@ test("checkpointTimes: every interval from 0, and always the session's end", () 
   assert.deepEqual(checkpointTimes(0.5, 0.2), [0, 0.2, 0.4, 0.5]);
   assert.throws(() => checkpointTimes(0, 10), /positive/);
   assert.throws(() => checkpointTimes(60, 0), /positive/);
+});
+
+test("withinDriftLimits: one 30 ms audio-clock stall exceeds them in a 1-minute session", () => {
+  assert.deepEqual(DRIFT_LIMITS, { driftMs: 20, residualMs: 20 });
+  const at = (/** @type {(t: number) => number} */ f) => [0, 10, 20, 30, 40, 50, 60].map((t) => [t, f(t)]);
+  // A stall leaves the art 30 ms ahead from then on: the trend through the step overstates it.
+  const stall = trend(at((t) => (t >= 30 ? 30 : 0)));
+  close(stall.driftMs, 38.6, 0.1);
+  assert.equal(withinDriftLimits(stall), false);
+  // Firefox's image clock on CI: about 12 ms a minute, with checkpoint scatter.
+  const firefox = trend(at((t) => 0.2 * t + (t % 20 ? 2 : -2)));
+  assert.equal(withinDriftLimits(firefox), true);
+  assert.equal(withinDriftLimits({ driftMs: -20.5, maxResidualMs: 0 }), false);
+  assert.equal(withinDriftLimits({ driftMs: 0, maxResidualMs: 20.5 }), false);
 });

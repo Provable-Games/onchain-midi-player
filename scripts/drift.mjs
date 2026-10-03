@@ -24,6 +24,22 @@ export function wrap(x, period) {
 }
 
 /**
+ * The limits on the art's offset from the sound over a session: the change of its trend, and any
+ * checkpoint's distance from that trend, in ms. 20 ms is half of EBU R37's 40 ms tolerance for
+ * sound ahead of picture.
+ */
+export const DRIFT_LIMITS = { driftMs: 20, residualMs: 20 };
+
+/**
+ * Whether the art's offset from the sound stayed within the limits.
+ * @param {{driftMs: number, maxResidualMs: number}} art the offset's trend (trend())
+ * @param {{driftMs: number, residualMs: number}} [limits]
+ */
+export function withinDriftLimits(art, limits = DRIFT_LIMITS) {
+  return Math.abs(art.driftMs) <= limits.driftMs && art.maxResidualMs <= limits.residualMs;
+}
+
+/**
  * When the checkpoints of a session of `seconds` fall, in seconds from its start: every `every`
  * seconds from 0, and at the end, whether or not `every` divides the session. Always two or more,
  * so a session is measured to its end whatever the interval.
