@@ -9,8 +9,8 @@
 //! - `segment`: `D` and `midi_segment`.
 //! - `settings`: validation and the `SETTINGS` encoding of `types::SynthSettings`.
 //! - `page_data`: the generated page constants, built offline by `scripts/build_page.mjs`.
-//! - `base64`: the crate's one base64 encoder, a temporary stand-in until the optimized encoder is
-//!   published (see its header).
+//! - `base64`: the crate's one base64 encoder, re-exported from the `game_components_encoding`
+//!   package (see its header).
 
 pub mod base64;
 pub mod contract;

@@ -150,9 +150,9 @@ pub trait IOnchainTinySynth<T> {
     /// `SETTINGS` is 16 bytes with defaults, plus about 6 bytes per timbre and 50 per operator
     /// (the 3 Beast reference sounds: 334 bytes). Validating and encoding 6 timbres costs about
     /// 3.3M L2 gas; the largest valid `SETTINGS` (8,192 bytes) about 51M, and 32 timbres of 8
-    /// operators about 56M. Base64 is the rest: with the temporary stand-in encoder (see
-    /// `base64`), about 320M for the largest real Beast score (3,716 bytes) with the reference
-    /// sounds, and about 740M with 8,192 bytes of `SETTINGS` (measurements in the README).
+    /// operators about 56M. Base64 is the rest. Through a library call, the whole call costs about
+    /// 61M for the largest real Beast score (3,716 bytes) with the reference sounds, and about
+    /// 178M with 8,192 bytes of `SETTINGS` (measurements in the README).
     fn midi_segment(self: @T, midi: ByteArray, settings: SynthSettings) -> ByteArray;
 
     // ------------------------------------------------------------------------------------
@@ -167,11 +167,12 @@ pub trait IOnchainTinySynth<T> {
     /// The result is a `ByteArray` so callers can splice it directly; output length is
     /// `4 * ceil(len(data) / 3)`.
     ///
-    /// The encoder in this revision is a temporary byte-wise stand-in; the class is declared
-    /// only with the maintainer's optimized word-wise encoder, which gives the same output.
+    /// The encoder is the maintainer's optimized word-wise encoder, `bytes_base64_encode` of the
+    /// `game_components_encoding` package, which `crate::base64` re-exports.
     ///
-    /// Cost: linear in `len(data)`; about 19.6K L2 gas per input byte with the stand-in. Do not
-    /// use it on large fixed data; that is why the engine and page are stored pre-encoded.
+    /// Cost: linear in `len(data)`; about 3.6K L2 gas per input byte for large inputs, through a
+    /// library call. Do not use it on large fixed data; that is why the engine and page are stored
+    /// pre-encoded.
     fn base64(self: @T, data: ByteArray) -> ByteArray;
 
     /// SHA-256 of the embedded TinySynth engine JavaScript, decompressed: exactly the bytes of
@@ -199,6 +200,7 @@ pub trait IOnchainTinySynth<T> {
     /// Returns the license notice for this class: Apache License 2.0, covering both this
     /// library and the embedded TinySynth engine (upstream copyright notice plus the
     /// notice describing the modifications made in the Provable-Games fork), then the MIT
-    /// License of fflate, from which the page's gunzip shim is derived.
+    /// License of fflate, from which the page's gunzip shim is derived, and the MIT License of
+    /// game-components, whose base64 encoder (`game_components_encoding`) the class embeds.
     fn license(self: @T) -> ByteArray;
 }
