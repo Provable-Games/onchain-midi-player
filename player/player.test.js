@@ -83,6 +83,9 @@ describe("decodeMidi and checkMidi", () => {
     ["trailing bytes after the last track", Buffer.concat([track([...note, ...EOT]), Buffer.from([0])]), /trailing bytes/],
     ["running status at the start of a track", track([0x00, 60, 100, ...EOT]), /running status without a channel status/],
     ["running status after a meta event", track([0x00, 0x90, 60, 100, 0x00, 0xff, 0x01, 0x01, 0x41, 0x10, 60, 0, ...EOT]), /running status without a channel status/],
+    ["an F7 escape event", track([0x00, 0xf7, 0x03, 0x90, 0x3c, 0x64, ...note, ...EOT]), /F7\) events are not supported/],
+    ["SysEx split over two events", track([0x00, 0xf0, 0x02, 0x7e, 0x7f, 0x00, 0xf7, 0x02, 0x09, 0xf7, ...note, ...EOT]), /SysEx not complete in one event/],
+    ["an empty SysEx event", track([0x00, 0xf0, 0x00, ...note, ...EOT]), /SysEx not complete in one event/],
     ["running status after SysEx", track([0x00, 0x90, 60, 100, 0x00, 0xf0, 0x01, 0xf7, 0x10, 60, 0, ...EOT]), /running status without a channel status/],
     ["2-byte tempo", track([0x00, 0xff, 0x51, 0x02, 0x07, 0xa1, ...note, ...EOT]), /bad tempo/],
     ["tempo 0", track([0x00, 0xff, 0x51, 0x03, 0, 0, 0, ...note, ...EOT]), /bad tempo/],
@@ -188,8 +191,12 @@ describe("the page's player script, fake engine", () => {
     h.click();
     await h.flush();
     assert.equal(h.timers.size, 1);
+    const before = h.calls.length;
     h.click(); // ■
-    assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+    const stop = h.calls.slice(before);
+    assert.deepEqual(stop[0], ["stopMIDI"]);
+    assert.equal(stop.length, 1 + 3 * 16);
+    assert.ok(stop.slice(1).every((x) => x[0] === "cancel" && x[3] === 1.5), "pending channel automation cancelled from now");
     assert.equal(h.timers.size, 0, "pending art restart cancelled");
     assert.equal(h.els.icon.attributes.d, PLAY_ICON);
     assert.equal(h.els.play.attributes["aria-label"], "Play");
@@ -369,6 +376,25 @@ describe("the page's player script, real engine", () => {
     const hits = h.synths[0].sent.filter((/** @type {any} */ [m]) => m[0] === 0x99).map((/** @type {any} */ x) => x[1] - tick0);
     assert.ok(hits.length >= 3);
     hits.slice(0, 3).forEach((t, i) => assert.ok(Math.abs(t - 0.5 * (i + 1)) < 1e-9, `hit ${i} at ${t} s, expected ${0.5 * (i + 1)} s`));
+  });
+
+  test("■ drops controller changes TinySynth had already scheduled, so they cannot reach the next playback", async () => {
+    // PPQ 100 at 120 BPM: CC7 100 and a note at tick 0, CC7 0 at tick 100 (0.5 s), End-of-Track at 200.
+    const midi = smf({ ppq: 100, tracks: [[[0, 0xb0, 7, 100], [0, 0x90, 60, 100], [100, 0xb0, 7, 0], [50, 0x80, 60, 0], [50, 0xff, 0x2f, 0]]] });
+    const h = runPage(edited(CASES.default_120bpm, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0 });
+    h.ready();
+    h.click();
+    await h.flush();
+    const synth = h.synths[0];
+    const ctx = synth.getAudioContext();
+    h.advance(0.42); // the mute at 0.6 s is now scheduled (0.2 s ahead)
+    const vol = synth.chvol[0].gain.name;
+    const log = h.audio.log;
+    const muteAt = log.findLastIndex((/** @type {any[]} */ c) => c[0] === vol && c[1] === "set" && c[2] === 0);
+    assert.ok(muteAt >= 0 && log[muteAt][3] > ctx.currentTime, "a future mute is pending");
+    h.click(); // ■
+    const cancel = log.findIndex((/** @type {any[]} */ c, /** @type {number} */ i) => i > muteAt && c[0] === vol && c[1] === "cancel");
+    assert.ok(cancel > muteAt && log[cancel][2] === ctx.currentTime && log[cancel][2] < log[muteAt][3], "cancelled from now on");
   });
 
   test("the custom timbres are installed in the real engine", async () => {

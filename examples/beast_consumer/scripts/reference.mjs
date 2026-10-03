@@ -176,11 +176,13 @@ export function validateMidi(m) {
 }
 
 /**
- * Test variant of MIDI with a SysEx event (00 F0 01 F7) and an escape event (00 F7 02 01 02)
- * inserted after the tempo meta event, MTrk length adjusted. Same notes, same End-of-Track tick.
+ * Test variant of MIDI with two complete SysEx events (00 F0 01 F7, and GM System On:
+ * 00 F0 05 7E 7F 09 01 F7) inserted after the tempo meta event, MTrk length adjusted. Same notes,
+ * same End-of-Track tick. (The page rejects F7 escape and continuation events, which TinySynth
+ * would misread.)
  */
 export function midiWithSysex() {
-  const insert = Buffer.from([0x00, 0xf0, 0x01, 0xf7, 0x00, 0xf7, 0x02, 0x01, 0x02]);
+  const insert = Buffer.from([0x00, 0xf0, 0x01, 0xf7, 0x00, 0xf0, 0x05, 0x7e, 0x7f, 0x09, 0x01, 0xf7]);
   const at = 22 + 7; // after the 7-byte tempo event
   const out = Buffer.concat([MIDI.subarray(0, at), insert, MIDI.subarray(at)]);
   out.writeUInt32BE(MIDI.readUInt32BE(18) + insert.length, 18);

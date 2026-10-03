@@ -5,7 +5,7 @@
 //
 // Loads the page four ways: fixtures/animation.html from disk, the exact
 // data:text/html;base64,... animation_url from fixtures/token.json, a variant whose MIDI block holds
-// a file with SysEx (F0) and escape (F7) events (same notes, same End-of-Track), and a variant with
+// a file with two SysEx (F0) events (same notes, same End-of-Track), and a variant with
 // invalid settings (1,2,30,40,64,0,0). For the valid pages it checks that the art rendered
 // (including the PNG inside the SVG's foreignObject, by sampling a screenshot pixel), that ▶ is
 // enabled and starts TinySynth with the token's settings (custom lead on program 80, custom kick on

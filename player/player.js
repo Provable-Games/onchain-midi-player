@@ -20,7 +20,8 @@
  *    playback (keeping any rest before the first event), and restarts the art when tick 0 is
  *    heard: after TinySynth's scheduling offset (`playTime - currentTime`) plus the context's
  *    output latency.
- * 4. ■ stops playback and cancels a pending art restart. The art keeps running.
+ * 4. ■ stops playback, cancels a pending art restart and the controller changes TinySynth had
+ *    already scheduled. The art keeps running.
  *
  * Plain browser JavaScript: no modules in the page, no eval, no network requests, no storage. Works
  * in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles
@@ -67,8 +68,9 @@ export function decodeMidi(text) {
  * So this rejects, beyond plain format errors: running status with no channel status before it in
  * the track, or after a meta or SysEx event; a tempo event that is not 3 bytes (with a one-byte
  * length) or is 0; status bytes F1-F6 and F8-FE; data bytes above 127; a track without
- * End-of-Track exactly at its end; text meta events over 4096 bytes; format 2 and SMPTE timing;
- * and a loop of under 50 ms (End-of-Track at tick 0, or a tempo so fast that one
+ * End-of-Track exactly at its end; text meta events over 4096 bytes; F7 events (TinySynth turns
+ * them into SysEx) and SysEx split over several events; format 2 and SMPTE timing; and a loop of
+ * under 50 ms (End-of-Track at tick 0, or a tempo so fast that one
  * pass takes almost no time), on which the looping scheduler would never catch up.
  * @param {Uint8Array} u
  * @returns {{maxTick: number, seconds: number}}
@@ -141,10 +143,15 @@ export function checkMidi(u) {
         }
         skip(n);
         run = 0;
-      } else if (st === 0xf0 || st === 0xf7) {
-        skip(vlq());
+      } else if (st === 0xf0) {
+        // TinySynth sends each F0 event as one complete SysEx message: a message split over several
+        // events (continued with F7 events) would be cut up.
+        const n = vlq();
+        skip(n);
+        if (!n || u[p - 1] !== 0xf7) fail("SysEx not complete in one event");
         run = 0;
-      } else if (st > 0xef) fail("unexpected status byte");
+      } else if (st === 0xf7) fail("SysEx continuation or escape (F7) events are not supported");
+      else if (st > 0xef) fail("unexpected status byte");
       else {
         run = st;
         for (let n = (st & 0xe0) === 0xc0 ? 1 : 2; n--;) if (byte() > 127) fail("bad data byte");
@@ -262,6 +269,15 @@ export function startPlayer() {
       if (playing) {
         setPlaying(false);
         synth.stopMIDI();
+        // TinySynth schedules controller changes (volume, expression, pan, modulation) ahead of
+        // time on its channel nodes and never cancels them; drop those still pending, so they
+        // cannot change the next playback.
+        const now = synth.getAudioContext().currentTime;
+        for (let ch = 0; ch < 16; ch++) {
+          synth.chvol[ch].gain.cancelScheduledValues(now);
+          synth.chmod[ch].gain.cancelScheduledValues(now);
+          if (synth.chpan[ch]) synth.chpan[ch].pan.cancelScheduledValues(now);
+        }
         return;
       }
       try {

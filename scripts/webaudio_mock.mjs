@@ -23,7 +23,8 @@ export function webAudioMock() {
     linearRampToValueAtTime(v, t) { log.push([this.name, "ramp", v, t]); }
     /** @param {number} v @param {number} t @param {number} c */
     setTargetAtTime(v, t, c) { log.push([this.name, "target", v, t, c]); }
-    cancelScheduledValues() {}
+    /** @param {number} t */
+    cancelScheduledValues(t) { log.push([this.name, "cancel", t]); }
   }
   class Node {
     /** @param {string} kind */

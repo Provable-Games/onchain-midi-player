@@ -206,6 +206,11 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
       } };
       /** @type {Record<string, any>} */
       const synth = { opts, ctx, maxTick: 0, playTime: 0, playTick: 0, tick2Time: 0.01, timbres: [] };
+      // Channel nodes, whose pending automation the player cancels on ■.
+      const param = (/** @type {string} */ name, /** @type {number} */ ch) => ({ cancelScheduledValues: (/** @type {number} */ t) => calls.push(["cancel", name, ch, t]) });
+      synth.chvol = Array.from({ length: 16 }, (_, ch) => ({ gain: param("chvol", ch) }));
+      synth.chmod = Array.from({ length: 16 }, (_, ch) => ({ gain: param("chmod", ch) }));
+      synth.chpan = Array.from({ length: 16 }, (_, ch) => ({ pan: param("chpan", ch) }));
       const record = (/** @type {string} */ name, /** @type {(...a: any[]) => void} */ f = () => {}) => (/** @type {any[]} */ ...args) => { calls.push([name, ...args]); f(...args); };
       Object.assign(synth, {
         getAudioContext: () => ctx,

@@ -19,7 +19,7 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 
-for (const [label, midi] of [['fixture MIDI', MIDI], ['MIDI with SysEx (F0) and escape (F7) events', midiWithSysex()]]) {
+for (const [label, midi] of [['fixture MIDI', MIDI], ['MIDI with SysEx (F0) events', midiWithSysex()]]) {
   test(`validateMidi: ${label}`, () => {
     const info = validateMidi(midi);
     assert.equal(info.eotTick, 192);
@@ -34,10 +34,10 @@ for (const [label, midi] of [['fixture MIDI', MIDI], ['MIDI with SysEx (F0) and 
   });
 }
 
-test('the SysEx variant really contains 00 F0 01 F7 and an F7 escape', () => {
+test('the SysEx variant really contains two complete SysEx events', () => {
   const v = midiWithSysex();
   assert.ok(v.includes(Buffer.from([0x00, 0xf0, 0x01, 0xf7])));
-  assert.ok(v.includes(Buffer.from([0x00, 0xf7, 0x02, 0x01, 0x02])));
+  assert.ok(v.includes(Buffer.from([0x00, 0xf0, 0x05, 0x7e, 0x7f, 0x09, 0x01, 0xf7])));
   assert.equal(v.readUInt32BE(18), v.length - 22);
 });
 
