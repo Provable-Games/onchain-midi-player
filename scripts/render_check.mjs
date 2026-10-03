@@ -2,7 +2,7 @@
 // @ts-check
 // Optional headless check: renders the Beast reference timbres with the real TinySynth (the
 // vendored fork build, scripts/engine.mjs) in headless Chromium, through the player's own
-// parseSettings + createSynth, into an OfflineAudioContext, and measures the audio:
+// decodeSettings + createSynth, into an OfflineAudioContext, and measures the audio:
 //
 //   lead (A4)  mean pitch within 3 cents of 440 Hz; vibrato depth 30 +- 3 cents at 6 +- 0.3 Hz
 //   kick       zero-crossing rate above 80 Hz at 20-40 ms and within 40-60 Hz at 100-160 ms;
@@ -34,7 +34,7 @@ const fixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/settings.jso
 const beastText = fixtures.valid.find((/** @type {any} */ f) => f.name === "beast_reference").settings_text;
 // The player module, loaded as an inline module script that publishes its API for the test.
 const playerModule = readFileSync(new URL("../player/settings.js", import.meta.url), "utf8") +
-  "\nwindow.__player = { parseSettings, createSynth };\n";
+  "\nwindow.__player = { decodeSettings, createSynth };\n";
 
 const browser = await chromium.launch(CHROME ? { executablePath: CHROME } : {});
 let failed = 0;
@@ -49,8 +49,8 @@ try {
 
   const m = await page.evaluate(async (text) => {
     const SR = 48000;
-    const { parseSettings, createSynth } = /** @type {any} */ (window).__player;
-    const settings = parseSettings("   " + text); // with alignment padding, as in the page
+    const { decodeSettings, createSynth } = /** @type {any} */ (window).__player;
+    const settings = decodeSettings("   " + text); // with alignment padding, as in the page
     /** Renders one note into an OfflineAudioContext that TinySynth takes as its AudioContext. */
     async function render(/** @type {number} */ ch, /** @type {number} */ note, /** @type {number} */ dur) {
       const Offline = window.OfflineAudioContext;

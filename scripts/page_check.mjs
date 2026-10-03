@@ -13,8 +13,9 @@
 // requested over the network and nothing is logged as an error. On the data: page it also checks
 // that ▶ restarts the art: the probe art is a bar sweeping linearly over 8 s, and screenshots
 // before and after ▶ show the bar where time-since-restart (not time-since-load) puts it. Failure
-// variants (invalid or unparsable settings, invalid MIDI) must keep the art visible, keep ▶
-// disabled, show the exact error and construct no synth.
+// variants (unparsable settings, invalid MIDI) must keep the art visible, keep ▶ disabled, show
+// the exact error and construct no synth. Range checks are Cairo's: settings that only break a
+// range rule must still play.
 //
 // Playwright is not a dependency of this repository; point the script at an existing install:
 //
@@ -320,8 +321,8 @@ async function checkFailures() {
   const noEot = smf({ ppq: 96, tracks: [[[0, 0x90, 60, 100], [96, 0x80, 60, 0]]] }).toString("base64");
   /** @type {Array<[string, string, string]>} */
   const variants = [
-    ["settings failing validation (quality 2)", withSettings(" 1,2,30,40,64,0,0"), "settings: TS: quality out of range"],
-    ["settings that do not parse", withSettings("1,1,30,40,64,0"), "settings: malformed: token 6"],
+    ["truncated settings", withSettings(" 1,1,30,40,64,0"), "settings: malformed: token 6"],
+    ["settings with a count over its cap", withSettings("1,1,30,40,64,0,33"), "settings: TS: too many timbres"],
     ["MIDI that is not base64", withMidi("@@not base64@@"), "midi: not base64"],
     ["MIDI cut after 4 bytes", withMidi("TVRoZA=="), "midi: truncated (byte 4)"],
     ["MIDI without End-of-Track", withMidi(noEot), "midi: truncated (byte 30)"],
@@ -345,11 +346,26 @@ async function checkFailures() {
   }
 }
 
+/** Range checks are Cairo's job: SETTINGS that parse but break a range rule (quality 2) still play. */
+async function checkRangeOnly() {
+  const c = CASES.default_120bpm;
+  console.log("range-only violation (quality 2): not the page's to reject (data: URI, offline)");
+  const { context, page, errors } = await open({ offline: true });
+  await page.goto(dataUrl(htmlOf(c, " 1,2,30,40,64,0,0" + c.d.slice(c.d.indexOf(MIDI_OPEN)))));
+  await ready(page);
+  check(!(await state(page)).disabled && errors.length === 0, "▶ enabled, no error");
+  await page.click("#play");
+  await page.waitForTimeout(200);
+  check((await state(page)).synth?.state === "running", "▶ plays");
+  await context.close();
+}
+
 try {
   await checkDataPage();
   await checkIframe();
   await checkCsp();
   await checkFailures();
+  await checkRangeOnly();
 } catch (e) {
   failures++;
   console.log(`  FAIL ${/** @type {Error} */ (e).stack || e}`);

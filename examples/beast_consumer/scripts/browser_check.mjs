@@ -6,12 +6,12 @@
 // Loads the page four ways: fixtures/animation.html from disk, the exact
 // data:text/html;base64,... animation_url from fixtures/token.json, a variant whose MIDI block holds
 // a file with two SysEx (F0) events (same notes, same End-of-Track), and a variant with
-// invalid settings (1,2,30,40,64,0,0). For the valid pages it checks that the art rendered
+// settings that do not parse (1,1,30,40,64,0: a token missing). For the valid pages it checks that the art rendered
 // (including the PNG inside the SVG's foreignObject, by sampling a screenshot pixel), that ▶ is
 // enabled and starts TinySynth with the token's settings (custom lead on program 80, custom kick on
 // drum 36, reverb, End-of-Track loop at tick 192), that there are no console errors, and that
 // nothing was requested over the network. For the invalid variant it checks that the page fails
-// closed: the art still renders, ▶ stays disabled, the validator's error is shown, no synth exists.
+// closed: the art still renders, ▶ stays disabled, the parser's error is shown, no synth exists.
 //
 // Usage (from examples/beast_consumer):
 //   PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core \
@@ -56,18 +56,18 @@ const html = readFileSync(join(root, 'fixtures', 'animation.html'), 'latin1');
 const sysex = midiWithSysex();
 const sysexHtml = html.replace(/(id="midi">)[^<]*(<\/script>)/, `$1${sysex.toString('base64')}$2`);
 if (sysexHtml === html) throw new Error('MIDI block not found');
-// Settings that fail validation (quality 2): the art must still render, ▶ stays disabled and the
-// validator's error is shown (spec D9).
-const invalidHtml = html.replace(/(id="settings">)[^<]*(<\/script>)/, '$1 1,2,30,40,64,0,0$2');
+// Settings that do not parse (a token missing): the art must still render, ▶ stays disabled and the
+// parser's error is shown (spec D9). Range checks are Cairo's job, not the page's.
+const invalidHtml = html.replace(/(id="settings">)[^<]*(<\/script>)/, '$1 1,1,30,40,64,0$2');
 if (invalidHtml === html) throw new Error('settings block not found');
-const INVALID_ERROR = 'settings: TS: quality out of range';
+const INVALID_ERROR = 'settings: malformed: token 6';
 const asData = (h) => 'data:text/html;base64,' + Buffer.from(h, 'latin1').toString('base64');
 // [label, url, invalid settings?]
 const targets = [
   ['fixtures/animation.html (file://)', pathToFileURL(join(root, 'fixtures', 'animation.html')).href],
   ['token.json animation_url (data: URI)', token.animation_url],
   ['SysEx MIDI variant (data: URI)', asData(sysexHtml)],
-  ['invalid settings variant 1,2,30,40,64,0,0 (data: URI)', asData(invalidHtml), true],
+  ['unparsable settings variant 1,1,30,40,64,0 (data: URI)', asData(invalidHtml), true],
 ];
 
 const browser = await chromium.launch({ executablePath: CHROME || undefined, env: process.env });

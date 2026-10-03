@@ -75,21 +75,14 @@ function flatten(path) {
   return src;
 }
 
-/**
- * The player script: player/settings.js and player/player.js in one function, minified.
- * @param {{rangeRecheck?: boolean}} [options] rangeRecheck false drops validateSettings from
- *   parseSettings (only to measure what the range re-check costs; never shipped)
- */
-export async function playerScript({ rangeRecheck = true } = {}) {
-  let settings = flatten("../player/settings.js");
-  if (!rangeRecheck) {
-    const full = "return validateSettings(decodeSettings(text));";
-    if (!settings.includes(full)) throw new Error("parseSettings changed; update the range re-check measurement");
-    settings = settings.replace(full, "return decodeSettings(text);");
-  }
-  const source = `(function(){"use strict";\n${settings}\n${flatten("../player/player.js")}\nstartPlayer();\n})();\n`;
+/** The player script: player/settings.js and player/player.js in one function, minified. */
+export async function playerScript() {
+  const source = `(function(){"use strict";\n${flatten("../player/settings.js")}\n${flatten("../player/player.js")}\nstartPlayer();\n})();\n`;
   const { code } = await minify(source, TERSER_OPTIONS);
   if (!code) throw new Error("terser produced no output");
+  // Range and semantic validation is Cairo's job (settings::validate); the page only parses.
+  const rule = code.match(/out of range|duplicate timbre slot|no operators|target not earlier|unsupported/);
+  if (rule) throw new Error(`the player contains a settings validation rule ("${rule[0]}"); validation belongs to Cairo`);
   return code;
 }
 
@@ -124,7 +117,6 @@ export async function build() {
   const engine = engineSource();
   const player = await playerScript();
   const page = assemblePage(engine, player);
-  const withoutRecheck = assemblePage(engine, await playerScript({ rangeRecheck: false }));
   const segment = segmentFor(page);
   const license = licenseText();
   if (VERSION.length > 31 || !/^[\x20-\x7e]+$/.test(VERSION)) throw new Error(`VERSION ${VERSION} is not a short string`);
@@ -133,8 +125,6 @@ export async function build() {
     pad: page.length - page.trimEnd().length,
     engine: engine.length,
     player: player.length,
-    pageWithoutRangeRecheck: withoutRecheck.length,
-    playerWithoutRangeRecheck: withoutRecheck.length - page.length + player.length,
     segment: segment.length,
     license: blen(license),
   };
@@ -159,7 +149,6 @@ function cairoSource({ page, segment, license, sizes }) {
 //! - engine: ${sizes.engine} bytes, the fork's minified build at commit ${ENGINE_PIN.ref}
 //! - player: ${sizes.player} bytes, player/player.js and player/settings.js, minified
 //! - alignment spaces: ${sizes.pad}
-//! - PAGE without the player's settings range re-check (validateSettings): ${sizes.pageWithoutRangeRecheck} bytes
 //! - animation_url_segment(): ${sizes.segment} bytes
 //!
 //! animation_url_segment() = b64('"animation_url":"data:text/html;base64,' ++ b64(PAGE)),
@@ -224,6 +213,5 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
   for (const [path, text] of files) writeFileSync(path, text);
   console.log(`${VERSION}: PAGE ${sizes.page} bytes (engine ${sizes.engine}, player ${sizes.player}, pad ${sizes.pad}), segment ${sizes.segment}`);
-  console.log(`without the settings range re-check: PAGE ${sizes.pageWithoutRangeRecheck} bytes (player ${sizes.playerWithoutRangeRecheck})`);
   console.log(`license ${sizes.license} bytes`);
 }

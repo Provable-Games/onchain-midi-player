@@ -19,9 +19,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { encodeSettings } from "../player/encode.js";
-import {
-  FILTER_KINDS, OPERATOR_FIELDS, SettingsError, WAVEFORMS, decodeSettings, validateSettings,
-} from "../player/settings.js";
+import { FILTER_KINDS, OPERATOR_FIELDS, SettingsError, WAVEFORMS, decodeSettings } from "../player/settings.js";
+import { validateSettings } from "../player/validate.js";
 import { INVALID, RESERVED, VALID } from "./settings_fixtures.mjs";
 
 /** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */

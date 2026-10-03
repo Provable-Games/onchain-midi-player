@@ -252,12 +252,15 @@ describe("the page's player script, fake engine", () => {
   const base = CASES.beast_140bpm;
   /** @type {Array<[string, string, string]>} [label, edited html, exact error] */
   const failures = [
-    ["settings that fail validation (quality 2)", edited(base, { settings: " 1,2,30,40,64,0,0" }), "settings: TS: quality out of range"],
-    ["settings with an operator error carry its indices",
-      edited(base, { settings: "1,1,30,40,64,0,1,0,0,1,0,0,1000001,10000,0,0,100,100,0,500,10000,10000,0,0" }),
-      "settings: TS: volume out of range (0, 0)"],
-    ["settings that do not parse (non-canonical token)", edited(base, { settings: "1,01,30,40,64,0,0" }), "settings: malformed: token 1"],
+    ["settings with a non-canonical token", edited(base, { settings: "1,01,30,40,64,0,0" }), "settings: malformed: token 1"],
     ["empty settings", edited(base, { settings: "  " }), "settings: malformed: token 0"],
+    ["settings of another format version", edited(base, { settings: "2,1,30,40,64,0,0" }), "settings: malformed: token 1"],
+    ["truncated settings", edited(base, { settings: "1,1,30,40,64,0" }), "settings: malformed: token 6"],
+    ["settings with a trailing token", edited(base, { settings: "1,1,30,40,64,0,0,0" }), "settings: malformed: token 7"],
+    ["settings with a count over its cap", edited(base, { settings: "1,1,30,40,64,0,33" }), "settings: TS: too many timbres"],
+    ["settings with an unknown wave tag",
+      edited(base, { settings: "1,1,30,40,64,0,1,0,0,1,0,7,5000,10000,0,0,100,100,0,500,10000,10000,0,0" }),
+      "settings: malformed: token 12"],
     ["MIDI that is not base64", edited(base, { midi: "!!!not base64!!!" }), "midi: not base64"],
     ["MIDI cut after its header", edited(base, { midi: Buffer.from(base.midi_b64, "base64").subarray(0, 14).toString("base64") }), "midi: truncated (byte 14)"],
     ["MIDI ending at tick 0", edited(base, { midi: smf({ ppq: 96, tracks: [[[0, 0x90, 60, 100], [0, 0xff, 0x2f, 0]]] }).toString("base64") }), "midi: loop shorter than 50 ms (byte 30)"],
@@ -277,6 +280,16 @@ describe("the page's player script, fake engine", () => {
       assert.equal(h.timers.size, 0);
     });
   }
+
+  test("range checks are Cairo's: settings that only break a range rule (quality 2) are played", async () => {
+    // The class never writes such SETTINGS (settings::validate reverts); the page only parses.
+    const h = runPage(edited(base, { settings: "1,2,30,40,64,0,1,0,0,1,0,0,1000001,10000,0,0,100,100,0,500,10000,10000,0,0" }));
+    h.ready();
+    assert.equal(h.els.play.disabled, false);
+    assert.deepEqual(h.consoleErrors, []);
+    h.click();
+    assert.deepEqual(h.calls[0], ["new", { quality: 2, useReverb: 1, voices: 64 }]);
+  });
 
   test("an unreadable art block is logged and does not block settings and MIDI", () => {
     const h = runPage(htmlOf(base));

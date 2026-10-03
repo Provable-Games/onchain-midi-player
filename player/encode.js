@@ -2,9 +2,9 @@
 /**
  * Reference SETTINGS encoder (Node and tooling; not part of the page). Mirrors `encode` in
  * `src/settings.cairo` byte for byte: the full v1 grammar, including custom waves and filters,
- * which `validateSettings` rejects until issues #2 and #3. Checks that every value fits its
- * Cairo type (what the Cairo type system guarantees) but not the ranges; call `validateSettings`
- * first. Throws `SettingsError('TS: settings too long')` past `MAX_SETTINGS_LEN` bytes.
+ * which `validateSettings` (player/validate.js) rejects until issues #2 and #3. Checks that every
+ * value fits its Cairo type (what the Cairo type system guarantees) but not the ranges; call
+ * `validateSettings` first. Throws `SettingsError('TS: settings too long')` past `MAX_SETTINGS_LEN` bytes.
  */
 import {
   FILTER_KINDS, OPERATOR_FIELDS, SETTINGS_FORMAT_VERSION, SettingsError, TYPE_BOUNDS, WAVEFORMS,

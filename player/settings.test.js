@@ -1,6 +1,7 @@
 // @ts-check
-// Node tests for player/settings.js and player/encode.js: parity with the shared fixtures (which
-// the Cairo tests assert too), the strict decoder, and the TinySynth installer.
+// Node tests for player/settings.js (the page's strict decoder and TinySynth installer),
+// player/validate.js and player/encode.js (the JS reference of src/settings.cairo): parity with the
+// shared fixtures (which the Cairo tests assert too), the decoder's strictness, and the installer.
 //
 // Run: node --test "player/**/*.test.js" "scripts/**/*.test.mjs"   (or npm test)
 
@@ -8,9 +9,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { encodeSettings } from "./encode.js";
-import {
-  SettingsError, createSynth, decodeSettings, installSettings, parseSettings, toTinySynthOps, validateSettings,
-} from "./settings.js";
+import { SettingsError, createSynth, decodeSettings, installSettings, toTinySynthOps } from "./settings.js";
+import { validateSettings } from "./validate.js";
+
+/** Cairo's validate then the page's decoder, as text: the reference's full check of SETTINGS. */
+const decodeAndValidate = (/** @type {string} */ text) => validateSettings(decodeSettings(text));
 
 const fixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/settings.json", import.meta.url), "utf8"));
 
@@ -31,7 +34,7 @@ describe("shared fixtures", () => {
       assert.equal(errorOf(() => validateSettings(f.settings)), null);
       assert.equal(encodeSettings(f.settings), f.settings_text);
       assert.deepEqual(decodeSettings(f.settings_text), f.settings);
-      assert.deepEqual(parseSettings(f.settings_text), f.settings);
+      assert.deepEqual(decodeAndValidate(f.settings_text), f.settings);
       assert.match(f.settings_text, /^[0-9,-]+$/);
     });
   }
@@ -40,7 +43,8 @@ describe("shared fixtures", () => {
       assert.equal(encodeSettings(f.settings), f.settings_text);
       assert.deepEqual(decodeSettings(f.settings_text), f.settings);
       assert.deepEqual(errorOf(() => validateSettings(f.settings)), f.error);
-      assert.deepEqual(errorOf(() => parseSettings(f.settings_text)), f.error);
+      assert.deepEqual(errorOf(() => decodeAndValidate(f.settings_text)), f.error);
+      assert.deepEqual(decodeSettings(f.settings_text), f.settings, "the page's decoder accepts it: validation is Cairo's job");
     });
   }
   for (const f of fixtures.invalid) {
@@ -51,7 +55,7 @@ describe("shared fixtures", () => {
       // first (the order_* fixtures); the length cap is the encoder's alone.
       if (f.error[0] !== "TS: settings too long") {
         const text = encodeSettings(f.settings, { limit: Infinity });
-        const got = errorOf(() => parseSettings(text));
+        const got = errorOf(() => decodeAndValidate(text));
         if (f.name.startsWith("order_")) assert.ok(got);
         else assert.deepEqual(got, f.error);
       }
@@ -186,8 +190,4 @@ describe("installer", () => {
     assert.deepEqual({ ...timbres[3][3][0], mutated: undefined }, { ...toTinySynthOps(beast.timbres[0])[0], mutated: undefined });
   });
 
-  test("refuses custom waves until issue #2", () => {
-    const custom = fixtures.reserved.find((/** @type {any} */ f) => f.name === "custom_waves").settings;
-    assert.deepEqual(errorOf(() => installSettings(new FakeSynth({}), custom)), ["TS: custom wave unsupported"]);
-  });
 });

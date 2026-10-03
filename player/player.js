@@ -11,8 +11,9 @@
  *
  * 1. Art first: the SVG is shown in an <img> as a base64 data URL, before and independently of
  *    everything else. Nothing that follows can hide it.
- * 2. SETTINGS is parsed and validated (`parseSettings`), and the MIDI is decoded and checked
- *    (`decodeMidi`). On any failure (spec D9) ▶ stays disabled, the exact error is shown and put in
+ * 2. SETTINGS is parsed strictly (`decodeSettings`: the grammar, Cairo types and count caps; the
+ *    class has already range-checked every value with `settings::validate`), and the MIDI is
+ *    decoded and checked (`decodeMidi`). On any failure (spec D9) ▶ stays disabled, the exact error is shown and put in
  *    its title and logged, and no synth is ever created. Otherwise ▶ is enabled.
  * 3. ▶ (a click or tap): the first one constructs TinySynth with the settings (`createSynth`).
  *    Every ▶ resumes the AudioContext inside the gesture, reloads the MIDI (back to tick 0 at the
@@ -29,7 +30,7 @@
  * and data: images.
  */
 
-import { createSynth, parseSettings } from "./settings.js";
+import { createSynth, decodeSettings } from "./settings.js";
 
 /** Icon path data (24x24 viewBox) of the toggle: ▶ while stopped, ■ while playing. */
 export const PLAY_ICON = "M8 5v14l11-7z";
@@ -246,7 +247,7 @@ export function startPlayer() {
     /** @type {Uint8Array} */
     let midi;
     try {
-      settings = parseSettings($("settings").textContent || "");
+      settings = decodeSettings($("settings").textContent || "");
       midi = decodeMidi($("midi").textContent || "");
     } catch (e) {
       fail(e);

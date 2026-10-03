@@ -1,7 +1,8 @@
 // The real page's player on the example's tokens, without a browser: the page's own player script
 // runs in node:vm against a minimal fake DOM (the repository's scripts/page_harness.mjs). The art
 // must render first and independently; ▶ installs the token's settings and loops at End-of-Track;
-// a settings or MIDI error must leave ▶ disabled, show the error and construct no synth (spec D9).
+// a settings parse or MIDI error must leave ▶ disabled, show the error and construct no synth (spec
+// D9). Range checks are Cairo's job, not the page's.
 // The full player tests are in the repository's player/player.test.js.
 //
 // Run from examples/beast_consumer:  node --test scripts/*.test.mjs
@@ -44,8 +45,8 @@ const withBlocks = ({ settings, midi }) => {
   return html;
 };
 const failures = [
-  ['settings that fail validation (quality 2)', { settings: '   1,2,30,40,64,0,0' }, 'settings: TS: quality out of range'],
   ['settings that fail parsing (non-canonical token)', { settings: '1,01,30,40,64,0,0' }, 'settings: malformed: token 1'],
+  ['settings with a bad count', { settings: '   1,1,30,40,64,17' }, 'settings: TS: too many waves'],
   ['MIDI that is not base64', { midi: '!!!not base64!!!' }, 'midi: not base64'],
   ['MIDI truncated after its header', { midi: MIDI.subarray(0, 14).toString('base64') }, 'midi: truncated (byte 14)'],
 ];

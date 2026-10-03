@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import vm from "node:vm";
-import { createSynth, installSettings, parseSettings } from "../player/settings.js";
+import { createSynth, decodeSettings, installSettings } from "../player/settings.js";
 import { engineSource } from "./engine.mjs";
 import { webAudioMock } from "./webaudio_mock.mjs";
 import { encodeSettings } from "../player/encode.js";
@@ -29,7 +29,7 @@ function noteOn(/** @type {any} */ synth, /** @type {any[][]} */ log, /** @type 
   return log.slice(from);
 }
 
-const settings = parseSettings(encodeSettings(BEAST_SETTINGS));
+const settings = decodeSettings(encodeSettings(BEAST_SETTINGS));
 const T = 1;
 
 describe("reference timbres in the real engine", () => {
@@ -84,7 +84,7 @@ describe("reference timbres in the real engine", () => {
   test("a MIDI program change selects a custom program; a drum note selects a custom drum", () => {
     const { Synth, log, nodes } = loadEngine();
     const lead80 = { ...BEAST_SETTINGS.timbres[0], slot: 80 };
-    const synth = createSynth(Synth, parseSettings(encodeSettings({ ...BEAST_SETTINGS, timbres: [lead80, BEAST_SETTINGS.timbres[1]] })));
+    const synth = createSynth(Synth, decodeSettings(encodeSettings({ ...BEAST_SETTINGS, timbres: [lead80, BEAST_SETTINGS.timbres[1]] })));
     synth.send([0xc0, 80]); // program change, channel 1
     let from = log.length;
     synth.send([0x90, 69, 100], T); // note on
