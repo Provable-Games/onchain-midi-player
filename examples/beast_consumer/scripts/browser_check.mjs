@@ -15,22 +15,24 @@
 // inside the SVG's foreignObject, by sampling a screenshot pixel), that ▶ is enabled and starts
 // TinySynth with the token's settings (custom lead on program 80, custom kick on drum 36, reverb,
 // End-of-Track loop at tick 192), that there are no console errors, and that nothing was requested
-// over the network (nor the gzip tag's data: URI, seen through the DevTools protocol). For the
+// over the network (nor the gzip tag's data: URI, seen through Chromium's DevTools protocol; the
+// other engines cannot show data: requests, and scripts/page_check.mjs proves it there). For the
 // invalid variants it checks that the page fails closed: the art still renders, ▶ stays disabled,
 // the error is shown, no synth exists. For the unsafe SVG it checks the failure the art rule
 // prevents: the parser ends the art block at the SVG's `</script>` (as parseArtBlock in
 // reference.mjs predicts), the art <img> is broken, and the rest of the SVG is parsed as page
 // markup.
 //
-// Usage (from examples/beast_consumer):
+// Usage (from examples/beast_consumer; the engine as in scripts/browsers.mjs):
 //   PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core \
-//   CHROME=/path/to/chrome-headless-shell [LD_LIBRARY_PATH=...] \
+//   PLAYWRIGHT_BROWSER=chromium|firefox|webkit \
+//   [CHROME=/path/to/chrome-headless-shell] [LD_LIBRARY_PATH=...] \
 //   node scripts/browser_check.mjs [screenshot_dir]
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
+import { collectErrors, dataRequestLog, launchBrowser } from '../../../scripts/browsers.mjs';
 import { decodePng } from '../../../scripts/png.mjs';
 import { ENGINE_MISSING } from '../../../player/player.js';
 import { engineSource } from '../../../scripts/engine.mjs';
@@ -39,12 +41,6 @@ import {
 } from './reference.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { PLAYWRIGHT_CORE, CHROME } = process.env;
-if (!PLAYWRIGHT_CORE) {
-  console.error('set PLAYWRIGHT_CORE to a playwright-core directory (and CHROME to a Chromium binary)');
-  process.exit(2);
-}
-const { chromium } = createRequire(import.meta.url)(PLAYWRIGHT_CORE);
 const shotDir = process.argv[2];
 
 function check(cond, msg) {
@@ -100,7 +96,7 @@ const targets = [
   ['token 4, a real Beast (data: URI)', asData(Buffer.from(animationHtml(4), 'utf8').toString('latin1')), { real: true }],
 ];
 
-const browser = await chromium.launch({ executablePath: CHROME || undefined, env: process.env });
+const { browser } = await launchBrowser();
 let failed = false;
 for (const [label, url, expected] of targets) {
   console.log(label);
@@ -108,7 +104,7 @@ for (const [label, url, expected] of targets) {
   // The art is 250x350: at this viewport the <img> shows it at 1:1.
   const context = await browser.newContext({ viewport: { width: 250, height: 350 } });
   await context.addInitScript(instrument);
-  const requests = [], blocked = [], errors = [];
+  const requests = [], blocked = [];
   await context.route('**/*', (route) => {
     const u = route.request().url();
     if (u.startsWith('data:') || u.startsWith('file:')) return route.continue();
@@ -117,13 +113,11 @@ for (const [label, url, expected] of targets) {
   });
   const page = await context.newPage();
   page.on('request', (r) => requests.push(r.url().slice(0, 40)));
-  // Playwright's request events skip data: URLs; the DevTools protocol sees them.
-  const cdpRequests = [];
-  const cdp = await context.newCDPSession(page);
-  await cdp.send('Network.enable');
-  cdp.on('Network.requestWillBeSent', (e) => cdpRequests.push(e.request.url));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('pageerror', (e) => errors.push(String(e)));
+  // Playwright's request events skip data: URLs; Chromium's DevTools protocol sees them (null on
+  // the other engines).
+  const cdpRequests = await dataRequestLog(context, page);
+  // What the page logs as errors or throws uncaught, as text, on every engine (awaited before use).
+  const logged = collectErrors(page);
   const name = label.split(' ')[0].replace(/\W/g, '_');
   try {
     await page.goto(url);
@@ -162,6 +156,7 @@ for (const [label, url, expected] of targets) {
       check(st.leaked.includes('style') && st.text === TOKENS[1].name,
         `the rest of the SVG became page markup (${st.leaked.length} elements, including <style> and <text>${st.text}</text>)`);
       check(st.gzipTags === 0 && !(await page.$eval('#play', (b) => b.disabled)), 'the engine loaded and ▶ is enabled: only the art is broken');
+      const errors = await logged();
       check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
     } else if (invalid) {
       check(await page.$eval('#play', (b) => b.disabled), '▶ is disabled');
@@ -170,6 +165,7 @@ for (const [label, url, expected] of targets) {
         `error shown: ${JSON.stringify(shown)}`);
       await page.click('#play', { force: true });
       check((await page.evaluate(() => window.__check.constructed)) === 0, 'clicking the disabled ▶ constructs no synth');
+      const errors = await logged();
       check(errors.length === invalid.logged.length && invalid.logged.every((m, i) => errors[i].includes(m)),
         `only the expected console errors (${errors.map((e) => JSON.stringify(e.split('\n')[0])).join(', ')})`);
     } else {
@@ -179,8 +175,12 @@ for (const [label, url, expected] of targets) {
       }));
       check(inflated.tags === 0 && inflated.engine === engineSource(), `the shim inflated the gzipped engine (${inflated.engine?.length} bytes, the pinned build)`);
       check(!(await page.$eval('#play', (b) => b.disabled)), '▶ is enabled');
+      // Playback starts once the AudioContext's resume() settles, which takes up to ~2 s on Firefox
+      // with a null audio sink: wait for it (the checks below report a start that never came).
+      const t0 = Date.now();
       await page.click('#play');
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => window.__check.synth?.playing, null, { timeout: 10000 }).catch(() => {});
+      console.log(`  info ▶ to playback: ${Date.now() - t0} ms`);
       const st = await page.evaluate((program) => {
         const { synth, opts, constructed } = window.__check;
         return {
@@ -200,11 +200,17 @@ for (const [label, url, expected] of targets) {
         check(st.lfo === 6 && st.kick === 0.25, 'custom lead on program 80 (6 Hz LFO) and custom kick on drum 36 installed');
         check(st.loop === 1 && st.loopEnd === 192, 'loops at End-of-Track (tick 192)');
       }
+      const errors = await logged();
       check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
     }
     check(blocked.length === 0, `no network requests (requests seen: ${[...new Set(requests.map((r) => r.split(':')[0] + ':'))].join(' ')})`);
-    check(cdpRequests.length > 0 && !cdpRequests.some((u) => u.startsWith('data:text/javascript')),
-      `the gzip tag's data: URI was never fetched (${cdpRequests.length} requests seen by the DevTools protocol)`);
+    if (cdpRequests) {
+      check(cdpRequests.length > 0 && !cdpRequests.some((u) => u.startsWith('data:text/javascript')),
+        `the gzip tag's data: URI was never fetched (${cdpRequests.length} requests seen by the DevTools protocol)`);
+    } else {
+      console.log('  skip the gzip tag\'s data: URI was never fetched: Chromium-only (DevTools protocol); ' +
+        'scripts/page_check.mjs proves it on every engine with a CSP');
+    }
   } catch (e) {
     failed = true;
     console.log(`  FAIL ${e.message}`);
