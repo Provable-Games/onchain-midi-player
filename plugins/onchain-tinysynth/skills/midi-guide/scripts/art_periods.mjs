@@ -6,8 +6,8 @@
 // Usage: node art_periods.mjs <art.svg>
 //
 // It lists each embedded GIF (data:image/gif;base64,...) with its frame delays and its loop, and
-// every SMIL `dur` and CSS animation duration. It flags GIF delays under 20 ms, which browsers do not
-// show as encoded. It does not judge which animations are visible: an opacity animation from 1 to
+// every SMIL `dur` and CSS animation duration. It flags GIF delays under 20 ms (or missing), which
+// browsers do not show as encoded. It does not judge which animations are visible: an opacity animation from 1 to
 // 0.999, for example, changes nothing a viewer can see.
 
 import { readFileSync } from "node:fs";
@@ -21,8 +21,9 @@ import { fileURLToPath } from "node:url";
 export const MIN_RELIABLE_DELAY = 20;
 
 /**
- * The frame delays of a GIF, in milliseconds, from its graphic control extensions. Walks the
- * blocks (rather than searching for bytes), so image data can never be misread as a delay.
+ * The frame delays of a GIF, in milliseconds: one per image, from the graphic control extension
+ * before it. An image with no control extension gets 0 (no delay given), which the report flags.
+ * Walks the blocks (rather than searching for bytes), so image data can never be misread as a delay.
  * @param {Uint8Array} bytes
  * @returns {number[]}
  */
@@ -38,14 +39,18 @@ export function gifDelays(bytes) {
   };
   /** @type {number[]} */
   const delays = [];
+  /** The delay of the last graphic control extension, which applies to the next image only. */
+  let pending = 0;
   while (p < g.length && g[p] !== 0x3b) {
     if (g[p] === 0x21) {
-      // An extension. A graphic control extension holds the frame delay in 10 ms units.
-      if (g[p + 1] === 0xf9) delays.push(g.readUInt16LE(p + 4) * 10);
+      // An extension. A graphic control extension holds the next frame's delay in 10 ms units.
+      if (g[p + 1] === 0xf9) pending = g.readUInt16LE(p + 4) * 10;
       p += 2;
       skipSubBlocks();
     } else if (g[p] === 0x2c) {
       // An image: its descriptor, local colour table, LZW code size, then its data sub-blocks.
+      delays.push(pending);
+      pending = 0;
       p += 10 + table(g[p + 9]) + 1;
       skipSubBlocks();
     } else {

@@ -246,6 +246,37 @@ describe("content kept in step with the code", () => {
   });
 });
 
+describe("settings limits are not hardcoded", () => {
+  // The class checks what the engine and the format require and lets gas decide cost, so these limits
+  // can change between versions: the skills name the constants in src/settings.cairo instead.
+  test("every MAX_ constant the skills name exists in src/settings.cairo", () => {
+    const cairo = read("src/settings.cairo");
+    for (const file of markdown) {
+      for (const [name] of readFileSync(file, "utf8").matchAll(/\bMAX_[A-Z_]+\b/g)) {
+        assert.match(cairo, new RegExp(`^pub const ${name}: `, "m"), `${relative(ROOT, file)}: ${name} is not a constant in src/settings.cairo`);
+      }
+    }
+  });
+
+  test("no count or length limit appears as a number next to what it limits", () => {
+    const cairo = read("src/settings.cairo");
+    const value = (/** @type {string} */ name) => cairo.match(new RegExp(`^pub const ${name}: u32 = ([\\d_]+);`, "m"))?.[1].replace(/_/g, "");
+    /** @type {Array<[string, RegExp]>} */
+    const limits = [["MAX_TIMBRES", /timbre/i], ["MAX_OPERATORS", /operator/i], ["MAX_WAVES", /\bwaves?\b/i], ["MAX_HARMONICS", /harmonic/i], ["MAX_SAMPLES", /sample/i], ["MAX_SETTINGS_LEN", /SETTINGS|settings/]];
+    for (const file of markdown) {
+      for (const line of readFileSync(file, "utf8").split("\n")) {
+        for (const [name, topic] of limits) {
+          const n = value(name);
+          if (!n || !topic.test(line)) continue;
+          const number = new RegExp(`(?<![\\w.,])(${n}|${Number(n).toLocaleString("en-US")})(?![\\w,]|\\.\\d)`);
+          assert.doesNotMatch(line, number, `${relative(ROOT, file)} states ${name} (${n}) as a number: ${line.slice(0, 120)}`);
+        }
+        assert.doesNotMatch(line, /(?<![\w.,])8,?192(?![\w,])/, `${relative(ROOT, file)} states the 8,192-byte SETTINGS cap`);
+      }
+    }
+  });
+});
+
 describe("the skills' helper scripts", () => {
   const dir = mkdtempSync(join(tmpdir(), "skills-"));
   after(() => rmSync(dir, { recursive: true, force: true }));
@@ -270,6 +301,12 @@ describe("the skills' helper scripts", () => {
     const report = artPeriods(`<svg><image href='data:image/gif;base64,${fast.toString("base64")}'/></svg>`);
     assert.equal(report[0], "GIF: 4 frames, delays 0, 10, 0, 10 ms, encoded loop 20 ms");
     assert.match(report[1], /^ {2}warning: 4 frame delays under 20 ms; .*measure this GIF's period in a browser$/);
+    // The same GIF without the second frame's control extension (8 bytes): still 4 frames, one with no delay.
+    const gce = Buffer.from([0x21, 0xf9, 0x04]);
+    const second = gif.indexOf(gce, gif.indexOf(gce) + 1);
+    const missing = Buffer.concat([gif.subarray(0, second), gif.subarray(second + 8)]);
+    assert.deepEqual(gifDelays(missing), [200, 0, 200, 200]);
+    assert.match(artPeriods(`<svg><image href='data:image/gif;base64,${missing.toString("base64")}'/></svg>`)[1], /warning: 1 frame delay under 20 ms/);
   });
 
   test("bytearray: a raw starknet_call result and sncast --json output give the token_uri", () => {
