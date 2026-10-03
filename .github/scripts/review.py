@@ -291,7 +291,8 @@ def cmd_prompt(args):
     if args.provider == "codex":
         lines += [f"You may also run read-only git commands in the working directory, such as "
                   f"`git diff {base} {head} -- <path>`, `git show {base}:<path>` and `git log {base}..{head}`. "
-                  "Commands run in a read-only sandbox.", ""]
+                  "Commands run in a read-only sandbox without network access, and the project's toolchains "
+                  "are not installed.", ""]
     else:
         lines += ["No shell is available. Use Read, Glob and Grep on the checkout and the context directory.", ""]
         if replaced:

@@ -38,6 +38,15 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   the Cairo output. Generated files must match a fresh run of their
   generator; flag hand edits to generated files, fixtures regenerated to fit a
   bug, and tests that compare an output with itself.
+- **Scarb dependencies:** a git dependency is pinned in `Scarb.toml` by a
+  `tag` or `rev`, and each `Scarb.lock` (the root package's and
+  `examples/beast_consumer`'s) records the commit it resolves to after the
+  `#` in `source`; a registry package is pinned by version and checksum.
+  Check that the pin, both lockfiles and the provenance the diff documents
+  agree, and read the locked source in the dependency directory the review
+  context names. The required `cairo` CI job builds and tests both packages
+  and fails if a build changes a lockfile, so not building them here is
+  expected (see Static review).
 
 Inspect relevant supporting code and report concrete, high-signal findings
 under the shared review policy.

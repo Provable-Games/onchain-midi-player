@@ -529,11 +529,29 @@ class PromptTests(Workspace):
             self.assertEqual((context / "base" / "old.md").read_text(), "gone\n")
             self.assertFalse((context / "base" / "new file.md").exists())
         self.assertIn("read-only git commands", prompts["codex"])
+        self.assertIn("read-only sandbox without network access, and the project's toolchains are not installed",
+                      prompts["codex"])
         self.assertIn("No shell is available", prompts["claude"])
         self.assertFalse((repo / "escape").is_symlink())  # neutralized for the Claude run
         self.assertTrue((repo / "inside").is_symlink())
         self.assertEqual(list(self.dir.rglob("INJECTED*")), [])
 
+
+    def test_review_is_static_and_incomplete_only_for_missing_material(self):
+        policy = (ROOT / CONFIG["policy_file"]).read_text()
+        role = (ROOT / CONFIG["agents"][0]["prompt_file"]).read_text()
+        flat = " ".join(policy.split())
+        self.assertIn("## Static review", policy)
+        self.assertIn("Being unable to build, test, run a tool or fetch a dependency is therefore expected, and it "
+                      "is not a reason for `Review incomplete`.", flat)
+        self.assertIn("Never claim that a build, test, tool or reproduction ran unless it did", flat)
+        self.assertIn("only when review material itself is missing: git history or the merge base is unavailable",
+                      flat)
+        self.assertNotIn("If access, tooling", flat)
+        # The policy is shared, so it must not describe one provider's sandbox.
+        self.assertNotIn("sandbox", policy.lower())
+        self.assertIn("**Scarb dependencies:**", role)
+        self.assertIn("(see Static review)", role)
 
 class ResultTests(Workspace):
     def codex_result(self, *, exit_code="0", review="lgtm", header=("fixture-codex-model", "medium"),
