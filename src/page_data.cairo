@@ -5,24 +5,24 @@
 //! control, the player <script>, then the opening of the settings block and its alignment spaces.
 //!
 //! - version(): tinysynth-b70ba90+page.1
-//! - PAGE: 45189 bytes (len % 9 == 0)
+//! - PAGE: 45207 bytes (len % 9 == 0)
 //! - engine: 37060 bytes, the fork's minified build at commit b70ba90
-//! - player: 6938 bytes, player/player.js and player/settings.js, minified
-//! - alignment spaces: 0
-//! - PAGE without the player's settings range re-check (validateSettings): 43911 bytes
-//! - animation_url_segment(): 80388 bytes
+//! - player: 6952 bytes, player/player.js and player/settings.js, minified
+//! - alignment spaces: 4
+//! - PAGE without the player's settings range re-check (validateSettings): 43920 bytes
+//! - animation_url_segment(): 80420 bytes
 //!
 //! animation_url_segment() = b64('"animation_url":"data:text/html;base64,' ++ b64(PAGE)),
 //! computed offline: nothing is base64-encoded at call time.
 //!
-//! sha256(PAGE)    = f8154a4f09fa7ba546f0a5ff19df90cbc6c2d46701b4861499e06a0c0f1944fc
-//! sha256(segment) = 41eb0b7d9e288008196ffaf171c23af11b2eacd40203b9f2075473069c605c87
+//! sha256(PAGE)    = 88edffd52c4c144553e6aabcc122ebd0a79edcbcec6d52e2fc71d81c33073f76
+//! sha256(segment) = 125998550ba028674de6ae3d26f364a8cdb7ebcf4bbcab4870eb3e7f76654c81
 
 /// Length of PAGE in bytes (a multiple of 9).
-pub const PAGE_LEN: u32 = 45189;
+pub const PAGE_LEN: u32 = 45207;
 
 /// Length of `animation_url_segment()` in bytes: `4 * (39 + 4 * PAGE_LEN / 3) / 3`.
-pub const SEGMENT_LEN: u32 = 80388;
+pub const SEGMENT_LEN: u32 = 80420;
 
 /// SHA-256 of the embedded engine script, big-endian: exactly the bytes of the fork's
 /// `webaudio-tinysynth.min.js` at commit b70ba90d63c5ea657cb67ca98de90d7f778c29bd,
@@ -39,8 +39,8 @@ pub fn animation_url_segment() -> ByteArray {
 }
 
 /// `animation_url_segment()` as ByteArray Serde felts.
-const ANIMATION_URL_SEGMENT: [felt252; 2596] = [
-    2593, 0x496d46756157316864476c76626c3931636d77694f694a6b595852684f6e52,
+const ANIMATION_URL_SEGMENT: [felt252; 2597] = [
+    2594, 0x496d46756157316864476c76626c3931636d77694f694a6b595852684f6e52,
     0x6c65485176614852746244746959584e6c4e6a517355454e4761324979546a,
     0x426c57454a735355646f4d474a586479745152326777596c64334b31424861,
     0x47785a5631457255456378624752485257645a4d6d686f5932354f62475245,
@@ -2628,11 +2628,12 @@ const ANIMATION_URL_SEGMENT: [felt252; 2596] = [
     0x4f4e575a496433644c564852555546686b63474a74556e5a6b65545636576c,
     0x6853565746584d5778694d3159775330684263315258526a4268517a563057,
     0x56686e623031446433686156453178596e6c7263475a546133565a4d6b5977,
-    0x57544a6e6232464462446c5a4d6b597757544a6e6232524462446468513267,
-    0x77533167784f5578484f485661523278365756644b6331705855546c4a5645,
-    0x59355331677762307455637a684d4d30357159323173643252454e44686a4d,
-    0x6b3535595668434d456c49556a566a52315535535735536247564955585a6a,
-    0x5233686f5956633061556c486247745155307036576c68534d4746584e5735, 0x6a65556b72, 5,
+    0x57544a6e623252454d43746c4d6e4e7653565246634578485a32396b513277,
+    0x3553316778616c6c59556d70685132677753316830623074495558426d5744,
+    0x427a596e6b3161324659546d685a62586873576b5177614531594d48426d55,
+    0x32647754337033646d4d79546e6c685745497755477034656c6b7a536e426a,
+    0x5346466e5a456873643170554d476c6b523159305a454d3564324a48526e42,
+    0x6961556c6e595664524f556c75546d786b53464a77596d316b656b6c714e47, 0x644a5130466e, 6,
 ];
 
 /// `license()`: the Apache-2.0 notice for this library and the embedded engine, including the

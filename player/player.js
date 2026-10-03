@@ -256,7 +256,10 @@ export function startPlayer() {
           synth.playMIDI();
           const delay = synth.playTime - ctx.currentTime + (ctx.outputLatency || 0);
           timer = window.setTimeout(showArt, Math.max(0, delay * 1000));
-        }).catch(fail);
+        }).catch((/** @type {unknown} */ e) => {
+          setPlaying(false);
+          fail(e);
+        });
       } catch (e) {
         fail(e);
       }

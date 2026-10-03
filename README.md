@@ -86,14 +86,14 @@ Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) recor
 
 | | Bytes |
 | --- | --- |
-| `PAGE` | 45,189 |
+| `PAGE` | 45,207 |
 | of which the engine | 37,060 |
-| of which the player (minified) | 6,938 |
-| `PAGE` without the player's settings range re-check (`validateSettings`) | 43,911 (1,278 less) |
-| `animation_url_segment()` | 80,388 |
+| of which the player (minified) | 6,952 |
+| `PAGE` without the player's settings range re-check (`validateSettings`) | 43,920 (1,287 less) |
+| `animation_url_segment()` | 80,420 |
 | `license()` | 2,594 |
 
-The range re-check stays for now (spec Q4); dropping it would save the 1,278 bytes above.
+The range re-check stays for now (spec Q4); dropping it would save the 1,287 bytes above.
 
 The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own minified player script in `node:vm` against a fake DOM, with a recording engine and with the real engine on a WebAudio mock) and in headless Chromium (`npm run page-check`: as an offline `data:` URI, in a sandboxed iframe and under a strict CSP; the loop period against `maxTick x tick2Time`, the art restart by screenshots of a probe animation, and the failure paths).
 
@@ -351,9 +351,9 @@ A stub class serving only the `page_data` constants (`animation_url_segment`, `s
 
 | | Stub class | Same class, empty constants | Limit |
 | --- | --- | --- | --- |
-| Sierra program | 7,354 felts | 204 felts | |
+| Sierra program | 7,357 felts | 204 felts | |
 | Contract class as declared (Sierra, entry points, ABI) | 324 KB | 9 KB | 4,089,446 bytes |
-| CASM bytecode | 3,732 felts | 311 felts | 81,920 felts |
+| CASM bytecode | 3,733 felts | 311 felts | 81,920 felts |
 
 The constants take about 8% of the class size limit and 4% of the bytecode limit.
 

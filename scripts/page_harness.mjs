@@ -96,10 +96,11 @@ export function parseDocument(html) {
 /**
  * Runs the page's player on `html`. Returns the fake DOM, the engine's record and controls.
  * @param {string} html
- * @param {{engine?: "fake" | "real", outputLatency?: number, constructError?: string}} [options]
- *   constructError: the fake engine's constructor throws this message
+ * @param {{engine?: "fake" | "real", outputLatency?: number, constructError?: string, resumeError?: string}} [options]
+ *   constructError: the fake engine's constructor throws this message; resumeError: its
+ *   AudioContext's resume() rejects with this message
  */
-export function runPage(html, { engine = "fake", outputLatency = 0.02, constructError } = {}) {
+export function runPage(html, { engine = "fake", outputLatency = 0.02, constructError, resumeError } = {}) {
   const doc = parseDocument(html);
   /** @type {Page} */
   const page = { elements: {}, body: [], events: [] };
@@ -197,7 +198,12 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     vm.createContext(sandbox);
     sandbox.WebAudioTinySynth = function FakeSynth(/** @type {any} */ opts) {
       if (constructError) throw new Error(constructError);
-      const ctx = { state: "suspended", currentTime: 1.5, outputLatency, resume: () => { calls.push(["resume"]); ctx.state = "running"; return Promise.resolve(); } };
+      const ctx = { state: "suspended", currentTime: 1.5, outputLatency, resume: () => {
+        calls.push(["resume"]);
+        if (resumeError) return Promise.reject(new Error(resumeError));
+        ctx.state = "running";
+        return Promise.resolve();
+      } };
       /** @type {Record<string, any>} */
       const synth = { opts, ctx, maxTick: 0, playTime: 0, timbres: [] };
       const record = (/** @type {string} */ name, /** @type {(...a: any[]) => void} */ f = () => {}) => (/** @type {any[]} */ ...args) => { calls.push([name, ...args]); f(...args); };

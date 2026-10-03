@@ -259,6 +259,18 @@ describe("the page's player script, fake engine", () => {
     assert.deepEqual(h.consoleErrors, ["no WebAudio"]);
     assert.equal(h.timers.size, 0);
   });
+
+  test("an AudioContext that will not resume fails closed and shows ▶ again", async () => {
+    const h = runPage(htmlOf(base), { resumeError: "resume refused" });
+    h.ready();
+    h.click();
+    await h.flush();
+    assert.deepEqual(h.calls.filter((x) => ["loadMIDI", "playMIDI"].includes(x[0])), []);
+    assert.equal(h.els.play.disabled, true);
+    assert.equal(h.els.error.textContent, "resume refused");
+    assert.equal(h.els.icon.attributes.d, PLAY_ICON);
+    assert.deepEqual(h.consoleErrors, ["resume refused"]);
+  });
 });
 
 describe("the page's player script, real engine", () => {
