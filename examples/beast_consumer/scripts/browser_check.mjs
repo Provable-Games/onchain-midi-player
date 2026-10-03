@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Optional headless check of the decoded page, with Playwright (not a dependency of this repo).
 //
-// Loads the page two ways: fixtures/animation.html from disk, and the exact
-// data:text/html;base64,... animation_url from fixtures/token.json. For each it checks that the
+// Loads the page three ways: fixtures/animation.html from disk, the exact
+// data:text/html;base64,... animation_url from fixtures/token.json, and a variant of that page whose
+// MIDI block holds a file with SysEx (F0) and escape (F7) events (same notes, same End-of-Track). For each it checks that the
 // player parsed the settings and MIDI blocks, that the art rendered (including the PNG inside the
 // SVG's foreignObject, by sampling a screenshot pixel), that the mock Play button works, that
 // there are no console errors, and that nothing was requested over the network.
@@ -15,6 +16,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { inflateSync } from 'node:zlib';
+import { midiWithSysex } from './reference.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -66,14 +68,20 @@ function check(cond, msg) {
 
 const token = JSON.parse(readFileSync(join(root, 'fixtures', 'token.json'), 'utf8'));
 const svgLen = Buffer.from(token.image.slice('data:image/svg+xml;base64,'.length), 'base64').length;
+const html = readFileSync(join(root, 'fixtures', 'animation.html'), 'latin1');
+const sysex = midiWithSysex();
+const sysexHtml = html.replace(/(id="midi">)[^<]*(<\/script>)/, `$1${sysex.toString('base64')}$2`);
+if (sysexHtml === html) throw new Error('MIDI block not found');
+// [label, url, expected MIDI byte count]
 const targets = [
-  ['fixtures/animation.html (file://)', pathToFileURL(join(root, 'fixtures', 'animation.html')).href],
-  ['token.json animation_url (data: URI)', token.animation_url],
+  ['fixtures/animation.html (file://)', pathToFileURL(join(root, 'fixtures', 'animation.html')).href, 112],
+  ['token.json animation_url (data: URI)', token.animation_url, 112],
+  ['SysEx MIDI variant (data: URI)', 'data:text/html;base64,' + Buffer.from(sysexHtml, 'latin1').toString('base64'), sysex.length],
 ];
 
 const browser = await chromium.launch({ executablePath: CHROME || undefined, env: process.env });
 let failed = false;
-for (const [label, url] of targets) {
+for (const [label, url, midiBytes] of targets) {
   console.log(label);
   const context = await browser.newContext({ viewport: { width: 800, height: 600 } });
   const requests = [], blocked = [], errors = [];
@@ -100,7 +108,7 @@ for (const [label, url] of targets) {
     'settings: chip lead on program 80 (triangle + 6 Hz LFO, route 1)');
     check(kick.drum && kick.slot === 36 && kick.ops[0].p === 0.25, 'settings: custom kick on drum 36');
     const m = st.midi;
-    check(st.midiBytes === 112 && m.format === 0 && m.ppq === 48 && m.bpm === 120, 'MIDI: 112 bytes, format 0, PPQ 48, 120 BPM');
+    check(st.midiBytes === midiBytes && m.format === 0 && m.ppq === 48 && m.bpm === 120, `MIDI: ${midiBytes} bytes, format 0, PPQ 48, 120 BPM`);
     check(m.notes === 4 && m.drumHits === 4 && m.endTick === 192 && m.bars === 1, 'MIDI: 4 notes, 4 drum hits, End-of-Track at tick 192 (1 bar)');
     check(st.artChars === svgLen, `art block holds exactly the SVG (${st.artChars} chars)`);
     const img = await page.$('#view');
@@ -108,7 +116,7 @@ for (const [label, url] of targets) {
     const dims = await img.evaluate((e) => [e.naturalWidth, e.naturalHeight]);
     check(dims[0] === 250 && dims[1] === 350, `art <img> loaded (${dims.join('x')})`);
     const shot = await img.screenshot();
-    if (shotDir) writeFileSync(join(shotDir, label.startsWith('fixtures') ? 'art_file.png' : 'art_data.png'), shot);
+    if (shotDir) writeFileSync(join(shotDir, label.split(' ')[0].replace(/\W/g, '_') + '_art.png'), shot);
     const png = decodePng(shot);
     const red = png.pixel(125, 129), card = png.pixel(30, 300);
     check(red[0] > 240 && red[1] < 20 && red[2] < 20, `foreignObject PNG rendered (pixel ${red})`);
@@ -116,7 +124,7 @@ for (const [label, url] of targets) {
     await page.click('#play');
     const status = await page.textContent('#status');
     check((await page.evaluate(() => window.__player.played)) && status.includes('MOCK'), 'Play (mock) runs');
-    if (shotDir) await page.screenshot({ path: join(shotDir, label.startsWith('fixtures') ? 'page_file.png' : 'page_data.png') });
+    if (shotDir) await page.screenshot({ path: join(shotDir, label.split(' ')[0].replace(/\W/g, '_') + '_page.png') });
     check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
     check(blocked.length === 0, `no network requests (requests seen: ${[...new Set(requests.map((r) => r.split(':')[0] + ':'))].join(' ')})`);
   } catch (e) {

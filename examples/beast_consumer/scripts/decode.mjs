@@ -3,8 +3,10 @@
 //
 // Usage: node scripts/decode.mjs <token_uri.txt | -> [out_dir]
 //   Reads the token_uri string from a file (or stdin with "-"), checks every base64 layer is
-//   canonical standard base64, and writes token.json, image.svg and animation.html to out_dir
-//   (default: the current directory).
+//   canonical standard base64 and the JSON is valid UTF-8, and writes to out_dir (default: the
+//   current directory):
+//     image.svg, animation.html   the decoded bytes, unchanged
+//     token.json                  the parsed JSON, pretty-printed as UTF-8
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,12 +17,13 @@ if (!src) {
   console.error('usage: node scripts/decode.mjs <token_uri.txt | -> [out_dir]');
   process.exit(2);
 }
-const uri = readFileSync(src === '-' ? 0 : src, 'latin1').trim();
-const { json, svg, html } = decodeTokenUri(uri);
+// A token_uri is ASCII; decodeTokenUri rejects anything else.
+const uri = readFileSync(src === '-' ? 0 : src, 'utf8').trim();
+const { json, svgBytes, htmlBytes } = decodeTokenUri(uri);
 mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, 'token.json'), JSON.stringify(json, null, 2) + '\n');
-writeFileSync(join(outDir, 'image.svg'), svg);
-writeFileSync(join(outDir, 'animation.html'), html);
+writeFileSync(join(outDir, 'token.json'), JSON.stringify(json, null, 2) + '\n', 'utf8');
+writeFileSync(join(outDir, 'image.svg'), svgBytes);
+writeFileSync(join(outDir, 'animation.html'), htmlBytes);
 console.log(`name: ${json.name}`);
-console.log(`image: ${svg.length} bytes of SVG; animation_url: ${html.length} bytes of HTML`);
+console.log(`image: ${svgBytes.length} bytes of SVG; animation_url: ${htmlBytes.length} bytes of HTML`);
 console.log(`wrote token.json, image.svg, animation.html to ${outDir}`);

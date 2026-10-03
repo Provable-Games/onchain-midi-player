@@ -18,8 +18,10 @@ import { createHash } from 'node:crypto';
 // Bytes and base64
 // ---------------------------------------------------------------------------------------------
 
-/** ASCII/Latin-1 string or Buffer -> Buffer. Every text piece in this example is ASCII. */
-export const bytes = (x) => (Buffer.isBuffer(x) ? x : Buffer.from(x, 'latin1'));
+/** String (encoded as UTF-8, like Cairo ByteArray literals) or Buffer (binary, e.g. MIDI) -> Buffer. */
+export const bytes = (x) => (Buffer.isBuffer(x) ? x : Buffer.from(x, 'utf8'));
+/** Length in bytes, which is what every alignment rule counts. */
+export const blen = (x) => bytes(x).length;
 /** Standard RFC 4648 base64 with '=' padding, as an ASCII string. */
 export const b64 = (x) => bytes(x).toString('base64');
 export const spaces = (n) => ' '.repeat(n);
@@ -43,6 +45,27 @@ export const MOCK_ENGINE_JS =
   'this.setTimbre=function(drum,slot,ops){this.timbres.push({drum:drum,slot:slot,ops:ops})};' +
   'this.loadMIDI=function(b){this.midi=b};this.playMIDI=function(){};this.stopMIDI=function(){}};';
 
+// Minimal SMF reader used by the player (a summary for display). Exported separately so the Node
+// tests can run exactly these bytes of the page in node:vm.
+export const PARSE_MIDI_JS = `function parseMidi(u){var p=0;
+function u32(){var v=(u[p]<<24|u[p+1]<<16|u[p+2]<<8|u[p+3])>>>0;p+=4;return v}
+function u16(){var v=u[p]<<8|u[p+1];p+=2;return v}
+function tag(){var s=String.fromCharCode(u[p],u[p+1],u[p+2],u[p+3]);p+=4;return s}
+function vlq(){var v=0,b;do{b=u[p++];v=v*128+(b&127)}while(b&128);return v}
+if(tag()!=="MThd"||u32()!==6)throw new Error("not a Standard MIDI File");
+var m={format:u16(),tracks:u16(),ppq:u16(),notes:0,drumHits:0,events:0,bpm:120,endTick:0};
+if(m.ppq&32768)throw new Error("SMPTE time division is not supported");
+for(var n=0;n<m.tracks;n++){if(tag()!=="MTrk")throw new Error("missing MTrk");
+var end=u32();end+=p;var tick=0,run=0;
+while(p<end){tick+=vlq();var st=u[p];if(st&128)p++;else st=run;m.events++;
+if(st===255){var ty=u[p++],len=vlq();if(ty===81)m.bpm=60000000/(u[p]<<16|u[p+1]<<8|u[p+2]);if(ty===47)m.endTick=Math.max(m.endTick,tick);p+=len;run=0}
+else if(st===240||st===247){var sl=vlq();p+=sl;run=0}
+else{run=st;var hi=st&240,d1=u[p++],d2=(hi===192||hi===208)?0:u[p++];
+if(hi===144&&d2>0){if((st&15)===9)m.drumHits++;else m.notes++}}}
+if(p!==end)throw new Error("bad MTrk length")}
+m.bars=m.endTick/(m.ppq*4);return m}
+`;
+
 // Runs on DOMContentLoaded: the settings, MIDI and art blocks come after this script in the
 // document (the art block is unclosed and ends at EOF), so they exist only once parsing is done.
 const PLAYER_JS = `(function(){"use strict";
@@ -59,24 +82,7 @@ s.timbres.push(tm)}
 return s}
 function b64ToBytes(t){var bin=atob(t.replace(/\\s+/g,"")),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u}
 function textToB64(t){var u=new TextEncoder().encode(t),bin="";for(var i=0;i<u.length;i++)bin+=String.fromCharCode(u[i]);return btoa(bin)}
-function parseMidi(u){var p=0;
-function u32(){var v=(u[p]<<24|u[p+1]<<16|u[p+2]<<8|u[p+3])>>>0;p+=4;return v}
-function u16(){var v=u[p]<<8|u[p+1];p+=2;return v}
-function tag(){var s=String.fromCharCode(u[p],u[p+1],u[p+2],u[p+3]);p+=4;return s}
-function vlq(){var v=0,b;do{b=u[p++];v=v*128+(b&127)}while(b&128);return v}
-if(tag()!=="MThd"||u32()!==6)throw new Error("not a Standard MIDI File");
-var m={format:u16(),tracks:u16(),ppq:u16(),notes:0,drumHits:0,events:0,bpm:120,endTick:0};
-if(m.ppq&32768)throw new Error("SMPTE time division is not supported");
-for(var n=0;n<m.tracks;n++){if(tag()!=="MTrk")throw new Error("missing MTrk");
-var end=u32();end+=p;var tick=0,run=0;
-while(p<end){tick+=vlq();var st=u[p];if(st&128)p++;else st=run;m.events++;
-if(st===255){var ty=u[p++],len=vlq();if(ty===81)m.bpm=60000000/(u[p]<<16|u[p+1]<<8|u[p+2]);if(ty===47)m.endTick=Math.max(m.endTick,tick);p+=len;run=0}
-else if(st===240||st===247){p+=vlq();run=0}
-else{run=st;var hi=st&240,d1=u[p++],d2=(hi===192||hi===208)?0:u[p++];
-if(hi===144&&d2>0){if((st&15)===9)m.drumHits++;else m.notes++}}}
-if(p!==end)throw new Error("bad MTrk length")}
-m.bars=m.endTick/(m.ppq*4);return m}
-var state={ready:false};window.__player=state;
+${PARSE_MIDI_JS}var state={ready:false};window.__player=state;
 document.addEventListener("DOMContentLoaded",function(){try{
 var settings=parseSettings($("settings").textContent),midi=b64ToBytes($("midi").textContent),art=$("art").textContent;
 var info=parseMidi(midi);
@@ -137,22 +143,26 @@ export function pageUnpadded() {
 /** PAGE: padded with spaces to len % 9 == 0. The spaces fall inside the settings block. */
 export function page() {
   const p = pageUnpadded();
-  const out = p + spaces(padLen(p.length, 9));
-  if (out.length % 9) throw new Error('PAGE not 9-aligned');
+  const out = p + spaces(padLen(blen(p), 9));
+  if (blen(out) % 9) throw new Error('PAGE not 9-aligned');
   // Exactly the two intended closers: the engine placeholder and the player.
   if (countCI(out, '</script') !== 2) throw new Error('unexpected </script in PAGE');
-  if (!out.endsWith(SETTINGS_OPEN + spaces(padLen(p.length, 9)))) throw new Error('PAGE tail');
+  if (!out.endsWith(SETTINGS_OPEN + spaces(padLen(blen(p), 9)))) throw new Error('PAGE tail');
   return out;
 }
 
-/** animation_url_segment(): b64('"animation_url":"data:text/html;base64,' ++ b64(PAGE)). */
-export function animationUrlSegment() {
-  const inner = URL_KEY + b64(page());
-  if (inner.length % 3) throw new Error('segment inner not 3-aligned');
+/** b64('"animation_url":"data:text/html;base64,' ++ b64(pageHtml)) for any 9-aligned page. */
+export function segmentFor(pageHtml) {
+  if (blen(pageHtml) % 9) throw new Error('page not 9-aligned');
+  const inner = URL_KEY + b64(pageHtml);
+  if (blen(inner) % 3) throw new Error('segment inner not 3-aligned');
   const seg = b64(inner);
   if (seg.includes('=')) throw new Error('segment padded');
   return seg;
 }
+
+/** animation_url_segment(): the segment for this class version's PAGE. */
+export const animationUrlSegment = () => segmentFor(page());
 
 // ---------------------------------------------------------------------------------------------
 // MockOnchainTinySynth.midi_segment
@@ -188,9 +198,9 @@ export function settingsAscii(s) {
 /** D = SETTINGS MIDI_OPEN b64(midi) <pad> ART_OPEN, with 0..8 pad spaces so len(D) % 9 == 0. */
 export function dFragment(midi, settings) {
   const head = settingsAscii(settings) + MIDI_OPEN + b64(midi);
-  const pad = padLen(head.length + ART_OPEN.length, 9);
+  const pad = padLen(blen(head) + blen(ART_OPEN), 9);
   const d = head + spaces(pad) + ART_OPEN;
-  if (d.length % 9) throw new Error('D not 9-aligned');
+  if (blen(d) % 9) throw new Error('D not 9-aligned');
   return { d, pad };
 }
 
@@ -312,80 +322,108 @@ export function validateMidi(m) {
   if (tag(14) !== 'MTrk') throw new Error('MTrk');
   const end = 22 + m.readUInt32BE(18);
   if (end !== m.length) throw new Error(`MTrk length ${m.readUInt32BE(18)} != ${m.length - 22}`);
-  let p = 22, tick = 0, run = 0, runningUsed = 0, offByVel0 = 0, eot = -1;
+  let p = 22, tick = 0, run = 0, runningUsed = 0, offByVel0 = 0, eot = -1, notes = 0, drumHits = 0;
   const vlq = () => { let v = 0, b; do { b = m[p++]; v = v * 128 + (b & 127); } while (b & 128); return v; };
   while (p < end) {
     tick += vlq();
     let st = m[p];
     if (st & 0x80) p++; else { st = run; runningUsed++; }
     if (st === 0xff) { const ty = m[p++]; const len = vlq(); if (ty === 0x2f) eot = tick; p += len; run = 0; continue; }
+    // SysEx (F0) and escape (F7) events: VLQ length, then that many bytes. They cancel running status.
+    if (st === 0xf0 || st === 0xf7) { const len = vlq(); p += len; run = 0; continue; }
     if (!st) throw new Error('running status without a status byte');
     run = st;
     const hi = st & 0xf0; const d1 = m[p++]; const d2 = hi === 0xc0 || hi === 0xd0 ? 0 : m[p++];
     if (hi === 0x90 && d2 === 0) offByVel0++;
+    if (hi === 0x90 && d2 > 0) { if ((st & 0x0f) === 9) drumHits++; else notes++; }
     void d1;
   }
   if (p !== end || eot !== tick) throw new Error('End-of-Track must be the last event');
   if (eot % (ppq * 4)) throw new Error('End-of-Track not on a 4/4 bar boundary');
   if (!runningUsed || !offByVel0) throw new Error('fixture should exercise running status and vel-0 note-off');
-  return { ppq, eotTick: eot, bars: eot / (ppq * 4), runningUsed, offByVel0 };
+  return { ppq, eotTick: eot, bars: eot / (ppq * 4), runningUsed, offByVel0, notes, drumHits };
+}
+
+/**
+ * Test variant of MIDI with a SysEx event (00 F0 01 F7) and an escape event (00 F7 02 01 02)
+ * inserted after the tempo meta event, MTrk length adjusted. Same notes, same End-of-Track tick.
+ */
+export function midiWithSysex() {
+  const insert = Buffer.from([0x00, 0xf0, 0x01, 0xf7, 0x00, 0xf7, 0x02, 0x01, 0x02]);
+  const at = 22 + 7; // after the 7-byte tempo event
+  const out = Buffer.concat([MIDI.subarray(0, at), insert, MIDI.subarray(at)]);
+  out.writeUInt32BE(MIDI.readUInt32BE(18) + insert.length, 18);
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------
 // token_uri: spliced (what the contract does) and naive (one pass, standard nesting)
 // ---------------------------------------------------------------------------------------------
 
+/** The consumer's own pieces for given JSON members and SVG, padded with JSON whitespace. */
+export function consumerPieces(mem, svg) {
+  const svgB64 = b64(svg);
+  const headPad = padLen(blen('{' + mem + ',' + IMAGE_KEY), 3);
+  const head = '{' + mem + ',' + spaces(headPad) + IMAGE_KEY;
+  const sPad = padLen(svgB64.length + 1, 3);
+  const s = svgB64 + '"' + spaces(sPad);
+  return { svgB64, head, headPad, s, sPad, comma: ',  ' };
+}
+
+/**
+ * The spliced token_uri for any members / SVG / 9-aligned page / 9-aligned D, assembled exactly
+ * as BeastLikeNft does it.
+ */
+export function spliceTokenUri({ mem, svg, pageHtml, d }) {
+  const c = consumerPieces(mem, svg);
+  for (const piece of [c.head, c.s, c.comma]) if (blen(piece) % 3) throw new Error('unaligned piece');
+  if (blen(d) % 9) throw new Error('D not 9-aligned');
+  const sB64 = b64(c.s);
+  return (
+    'data:application/json;base64,' + b64(c.head) + sB64 + b64(c.comma) + segmentFor(pageHtml) +
+    b64(b64(d)) + sB64 + b64('}')
+  );
+}
+
+/**
+ * Naive reference: the whole JSON as one string with standard nested data URIs, then base64 it
+ * once. The whitespace between JSON tokens is the same insignificant whitespace the spliced version
+ * uses for alignment (checked separately against compact JSON).
+ */
+export function naiveTokenJson({ mem, svg, pageHtml, d }) {
+  const c = consumerPieces(mem, svg);
+  return (
+    '{' + mem + ',' + spaces(c.headPad) +
+    '"image":"data:image/svg+xml;base64,' + c.svgB64 + '"' + spaces(c.sPad) + ',  ' +
+    '"animation_url":"data:text/html;base64,' + b64(pageHtml + d + svg) + '"' + spaces(c.sPad) +
+    '}'
+  );
+}
+
+export const naiveTokenUri = (parts) => 'data:application/json;base64,' + b64(naiveTokenJson(parts));
+
 export function tokenParts(tokenId) {
   const t = TOKENS[tokenId];
   if (!t) throw new Error(`unknown token ${tokenId}`);
   const svg = renderSvg(t.name, t.tier);
   if (svg.toLowerCase().includes('</script')) throw new Error('SVG contains </script');
-  const svgB64 = b64(svg);
   const mem = members(tokenId, t.name, t.tier);
   const settings = settingsFor(t.tier);
-  // Consumer pieces, padded with JSON whitespace to multiples of 3.
-  const headPad = padLen(1 + mem.length + 1 + IMAGE_KEY.length, 3);
-  const head = '{' + mem + ',' + spaces(headPad) + IMAGE_KEY;
-  const sPad = padLen(svgB64.length + 1, 3);
-  const s = svgB64 + '"' + spaces(sPad);
-  const comma = ',  ';
   const { d, pad: dPad } = dFragment(MIDI, settings);
-  return { ...t, tokenId, svg, svgB64, mem, settings, head, headPad, s, sPad, comma, d, dPad };
+  return { ...t, tokenId, svg, mem, settings, d, dPad, pageHtml: page(), ...consumerPieces(mem, svg) };
 }
 
 /** What the contract assembles, piece by piece. */
-export function tokenUriSpliced(tokenId) {
-  const p = tokenParts(tokenId);
-  for (const piece of [p.head, p.s, p.comma]) if (piece.length % 3) throw new Error('unaligned piece');
-  const sB64 = b64(p.s);
-  return (
-    'data:application/json;base64,' + b64(p.head) + sB64 + b64(p.comma) + animationUrlSegment() +
-    midiSegment(MIDI, p.settings) + sB64 + b64('}')
-  );
-}
+export const tokenUriSpliced = (tokenId) => spliceTokenUri(tokenParts(tokenId));
 
 /** The decoded animation_url HTML: PAGE ++ D ++ SVG. */
 export const animationHtml = (tokenId) => {
   const p = tokenParts(tokenId);
-  return page() + p.d + p.svg;
+  return p.pageHtml + p.d + p.svg;
 };
 
-/**
- * Naive reference: build the whole JSON as one string with standard nested data URIs, then
- * base64 it once. The whitespace between JSON tokens is the same insignificant whitespace the
- * spliced version uses for alignment (checked separately against compact JSON).
- */
-export function tokenJsonNaive(tokenId) {
-  const p = tokenParts(tokenId);
-  return (
-    '{' + p.mem + ',' + spaces(p.headPad) +
-    '"image":"data:image/svg+xml;base64,' + p.svgB64 + '"' + spaces(p.sPad) + ',  ' +
-    '"animation_url":"data:text/html;base64,' + b64(animationHtml(tokenId)) + '"' + spaces(p.sPad) +
-    '}'
-  );
-}
-
-export const tokenUriNaive = (tokenId) => 'data:application/json;base64,' + b64(tokenJsonNaive(tokenId));
+export const tokenJsonNaive = (tokenId) => naiveTokenJson(tokenParts(tokenId));
+export const tokenUriNaive = (tokenId) => naiveTokenUri(tokenParts(tokenId));
 
 /** The same token as compact JSON (no alignment whitespace), for a semantic comparison. */
 export function tokenJsonCompact(tokenId) {
@@ -454,14 +492,24 @@ export function strictB64Decode(s) {
   return buf;
 }
 
-/** Decodes a token_uri exactly as a marketplace would: JSON layer, then the two data URIs. */
+/**
+ * Decodes a token_uri exactly as a marketplace would: JSON layer, then the two data URIs. Every
+ * layer is returned as its raw bytes; the JSON is decoded as strict UTF-8 (invalid UTF-8 throws),
+ * and `svg` / `html` are UTF-8 text views for convenience. Write assets from the raw buffers.
+ */
 export function decodeTokenUri(uri) {
   if (!uri.startsWith(JSON_PREFIX)) throw new Error('not a base64 JSON data URI');
-  const jsonText = strictB64Decode(uri.slice(JSON_PREFIX.length)).toString('latin1');
+  if (/[^\x21-\x7e]/.test(uri)) throw new Error('token_uri must be printable ASCII');
+  const jsonBytes = strictB64Decode(uri.slice(JSON_PREFIX.length));
+  const jsonText = new TextDecoder('utf-8', { fatal: true }).decode(jsonBytes);
   const json = JSON.parse(jsonText);
   if (!json.image.startsWith(SVG_PREFIX)) throw new Error('image is not a base64 SVG data URI');
   if (!json.animation_url.startsWith(HTML_PREFIX)) throw new Error('animation_url is not base64 HTML');
-  const svg = strictB64Decode(json.image.slice(SVG_PREFIX.length)).toString('latin1');
-  const html = strictB64Decode(json.animation_url.slice(HTML_PREFIX.length)).toString('latin1');
-  return { jsonText, json, svg, html };
+  const svgBytes = strictB64Decode(json.image.slice(SVG_PREFIX.length));
+  const htmlBytes = strictB64Decode(json.animation_url.slice(HTML_PREFIX.length));
+  return {
+    jsonBytes, jsonText, json, svgBytes, htmlBytes,
+    svg: svgBytes.toString('utf8'),
+    html: htmlBytes.toString('utf8'),
+  };
 }
