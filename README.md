@@ -103,7 +103,7 @@ The page is tested in Node ([`player/player.test.js`](player/player.test.js): th
 
 Engine differences the browser checks show (Playwright's builds: Chromium 153, Firefox 155, WebKit 26.6):
 
-- **Firefox needs an audio output device.** Without one, its `AudioContext` never leaves `suspended` and `resume()` never settles: ▶ turns into ■, but nothing plays and the art does not restart. CI gives Firefox a PulseAudio null sink (see [CI](#ci)). On it, `resume()` takes up to about 2 s to settle (Chromium and WebKit: well under half a second). The art restart still lands on tick 0, because the player times it from `playTime` once `resume()` has settled.
+- **Firefox needs an audio output device.** Without one, its `AudioContext` never leaves `suspended` and `resume()` never settles: ▶ turns into ■, but nothing plays and the art does not restart. CI gives Firefox a PulseAudio null sink (see [CI](#ci)). On it, ▶ takes up to about 2 s to start playback, waiting for `resume()` to settle (WebKit up to about 1 s, Chromium under 0.2 s; the checks print each time). The art restart still lands on tick 0, because the player times it from `playTime` once `resume()` has settled.
 - **`AudioContext.outputLatency`**: Chromium's headless shell reports 32 ms, Firefox on the null sink 35-50 ms, and WebKit 0 (it has the property but reports no latency). So on WebKit the art restart includes only TinySynth's 100 ms scheduling offset, and any real output latency puts the art that far ahead of the sound. Where the property is missing, the player counts it as 0.
 - The art restart, the End-of-Track loop timing (exact to 1e-6 s), the failure paths and the offline renders of the reference timbres agree on all three engines.
 
