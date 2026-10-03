@@ -407,7 +407,7 @@ The kick and snare are in `scripts/settings_fixtures.mjs`. `npm run render-check
 
 ## MIDI contract
 
-What a composer can rely on, and what the page rejects. The `midi` argument of `midi_segment` is a Standard MIDI File passed as a `ByteArray`. The class embeds it as base64 and never parses it, so a file that breaks a rule here does not revert: the page shows the error, ▶ stays disabled, and the art still shows.
+What a composer can rely on, and what the page rejects. The `midi` argument of `midi_segment` is a Standard MIDI File passed as a `ByteArray`. The class embeds it as base64 and never parses it, so a file that breaks a rule here does not revert: the page shows the error, ▶ stays disabled, and the art still shows. Check files before they go onchain with [`scripts/check_midi.mjs`](#checking-midi-files), which runs the page's own check.
 
 Every rule below is fixed per class hash: the checks are `checkMidi` and `decodeMidi` in [`player/player.js`](player/player.js), and playback is the pinned TinySynth (`b70ba90`) driven by that player.
 
@@ -436,7 +436,7 @@ Every rule below is fixed per class hash: the checks are `checkMidi` and `decode
 | No other system status bytes as events (`F1`–`F6`, `F8`–`FE`). | `unexpected status byte` |
 | One pass lasts at least 50 ms: `maxTick` (see [Playback](#playback)) under the tempo map, which starts at 120 BPM. | `loop shorter than 50 ms` |
 
-Everything else is accepted: any channel message, other meta events and SysEx of any length, and tempo events in any track. The page also rejects a MIDI block that is not strict base64 (`midi: not base64`). The class always writes valid base64, so a file from the class never fails this way.
+Everything else is accepted: any channel message, other meta events and SysEx of any length, and tempo events in any track. The page also rejects a MIDI block that is not strict base64 (`midi: not base64`). The class always writes valid base64, so only `check_midi.mjs` reports it, for a bad base64 input.
 
 The rules follow from how TinySynth reads a file: it stops reading a track at End-of-Track rather than at the chunk length, keeps running status across tracks and after meta and SysEx events, reads tempo at a fixed offset, and turns F7 events into SysEx. On a loop under 50 ms its scheduler would never catch up, and a longer text event can exceed a browser's argument limit.
 
@@ -506,6 +506,44 @@ Nothing checks these; a file that ignores them still plays.
 - **Put the note-off first:** at one tick, put a note's note-off before the next note-on of the same pitch on that channel. The other way round, the note-off releases the new note too.
 - **Prefer note-offs to CC120–127, and avoid CC121** (see the table).
 - **Keep the file small:** `midi_segment` base64-encodes the MIDI at call time, once on its own and twice inside `D`, so gas grows with its length. That is about 81M L2 gas per 1,000 bytes with the stand-in encoder (5.2M with no MIDI and 305.1M with 3,716 bytes, in [the `midi_segment` table](#midi_segment-by-midi-and-settings-size)), and about 31M with the optimized encoder (projected).
+
+### Checking MIDI files
+
+[`scripts/check_midi.mjs`](scripts/check_midi.mjs) runs the page's own `checkMidi` and `decodeMidi`, imported from `player/player.js`, so a score passes exactly when this checkout's player loads it. It needs Node 22 or later and no `npm install`:
+
+```sh
+node scripts/check_midi.mjs song.mid                  # a MIDI file
+node scripts/check_midi.mjs a.mid b.mid scores.json   # several inputs at once
+node scripts/check_midi.mjs scores.json               # every "midi_b64" string in a JSON file
+node scripts/check_midi.mjs TVRoZAAAAAYAAQAG...       # a base64 string (MIDI in base64 starts with TVRoZA)
+node scripts/check_midi.mjs - < song.b64              # standard input: MIDI bytes, base64 text or JSON
+npm run check-midi -- song.mid                        # the same, through npm
+```
+
+- **Inputs.** `.mid` and `.midi` files, and files starting with `MThd`, are MIDI. In a JSON file of any shape, every `midi_b64` string is checked and named by the `name` string next to it, as in [`tests/fixtures/page.json`](tests/fixtures/page.json) and the composer's `midi.json` fixtures. Any other file is read as base64 text.
+- **Output.** For each score, PASS or FAIL and the size. A failure gives the page's exact error. A pass gives the loop length, `maxTick`, each track's End-of-Track tick and channels, and each channel's notes and programs, with the drum notes on channel 10 (or that it is not used):
+
+  ```text
+  PASS song.mid
+    816 bytes, format 1, 6 tracks, 480 ticks per quarter note
+    loop 12.740 s, maxTick 13440 (the latest End-of-Track: the player loops there)
+    track 1: End-of-Track at tick 0, no channel events
+    track 2: End-of-Track at tick 7680, 16 notes on channel 1
+    …
+    channel 1: 16 notes, no program change (program 0)
+    …
+    channel 10 (drums): not used
+  FAIL bad.mid
+    midi: running status without a channel status (byte 24)
+    32 bytes
+  ```
+- **Exit status.** 0 if every score passes, 1 if any fails, and 2 for a usage error or an input it cannot read (a missing file, invalid JSON, or JSON with no `midi_b64` string), so it can gate another repository's CI.
+- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player: for a declared class version, check out its release tag (see [Versions](#versions)). In another repository's CI, for example:
+
+  ```sh
+  git clone --depth 1 https://github.com/Provable-Games/onchain-tinysynth "$RUNNER_TEMP/onchain-tinysynth"
+  node "$RUNNER_TEMP/onchain-tinysynth/scripts/check_midi.mjs" path/to/*.mid
+  ```
 
 ## Art (SVG) requirements
 
@@ -621,6 +659,7 @@ npm run gen:settings     # regenerate tests/fixtures/settings.json and tests/set
 npm run check:settings   # fail if they are out of date
 npm ci && npm run gen:page   # rebuild the page, src/page_data.cairo and the page fixtures
 npm run check:page       # fail if any of them is out of date
+npm run check-midi -- song.mid   # check MIDI files against the page's MIDI contract
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
   npm run render-check   # optional: render the reference timbres in headless Chromium
 PLAYWRIGHT_CORE=... CHROME=... npm run page-check   # optional: the page in headless Chromium
