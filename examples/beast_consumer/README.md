@@ -68,7 +68,7 @@ examples/beast_consumer/
    settings, loops at End-of-Track and restarts the art in sync. See the root README.
 ```
 
-`token_uri` is assembled from base64 pieces that are each encoded on their own, using `b64(X ++ Y) == b64(X) ++ b64(Y)` when `len(X) % 3 == 0`. The full layout and alignment rules are in the root [README](../../README.md#consumer-token_uri-layout-the-beasts-layout) and walked through step by step in the comments of [`beast_like_nft.cairo`](src/beast_like_nft.cairo). In short:
+`token_uri` is assembled from base64 pieces that are each encoded on their own, using `b64(X ++ Y) == b64(X) ++ b64(Y)` when `len(X) % 3 == 0`. The full layout and alignment rules are in the root [README](../../README.md#consumer-token_uri-layout) and walked through step by step in the comments of [`beast_like_nft.cairo`](src/beast_like_nft.cairo). In short:
 
 - The consumer's pieces (`'{' members ',' <pad>`, `S`, the comma and the image key) are padded with spaces between JSON tokens to multiples of 3 bytes.
 - The class pads `PAGE` and `D` to multiples of 9, because they are spliced at both layers.

@@ -1,7 +1,7 @@
 // @ts-check
 // JavaScript reference for everything the class returns around the page, and for the consumer
-// layout that splices it (the Beasts layout in README.md and src/interface.cairo). Node built-ins
-// only: it reads the built PAGE from tests/fixtures/page.html (written by scripts/build_page.mjs)
+// layout that splices it ("Consumer `token_uri` layout" in README.md and src/interface.cairo).
+// Node built-ins only: it reads the built PAGE from tests/fixtures/page.html (written by scripts/build_page.mjs)
 // and needs no `npm install`, so the beast_consumer example and the tests can use it directly.
 //
 //   PAGE                     fixed HTML: head and styles, the engine gzipped in a
@@ -284,7 +284,7 @@ export function dFragment(midi, settings) {
 export const midiSegment = (/** @type {Uint8Array} */ midi, /** @type {SynthSettings} */ settings) => b64(b64(dFragment(midi, settings).d));
 
 // ---------------------------------------------------------------------------------------------
-// The consumer's token_uri (the Beasts layout)
+// The consumer's token_uri (the consumer layout)
 // ---------------------------------------------------------------------------------------------
 
 /** A Cairo ByteArray word: a piece appended at a multiple of 31 bytes is copied word by word. */

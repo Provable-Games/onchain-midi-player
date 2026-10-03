@@ -175,6 +175,19 @@ describe("links and paths", () => {
     assert.ok(checked > 50, `${checked} links`);
   });
 
+  test("README anchors: every #link in the README and the example's README resolves", () => {
+    const readme = read("README.md");
+    const own = anchorsOf(readme);
+    for (const link of links(readme).filter((l) => l.startsWith("#"))) assert.ok(own.has(link.slice(1)), `README.md: ${link}`);
+    const example = read("examples/beast_consumer/README.md");
+    for (const link of links(example)) {
+      const m = link.match(/^\.\.\/\.\.\/README\.md#(.+)$/);
+      if (m) assert.ok(own.has(m[1]), `examples/beast_consumer/README.md: ${link}`);
+    }
+    // The layout headings are general, not named after one collection.
+    assert.ok(own.has("consumer-token_uri-layout") && own.has("a-full-size-example-token_uri-against-the-1b-target"));
+  });
+
   test("README links into the plugin resolve", () => {
     const readme = read("README.md");
     const into = links(readme).filter((l) => l.startsWith("plugins/") || l.startsWith(".claude-plugin/"));

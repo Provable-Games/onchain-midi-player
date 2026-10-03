@@ -7,7 +7,7 @@ compatibility: Needs Node 22 or later, a clone of https://github.com/Provable-Ga
 
 # Inspecting a `token_uri`
 
-A `token_uri` from this player is `data:application/json;base64,` + JSON whose `animation_url` is `data:text/html;base64,` + one HTML page: the fixed `PAGE` (engine gzipped, player), then the token's `SETTINGS`, MIDI and SVG art blocks. README: [Consumer `token_uri` layout](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#consumer-token_uri-layout-the-beasts-layout) and [Verifying the engine](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#verifying-the-engine).
+A `token_uri` from this player is `data:application/json;base64,` + JSON whose `animation_url` is `data:text/html;base64,` + one HTML page: the fixed `PAGE` (engine gzipped, player), then the token's `SETTINGS`, MIDI and SVG art blocks. README: [Consumer `token_uri` layout](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#consumer-token_uri-layout) and [Verifying the engine](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#verifying-the-engine).
 
 Run everything from a clone whose `grep 'pub const VERSION' src/page_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed (README [Agent skills](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#agent-skills)). The same `VERSION` always means the same page bytes, and newer commits have the tools. Node 22 or later; no `npm ci`. `I=plugins/onchain-tinysynth/skills/token-uri-inspector/scripts` below.
 
