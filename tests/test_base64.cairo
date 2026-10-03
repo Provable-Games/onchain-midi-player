@@ -101,7 +101,7 @@ fn large_inputs_cover_the_fixture() {
     assert_eq!(seq_b64_long().len(), 8);
 }
 
-/// The largest input in the crate's tests: PAGE (23,958 bytes), then the 31,983-byte JSON-layer
+/// The largest input in the crate's tests: PAGE (24,687 bytes), then the 32,955-byte JSON-layer
 /// string, encoded at call time must give the segment that was encoded offline, byte for byte.
 #[test]
 fn page_encodes_to_the_pre_encoded_segment() {

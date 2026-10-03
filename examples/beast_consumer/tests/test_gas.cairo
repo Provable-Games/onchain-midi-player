@@ -57,7 +57,7 @@ fn gas_t4_setup() {
 #[test]
 fn gas_t4_token_uri() {
     let (nft, _) = setup();
-    assert(nft.token_uri(4).len() == 133525, 'token_uri length');
+    assert(nft.token_uri(4).len() == 134821, 'token_uri length');
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -129,7 +129,7 @@ fn gas_t4_b64_s() {
 // ------------------------------------------------------------------------------------------------
 
 /// Token 4's pieces at their real lengths: b64('{' members ',' <pad>) (308), b64(head) of the
-/// unaligned layout (356), b64(S) (40,420), the segment (42,644) and midi_segment (9,568).
+/// unaligned layout (356), b64(S) (40,420), the segment (43,940) and midi_segment (9,568).
 fn pieces() -> (ByteArray, ByteArray, ByteArray, ByteArray, ByteArray) {
     (filler(308), filler(356), filler(40420), page_data::animation_url_segment(), filler(9568))
 }
@@ -137,7 +137,7 @@ fn pieces() -> (ByteArray, ByteArray, ByteArray, ByteArray, ByteArray) {
 #[test]
 fn gas_t4_append_pieces() {
     let (open, head, s_b64, segment, ms) = pieces();
-    assert(open.len() + head.len() + s_b64.len() + segment.len() + ms.len() == 93296, 'pieces');
+    assert(open.len() + head.len() + s_b64.len() + segment.len() + ms.len() == 94592, 'pieces');
 }
 
 /// The example's layout: b64(S) at byte 465 and the segment at byte 40,889, both multiples of 31.
@@ -161,7 +161,7 @@ fn gas_t4_appends_aligned() {
     uri.append(@ms);
     uri.append(@s_b64);
     uri.append(@"fQ==");
-    assert(uri.len() == 133525, 'token_uri length');
+    assert(uri.len() == 134821, 'token_uri length');
 }
 
 /// The same pieces without the alignment spaces (the layout before word alignment).
@@ -178,5 +178,5 @@ fn gas_t4_appends_unaligned() {
     uri.append(@ms);
     uri.append(@s_b64);
     uri.append(@"fQ==");
-    assert(uri.len() == 133445, 'token_uri length');
+    assert(uri.len() == 134741, 'token_uri length');
 }
