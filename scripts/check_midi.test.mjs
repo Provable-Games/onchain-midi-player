@@ -103,6 +103,7 @@ describe("valid files", () => {
       [file("song.mid", SONG), "song.mid"],
       [file("song.data", SONG), "song.data"], // no known extension: starts with MThd
       [file("song.b64", SONG_B64 + "\n"), "song.b64"],
+      [file("wrapped.txt", SONG_B64.replace(/.{76}/g, "$&\n") + "\n"), "wrapped.txt"], // as `base64` writes it
       [file("song.json", JSON.stringify([{ name: "genesis", midi_b64: SONG_B64 }])), "song.json: [0] genesis"], // the composer's midi.json shape
       [file("nested.json", JSON.stringify({ a: { b: [{ midi_b64: SONG_B64 }] } })), "nested.json: a.b[0]"],
       [SONG_B64, `base64 argument (${SONG_B64.length} characters)`],
@@ -114,7 +115,7 @@ describe("valid files", () => {
       assert.ok(r.label.endsWith(label), `${r.label} ends with ${label}`);
       assert.deepEqual(formatResult(r).slice(1), SONG_REPORT.slice(1), label);
     }
-    for (const input of [SONG_B64, SONG_B64 + "\n"]) {
+    for (const input of [SONG_B64, SONG_B64 + "\n", SONG_B64.replace(/.{76}/g, "$&\r\n")]) {
       const out = cli(["-"], input);
       assert.equal(out.status, 0);
       assert.equal(out.stdout, [SONG_REPORT[0].replace("song", "stdin"), ...SONG_REPORT.slice(1), ""].join("\n"));
@@ -193,9 +194,11 @@ describe("exit status", () => {
     const one = cli([song]);
     assert.equal(one.status, 0);
     assert.equal(one.stdout.split("\n")[0], `PASS ${song}`);
+    const fixtures = JSON.parse(read("tests/fixtures/page.json").toString("utf8"));
+    const n = 1 + fixtures.valid.length + fixtures.invalid.length;
     const many = cli([song, path("tests/fixtures/page.json")]);
     assert.equal(many.status, 0);
-    assert.match(many.stdout, /\n16 scores: 16 passed, 0 failed\n$/);
+    assert.ok(many.stdout.endsWith(`\n${n} scores: ${n} passed, 0 failed\n`), many.stdout.slice(-40));
     assert.equal(cli(["--help"]).status, 0);
   });
 

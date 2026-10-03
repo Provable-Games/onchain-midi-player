@@ -483,7 +483,7 @@ Ignored, with no effect: every other controller, including bank select (CC0, CC3
 
 ### Limits
 
-- **Polyphony:** at most `SynthSettings.voices` (1–64) melodic notes at once, across all channels. A note beyond that cuts a released note first (the one ending soonest), otherwise the oldest held note. Drum hits do not count, and the limit never cuts them.
+- **Polyphony:** at most `SynthSettings.voices` (1–64) melodic notes at once, across all channels. A note beyond that cuts a released note first (the one ending soonest), otherwise the held note that started earliest (of notes that started together, the one latest in the file). A drum hit takes no voice and is never cut, but it applies the limit too: right after one, at most `voices` − 1 melodic notes remain, so with `voices` 1 every drum hit cuts the melody.
 - **Range:** 16 channels, programs 0–127, notes 0–127 (drum notes 35–81), and velocity 1–127, with loudness following its square.
 - **Timing:** 1–32,767 ticks per quarter note, tempo 1–16,777,215 µs per quarter note, and a pass of at least 50 ms.
 - **Size:** text events at most 4,096 bytes. Nothing else in the page limits the size; gas does (see the recommendations).
@@ -520,7 +520,7 @@ node scripts/check_midi.mjs - < song.b64              # standard input: MIDI byt
 npm run check-midi -- song.mid                        # the same, through npm
 ```
 
-- **Inputs.** `.mid` and `.midi` files, and files starting with `MThd`, are MIDI. In a JSON file of any shape, every `midi_b64` string is checked and named by the `name` string next to it, as in [`tests/fixtures/page.json`](tests/fixtures/page.json) and the composer's `midi.json` fixtures. Any other file is read as base64 text.
+- **Inputs.** `.mid` and `.midi` files, and files starting with `MThd`, are MIDI. In a JSON file of any shape, every `midi_b64` string is checked and named by the `name` string next to it, as in [`tests/fixtures/page.json`](tests/fixtures/page.json) and the composer's `midi.json` fixtures. Any other text file is read as base64, ignoring line breaks and spaces (so `base64 song.mid > song.b64` works as it is).
 - **Output.** For each score, PASS or FAIL and the size. A failure gives the page's exact error. A pass gives the loop length, `maxTick`, each track's End-of-Track tick and channels, and each channel's notes and programs, with the drum notes on channel 10 (or that it is not used):
 
   ```text

@@ -12,7 +12,7 @@
 //   - a JSON file (.json, or any file that starts with "{" or "["): every "midi_b64" string in it, at
 //     any depth, goes to decodeMidi, as the page decodes its MIDI block, named by the "name" string
 //     next to it (the fixture shape of tests/fixtures/page.json and tests/fixtures/beasts/midi.json);
-//   - any other text file: its text, trimmed, as base64 (decodeMidi);
+//   - any other text file: its text, without line breaks and spaces, as base64 (decodeMidi);
 //   - "-": standard input, read like a file;
 //   - an argument that is not a file and starts with "TVRoZA" (base64 of "MThd", how every MIDI
 //     file's base64 starts): a base64 string.
@@ -61,8 +61,10 @@ export function scoresFromContents(label, buf, ext) {
   if (ext === ".mid" || ext === ".midi" || buf.subarray(0, 4).toString("latin1") === "MThd") return [{ label, bytes: new Uint8Array(buf) }];
   const text = buf.toString("latin1").trim();
   if (ext === ".json" || text.startsWith("{") || text.startsWith("[")) return scoresFromJson(label, buf.toString("utf8"));
-  // Printable ASCII: base64 text. Anything else is taken as (broken) MIDI bytes, for checkMidi to name.
-  if (/^[\x20-\x7e]*$/.test(text)) return [{ label, b64: text }];
+  // Printable ASCII: base64 text, whose line breaks (`base64` wraps at 76 columns) are transport, not
+  // data. Anything else is taken as (broken) MIDI bytes, for checkMidi to name.
+  const b64 = text.replace(/\s+/g, "");
+  if (/^[\x21-\x7e]*$/.test(b64)) return [{ label, b64 }];
   return [{ label, bytes: new Uint8Array(buf) }];
 }
 
