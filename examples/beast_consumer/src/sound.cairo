@@ -130,5 +130,7 @@ pub fn settings_for(tier: u8) -> SynthSettings {
         2 => 30,
         _ => 5,
     };
-    SynthSettings { quality: 1, reverb, master_vol: 40, voices: 64, timbres: timbres() }
+    SynthSettings {
+        quality: 1, reverb, master_vol: 40, voices: 64, waves: [].span(), timbres: timbres(),
+    }
 }

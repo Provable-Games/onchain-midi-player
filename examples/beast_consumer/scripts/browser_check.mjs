@@ -101,12 +101,14 @@ for (const [label, url, midiBytes] of targets) {
     const st = await page.evaluate(() => window.__player);
     check(!st.error, `player initialised${st.error ? ': ' + st.error : ''}`);
     const s = st.settings;
-    check(s.quality === 1 && s.reverb === 100 && s.masterVol === 40 && s.voices === 64, 'settings: quality 1, reverb 100, volume 40, 64 voices');
+    check(s.quality === 1 && s.reverb === 100 && s.master_vol === 40 && s.voices === 64 && s.waves.length === 0,
+      'settings: quality 1, reverb 100, volume 40, 64 voices, no custom waves');
     const lead = s.timbres[0], kick = s.timbres[1];
-    check(s.timbres.length === 2 && !lead.drum && lead.slot === 80 && lead.ops.length === 2 &&
-      lead.ops[0].w === 'triangle' && lead.ops[1].g === 1 && lead.ops[1].t === 0 && lead.ops[1].f === 6,
+    check(s.timbres.length === 2 && !lead.drum && lead.slot === 80 && lead.operators.length === 2 &&
+      lead.operators[0].wave === 'Triangle' && lead.operators[1].route === 1 && lead.operators[1].ratio === 0 &&
+      lead.operators[1].offset_hz === 60000,
     'settings: chip lead on program 80 (triangle + 6 Hz LFO, route 1)');
-    check(kick.drum && kick.slot === 36 && kick.ops[0].p === 0.25, 'settings: custom kick on drum 36');
+    check(kick.drum && kick.slot === 36 && kick.operators[0].pitch_ratio === 2500, 'settings: custom kick on drum 36');
     const m = st.midi;
     check(st.midiBytes === midiBytes && m.format === 0 && m.ppq === 48 && m.bpm === 120, `MIDI: ${midiBytes} bytes, format 0, PPQ 48, 120 BPM`);
     check(m.notes === 4 && m.drumHits === 4 && m.endTick === 192 && m.bars === 1, 'MIDI: 4 notes, 4 drum hits, End-of-Track at tick 192 (1 bar)');
@@ -124,6 +126,13 @@ for (const [label, url, midiBytes] of targets) {
     await page.click('#play');
     const status = await page.textContent('#status');
     check((await page.evaluate(() => window.__player.played)) && status.includes('MOCK'), 'Play (mock) runs');
+    const eng = await page.evaluate(() => window.__player.engine);
+    check(JSON.stringify(eng.opts) === '{"quality":1,"useReverb":1,"voices":64}' &&
+      JSON.stringify(eng.calls) === '[["setQuality",1],["setMasterVol",0.4],["setReverbLev",1],["setVoices",64]]',
+    'installSettings: constructor options, then quality, volume, reverb and voices');
+    const ops = eng.timbres.map((t) => t.ops);
+    check(eng.timbres.length === 2 && ops[0][1].g === 1 && ops[0][1].t === 0 && ops[0][1].f === 6 &&
+      ops[0][0].w === 'triangle' && ops[1][0].p === 0.25, 'installSettings: timbres converted for setTimbre');
     if (shotDir) await page.screenshot({ path: join(shotDir, label.split(' ')[0].replace(/\W/g, '_') + '_page.png') });
     check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
     check(blocked.length === 0, `no network requests (requests seen: ${[...new Set(requests.map((r) => r.split(':')[0] + ':'))].join(' ')})`);

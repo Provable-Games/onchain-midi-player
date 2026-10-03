@@ -1,15 +1,195 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TinySynth player (mock)</title><style>html,body{margin:0;background:#111;color:#ddd;font:14px/1.4 monospace}#card{display:flex;flex-wrap:wrap;gap:16px;padding:16px}#view{width:250px;height:350px;background:#000}#info{flex:1;min-width:240px}h1{font-size:16px;margin:0 0 8px}h1 b{color:#f55}h2{font-size:13px;margin:12px 0 4px;color:#999}pre{margin:0;white-space:pre-wrap;word-break:break-all;background:#1b1b1f;padding:6px;max-height:220px;overflow:auto}button{font:inherit;padding:6px 12px}</style><script>/* MOCK ENGINE. The real class embeds the ~37 KB minified TinySynth engine (Provable-Games fork, pinned release, SHA-256 = script_sha256()) here. This stand-in keeps the same global and the few methods the player calls, and makes no sound. */window.WebAudioTinySynth=function(o){this.opts=o||{};this.timbres=[];this.midi=null;this.setTimbre=function(drum,slot,ops){this.timbres.push({drum:drum,slot:slot,ops:ops})};this.loadMIDI=function(b){this.midi=b};this.playMIDI=function(){};this.stopMIDI=function(){}};</script></head><body><div id="card"><img id="view" alt="token art"><div id="info"><h1>TinySynth player <b>MOCK</b></h1><button id="play">Play (mock: no audio)</button><p id="status">Loading...</p><h2>Settings</h2><pre id="settings-out"></pre><h2>MIDI</h2><pre id="midi-out"></pre></div></div><script>(function(){"use strict";
-var FX=10000,WAVES=["sine","square","sawtooth","triangle","n0","n1"];
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TinySynth player (mock)</title><style>html,body{margin:0;background:#111;color:#ddd;font:14px/1.4 monospace}#card{display:flex;flex-wrap:wrap;gap:16px;padding:16px}#view{width:250px;height:350px;background:#000}#info{flex:1;min-width:240px}h1{font-size:16px;margin:0 0 8px}h1 b{color:#f55}h2{font-size:13px;margin:12px 0 4px;color:#999}pre{margin:0;white-space:pre-wrap;word-break:break-all;background:#1b1b1f;padding:6px;max-height:220px;overflow:auto}button{font:inherit;padding:6px 12px}</style><script>/* MOCK ENGINE. The real class embeds the ~37 KB minified TinySynth engine (Provable-Games fork, pinned release, SHA-256 = script_sha256()) here. This stand-in keeps the same global and the few methods the player calls, and makes no sound. */window.WebAudioTinySynth=function(o){this.opts=o||{};this.timbres=[];this.midi=null;this.calls=[];this.setQuality=function(q){this.calls.push(["setQuality",q])};this.setMasterVol=function(v){this.calls.push(["setMasterVol",v])};this.setReverbLev=function(v){this.calls.push(["setReverbLev",v])};this.setVoices=function(v){this.calls.push(["setVoices",v])};this.setTimbre=function(drum,slot,ops){this.timbres.push({drum:drum,slot:slot,ops:ops})};this.loadMIDI=function(b){this.midi=b};this.playMIDI=function(){};this.stopMIDI=function(){}};</script></head><body><div id="card"><img id="view" alt="token art"><div id="info"><h1>TinySynth player <b>MOCK</b></h1><button id="play">Play (mock: no audio)</button><p id="status">Loading...</p><h2>Settings</h2><pre id="settings-out"></pre><h2>MIDI</h2><pre id="midi-out"></pre></div></div><script>(function(){"use strict";
+const FIXED_POINT_SCALE = 10000;
+const SETTINGS_FORMAT_VERSION = 1;
+const MAX_WAVES = 16;
+const MAX_TIMBRES = 32;
+const MAX_OPERATORS = 8;
+const MAX_HARMONICS = 64;
+const MIN_SAMPLES = 2;
+const MAX_SAMPLES = 256;
+const MAX_ROUTE = 10 + MAX_OPERATORS;
+const MAX_TIME = 200000;
+const WAVEFORMS = ["Sine", "Square", "Sawtooth", "Triangle", "WhiteNoise", "MetallicNoise"];
+const TINYSYNTH_WAVES = ["sine", "square", "sawtooth", "triangle", "n0", "n1"];
+const FILTER_KINDS = ["LowPass", "HighPass", "BandPass"];
+const OPERATOR_FIELDS = [
+["volume", "u32", 0, 1000000, "v"],
+["ratio", "u32", 0, 640000, "t"],
+["offset_hz", "i32", -200000000, 200000000, "f"],
+["attack", "u32", 0, MAX_TIME, "a"],
+["hold", "u32", 0, MAX_TIME, "h"],
+["decay", "u32", 0, MAX_TIME, "d"],
+["sustain", "u32", 0, 1000000, "s"],
+["release", "u32", 0, MAX_TIME, "r"],
+["pitch_ratio", "u32", 0, 160000, "p"],
+["pitch_time", "u32", 0, MAX_TIME, "q"],
+["key_scale", "i32", -80000, 80000, "k"],
+];
+const TYPE_BOUNDS = {
+bool: [0, 1],
+u8: [0, 255],
+i8: [-128, 127],
+u16: [0, 65535],
+u32: [0, 4294967295],
+i32: [-2147483648, 2147483647],
+};
+class SettingsError extends Error {
+constructor(code, indices = [], detail = "") {
+super("settings: " + code + (indices.length ? " (" + indices.join(", ") + ")" : "") + (detail ? ": " + detail : ""));
+this.name = "SettingsError";
+this.code = code;
+this.indices = indices;
+}
+}
+const CANONICAL = /^(0|-?[1-9][0-9]*)$/;
+function decodeSettings(text) {
+const tokens = text.replace(/^ +| +$/g, "").split(",");
+let pos = 0;
+const malformed = () => new SettingsError("malformed", [], "token " + pos);
+const read = (type) => {
+const tok = tokens[pos];
+if (tok === undefined) throw malformed();
+if (!CANONICAL.test(tok)) throw malformed();
+const v = Number(tok);
+const [lo, hi] = TYPE_BOUNDS[type];
+if (!(v >= lo && v <= hi)) throw malformed();
+pos++;
+return v;
+};
+const count = (max, code, indices = [], min = 0) => {
+const n = read("u32");
+if (n < min || n > max) throw new SettingsError(code, indices);
+return n;
+};
+if (read("u32") !== SETTINGS_FORMAT_VERSION) throw malformed();
+const s = {
+quality: read("u8"),
+reverb: read("u8"),
+master_vol: read("u8"),
+voices: read("u8"),
+waves: [],
+timbres: [],
+};
+const nWaves = count(MAX_WAVES, "TS: too many waves");
+for (let w = 0; w < nWaves; w++) {
+const tag = read("u32");
+if (tag === 0) {
+const n = count(MAX_HARMONICS, "TS: harmonics length", [w], 1);
+const h = [];
+for (let i = 0; i < n; i++) h.push(read("u16"));
+s.waves.push({ Harmonics: h });
+} else if (tag === 1) {
+const n = count(MAX_SAMPLES, "TS: samples length", [w], MIN_SAMPLES);
+const x = [];
+for (let i = 0; i < n; i++) x.push(read("i8"));
+s.waves.push({ Samples: x });
+} else throw malformed();
+}
+const nTimbres = count(MAX_TIMBRES, "TS: too many timbres");
+for (let t = 0; t < nTimbres; t++) {
+const drum = read("bool") === 1;
+const slot = read("u8");
+const nOps = count(MAX_OPERATORS, "TS: too many operators", [t]);
+const operators = [];
+for (let o = 0; o < nOps; o++) {
+const route = read("u8");
+const tag = read("u32");
+let wave;
+if (tag < WAVEFORMS.length) wave =  (WAVEFORMS[tag]);
+else if (tag === 6) wave = { Custom: read("u8") };
+else throw malformed();
+const op = { route, wave };
+for (const [name, type] of OPERATOR_FIELDS) op[name] = read(type);
+const flag = read("bool");
+if (flag) {
+const kind = read("u32");
+if (kind >= FILTER_KINDS.length) throw malformed();
+op.filter = { kind: FILTER_KINDS[kind], cutoff: read("u32"), key_track: read("bool") === 1, q: read("u32") };
+} else op.filter = null;
+operators.push( (op));
+}
+s.timbres.push({ drum, slot, operators });
+}
+if (pos !== tokens.length) throw malformed();
+return s;
+}
+function validateSettings(s, { customWaves = false } = {}) {
+const check = (ok, code, indices = []) => {
+if (!ok) throw new SettingsError(code, indices);
+};
+const range = (name) => "TS: " + name + " out of range";
+check(s.quality <= 1, range("quality"));
+check(s.reverb <= 100, range("reverb"));
+check(s.master_vol <= 100, range("master_vol"));
+check(s.voices >= 1 && s.voices <= 64, range("voices"));
+check(s.waves.length <= MAX_WAVES, "TS: too many waves");
+s.waves.forEach((wave, w) => {
+if ("Harmonics" in wave) {
+const n = wave.Harmonics.length;
+check(n >= 1 && n <= MAX_HARMONICS, "TS: harmonics length", [w]);
+} else {
+const n = wave.Samples.length;
+check(n >= MIN_SAMPLES && n <= MAX_SAMPLES, "TS: samples length", [w]);
+}
+});
+check(customWaves || s.waves.length === 0, "TS: custom wave unsupported");
+check(s.timbres.length <= MAX_TIMBRES, "TS: too many timbres");
+const used = new Set();
+s.timbres.forEach((timbre, t) => {
+const { drum, slot, operators } = timbre;
+if (drum) check(slot >= 35 && slot <= 81, range("drum slot"), [t]);
+else check(slot <= 127, range("program slot"), [t]);
+const key = (drum ? 128 : 0) + slot;
+check(!used.has(key), "TS: duplicate timbre slot", [t]);
+used.add(key);
+check(operators.length >= 1, "TS: no operators", [t]);
+check(operators.length <= MAX_OPERATORS, "TS: too many operators", [t]);
+operators.forEach((op, o) => {
+const at = [t, o];
+const pos = o + 1;
+const r = op.route;
+check(r <= MAX_ROUTE, range("route"), at);
+check(!(r >= 1 && r <= 10 && r >= pos), "TS: FM target not earlier", at);
+check(!(r >= 11 && r - 10 >= pos), "TS: AM target not earlier", at);
+if (typeof op.wave === "object") {
+check(customWaves, "TS: custom wave unsupported", at);
+check(op.wave.Custom < s.waves.length, range("wave index"), at);
+}
+for (const [name, , lo, hi] of OPERATOR_FIELDS) {
+const v =  (op)[name];
+check(v >= lo && v <= hi, range(name), at);
+}
+check(op.filter === null, "TS: filter unsupported", at);
+});
+});
+return s;
+}
+function parseSettings(text) {
+return validateSettings(decodeSettings(text));
+}
+const fx = (x) => x / FIXED_POINT_SCALE; // one IEEE division: the same double in every engine
+function toTinySynthOps(timbre) {
+return timbre.operators.map((o) => {
+if (typeof o.wave === "object") throw new SettingsError("TS: custom wave unsupported");
+const p = { g: o.route, w: TINYSYNTH_WAVES[WAVEFORMS.indexOf(o.wave)] };
+for (const [name, , , , key] of OPERATOR_FIELDS) p[key] = fx( (o)[name]);
+return p;
+});
+}
+function createSynth(WebAudioTinySynth, s) {
+const synth = new WebAudioTinySynth({ quality: s.quality, useReverb: s.reverb > 0 ? 1 : 0, voices: s.voices });
+installSettings(synth, s);
+return synth;
+}
+function installSettings(synth, s) {
+synth.setQuality(s.quality);
+synth.setMasterVol(s.master_vol / 100);
+synth.setReverbLev(s.reverb / 100); // convolver gain = reverbLev * 8; no convolver when reverb == 0
+synth.setVoices(s.voices);
+if (s.waves.length) throw new SettingsError("TS: custom wave unsupported"); // issue #2
+for (const t of s.timbres) synth.setTimbre(t.drum ? 1 : 0, t.slot, toTinySynthOps(t));
+}
 function $(i){return document.getElementById(i)}
-function nums(t){return t.split(",").map(Number)}
-function parseSettings(text){
-var parts=text.trim().split(";"),g=nums(parts[0]);
-var s={quality:g[0],reverb:g[1],masterVol:g[2],voices:g[3],timbres:[]};
-for(var i=1;i<parts.length;i++){var ops=parts[i].split(":"),h=nums(ops[0]),tm={drum:h[0]===1,slot:h[1],ops:[]};
-for(var j=1;j<ops.length;j++){var v=nums(ops[j]);
-tm.ops.push({g:v[0],w:WAVES[v[1]],v:v[2]/FX,t:v[3]/FX,f:v[4]/FX,a:v[5]/FX,h:v[6]/FX,d:v[7]/FX,s:v[8]/FX,r:v[9]/FX,p:v[10]/FX,q:v[11]/FX,k:v[12]/FX})}
-s.timbres.push(tm)}
-return s}
 function b64ToBytes(t){var bin=atob(t.replace(/\s+/g,"")),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u}
 function textToB64(t){var u=new TextEncoder().encode(t),bin="";for(var i=0;i<u.length;i++)bin+=String.fromCharCode(u[i]);return btoa(bin)}
 function parseMidi(u){var p=0;
@@ -34,12 +214,11 @@ document.addEventListener("DOMContentLoaded",function(){try{
 var settings=parseSettings($("settings").textContent),midi=b64ToBytes($("midi").textContent),art=$("art").textContent;
 var info=parseMidi(midi);
 $("view").src="data:image/svg+xml;base64,"+textToB64(art);
-$("settings-out").textContent="raw (mock format): "+$("settings").textContent.trim()+"\n\nparsed: "+JSON.stringify(settings,null,1);
+$("settings-out").textContent="raw: "+$("settings").textContent.trim()+"\n\nparsed: "+JSON.stringify(settings,null,1);
 $("midi-out").textContent=midi.length+" bytes: format "+info.format+", "+info.tracks+" track(s), PPQ "+info.ppq+", "+info.bpm+" BPM, "+info.notes+" melody notes, "+info.drumHits+" drum hits, End-of-Track at tick "+info.endTick+" ("+info.bars+" bar(s))";
 state.settings=settings;state.midiBytes=midi.length;state.midi=info;state.artChars=art.length;state.ready=true;
-$("play").onclick=function(){var synth=new window.WebAudioTinySynth({quality:settings.quality,useReverb:settings.reverb>0,voices:settings.voices});
-settings.timbres.forEach(function(t){synth.setTimbre(t.drum?1:0,t.slot,t.ops)});synth.loadMIDI(midi);synth.playMIDI();
-state.played=true;$("status").textContent="MOCK: no audio. The real player would now start TinySynth with "+synth.timbres.length+" custom timbre(s) and loop at tick "+info.endTick+"."};
+$("play").onclick=function(){var synth=createSynth(window.WebAudioTinySynth,settings);synth.loadMIDI(midi);synth.playMIDI();
+state.played=true;state.engine={opts:synth.opts,calls:synth.calls,timbres:synth.timbres};$("status").textContent="MOCK: no audio. The real player would now start TinySynth with "+synth.timbres.length+" custom timbre(s) and loop at tick "+info.endTick+"."};
 $("status").textContent="Ready (mock player).";
 }catch(e){state.error=String(e);$("status").textContent="Error: "+e;console.error(e)}});
-})();</script><script type="text/plain" id="settings">   1,100,40,64;0,80:0,3,5000,10000,0,30,0,100,10000,330,10000,10000,0:1,0,175,0,60000,2000,0,100,10000,330,10000,10000,0;1,36:0,0,10000,0,1200000,0,200,1000,0,1000,2500,500,0</script><script type="text/plain" id="midi">TVRoZAAAAAYAAAABADBNVHJrAAAAWgD/UQMHoSAA/1gEBAIYCADAUACwB2QACkAAuQdaAJBIYACZJGQMJAAckEgACExgAJkmZAwmAByQTAAIT2AAmSRkDCQAHJBPAAhUYACZJmQMJgAckFQACP8vAA==  </script><script type="text/plain" id="art"><svg xmlns='http://www.w3.org/2000/svg' width='250' height='350' viewBox='0 0 250 350'><animate attributeName='opacity' dur='2.2s' from='1' to='0.999' repeatCount='indefinite'/><style>.n{fill:#fff;font:bold 22px monospace}.t{fill:#c9c9d1;font:14px monospace}</style><rect width='250' height='350' rx='12' fill='#1e1e22'/><rect x='4.5' y='4.5' width='241' height='341' rx='9' fill='none' stroke='#b79a5e' stroke-width='4'><animate attributeName='stroke-opacity' values='1;0.4;1' dur='3s' repeatCount='indefinite'/></rect><text x='125' y='42' text-anchor='middle' class='n'>Warlock</text><rect x='61' y='65' width='128' height='128' rx='8' fill='#000'/><foreignObject x='61' y='65' width='128' height='128'><xhtml:img xmlns:xhtml='http://www.w3.org/1999/xhtml' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR42mP4z8AARwzEcQCukw/xOF6MEQAAAABJRU5ErkJggg==' style='width:100%;height:100%;image-rendering:pixelated'/></foreignObject><text x='125' y='230' text-anchor='middle' class='t'>TIER 1</text></svg>
+})();</script><script type="text/plain" id="settings">     1,1,100,40,64,0,2,0,80,2,0,3,5000,10000,0,30,0,100,10000,330,10000,10000,0,0,1,0,175,0,60000,2000,0,100,10000,330,10000,10000,0,0,1,36,1,0,0,10000,0,1200000,0,200,1000,0,1000,2500,500,0,0</script><script type="text/plain" id="midi">TVRoZAAAAAYAAAABADBNVHJrAAAAWgD/UQMHoSAA/1gEBAIYCADAUACwB2QACkAAuQdaAJBIYACZJGQMJAAckEgACExgAJkmZAwmAByQTAAIT2AAmSRkDCQAHJBPAAhUYACZJmQMJgAckFQACP8vAA==    </script><script type="text/plain" id="art"><svg xmlns='http://www.w3.org/2000/svg' width='250' height='350' viewBox='0 0 250 350'><animate attributeName='opacity' dur='2.2s' from='1' to='0.999' repeatCount='indefinite'/><style>.n{fill:#fff;font:bold 22px monospace}.t{fill:#c9c9d1;font:14px monospace}</style><rect width='250' height='350' rx='12' fill='#1e1e22'/><rect x='4.5' y='4.5' width='241' height='341' rx='9' fill='none' stroke='#b79a5e' stroke-width='4'><animate attributeName='stroke-opacity' values='1;0.4;1' dur='3s' repeatCount='indefinite'/></rect><text x='125' y='42' text-anchor='middle' class='n'>Warlock</text><rect x='61' y='65' width='128' height='128' rx='8' fill='#000'/><foreignObject x='61' y='65' width='128' height='128'><xhtml:img xmlns:xhtml='http://www.w3.org/1999/xhtml' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR42mP4z8AARwzEcQCukw/xOF6MEQAAAABJRU5ErkJggg==' style='width:100%;height:100%;image-rendering:pixelated'/></foreignObject><text x='125' y='230' text-anchor='middle' class='t'>TIER 1</text></svg>

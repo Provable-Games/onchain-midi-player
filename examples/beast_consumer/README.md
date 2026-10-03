@@ -1,6 +1,6 @@
 # Example: a Beasts-style NFT with the onchain TinySynth player
 
-A runnable end-to-end example of how an NFT that already renders its own SVG (modelled on the Beasts NFT) adds the onchain TinySynth player to its `token_uri`. The TinySynth class does not exist yet, so `MockOnchainTinySynth` stands in for it: it implements the declared `IOnchainTinySynth` interface and returns output in the exact layout the real class will use, with a tiny mock page in place of the engine and player.
+A runnable end-to-end example of how an NFT that already renders its own SVG (modelled on the Beasts NFT) adds the onchain TinySynth player to its `token_uri`. The TinySynth class does not exist yet, so `MockOnchainTinySynth` stands in for it: it implements the declared `IOnchainTinySynth` interface and returns output in the exact layout the real class will use, with a small mock page in place of the engine and player (it does embed the real settings parser).
 
 ```
 examples/beast_consumer/
@@ -65,9 +65,9 @@ The three example tokens are chosen so that every pad length occurs:
 
 | token | name | head pad | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 0 | 2 | 2 | 13,853 |
-| 2 | Night's Wyvern | 2 | 0 | 3 | 13,881 |
-| 3 | Fen-Troll | 1 | 1 | 4 | 13,865 |
+| 1 | Warlock | 0 | 2 | 4 | 25,069 |
+| 2 | Night's Wyvern | 2 | 0 | 5 | 25,097 |
+| 3 | Fen-Troll | 1 | 1 | 6 | 25,081 |
 
 Only `reverb` varies between tokens (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding.
 
@@ -80,10 +80,10 @@ Today, Beasts renders the SVG, base64-encodes it for `image`, builds the whole J
 | | This example | Real class |
 | --- | --- | --- |
 | Engine | a one-line placeholder `<script>` with the same global name; no sound | the ~37 KB minified TinySynth from a pinned release of the Provable-Games fork |
-| Player | parses and displays the blocks; Play is a no-op | tap-to-start audio, play/stop, End-of-Track looping, art restart in sync |
-| `SETTINGS` format | placeholder: `quality,reverb,master_vol,voices{;drum,slot{:op}}`, op = 13 comma-separated integers | specified with issue #1 |
-| Validation | a few ranges (quality, reverb, master_vol, voices, slots, operator count, route) | every field, per `types.cairo` |
-| `Harmonics`, `Samples`, filters | revert ("unsupported") | issues #2 and #3 |
+| Player | parses `SETTINGS` with the real `player/settings.js` (embedded as a plain script) and displays the blocks; Play installs the settings into the mock engine with the real `createSynth` | tap-to-start audio, play/stop, End-of-Track looping, art restart in sync |
+| `SETTINGS` format | real (issue #1): the crate's `settings::encode` | same |
+| Validation | real: the crate's `settings::validate`, every field, `'TS: ...'` messages | same |
+| Custom waves (`SynthSettings.waves`, `Waveform::Custom`), filters | revert (`'TS: custom wave unsupported'`, `'TS: filter unsupported'`), as in the real class until issues #2 and #3 | issues #2 and #3 |
 | `base64` | byte-wise | planned word-wise, about 3.4x cheaper in prior art |
 | `script_sha256` | SHA-256 of the placeholder script | SHA-256 of the pinned engine release |
 | `version`, `license` | mock strings | real version string and Apache-2.0 notice |
@@ -154,9 +154,9 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
 
 | Call | L2 gas |
 | --- | --- |
-| `BeastLikeNft.token_uri`, tokens 1-3 | 96.0M-96.5M |
-| of which `animation_url_segment` (materializing the 9 KB constant) | 1.8M |
-| of which `midi_segment` (validation, `SETTINGS`, two base64 passes) | 25.7M |
+| `BeastLikeNft.token_uri`, tokens 1-3 | 103.1M-103.6M |
+| of which `animation_url_segment` (materializing the 20 KB constant) | 3.9M |
+| of which `midi_segment` (validation, `SETTINGS`, two base64 passes) | 26.6M |
 | of which 5 `base64` library calls (SVG, `S`, head, `',  '`, `'}'`) | about 61M in total, the largest single call 31M |
 
 The mock's byte-wise `base64` dominates, and every library call also serializes its `ByteArray` argument. Treat these figures as an upper bound, not a forecast for the real class.
