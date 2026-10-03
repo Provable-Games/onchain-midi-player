@@ -150,7 +150,7 @@ The optional headless check loads the page seven ways:
 - as a variant whose SVG breaks the [art rule](../../README.md#art-svg-requirements) (a `<script>` element in it);
 - token 4's page, a full-size Beast, as a `data:` URI.
 
-For the valid pages it confirms that the page's shim inflated the engine (its gzip tag replaced by the pinned build, byte for byte), that the art renders (for token 1 it samples a pixel of the PNG inside the SVG's `foreignObject`), that ▶ is enabled, and that ▶ starts TinySynth with the token's settings: for token 1 the custom lead on program 80, the custom kick on drum 36, the reverb and volume, and the End-of-Track loop at tick 192; for token 4 the reference lead on program 0, the reference kick on drum 36, no reverb, and the loop at the score's End-of-Track (tick 49,440).
+For the valid pages it confirms that the page's shim inflated the engine (its gzip tag replaced by the pinned build, byte for byte), that the art renders (for token 1 it samples a pixel of the PNG inside the SVG's `foreignObject`), that ▶ is enabled, and that ▶ starts TinySynth with the token's settings: for token 1 the custom lead on program 80, the custom kick on drum 36, the reverb and volume, and the End-of-Track loop at tick 192; for token 4 the reference lead on program 0, the reference kick on drum 36, no reverb, and the loop at the score's End-of-Track (tick 58,560).
 
 For the invalid variants it confirms that the page fails closed: the art still renders, ▶ is disabled, the error is shown (the parser's, or `engine: TinySynth did not load`), and no synth is created. (Range checks are Cairo's job: the page only parses `SETTINGS`.)
 
