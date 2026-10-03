@@ -27,14 +27,16 @@ function engine({ voices = 64 } = {}) {
   vm.runInContext(engineSource(), sandbox);
   const synth = /** @type {any} */ (new /** @type {any} */ (sandbox).WebAudioTinySynth({ quality: 1, useReverb: 0, voices }));
   const ctx = contexts[0];
-  /** @type {Array<{t: number, ch: number, n: number, p: any, freq: number, oscs: string[]}>} */
+  /** @type {Array<{t: number, ch: number, n: number, p: any, freq: number, oscs: string[], srcs: string[]}>} */
   const notes = [];
   const note = synth._note;
   synth._note = (/** @type {number} */ t, /** @type {number} */ ch, /** @type {number} */ n, /** @type {number} */ v, /** @type {any} */ p) => {
     const from = log.length;
     note(t, ch, n, v, p);
-    const oscs = log.slice(from).filter((c) => c[1] === "create" && c[0].startsWith("osc")).map((c) => c[0]);
-    notes.push({ t, ch, n, p, freq: nodes[oscs[0]].frequency.value, oscs });
+    const created = log.slice(from).filter((c) => c[1] === "create").map((c) => c[0]);
+    const oscs = created.filter((name) => name.startsWith("osc")); // oscillator operators
+    const srcs = created.filter((name) => name.startsWith("src")); // noise operators (buffer sources)
+    notes.push({ t, ch, n, p, freq: oscs.length ? nodes[oscs[0]].frequency.value : NaN, oscs, srcs });
   };
   /** @type {number[]} */
   const offs = [];
@@ -170,6 +172,28 @@ describe("the pinned engine behaves as the README's MIDI contract says", () => {
     assert.ok(near(detune(), -256 * 100 / 127), `default: ${detune()} cents`);
     for (const m of [[0xb0, 101, 0], [0xb0, 100, 0], [0xb0, 6, 12], [0xb0, 38, 0], [0xe0, 0, 0]]) e.synth.send(m, 1);
     assert.ok(near(detune(), -1536 * 100 / 127), `RPN 0 = 12: ${detune()} cents`);
+  });
+
+  test("pitch bend retunes only the oscillators of sounding melodic notes; every new note starts bent", () => {
+    const e = engine();
+    e.synth.setTimbre(0, 5, [{ w: "n0", v: 0.5, d: 1, s: 1 }]); // program 5: a noise-only melodic timbre
+    e.synth.send([0xc1, 5], 1);
+    e.synth.send([0x90, 60, 100], 1); // channel 1, program 0: two oscillators
+    e.synth.send([0x91, 60, 100], 1); // channel 2, program 5: one noise operator
+    e.synth.send([0x99, 38, 100], 1); // channel 10, the snare: oscillators and a noise operator
+    const [osc, noise, drum] = e.notes;
+    assert.ok(osc.oscs.length === 2 && !osc.srcs.length && noise.srcs.length === 1 && !noise.oscs.length && drum.oscs.length && drum.srcs.length);
+    const full = (8191 * 256 * 100) / 127 / 8192; // full scale up at the default range: about +201.55 cents
+    const from = e.log.length;
+    for (const ch of [0, 1, 9]) e.synth.send([0xe0 | ch, 0x7f, 0x7f], 1.01);
+    const bent = (/** @type {string} */ name) => e.log.slice(from).some((c) => c[0] === `${name}.detune` && c[1] === "set" && near(c[2], full));
+    assert.ok(osc.oscs.every(bent), "a held melodic note's oscillators follow the bend");
+    assert.ok(!noise.srcs.some(bent), "a held melodic noise operator keeps the bend it started with");
+    assert.ok(![...drum.oscs, ...drum.srcs].some(bent), "a sounding drum hit keeps the bend it started with");
+    for (const m of [[0x90, 62, 100], [0x91, 62, 100], [0x99, 38, 100]]) e.synth.send(m, 1.02);
+    for (const n of e.notes.slice(3)) {
+      for (const name of [...n.oscs, ...n.srcs]) assert.ok(near(e.nodes[name].detune.value, full), `new note on channel ${n.ch + 1}: ${name} starts bent`);
+    }
   });
 
   test("GM Master Volume SysEx, bank select and CC91 are ignored", () => {

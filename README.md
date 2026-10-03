@@ -472,7 +472,7 @@ The rules follow from how TinySynth reads a file: it stops reading a track at En
 | Note on (`9n`) | Velocity 1–127; velocity 0 is a note-off. Loudness follows velocity squared, (velocity / 128)²; FM depth does not change with velocity. |
 | Note off (`8n`) | Releases every note of that pitch on the channel that started at or before it and has had no note-off yet. Its velocity is ignored. |
 | Program change (`Cn`) | Selects the instrument for the channel's following notes. |
-| Pitch bend (`En`) | Shifts the channel's notes by (value − 8192) / 8192 × the bend range. |
+| Pitch bend (`En`) | Bends the channel by (value − 8192) / 8192 × the bend range. Every note that starts later takes the new bend, drum hits included. Of the notes already sounding, it retunes only the oscillator operators of melodic notes: noise operators (`WhiteNoise`, `MetallicNoise` and the built-in noise sounds) and drum hits keep the bend they started with. |
 | CC1 modulation | Vibrato of ±(value × 100 / 127) cents from one 5 Hz sine LFO, shared by all channels. |
 | CC7 volume, CC11 expression | Channel gain 3 × (CC7 / 127)² × (CC11 / 127)². |
 | CC10 pan | Position (value − 64) / 64: 0 is left, 64 centre, 127 almost fully right. |
