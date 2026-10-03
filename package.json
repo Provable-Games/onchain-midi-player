@@ -1,0 +1,16 @@
+{
+  "name": "onchain-tinysynth-player",
+  "private": true,
+  "type": "module",
+  "description": "Player-side JavaScript and tooling for onchain-tinysynth (no runtime dependencies).",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"player/**/*.test.js\" \"scripts/**/*.test.mjs\"",
+    "gen:settings": "node scripts/gen_settings_fixtures.mjs",
+    "check:settings": "node scripts/gen_settings_fixtures.mjs --check",
+    "render-check": "node scripts/render_check.mjs"
+  }
+}
