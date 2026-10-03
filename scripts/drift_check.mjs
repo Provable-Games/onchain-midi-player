@@ -38,7 +38,8 @@
 //   PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromium|firefox|webkit \
 //   node scripts/drift_check.mjs [--minutes 10] [--every 10] [out_dir]
 //
-// --minutes is the session after ▶ (default 10; CI runs 1). With out_dir, it writes
+// --minutes is the session after ▶ (default 10; CI runs 1). Checkpoints are at 0, --every, 2 x
+// --every, ... and always at the session's end, so there are at least two. With out_dir, it writes
 // drift_check_result.json (every checkpoint and the summary) and screenshots of the first and last
 // checkpoints there. Exits 0 when every check passes, 1 when one fails, 2 on bad arguments or when
 // PLAYWRIGHT_CORE is not set or PLAYWRIGHT_BROWSER names no supported engine.
@@ -47,7 +48,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { collectErrors, launchBrowser } from "./browsers.mjs";
-import { artOffsetMs, barX, clockAt, clockDrift, largestStep, leads, median, passGrid, passStarts, trend } from "./drift.mjs";
+import { artOffsetMs, barX, checkpointTimes, clockAt, clockDrift, largestStep, leads, median, passGrid, passStarts, trend } from "./drift.mjs";
 import { fixtureCase, tokenPage } from "./fixture_pages.mjs";
 import { ART_OPEN, HTML_PREFIX, VERSION, b64 } from "./page.mjs";
 import { decodePng } from "./png.mjs";
@@ -217,11 +218,11 @@ try {
   info(`▶ to the art restart: ${Date.now() - t0} ms`);
 
   const session = Date.now();
-  const n = Math.floor((minutes * 60) / every + 1e-9);
-  for (let k = 0; k <= n; k++) {
-    const wait = session + k * every * 1000 - Date.now();
+  const times = checkpointTimes(minutes * 60, every);
+  for (let k = 0; k < times.length; k++) {
+    const wait = session + times[k] * 1000 - Date.now();
     if (wait > 0) await page.waitForTimeout(wait);
-    rows.push(await checkpoint(k, (Date.now() - session) / 1000, start, k === n));
+    rows.push(await checkpoint(k, (Date.now() - session) / 1000, start, k === times.length - 1));
   }
 
   const end = await page.evaluate(() => {

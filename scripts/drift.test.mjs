@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { artOffsetMs, barX, clockAt, clockDrift, fitLine, largestStep, leads, median, passGrid, passStarts, trend, wrap } from "./drift.mjs";
+import { artOffsetMs, barX, checkpointTimes, clockAt, clockDrift, fitLine, largestStep, leads, median, passGrid, passStarts, trend, wrap } from "./drift.mjs";
 
 const close = (/** @type {number} */ a, /** @type {number} */ b, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 
@@ -134,4 +134,17 @@ test("largestStep: a 30 ms stall of the audio clock, among 10 ms quantization", 
   const steady = largestStep(samples.filter(([p]) => p < 29000), 8);
   assert.ok(Math.abs(steady.stepMs) < 6, String(steady.stepMs));
   assert.deepEqual(largestStep(samples.slice(0, 10), 8), { stepMs: 0, atMs: 0 });
+});
+
+test("checkpointTimes: every interval from 0, and always the session's end", () => {
+  const ten = checkpointTimes(600, 10);
+  assert.equal(ten.length, 61);
+  assert.deepEqual([ten[0], ten[1], ten[60]], [0, 10, 600]);
+  assert.deepEqual(checkpointTimes(60, 10), [0, 10, 20, 30, 40, 50, 60]);
+  // An interval longer than the session, and one that does not divide it.
+  assert.deepEqual(checkpointTimes(60, 120), [0, 60]);
+  assert.deepEqual(checkpointTimes(65, 10), [0, 10, 20, 30, 40, 50, 60, 65]);
+  assert.deepEqual(checkpointTimes(0.5, 0.2), [0, 0.2, 0.4, 0.5]);
+  assert.throws(() => checkpointTimes(0, 10), /positive/);
+  assert.throws(() => checkpointTimes(60, 0), /positive/);
 });

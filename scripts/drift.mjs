@@ -24,6 +24,21 @@ export function wrap(x, period) {
 }
 
 /**
+ * When the checkpoints of a session of `seconds` fall, in seconds from its start: every `every`
+ * seconds from 0, and at the end, whether or not `every` divides the session. Always two or more,
+ * so a session is measured to its end whatever the interval.
+ * @param {number} seconds
+ * @param {number} every
+ */
+export function checkpointTimes(seconds, every) {
+  if (!(seconds > 0) || !(every > 0)) throw new Error("checkpointTimes needs a positive session and interval");
+  const times = [];
+  for (let k = 0; k * every < seconds - 1e-9; k++) times.push(k * every);
+  times.push(seconds);
+  return times;
+}
+
+/**
  * The left edge of the probe's white bar in row `y` of a screenshot, or -1 if it is not there.
  * @param {{width: number, pixel: (x: number, y: number) => number[]}} png
  * @param {number} y
