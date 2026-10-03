@@ -91,6 +91,8 @@ describe("decodeMidi and checkMidi", () => {
     ["status byte FE", track([0x00, 0xfe, ...EOT]), /unexpected status byte/],
     ["data byte above 127", track([0x00, 0x90, 60, 0xc8, ...EOT]), /bad data byte/],
     ["5-byte delta time", track([0x81, 0x81, 0x81, 0x81, 0x01, 0x90, 60, 100, ...EOT]), /bad variable-length number/],
+    ["a 4097-byte text event", track([0x00, 0xff, 0x01, 0xa0, 0x01, ...Array(4097).fill(0x41), ...note, ...EOT]), /text event longer than 4096 bytes/],
+    ["a 4097-byte track name", track([0x00, 0xff, 0x03, 0xa0, 0x01, ...Array(4097).fill(0x41), ...note, ...EOT]), /text event longer than 4096 bytes/],
     ["meta length past the track", track([0x00, 0xff, 0x01, 0x7f, 0x41, ...EOT]), /truncated/],
     ["End-of-Track at tick 0", track([0x00, 0x90, 60, 100, ...EOT]), "midi: loop shorter than 50 ms (byte 30)"],
     ["a loop of 192 ticks at 1 us per quarter note", track([0x00, 0xff, 0x51, 0x03, 0, 0, 1, ...note, 0x81, 0x00, 0xff, 0x2f, 0x00]), /loop shorter than 50 ms/],
@@ -98,6 +100,12 @@ describe("decodeMidi and checkMidi", () => {
   for (const [label, bytes, message] of bad) {
     test(`rejects: ${label}`, () => throwsExactly(() => checkMidi(new Uint8Array(bytes)), message));
   }
+
+  test("text events up to 4096 bytes are accepted, and other meta events of any length", () => {
+    const text = (/** @type {number} */ type, /** @type {number} */ n) => [0x00, 0xff, type, 0x80 | (n >> 7), n & 127, ...Array(n).fill(0x41)];
+    const body = [...text(0x01, 4096), ...text(0x7f, 5000), ...note, ...EOT];
+    assert.equal(checkMidi(new Uint8Array(track(body))).maxTick, 96);
+  });
 
   test("format 1: End-of-Track tick is the latest track's; tempo map from every track", () => {
     const f1 = smf({ format: 1, ppq: 100, tracks: [[[0, 0xff, 0x51, 0x03, 0x0f, 0x42, 0x40], [400, 0xff, 0x2f, 0x00]], [[0, 0x90, 60, 100], [300, 0x80, 60, 0], [500, 0xff, 0x2f, 0x00]]] });

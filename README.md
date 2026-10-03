@@ -76,7 +76,7 @@ Alignment. The consumer's own pieces (`'{' ... base64,'`, `S`, `',' <pad>`) must
 `PAGE` is [`tests/fixtures/page.html`](tests/fixtures/page.html), byte for byte: head and styles, the engine `<script>` (the pinned fork build's exact bytes), a small ▶/■ button, the player `<script>`, then the opening of the settings block and its alignment spaces. The per-token `D` and the SVG follow it at call time. The player ([`player/player.js`](player/player.js) and [`player/settings.js`](player/settings.js), flattened into one plain script and minified) starts on DOMContentLoaded:
 
 - **Art first.** It shows the art block in an `<img>` as `data:image/svg+xml;base64,...` (the SVG re-encoded as UTF-8), before and independently of the settings and the MIDI. The art fills the frame; the button overlays the bottom-right corner.
-- **Settings and MIDI.** It parses and validates `SETTINGS` (`parseSettings`, with the same checks and messages as Cairo), and decodes the MIDI block (strict base64 after trimming the alignment spaces) and checks it (`checkMidi`). The check guarantees that TinySynth's parser reads the file as written and that looping is safe: it rejects running status without a channel status, tempo events that are not 3 bytes (with a one-byte length) or are 0, a track without End-of-Track at its end, format 2, SMPTE timing, and a loop shorter than 50 ms.
+- **Settings and MIDI.** It parses and validates `SETTINGS` (`parseSettings`, with the same checks and messages as Cairo), and decodes the MIDI block (strict base64 after trimming the alignment spaces) and checks it (`checkMidi`). The check guarantees that TinySynth's parser reads the file as written and that looping is safe: it rejects running status without a channel status, tempo events that are not 3 bytes (with a one-byte length) or are 0, text events over 4 KB, a track without End-of-Track at its end, format 2, SMPTE timing, and a loop shorter than 50 ms.
 - **Fail closed (spec D9).** On any of these errors ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and logged. No synth is created. The art stays.
 - **▶** (a click or tap) constructs TinySynth on the first press (`createSynth`), resumes the `AudioContext` inside the gesture, reloads the MIDI (back to tick 0 at the song's starting tempo, keeping any rest before the first event), loops at End-of-Track with `setLoop(1)` and `setLoopEnd(maxTick)`, and starts playback. It then restarts the art when tick 0 is heard: after TinySynth's scheduling offset (`playTime - currentTime`, 100 ms) plus `AudioContext.outputLatency`, it re-creates the `<img>` with a distinct but equivalent URL (`data:image/svg+xml;r=<n>;base64,...`), so the browser starts a new animation timeline, and swaps it in once decoded.
 - **■** stops playback and cancels a pending art restart. The art keeps running.
@@ -86,14 +86,14 @@ Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) recor
 
 | | Bytes |
 | --- | --- |
-| `PAGE` | 45,315 |
+| `PAGE` | 45,387 |
 | of which the engine | 37,060 |
-| of which the player (minified) | 7,064 |
-| `PAGE` without the player's settings range re-check (`validateSettings`) | 44,037 (1,278 less) |
-| `animation_url_segment()` | 80,612 |
+| of which the player (minified) | 7,129 |
+| `PAGE` without the player's settings range re-check (`validateSettings`) | 44,100 (1,287 less) |
+| `animation_url_segment()` | 80,740 |
 | `license()` | 2,594 |
 
-The range re-check stays for now (spec Q4); dropping it would save the 1,278 bytes above.
+The range re-check stays for now (spec Q4); dropping it would save the 1,287 bytes above.
 
 The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own minified player script in `node:vm` against a fake DOM, with a recording engine and with the real engine on a WebAudio mock) and in headless Chromium (`npm run page-check`: as an offline `data:` URI, in a sandboxed iframe and under a strict CSP; the loop period against `maxTick x tick2Time`, the art restart by screenshots of a probe animation, and the failure paths).
 
@@ -107,7 +107,7 @@ Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`.
 | `midi_segment(midi: ByteArray, settings: SynthSettings) -> ByteArray` | `b64(b64(D))`: the token's settings and MIDI blocks, then opens the art block. Validates `settings` and encodes only per-token data. |
 | `base64(data: ByteArray) -> ByteArray` | Standard RFC 4648 base64 with `=` padding, for consumers encoding their own JSON pieces. |
 | `script_sha256() -> u256` | Constant SHA-256 of the embedded engine JS (big-endian). |
-| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.1'`. |
+| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.2'` (see [Build pipeline](#build-pipeline)). |
 | `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice. |
 
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
@@ -351,9 +351,9 @@ A stub class serving only the `page_data` constants (`animation_url_segment`, `s
 
 | | Stub class | Same class, empty constants | Limit |
 | --- | --- | --- | --- |
-| Sierra program | 7,372 felts | 204 felts | |
+| Sierra program | 7,382 felts | 204 felts | |
 | Contract class as declared (Sierra, entry points, ABI) | 324 KB | 9 KB | 4,089,446 bytes |
-| CASM bytecode | 3,739 felts | 311 felts | 81,920 felts |
+| CASM bytecode | 3,743 felts | 311 felts | 81,920 felts |
 
 The constants take about 8% of the class size limit and 4% of the bytecode limit.
 

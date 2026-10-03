@@ -35,6 +35,11 @@ export const STOP_ICON = "M6 6h12v12H6z";
 
 /** A loop shorter than this would make TinySynth's scheduler spin; such MIDI is rejected. */
 const MIN_LOOP_SECONDS = 0.05;
+/**
+ * TinySynth decodes text meta events (text, copyright, track and instrument names, device) with
+ * `String.fromCharCode.apply`, whose argument count browsers limit; longer ones are rejected.
+ */
+const MAX_TEXT_BYTES = 4096;
 
 /**
  * Decodes the MIDI block: base64 (strict RFC 4648, `=` padding) after trimming the alignment spaces
@@ -62,7 +67,8 @@ export function decodeMidi(text) {
  * So this rejects, beyond plain format errors: running status with no channel status before it in
  * the track, or after a meta or SysEx event; a tempo event that is not 3 bytes (with a one-byte
  * length) or is 0; status bytes F1-F6 and F8-FE; data bytes above 127; a track without
- * End-of-Track exactly at its end; format 2 and SMPTE timing; and a loop of under 50 ms (End-of-Track at tick 0, or a tempo so fast that one
+ * End-of-Track exactly at its end; text meta events over 4096 bytes; format 2 and SMPTE timing;
+ * and a loop of under 50 ms (End-of-Track at tick 0, or a tempo so fast that one
  * pass takes almost no time), on which the looping scheduler would never catch up.
  * @param {Uint8Array} u
  * @returns {{maxTick: number, seconds: number}}
@@ -126,7 +132,9 @@ export function checkMidi(u) {
           if (n || p !== end) fail("End-of-Track is not at the end of its track");
           break;
         }
-        if (type === 0x51) {
+        if ((type >= 1 && type <= 4) || type === 9) {
+          if (n > MAX_TEXT_BYTES) fail("text event longer than " + MAX_TEXT_BYTES + " bytes");
+        } else if (type === 0x51) {
           // TinySynth reads the tempo at a fixed offset: its length must be the single byte 03.
           if (n !== 3 || p !== at + 1 || !(u[p] | u[p + 1] | u[p + 2])) fail("bad tempo");
           tempos.push([tick, (u[p] << 16) | (u[p + 1] << 8) | u[p + 2]]);
