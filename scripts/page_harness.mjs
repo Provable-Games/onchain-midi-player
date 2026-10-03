@@ -122,9 +122,10 @@ export function parseDocument(html) {
 /**
  * Runs the page's shim and player on `html`. Returns the fake DOM, the engine's record and controls.
  * @param {string} html
- * @param {{engine?: "fake" | "real", outputLatency?: number, constructError?: string, resumeError?: string}} [options]
- *   constructError: the fake engine's constructor throws this message; resumeError: its
- *   AudioContext's resume() rejects with this message
+ * @param {{engine?: "fake" | "real", outputLatency?: number | null, constructError?: string, resumeError?: string}} [options]
+ *   outputLatency: the AudioContext's, in seconds, or null for a context without the property (an
+ *   engine that does not support it); constructError: the fake engine's constructor throws this
+ *   message; resumeError: its AudioContext's resume() rejects with this message
  */
 export function runPage(html, { engine = "fake", outputLatency = 0.02, constructError, resumeError } = {}) {
   const doc = parseDocument(html);
@@ -234,7 +235,8 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     const Real = sandbox.WebAudioTinySynth;
     sandbox.WebAudioTinySynth = function (/** @type {any} */ opts) {
       const synth = new Real(opts);
-      synth.getAudioContext().outputLatency = outputLatency;
+      if (outputLatency === null) delete synth.getAudioContext().outputLatency;
+      else synth.getAudioContext().outputLatency = outputLatency;
       // Only the page's own calls are recorded, not the engine's calls to itself (loadMIDI calls
       // stopMIDI, for example).
       let depth = 0;
@@ -261,7 +263,7 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     sandbox.WebAudioTinySynth = function FakeSynth(/** @type {any} */ opts) {
       if (constructError) throw new Error(constructError);
       const ctx = {
-        state: "suspended", currentTime: 1.5, outputLatency,
+        state: "suspended", currentTime: 1.5, ...(outputLatency === null ? {} : { outputLatency }),
         createGain: () => ({
           gain: { value: 1 },
           connect: (/** @type {any} */ to) => calls.push(["connect", to.name]),
