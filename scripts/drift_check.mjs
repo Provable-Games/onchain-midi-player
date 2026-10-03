@@ -51,7 +51,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { collectErrors, launchBrowser } from "./browsers.mjs";
-import { DRIFT_LIMITS, artOffsetMs, barX, checkpointTimes, clockAt, clockDrift, largestStep, leads, median, passGrid, passStarts, trend, withinDriftLimits } from "./drift.mjs";
+import { DRIFT_LIMITS, artOffsetMs, barMoved, barX, checkpointTimes, clockAt, clockDrift, largestStep, leads, median, passGrid, passStarts, trend, withinDriftLimits } from "./drift.mjs";
 import { fixtureCase, tokenPage } from "./fixture_pages.mjs";
 import { ART_OPEN, HTML_PREFIX, VERSION, b64 } from "./page.mjs";
 import { decodePng } from "./png.mjs";
@@ -237,7 +237,11 @@ try {
   });
 
   const found = rows.every((r) => r.found);
-  check(found, `the art ran all session: the bar found in all ${SHOTS} screenshots at each of the ${rows.length} checkpoints`);
+  // Found and moving: a frozen art would keep the bar in place, which only the drift (not checked
+  // with --drift-info) would otherwise show.
+  const stuck = rows.filter((r) => !barMoved(r.xs)).map((r) => clock(r.t));
+  check(found && !stuck.length, `the art ran all session: the bar found, and moving, in the ${SHOTS} screenshots of each of the ${rows.length} checkpoints` +
+    (stuck.length ? `; still at ${stuck.join(", ")}` : ""));
   const art = found ? trend(rows.map((r) => [r.t, r.offsetMs])) : { driftMs: NaN, maxResidualMs: NaN };
   Object.assign(summary, {
     firstOffsetMs: rows[0].offsetMs, lastOffsetMs: rows[rows.length - 1].offsetMs, artDriftMs: art.driftMs, maxResidualMs: art.maxResidualMs,

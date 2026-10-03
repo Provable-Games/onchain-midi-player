@@ -65,6 +65,16 @@ export function barX(png, y) {
 }
 
 /**
+ * Whether the probe's bar moved across a checkpoint's screenshots: found in each, and not in the
+ * same place in all. A moving bar crosses its 390 pixels once per pass, so screenshots 150 ms or
+ * more apart differ; a frozen art leaves it where it stopped.
+ * @param {number[]} xs the bar's position in each screenshot (-1: not found)
+ */
+export function barMoved(xs) {
+  return xs.length > 1 && xs.every((x) => x >= 0) && new Set(xs).size > 1;
+}
+
+/**
  * The art's offset from the sound at one instant, in ms (positive: the art is ahead). The probe's
  * bar at `x` of its `travel` pixels is that far through a sweep of `period` seconds that started
  * with the art's restart; the sound heard is at AudioContext time `heard`, and the first pass

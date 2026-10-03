@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DRIFT_LIMITS, artOffsetMs, barX, checkpointTimes, clockAt, clockDrift, fitLine, largestStep, leads, median, passGrid, passStarts, trend, withinDriftLimits, wrap } from "./drift.mjs";
+import { DRIFT_LIMITS, artOffsetMs, barMoved, barX, checkpointTimes, clockAt, clockDrift, fitLine, largestStep, leads, median, passGrid, passStarts, trend, withinDriftLimits, wrap } from "./drift.mjs";
 
 const close = (/** @type {number} */ a, /** @type {number} */ b, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 
@@ -161,4 +161,12 @@ test("withinDriftLimits: one 30 ms audio-clock stall exceeds them in a 1-minute 
   assert.equal(withinDriftLimits(firefox), true);
   assert.equal(withinDriftLimits({ driftMs: -20.5, maxResidualMs: 0 }), false);
   assert.equal(withinDriftLimits({ driftMs: 0, maxResidualMs: 20.5 }), false);
+});
+
+test("barMoved: a moving bar, even across its wrap, but not a frozen or missing one", () => {
+  assert.equal(barMoved([12, 47, 81, 116, 150, 185, 219]), true);
+  assert.equal(barMoved([320, 355, 389, 3, 37, 72, 106]), true);
+  assert.equal(barMoved([150, 150, 150, 150, 150, 150, 150]), false);
+  assert.equal(barMoved([12, 47, -1, 116, 150, 185, 219]), false);
+  assert.equal(barMoved([42]), false);
 });
