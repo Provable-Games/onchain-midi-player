@@ -99,7 +99,13 @@ Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) recor
 
 The player does not re-check settings ranges: dropping that re-check (and the install path's custom-wave guards, which only repeated Cairo rules) saved 1,512 bytes of the uncompressed `PAGE` (45,810 to 44,298). The build fails if a validation rule reappears in the player.
 
-The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own shim and minified player script in `node:vm` against a fake DOM, the shim inflating the real engine from the page's payload, with a recording engine and with the real engine on a WebAudio mock; [`player/gunzip.test.js`](player/gunzip.test.js): the shim's inflation) and in headless Chromium (`npm run page-check`: as an offline `data:` URI, in a sandboxed iframe and under a strict CSP; the inflation and its order, the loop period against `maxTick x tick2Time`, the art restart by screenshots of a probe animation, and the failure paths, including a corrupt, truncated or missing gzip payload).
+The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own shim and minified player script in `node:vm` against a fake DOM, the shim inflating the real engine from the page's payload, with a recording engine and with the real engine on a WebAudio mock; [`player/gunzip.test.js`](player/gunzip.test.js): the shim's inflation) and in headless Chromium, Firefox and WebKit (`npm run page-check`: as an offline `data:` URI, in a sandboxed iframe and under a strict CSP; the inflation and its order, the loop period against `maxTick x tick2Time`, the art restart by screenshots of a probe animation, and the failure paths, including a corrupt, truncated or missing gzip payload).
+
+Engine differences the browser checks show (Playwright's builds: Chromium 153, Firefox 155, WebKit 26.6):
+
+- **Firefox needs an audio output device.** Without one, its `AudioContext` never leaves `suspended` and `resume()` never settles: ▶ turns into ■, but nothing plays and the art does not restart. CI gives Firefox a PulseAudio null sink (see [CI](#ci)). On it, `resume()` takes up to about 2 s to settle (Chromium and WebKit: well under half a second). The art restart still lands on tick 0, because the player times it from `playTime` once `resume()` has settled.
+- **`AudioContext.outputLatency`**: Chromium's headless shell reports 32 ms, Firefox on the null sink 35-50 ms, and WebKit 0 (it has the property but reports no latency). So on WebKit the art restart includes only TinySynth's 100 ms scheduling offset, and any real output latency puts the art that far ahead of the sound. Where the property is missing, the player counts it as 0.
+- The art restart, the End-of-Track loop timing (exact to 1e-6 s), the failure paths and the offline renders of the reference timbres agree on all three engines.
 
 ### The gzipped engine
 
@@ -403,7 +409,7 @@ let lfo = Operator {
 let lead = Timbre { drum: false, slot: 0, operators: [carrier, lfo].span() };
 ```
 
-The kick and snare are in `scripts/settings_fixtures.mjs`. `npm run render-check` renders all three sounds in headless Chromium and measures them (optional; needs Playwright). The checks: pitch and vibrato, the kick's pitch drop, and the snare's noise burst.
+The kick and snare are in `scripts/settings_fixtures.mjs`. `npm run render-check` renders all three sounds in a headless browser (Chromium, Firefox or WebKit; CI runs all three) and measures them (optional; needs Playwright). The checks: pitch and vibrato, the kick's pitch drop, and the snare's noise burst.
 
 ## MIDI requirements
 
@@ -531,9 +537,9 @@ npm run gen:settings     # regenerate tests/fixtures/settings.json and tests/set
 npm run check:settings   # fail if they are out of date
 npm ci && npm run gen:page   # rebuild the page, src/page_data.cairo and the page fixtures
 npm run check:page       # fail if any of them is out of date
-PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
-  npm run render-check   # optional: render the reference timbres in headless Chromium
-PLAYWRIGHT_CORE=... CHROME=... npm run page-check   # optional: the page in headless Chromium
+PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromium \
+  npm run render-check   # optional: render the reference timbres in a headless browser
+PLAYWRIGHT_CORE=... PLAYWRIGHT_BROWSER=firefox npm run page-check   # optional: the page; chromium, firefox or webkit
 ```
 
 The engine tests, the page build and the page checks use the vendored engine (`tests/vendor/`, SHA-256 checked on every load).
@@ -601,7 +607,7 @@ The consumer's whole library call, including reading the result, is 6.2M (see [G
 2. **Player page JS** (done, issue #8): MIDI decode, tap-to-start, play/stop, End-of-Track looping, latency-compensated art restart, offline only.
 3. **Offline build pipeline** (done, issue #9): verifies the pinned engine by SHA-256, gzips it (issue #14), assembles and aligns the page, and generates the pre-encoded Cairo constants plus golden fixtures (reference outputs for sample MIDI and art).
 4. **Cairo class implementation** (done, issue #10, apart from the encoder): the class, `midi_segment`, `SynthSettings` validation and encoding (issue #1), byte-for-byte parity with the JS reference fixtures directly and through `library_call`, the example ported to the class, and gas and class-size measurements. **Remaining:** swap the stand-in base64 encoder for `game_components_encoding` and re-measure.
-5. **Browser validation**: Chromium, Firefox and WebKit; playback, looping, art sync, and offline behaviour.
+5. **Browser validation** (started, issue #11): Chromium, Firefox and WebKit; playback, looping, art sync, and offline behaviour. CI runs every browser check on all three engines.
 6. **Docs and declaration**: finalize docs, declare on Sepolia, then on mainnet, and publish the class hashes.
 
 ## Open decisions
@@ -625,7 +631,9 @@ GitHub Actions runs on every pull request and on pushes to `main`, on `ubuntu-24
 | `cairo` | Scarb 2.20.1 and snforge 0.64.0 from `.tool-versions`: `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer`; the Scarb lockfiles stay unchanged |
 | `javascript` | Node 24: the example's Node tests; `npm ci` (when `package-lock.json` exists) and `npm test` when the root `package.json` has a `test` script; `tsc --checkJs` on `player/` when it exists |
 | `generated` | Reruns the example's `gen_fixtures.mjs`, then `npm run check:settings` and `npm run check:page` (the engine hash, the page, `src/page_data.cairo` and the page fixtures) when those scripts exist, then fails on any diff |
-| `browser` | Installs Playwright's Chromium headless shell with its system libraries, then runs the example's `browser_check.mjs` and, when those scripts exist, `npm run render-check` and `npm run page-check`. Firefox and WebKit follow in roadmap phase 5 |
+| `browser` | Passes when all three engine legs pass. Each leg, `browser (chromium)`, `browser (firefox)` and `browser (webkit)` (fail-fast off), installs that Playwright browser (for Chromium, its headless shell) with its system libraries, then runs the example's `browser_check.mjs` and, when those scripts exist, `npm run render-check` and `npm run page-check`, with `PLAYWRIGHT_BROWSER` set to its engine. The Firefox leg first starts PulseAudio with a null sink: Firefox runs an `AudioContext` only with an audio output device, and the runner has no sound card |
+
+The browser checks are the same on every engine but one: that the gzip tag's `data:` URI is never fetched shows directly only through Chromium's DevTools protocol, because Playwright's request events, `route()` and Resource Timing skip `data:` URLs on every engine. On Firefox and WebKit, `page-check` and `browser_check.mjs` print `skip` for that check on each load. `page-check` proves it on every engine another way: its strict-CSP load reports no violation, although the CSP blocks `data:` scripts, and a control page under the same CSP shows that the engine reports a violation for a plain `<script src="data:...">`. The checks also turn off Firefox's tab icons (`browser.chrome.site_icons`): Firefox fetches `/favicon.ico` for every http(s) page by itself, and the page never asks for it.
 
 The optional steps switch on by themselves when the root `package.json`, its scripts or `player/` exist ([`.github/scripts/ci-detect.sh`](.github/scripts/ci-detect.sh)). TypeScript, `@types/node` and `playwright-core` are pinned in [`.github/ci-tools`](.github/ci-tools); Dependabot updates them and the actions monthly.
 
@@ -652,14 +660,17 @@ git diff --exit-code                     # generators left no drift
 T=.github/ci-tools/node_modules
 $T/.bin/tsc --noEmit --allowJs --checkJs --target es2022 --module nodenext \
   --moduleResolution nodenext --lib es2022,dom --typeRoots $T/@types --types node player/*.js
-(cd .github/ci-tools && npx playwright-core install --only-shell chromium)   # add --with-deps for system libraries
-PLAYWRIGHT_CORE="$PWD/$T/playwright-core" sh -c \
-  'cd examples/beast_consumer && node scripts/browser_check.mjs'
-PLAYWRIGHT_CORE="$PWD/$T/playwright-core" npm run render-check
-PLAYWRIGHT_CORE="$PWD/$T/playwright-core" npm run page-check
+(cd .github/ci-tools && npx playwright-core install --only-shell chromium && npx playwright-core install firefox webkit)   # add --with-deps for system libraries
+export PLAYWRIGHT_CORE="$PWD/$T/playwright-core"
+for PLAYWRIGHT_BROWSER in chromium firefox webkit; do   # the browser checks, on each engine
+  export PLAYWRIGHT_BROWSER
+  (cd examples/beast_consumer && node scripts/browser_check.mjs)
+  npm run render-check
+  npm run page-check
+done
 
 # Review helpers
 python3 -I -B -m unittest discover -s .github/scripts -p 'test_*.py'
 ```
 
-To use a Chromium you already have, set `CHROME=/path/to/chrome-headless-shell` (and `LD_LIBRARY_PATH` if it needs extra libraries) instead of installing one.
+`PLAYWRIGHT_BROWSER` is `chromium` when unset. Firefox needs an audio output device: on a machine without one (a container or a server), start PulseAudio with a null sink first, as CI does (`pulseaudio --start --exit-idle-time=-1 && pactl load-module module-null-sink && pactl set-default-sink null`). To use a Chromium you already have, set `CHROME=/path/to/chrome-headless-shell` (and `LD_LIBRARY_PATH` if it needs extra libraries) instead of installing one; it applies only to `chromium`.
