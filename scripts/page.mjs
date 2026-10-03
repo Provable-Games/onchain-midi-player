@@ -264,27 +264,55 @@ export const midiSegment = (/** @type {Uint8Array} */ midi, /** @type {SynthSett
 // The consumer's token_uri (the Beasts layout)
 // ---------------------------------------------------------------------------------------------
 
+/** A Cairo ByteArray word: a piece appended at a multiple of 31 bytes is copied word by word. */
+export const WORD_BYTES = 31;
+/** `b64(' ' + IMAGE_KEY)`: the image key after one space, 36 bytes, so its own aligned piece. */
+export const IMAGE_KEY_B64 = b64(" " + IMAGE_KEY);
+
 /**
  * The consumer's own pieces for given JSON members and SVG, padded with JSON whitespace.
+ *
+ * With `align`, the consumer also adds groups of 3 spaces between JSON tokens (`b64('   ')` is the
+ * constant `'ICAg'`; 4 and 31 are coprime, so at most 30 groups) so that its two largest appends
+ * start on a 31-byte word boundary of its `token_uri` ByteArray, where `ByteArray::append` copies
+ * whole words instead of splitting every word in two:
+ * - the first `b64(S)`: the consumer encodes `'{' members ',' <pad>` (padded to a multiple of 3),
+ *   appends `'ICAg'` groups, then the constant `IMAGE_KEY_B64`, the 48-character
+ *   `b64(' "image":"data:image/svg+xml;base64,')` (the image key after one space is 36 bytes);
+ * - `animation_url_segment()`: the comma piece is the constant `'LCAg'` (`b64(',  ')`), then
+ *   `'ICAg'` groups.
+ * None of the alignment spaces is base64-encoded at call time, and every piece is still a multiple
+ * of 3 bytes, so the base64 layout is unchanged.
  * @param {string} mem
  * @param {string} svg
+ * @param {{align?: boolean}} [options]
  */
-export function consumerPieces(mem, svg) {
+export function consumerPieces(mem, svg, { align = false } = {}) {
   const svgB64 = b64(svg);
-  const headPad = padLen(blen("{" + mem + "," + IMAGE_KEY), 3);
-  const head = "{" + mem + "," + spaces(headPad) + IMAGE_KEY;
+  const open = "{" + mem + ",";
+  let headPad = padLen(blen(open + IMAGE_KEY), 3);
   const sPad = padLen(svgB64.length + 1, 3);
   const s = svgB64 + '"' + spaces(sPad);
-  return { svgB64, head, headPad, s, sPad, comma: ",  " };
+  let comma = ",  ";
+  if (align) {
+    const b64Len = (/** @type {number} */ n) => (n / 3) * 4;
+    headPad = padLen(blen(open), 3) + 1;
+    while ((JSON_PREFIX.length + b64Len(blen(open) + headPad + IMAGE_KEY.length)) % WORD_BYTES) headPad += 3;
+    const segmentAt = JSON_PREFIX.length + b64Len(blen(open) + headPad + IMAGE_KEY.length) + b64Len(blen(s));
+    while ((segmentAt + b64Len(comma.length)) % WORD_BYTES) comma += "   ";
+  }
+  const head = open + spaces(headPad) + IMAGE_KEY;
+  return { svgB64, head, headPad, s, sPad, comma };
 }
 
 /**
  * The spliced token_uri for any members, SVG, 9-aligned page and 9-aligned D, assembled exactly as
  * a consumer contract does it.
  * @param {{mem: string, svg: string, pageHtml: string, d: string}} parts
+ * @param {{align?: boolean}} [options] see consumerPieces
  */
-export function spliceTokenUri({ mem, svg, pageHtml, d }) {
-  const c = consumerPieces(mem, svg);
+export function spliceTokenUri({ mem, svg, pageHtml, d }, options = {}) {
+  const c = consumerPieces(mem, svg, options);
   for (const piece of [c.head, c.s, c.comma]) if (blen(piece) % 3) throw new Error("unaligned piece");
   if (blen(d) % 9) throw new Error("D not 9-aligned");
   const sB64 = b64(c.s);
@@ -296,18 +324,22 @@ export function spliceTokenUri({ mem, svg, pageHtml, d }) {
  * once. Its whitespace between JSON tokens is the same insignificant whitespace the spliced version
  * uses for alignment.
  * @param {{mem: string, svg: string, pageHtml: string, d: string}} parts
+ * @param {{align?: boolean}} [options] see consumerPieces
  */
-export function naiveTokenJson({ mem, svg, pageHtml, d }) {
-  const c = consumerPieces(mem, svg);
+export function naiveTokenJson({ mem, svg, pageHtml, d }, options = {}) {
+  const c = consumerPieces(mem, svg, options);
   return (
     "{" + mem + "," + spaces(c.headPad) +
-    IMAGE_KEY + c.svgB64 + '"' + spaces(c.sPad) + ",  " +
+    IMAGE_KEY + c.svgB64 + '"' + spaces(c.sPad) + c.comma +
     URL_KEY + b64(pageHtml + d + svg) + '"' + spaces(c.sPad) +
     "}"
   );
 }
 
-export const naiveTokenUri = (/** @type {Parameters<typeof naiveTokenJson>[0]} */ parts) => JSON_PREFIX + b64(naiveTokenJson(parts));
+export const naiveTokenUri = (
+  /** @type {Parameters<typeof naiveTokenJson>[0]} */ parts,
+  /** @type {{align?: boolean}} */ options = {},
+) => JSON_PREFIX + b64(naiveTokenJson(parts, options));
 
 /**
  * Decodes a token_uri exactly as a marketplace would: JSON layer, then the two data URIs. Every
@@ -379,6 +411,21 @@ export function constFeltArray(name, felts) {
   const head = `const ${name}: [felt252; ${felts.length}] = [`;
   const inline = `${head}${felts.join(", ")}];`;
   return inline.length <= 100 ? inline : [head, fillLines(felts, 4), "];"].join("\n");
+}
+
+/**
+ * A ByteArray constant as a string literal in a function body. The compiler lowers a literal to
+ * the ByteArray's words as constants, so materializing it costs a fraction of deserializing a
+ * `const` felt array (0.28M against 3.70M L2 gas for the 42,644-byte segment), for a larger class
+ * (about 130 KB and 2,700 CASM felts more for the page constants; README, "Class size"). Only for
+ * base64 text, which needs no escaping; `scarb fmt` leaves the long literal line alone.
+ * @param {string} fnName
+ * @param {string} text
+ * @param {string[]} doc
+ */
+export function cairoBase64Literal(fnName, text, doc) {
+  if (!/^[A-Za-z0-9+/=]*$/.test(text)) throw new Error(`${fnName}: not base64 text`);
+  return [...doc.map((l) => (l ? `/// ${l}` : "///")), `pub fn ${fnName}() -> ByteArray {`, `    "${text}"`, "}"].join("\n");
 }
 
 /**

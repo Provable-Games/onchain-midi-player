@@ -5,7 +5,7 @@
 //! onchain. scripts/art_safety.test.mjs has the same check in JavaScript (`assertArtSafe`) and
 //! shows the failure.
 
-use beast_consumer::beast_like_nft::{beast_image, render_svg, token_data};
+use beast_consumer::beast_like_nft::{beast_image, render_svg, token_data, token_svg};
 use crate::golden;
 
 /// Whether `svg` contains `</script` in any letter case (ASCII).
@@ -41,6 +41,13 @@ fn rendered_svgs_never_contain_script_end_tag() {
         let svg = render_svg(@name, tier, @beast_image());
         assert(!contains_script_end_tag(@svg), 'svg contains </script');
     }
+}
+
+// Token 4's art is a real Beast SVG, as the Beasts renderer produced it.
+#[test]
+fn real_beast_svg_never_contains_script_end_tag() {
+    let (name, tier) = token_data(4);
+    assert(!contains_script_end_tag(@token_svg(4, @name, tier)), 'svg contains </script');
 }
 
 #[test]

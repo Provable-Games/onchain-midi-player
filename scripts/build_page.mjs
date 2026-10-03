@@ -21,8 +21,9 @@
 //   5. Writes tests/fixtures/page.html (PAGE, byte for byte) and src/page_data.cairo (generated:
 //      animation_url_segment pre-encoded at both base64 layers, PAGE_LEN, SEGMENT_LEN,
 //      ENGINE_SHA256, GZIP_SHA256, GZIP_LEN, VERSION and the license text).
-//   6. Writes the golden fixtures for phase 4 (scripts/gen_page_fixtures.mjs):
-//      tests/fixtures/page.json and tests/page_fixtures.cairo.
+//   6. Writes the golden fixtures for the class (scripts/gen_page_fixtures.mjs):
+//      tests/fixtures/page.json and tests/page_fixtures.cairo, and the class's test fixtures
+//      (scripts/gen_class_fixtures.mjs): tests/class_fixtures.cairo.
 //
 // Usage (repository root, after `npm ci`):
 //   node scripts/build_page.mjs           write the files and print the sizes   (npm run gen:page)
@@ -38,11 +39,12 @@ import { gunzipSync } from "node:zlib";
 import { gzipSync } from "fflate";
 import { minify } from "terser";
 import { ENGINE_PIN, engineSource } from "./engine.mjs";
+import { classFixturesCairo } from "./gen_class_fixtures.mjs";
 import { pageFixtures } from "./gen_page_fixtures.mjs";
 import {
   GZIP_CLOSE, GZIP_OPEN, PAGE_PATH, PAGE_VERSIONS_PATH, SETTINGS_OPEN, SHIM_PIN, VERSION, b64, blen, bytes,
-  cairoByteArrayConst, checkPage, checkPageVersion, countCI, licenseText, padLen, pageScripts, segmentFor, sha256,
-  shimLicense, spaces,
+  cairoBase64Literal, cairoByteArrayConst, checkPage, checkPageVersion, countCI, licenseText, padLen, pageScripts,
+  segmentFor, sha256, shimLicense, spaces,
 } from "./page.mjs";
 import { gunzip } from "../player/gunzip.js";
 import { PLAY_ICON } from "../player/player.js";
@@ -50,6 +52,7 @@ import { PLAY_ICON } from "../player/player.js";
 export const CAIRO_PATH = new URL("../src/page_data.cairo", import.meta.url);
 export const FIXTURES_JSON_PATH = new URL("../tests/fixtures/page.json", import.meta.url);
 export const FIXTURES_CAIRO_PATH = new URL("../tests/page_fixtures.cairo", import.meta.url);
+export const CLASS_FIXTURES_PATH = new URL("../tests/class_fixtures.cairo", import.meta.url);
 
 /** Terser options. Changing them (or the Terser version) changes PAGE. */
 const TERSER_OPTIONS = /** @type {import("terser").MinifyOptions} */ ({
@@ -202,7 +205,7 @@ export async function build() {
     version: VERSION, license, engineCommit: ENGINE_PIN.commit, engineSha256: ENGINE_PIN.sha256,
     gzipSha256, gzipLen: engineGzip.length, shimSha256: sha256(shim),
   });
-  return { page, cairo, fixtures, sizes, segment };
+  return { page, cairo, fixtures, classFixtures: classFixturesCairo(page), sizes, segment };
 }
 
 /**
@@ -255,8 +258,10 @@ pub const GZIP_LEN: u32 = ${sizes.gzip};
 /// \`version()\`: the engine pin and the page version.
 pub const VERSION: felt252 = '${VERSION}';
 
-${cairoByteArrayConst("animation_url_segment", "ANIMATION_URL_SEGMENT", segment, [
+${cairoBase64Literal("animation_url_segment", segment, [
   "The `animation_url` JSON member, pre-encoded at both layers, left open for `midi_segment()`.",
+  "A string literal: the compiler stores its words as constants, which is the cheapest way to",
+  "materialize it (see `cairoBase64Literal` in scripts/page.mjs).",
 ])}
 
 ${cairoByteArrayConst("license", "LICENSE", license, [
@@ -265,13 +270,14 @@ ${cairoByteArrayConst("license", "LICENSE", license, [
 ])}
 `;
   // scarb fmt rewraps comment lines longer than 100 characters; keep the output formatter-stable.
-  const long = src.split("\n").find((line) => line.length > 100);
+  // It leaves string literals alone: the segment's base64 literal is the only long line.
+  const long = src.split("\n").find((line) => line.length > 100 && !/^ {4}"[A-Za-z0-9+/=]*"$/.test(line));
   if (long) throw new Error(`generated Cairo line longer than 100 characters: ${long}`);
   return src;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const { page, cairo, fixtures, sizes } = await build();
+  const { page, cairo, fixtures, classFixtures, sizes } = await build();
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
   let recorded;
   try {
@@ -282,6 +288,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
   const files = /** @type {Array<[URL, string]>} */ ([
     [PAGE_PATH, page], [CAIRO_PATH, cairo], [FIXTURES_JSON_PATH, fixtures.json], [FIXTURES_CAIRO_PATH, fixtures.cairo],
+    [CLASS_FIXTURES_PATH, classFixtures],
     [PAGE_VERSIONS_PATH, JSON.stringify(recorded, null, 2) + "\n"],
   ]);
   if (process.argv.includes("--check")) {

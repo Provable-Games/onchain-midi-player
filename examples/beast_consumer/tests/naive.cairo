@@ -1,14 +1,15 @@
 //! Naive reference: the token JSON built plainly as one string, with standard nested data URIs,
 //! then base64-encoded once. No splicing and no pre-encoded pieces.
 //!
-//! It uses its own table-based, byte-at-a-time encoder (not the mock's), and the raw PAGE from
-//! the generated golden file (the contract only stores PAGE pre-encoded). The whitespace between
-//! JSON tokens is the same insignificant whitespace the contract uses for alignment;
-//! scripts/gen_fixtures.mjs checks that the decoded JSON equals the compact JSON.
+//! It uses its own table-based, byte-at-a-time encoder (not the class's), and the raw PAGE from
+//! the generated golden file (the class only stores PAGE pre-encoded). The whitespace between
+//! JSON tokens is the same insignificant whitespace the contract uses for alignment, computed here
+//! from lengths alone; scripts/gen_fixtures.mjs checks that the decoded JSON equals the compact
+//! JSON.
 
-use beast_consumer::beast_like_nft::{beast_image, members, render_svg, token_data};
-use beast_consumer::mock_tinysynth::settings_ascii;
+use beast_consumer::beast_like_nft::{members, token_data, token_svg};
 use beast_consumer::sound;
+use onchain_tinysynth::settings::encode;
 use crate::golden;
 
 fn alphabet() -> Span<u8> {
@@ -72,32 +73,50 @@ pub fn naive_animation_html(token_id: u256) -> ByteArray {
     let (name, tier) = token_data(token_id);
     let midi_open: ByteArray = "</script><script type=\"text/plain\" id=\"midi\">";
     let art_open: ByteArray = "</script><script type=\"text/plain\" id=\"art\">";
-    let mut d = settings_ascii(@sound::settings_for(tier));
+    let mut d = encode(@sound::token_settings(token_id, tier));
     d.append(@midi_open);
-    d.append(@naive_b64(@sound::midi()));
+    d.append(@naive_b64(@sound::token_midi(token_id)));
     d.append(@spaces((9 - (d.len() + art_open.len()) % 9) % 9));
     d.append(@art_open);
     let mut html = golden::page();
     html.append(@d);
-    html.append(@render_svg(@name, tier, @beast_image()));
+    html.append(@token_svg(token_id, @name, tier));
     html
+}
+
+/// Length of the base64 of `n` bytes, `n` a multiple of 3.
+fn b64_len(n: usize) -> usize {
+    n / 3 * 4
 }
 
 /// The whole token JSON as one plain string.
 pub fn naive_token_json(token_id: u256) -> ByteArray {
     let (name, tier) = token_data(token_id);
-    let svg_b64 = naive_b64(@render_svg(@name, tier, @beast_image()));
+    let svg_b64 = naive_b64(@token_svg(token_id, @name, tier));
     let image_key: ByteArray = "\"image\":\"data:image/svg+xml;base64,";
     let mut json: ByteArray = "{";
     json.append(@members(token_id, @name, tier));
     json.append_byte(',');
-    json.append(@spaces((3 - (json.len() + image_key.len()) % 3) % 3));
+    // The head's spaces: to a multiple of 3, one before the image key, then 3 at a time until the
+    // first b64(S) starts on a 31-byte word of the token_uri (29 is the data URI prefix).
+    let mut head_pad = (3 - json.len() % 3) % 3 + 1;
+    while (29 + b64_len(json.len() + head_pad + image_key.len())) % 31 != 0 {
+        head_pad += 3;
+    }
+    json.append(@spaces(head_pad));
     json.append(@image_key);
+    let head_len = json.len();
     json.append(@svg_b64);
     json.append_byte('"');
     let s_pad = spaces((3 - (svg_b64.len() + 1) % 3) % 3);
     json.append(@s_pad);
-    json.append(@",  ");
+    // ',' and 2 spaces, then 3 at a time until the segment starts on a word.
+    let s_len = svg_b64.len() + 1 + s_pad.len();
+    let mut comma: ByteArray = ",  ";
+    while (29 + b64_len(head_len) + b64_len(s_len) + b64_len(comma.len())) % 31 != 0 {
+        comma.append(@"   ");
+    }
+    json.append(@comma);
     json.append(@"\"animation_url\":\"data:text/html;base64,");
     json.append(@naive_b64(@naive_animation_html(token_id)));
     json.append_byte('"');

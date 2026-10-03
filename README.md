@@ -6,13 +6,16 @@ A Cairo class library for Starknet that serves a fully onchain, offline-playable
 
 The interface is declared in [`src/interface.cairo`](src/interface.cairo) and the settings types in [`src/types.cairo`](src/types.cairo).
 
-Implemented so far:
+Implemented:
 - **Settings (issue #1):** validation and the `SETTINGS` encoding in [`src/settings.cairo`](src/settings.cairo), with its JavaScript counterpart in [`player/`](player). See [Sound settings and custom sounds](#sound-settings-and-custom-sounds).
 - **The player page (issue #8):** [`player/player.js`](player/player.js), with the settings module, in the fixed page `PAGE`. See [The player page](#the-player-page).
 - **The offline build pipeline (issue #9):** the pinned engine, the page build, the generated [`src/page_data.cairo`](src/page_data.cairo) and the golden fixtures for the class. See [Build pipeline](#build-pipeline).
 - **The gzipped engine (issue #14):** `PAGE` carries the engine gzipped, with a small gunzip shim, which nearly halves the segment and its gas. See [The gzipped engine](#the-gzipped-engine).
+- **The class (issue #10):** `OnchainTinySynth` in [`src/contract.cairo`](src/contract.cairo), with `midi_segment` in [`src/segment.cairo`](src/segment.cairo). It matches every golden fixture byte for byte, directly and through a library call. See [Gas and limits](#gas-and-limits).
 
-The class itself (`midi_segment`, the fast `base64`, the contract) is not implemented yet (phase 4, issue #10). See [Roadmap](#roadmap).
+> **Not ready to declare: the base64 encoder is a temporary stand-in.** [`src/base64.cairo`](src/base64.cairo) holds a byte-wise encoder until the maintainer's optimized encoder is published as `game_components_encoding`. The release gate (issue #12) must not pass with the stand-in in place. See [The base64 encoder](#the-base64-encoder-temporary-stand-in).
+
+See [Roadmap](#roadmap).
 
 ## How it works
 
@@ -70,7 +73,7 @@ Where:
 
 Decoded, the `animation_url` value after its `data:text/html;base64,` prefix is `b64(PAGE) ++ b64(D) ++ svg_b64`, which is standard base64 of `PAGE ++ D ++ SVG`. Since `svg_b64` ends that stream, it may end with `=` padding. `b64(PAGE)` and `b64(D)` are mid-stream and must be unpadded.
 
-Alignment. The consumer's own pieces (`'{' ... base64,'`, `S`, `',' <pad>`) must each have a length that is a multiple of 3 before encoding. The class's pre-encoded pieces sit at both layers, so they need `len(X) % 9 == 0`: 3-alignment at the HTML layer, and `len(b64(X)) = 4·len(X)/3` must also be a multiple of 3 at the JSON layer. The class pads `PAGE` and `D` to multiples of 9 itself. The 39-byte `"animation_url":"data:text/html;base64,` prefix is already a multiple of 3.
+Alignment. The consumer's own pieces (`'{' ... base64,'`, `S`, `',' <pad>`) must each have a length that is a multiple of 3 before encoding. The class's pre-encoded pieces sit at both layers, so they need `len(X) % 9 == 0`: 3-alignment at the HTML layer, and `len(b64(X)) = 4·len(X)/3` must also be a multiple of 3 at the JSON layer. The class pads `PAGE` and `D` to multiples of 9 itself. The 39-byte `"animation_url":"data:text/html;base64,` prefix is already a multiple of 3. Consumers can also add spaces between JSON tokens, 3 at a time, so that their large appends start on a 31-byte `ByteArray` word, which makes them about 4x cheaper (see the [Integration guide](#integration-guide)).
 
 ### The player page
 
@@ -129,16 +132,27 @@ Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`.
 | --- | --- |
 | `animation_url_segment() -> ByteArray` | Fixed `"animation_url":"data:text/html;base64,<page>` JSON member, pre-encoded at both layers. No encoding at call time. |
 | `midi_segment(midi: ByteArray, settings: SynthSettings) -> ByteArray` | `b64(b64(D))`: the token's settings and MIDI blocks, then opens the art block. Validates `settings` and encodes only per-token data. |
-| `base64(data: ByteArray) -> ByteArray` | Standard RFC 4648 base64 with `=` padding, for consumers encoding their own JSON pieces. |
+| `base64(data: ByteArray) -> ByteArray` | Standard RFC 4648 base64 with `=` padding, for consumers encoding their own JSON pieces. The same encoder `midi_segment` uses. |
 | `script_sha256() -> u256` | Constant SHA-256 of the embedded engine JS, decompressed (big-endian). |
 | `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.6'` (see [Build pipeline](#build-pipeline)). |
 | `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice, then the MIT license of fflate, from which the page's gunzip shim derives. |
 
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
 
-## Integration guide (planned)
+The class is `onchain_tinysynth::contract::OnchainTinySynth`: an empty `#[storage]` struct, no constructor, every entry point a view. `animation_url_segment`, `script_sha256`, `version` and `license` return the generated constants of [`src/page_data.cairo`](src/page_data.cairo). `midi_segment` validates and encodes the settings ([`src/settings.cairo`](src/settings.cairo)), builds `D` and returns `b64(b64(D))` ([`src/segment.cairo`](src/segment.cairo)). Invalid settings revert with the `'TS: ...'` short string and the indices as extra panic felts; through a library call the panic data arrives whole, followed by `'ENTRYPOINT_FAILED'`.
 
-This is a sketch of how a consumer such as Beasts would build its `token_uri`. It depends on the unimplemented class and will change with the design.
+## The base64 encoder (temporary stand-in)
+
+All base64 in the class goes through one function, `onchain_tinysynth::base64::bytes_base64_encode(_bytes: ByteArray) -> ByteArray`: `midi_segment` (three passes) and the `base64` entry point.
+
+- **Today: a stand-in.** [`src/base64.cairo`](src/base64.cairo) is `bytes_base64_encode` and its two private helpers, copied verbatim from Provable-Games/game-components, `packages/utilities/src/utils/encoding.cairo` at commit `5e48f22` (lines 3-77; SHA-256 of those lines `03d3ce9a26c79fc259e50e85e4f431351c3b997a9ea1606e4d14917915aff4b5`), MIT. It is the same byte-wise encoder as the Beasts NFT's, at about 19.6K L2 gas per input byte. Nothing was edited; only the file's unrelated helpers were left out. Because it will not ship, its notice is not in `license()` or NOTICE.
+- **Final: the maintainer's optimized encoder.** It will be published as the zero-dependency package `game_components_encoding` (`packages/encoding` in game-components) and replace this file as a pinned dependency. It has the same signature, so the swap changes no call site. Its lab measured about 62% less encoding gas than this stand-in; the gas figures below are labelled "stand-in (v1)" where encoding is involved, with the base64 share split out so the effect of the swap can be estimated.
+- **The swap must keep the output.** The encoder's own tests ([`tests/test_base64.cairo`](tests/test_base64.cairo): RFC 4648 vectors, every byte value, every length from 0 to 100, the 31/62/93-byte word boundaries, 1-16 KB inputs, and PAGE encoded twice at call time equal to the pre-encoded segment) and every golden fixture must pass unchanged.
+- **Release gate.** The class must not be declared (issue #12) with the stand-in in place.
+
+## Integration guide
+
+How a consumer such as Beasts builds its `token_uri` (the layout above), with the word alignment described below. [`examples/beast_consumer`](examples/beast_consumer) runs exactly this against the class.
 
 ```cairo
 use onchain_tinysynth::interface::{
@@ -146,35 +160,53 @@ use onchain_tinysynth::interface::{
 };
 use onchain_tinysynth::types::SynthSettings;
 
+/// Appends spaces (between JSON tokens) until `(s.len() + extra) % 3 == 0`.
+fn pad3(ref s: ByteArray, extra: u32) {
+    while (s.len() + extra) % 3 != 0 {
+        s.append_byte(' ');
+    }
+}
+
+/// Appends 'ICAg', which is b64('   '): 3 spaces between JSON tokens, until `uri.len() + extra` is
+/// a multiple of 31. At most 30 times, since 4 and 31 are coprime.
+fn align_to_word(ref uri: ByteArray, extra: u32) {
+    while (uri.len() + extra) % 31 != 0 {
+        uri.append(@"ICAg");
+    }
+}
+
 fn token_uri(
     tinysynth: starknet::ClassHash,
-    members: ByteArray,
-    svg_b64: ByteArray,
+    members: ByteArray, // "name":...,"attributes":[...]   (no braces)
+    svg: ByteArray, // raw SVG; must never contain `</script`
     midi: ByteArray,
     settings: SynthSettings,
 ) -> ByteArray {
     let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth };
 
-    // '{' members ',' <pad> '"image":"data:image/svg+xml;base64,'
-    // <pad> is chosen so the whole piece is a multiple of 3 bytes long.
-    // `spaces(n)` is the consumer's own helper returning n ASCII spaces.
-    let image_key: ByteArray = "\"image\":\"data:image/svg+xml;base64,";
-    let mut head: ByteArray = "{";
-    head.append(@members);
-    head.append(@",");
-    head.append(@spaces((3 - (head.len() + image_key.len()) % 3) % 3));
-    head.append(@image_key);
+    // '{' members ',' <pad>, a multiple of 3 bytes.
+    let mut open: ByteArray = "{";
+    open.append(@members);
+    open.append_byte(',');
+    pad3(ref open, 0);
 
     // S = svg_b64 '"' <pad>, encoded once and used twice.
-    let mut s = svg_b64;
-    s.append(@"\"");
-    s.append(@spaces((3 - s.len() % 3) % 3));
+    let mut s = synth.base64(svg);
+    s.append_byte('"');
+    pad3(ref s, 0);
     let s_b64 = synth.base64(s);
 
     let mut uri: ByteArray = "data:application/json;base64,";
-    uri.append(@synth.base64(head));
+    uri.append(@synth.base64(open));
+    // b64(' "image":"data:image/svg+xml;base64,'): the image key after one space (36 bytes), a
+    // constant. The spaces before it put b64(S) on a word boundary.
+    let image_key: ByteArray = "ICJpbWFnZSI6ImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQs";
+    align_to_word(ref uri, image_key.len());
+    uri.append(@image_key);
     uri.append(@s_b64);
-    uri.append(@synth.base64(",  ")); // ',' <pad>, 3 bytes
+    // b64(',  '), then spaces until the segment starts on a word boundary.
+    uri.append(@"LCAg");
+    align_to_word(ref uri, 0);
     uri.append(@synth.animation_url_segment());
     uri.append(@synth.midi_segment(midi, settings));
     uri.append(@s_b64);
@@ -183,7 +215,89 @@ fn token_uri(
 }
 ```
 
-The alignment rule: every piece passed to `base64` except the final `'}'` must have a length that is a multiple of 3. Otherwise the encoder emits `=` padding mid-stream and the concatenation is no longer valid base64. Consumers may also use their own base64 encoder, provided it produces standard RFC 4648 output.
+**Art (required).** The SVG must never contain `</script`, in any letter case; see [Art (SVG) requirements](#art-svg-requirements).
+
+**Base64 alignment (required).** Every piece passed to `base64`, except the final `'}'`, must be a multiple of 3 bytes long. Otherwise the encoder emits `=` padding mid-stream and the concatenation is no longer valid base64. The consumer pads with spaces between JSON tokens (`pad3`); the class pads `PAGE` and `D` itself.
+
+**Word alignment (optional, saves gas).** A Cairo `ByteArray` stores 31-byte words. `append` onto a `ByteArray` whose length is a multiple of 31 copies whole words; at any other length it splits every word of the appended piece in two, which costs about 4x as much. Measured in L2 gas:
+
+| Append | Word-aligned | Unaligned |
+| --- | --- | --- |
+| The 42,644-byte `animation_url_segment()` ([`tests/test_page_gas.cairo`](tests/test_page_gas.cairo)) | 2.2M | 9.3M |
+| Every append of a real Beast's `token_uri`: two 40,420-character `b64(S)`, the segment, `midi_segment`, the small pieces (the example's `gas_t4_appends_*`) | 16.0M | 29.9M |
+
+The consumer chooses where its large pieces land by adding spaces between JSON tokens, 3 at a time: 3 spaces are one 3-byte group, so they keep every piece a multiple of 3, and they encode to the constant `'ICAg'`, so they are never base64-encoded at call time. It does this in two places:
+
+- **Before `"image"`, so the first `b64(S)` is aligned.** The consumer encodes `'{' members ',' <pad>`, appends `'ICAg'` until the length plus 48 is a multiple of 31, then the 48-character constant `b64(' "image":"data:image/svg+xml;base64,')`. That is why the image key, with one space in front, is a piece of its own: it is 36 bytes, a multiple of 3.
+- **After the comma before `"animation_url"`, so the segment is aligned.** The consumer appends `'LCAg'` (`b64(',  ')`), then `'ICAg'` until the length is a multiple of 31.
+
+At most 30 groups are needed in each place (120 characters), and the decoded JSON only gains insignificant whitespace. `midi_segment` and the second `b64(S)` cannot be aligned this way: they follow the segment directly at both layers.
+
+**Your own encoder.** Consumers may use their own encoder instead of the class's `base64`, provided it produces standard RFC 4648 output. A copy compiled into the consumer also avoids passing the data through the library call: for a 22.7 KB SVG that saves about 7.4M L2 gas (444.4M instead of 451.8M with the stand-in encoder).
+
+## Gas and limits
+
+L2 gas, measured with snforge 0.64.0 and Scarb 2.20.1. **Figures that involve base64 are with the stand-in encoder (v1)** (see [The base64 encoder](#the-base64-encoder-temporary-stand-in)); each table gives the base64 share, so the effect of the optimized encoder can be estimated. Its lab measured about 62% less encoding gas than the stand-in; the "projected" figures apply that reduction to the base64 share only. The follow-up that swaps in the encoder re-measures all of them.
+
+### Entry points
+
+Through `IOnchainTinySynthLibraryDispatcher` on the declared class, as a consumer calls them, including passing the arguments and the result ([`tests/test_class_gas.cairo`](tests/test_class_gas.cairo), `snforge test gas_lc`):
+
+| Entry point | L2 gas | Base64 share |
+| --- | --- | --- |
+| `animation_url_segment()` | 6.2M: 0.3M to materialize the constant, the rest to return its 42,644 bytes | none |
+| `midi_segment(midi, settings)` | 5.4M with no MIDI and the default settings; 324.3M with the largest real Beast score (3,716 bytes) and the 3 reference sounds; 739.6M with that score and 8,192 bytes of `SETTINGS` (table below) | 86-100% |
+| `base64(data)` | 0.2M for 3 bytes, 20.5M for 1,023 bytes: about 19.6K per input byte | nearly all |
+| `script_sha256()` | 0.1M | none |
+| `version()` | 0.1M | none |
+| `license()` | 1.0M | none |
+
+### `midi_segment` by MIDI and `SETTINGS` size
+
+Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`). Rows are real Beast scores from the onchain composer ([`tests/fixtures/beasts/`](tests/fixtures/beasts/README.md)); columns are `SETTINGS` sizes: the defaults, the 3 Beast reference sounds, 6 timbres, 32 timbres of 8 minimal operators (the most validation work) and the largest valid input (the most encoding work). Each cell is the total with the stand-in encoder, then the base64 share (`b64(midi)` plus the two passes over `D`):
+
+| MIDI | 16 bytes | 334 bytes | 504 bytes | 7,437 bytes | 8,192 bytes |
+| --- | --- | --- | --- | --- | --- |
+| none | 5.2M (96%) | 21.5M (90%) | 30.5M (89%) | 399.5M (86%) | 428.9M (88%) |
+| 816 bytes | 71.1M (99%) | 87.4M (97%) | 96.4M (96%) | 465.4M (88%) | 494.3M (90%) |
+| 1,541 bytes | 129.8M (99%) | 146.2M (98%) | 155.1M (98%) | 523.7M (89%) | 553.1M (91%) |
+| 2,266 bytes | 188.1M (100%) | 204.5M (99%) | 213.4M (98%) | 582.4M (90%) | 611.8M (92%) |
+| 2,991 bytes | 246.4M (100%) | 263.2M (99%) | 271.7M (98%) | 640.7M (91%) | 670.1M (92%) |
+| 3,716 bytes (the largest real score) | 305.1M (100%) | 321.5M (99%) | 330.4M (99%) | 699.0M (92%) | 728.4M (93%) |
+| 3,716 bytes, projected with the optimized encoder | 116.7M | 124.2M | 128.3M | 301.0M | 309.0M |
+
+The rest is validating and encoding `SETTINGS` (see [Sound settings](#sound-settings-and-custom-sounds)) and assembling `D`. The library call adds the cost of passing the inputs: 2.8M for the score with the reference sounds, 11.2M with 8,192 bytes of `SETTINGS`.
+
+### A full Beasts `token_uri` against the 1B target
+
+Token 4 of the example ([`examples/beast_consumer`](examples/beast_consumer/README.md#gas)) is a real Beast:
+- **art:** the Beasts renderer's SVG for a shiny, animated Warlock, 22,733 bytes;
+- **music:** the largest real score, 3,716 bytes;
+- **sounds:** the 3 reference sounds, 334 bytes of `SETTINGS`;
+- **layout:** word-aligned.
+
+Its `token_uri` is 133,525 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
+
+| Piece | Stand-in encoder (v1) | Of which base64 | Projected, optimized encoder |
+| --- | --- | --- | --- |
+| **Whole `BeastLikeNft.token_uri`** | **1,414.6M** | **1,368.0M (97%)** | **about 566M** |
+| `animation_url_segment()` (library call) | 6.2M | none | 6.2M |
+| `midi_segment()` (library call) | 323.7M | 318.2M | about 126M |
+| The consumer's base64 (4 library calls): `b64(svg)` 451.8M, `b64(S)` 602.4M, the head and `'}'` about 5M | about 1,059M | 1,049.8M | about 408M |
+| The appends (word-aligned layout; 29.9M unaligned) | 16.0M | none | 16.0M |
+| The rest: SVG and score constants, members, name check | about 10M | none | about 10M |
+
+- **With the stand-in encoder, a real Beast is over budget.** It costs 1.41B, over the 1B target and over Starknet's limit of 1.1×10^9 L2 gas per transaction.
+- **Most of it is the SVG.** Base64 is 97% of the total, and the two passes over the SVG are 74%. These are the same two passes Beasts' metadata makes today: it encodes the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 346M with the stand-in, about 150M projected.
+- **With the optimized encoder the projection is about 0.57B.**
+- **The sample tokens are cheaper:** a 1 KB SVG and a 112-byte MIDI cost 90.2M to 90.6M.
+
+### The 8,192-byte `SETTINGS` cap (issue #1, Q3)
+
+- **Cost per size.** Every 1,000 bytes of `SETTINGS` add about 52M to `midi_segment` with the stand-in, about 24M projected. Of that, about 6M is validating and encoding; the rest is base64, because `SETTINGS` sits inside `D`, which is encoded twice.
+- **Realistic settings are cheap.** The 3 reference sounds (334 bytes) or 6 timbres (504 bytes) add 16-25M over the defaults with the stand-in, 1-2% of a full Beast `token_uri`.
+- **Worst case at the cap.** The largest real score with 8,192 bytes of `SETTINGS` costs 739.6M through the library call with the stand-in, about 310M projected. In the full Beast `token_uri` above, that gives 1.83B with the stand-in, about 0.76B projected.
+- **Recommendation: keep 8,192 bytes, and confirm it when the encoder is swapped.** With the optimized encoder, even the worst case is projected at about 0.76B: the cap, the largest real score and a full-size animated Beast SVG together. That leaves room under 1B. If the measured worst case after the swap is near 1B, lower the cap to 4,096 bytes before the class is declared. That bounds `midi_segment` at about 213M projected, and the full token at about 0.65B.
 
 ## Sound settings and custom sounds
 
@@ -206,7 +320,7 @@ Declared in [`src/types.cairo`](src/types.cairo). The consumer passes a typed `S
 - **Size.** `SETTINGS` is base64-encoded at call time along with the MIDI.
   - It is 16 bytes with the defaults (`1,1,30,40,64,0,0`), plus about 6 bytes per timbre and 50 bytes per operator.
   - The three Beast reference sounds (a 2-operator lead, kick and snare) come to 334 bytes.
-  - The cap is 8,192 bytes.
+  - The cap is 8,192 bytes. Each 1,000 bytes add about 52M L2 gas to `midi_segment` with the stand-in encoder (see [Gas and limits](#gas-and-limits)).
 - **Engine dependencies.** Custom waves need [webaudio-tinysynth#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26). Its storage question is [decided](https://github.com/Provable-Games/webaudio-tinysynth/issues/26#issuecomment-5965255502): each sample wave is stored as one cycle, with its own home pitch. `Filter` needs [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27). Deterministic noise needs [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7). All must land before the class is declared.
 
 ### The `SETTINGS` format
@@ -377,7 +491,7 @@ What a class hash fixes, and what the consumer supplies:
    ```
 
    The fork's `package.json` accepts any Terser 5 from 5.14.0, so the command pins the version the build was reproduced with (5.51.2). A tagged fork release with a published SHA-256 is roadmap phase 0.
-5. **Optionally, check the rest of the page and the class.** `verify_engine.mjs` also prints the SHA-256 and length of the fixed page `PAGE` (the decoded page up to the opening tag of the settings block and its alignment spaces), which [`scripts/page_versions.json`](scripts/page_versions.json) records for every `version()`. A matching `PAGE` also proves that the payload you hashed sits in the page's own engine tag, the one that runs, and that the shim and the player around it are the class's. To check the class itself, check out this repository at the row's release tag, rebuild the page with `npm ci && npm run check:page` (the pinned Terser and fflate; it fails on any difference from the committed `PAGE` and `src/page_data.cairo`), run `scarb build`, compute the class hash (for example with `sncast utils class-hash --contract-name <the class's contract>`), and compare it with the row's class hash.
+5. **Optionally, check the rest of the page and the class.** `verify_engine.mjs` also prints the SHA-256 and length of the fixed page `PAGE` (the decoded page up to the opening tag of the settings block and its alignment spaces), which [`scripts/page_versions.json`](scripts/page_versions.json) records for every `version()`. A matching `PAGE` also proves that the payload you hashed sits in the page's own engine tag, the one that runs, and that the shim and the player around it are the class's. To check the class itself, check out this repository at the row's release tag, rebuild the page with `npm ci && npm run check:page` (the pinned Terser and fflate; it fails on any difference from the committed `PAGE` and `src/page_data.cairo`), run `scarb build`, compute the class hash (for example with `sncast utils class-hash --contract-name OnchainTinySynth`, the class `onchain_tinysynth::contract::OnchainTinySynth`), and compare it with the row's class hash.
 
 ## Versioning
 
@@ -434,8 +548,9 @@ The engine tests, the page build and the page checks use the vendored engine (`t
 4. Assembles `PAGE` and pads it with spaces to `len % 9 == 0`; the spaces fall inside the settings block, where the player trims them.
 5. Writes:
    - [`tests/fixtures/page.html`](tests/fixtures/page.html): `PAGE`;
-   - [`src/page_data.cairo`](src/page_data.cairo) (generated, do not edit): `animation_url_segment()` pre-encoded at both base64 layers, `PAGE_LEN`, `SEGMENT_LEN`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`, `VERSION` and `license()`. The large constants are `const` felt arrays (stored once as data in the class bytecode) deserialized into a `ByteArray`; materializing the segment costs about 3.7M L2 gas;
-   - the golden fixtures for the class: [`tests/fixtures/page.json`](tests/fixtures/page.json) and [`tests/page_fixtures.cairo`](tests/page_fixtures.cairo) (below).
+   - [`src/page_data.cairo`](src/page_data.cairo) (generated, do not edit): `animation_url_segment()` pre-encoded at both base64 layers, `PAGE_LEN`, `SEGMENT_LEN`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`, `VERSION` and `license()`. The segment is a string literal: the compiler stores its words as constants, so materializing it costs 0.28M L2 gas, against 3.70M for a `const` felt array deserialized into a `ByteArray`, for a larger class (see [Class size](#class-size)). `license()`, rarely called, stays a `const` felt array;
+   - the golden fixtures for the class: [`tests/fixtures/page.json`](tests/fixtures/page.json) and [`tests/page_fixtures.cairo`](tests/page_fixtures.cairo) (below);
+   - the class's test fixtures, [`tests/class_fixtures.cairo`](tests/class_fixtures.cairo): the raw `PAGE`, base64 vectors from Node's encoder, and the real Beast scores of [`tests/fixtures/beasts/`](tests/fixtures/beasts/README.md).
 
 `VERSION` is `tinysynth-<engine ref>+page.<PAGE_VERSION>`. [`scripts/page_versions.json`](scripts/page_versions.json) records the SHA-256 of `PAGE` for every `VERSION`, and the build (and `check:page`) fails if the page changes while `VERSION` stays the same. To change the page: bump `PAGE_VERSION` in [`scripts/page.mjs`](scripts/page.mjs) (a re-pin changes `VERSION` by itself), then run `npm run gen:page -- --record`.
 
@@ -446,32 +561,38 @@ Computed by the JS reference ([`scripts/page.mjs`](scripts/page.mjs)) from the i
 - the expected `midi_segment(midi, settings)` in full, with `SETTINGS`, `D` and its pad;
 - the decoded `animation_url` HTML (`PAGE ++ D ++ SVG`) and the Beasts-layout `token_uri`, as length and SHA-256. They are 25-60 KB each and fully determined by stored pieces, so they are pinned by digest rather than stored. The example's three tokens hold complete `token_uri` goldens.
 
-Per invalid case: the settings and the panic data `midi_segment` must revert with. `tests/page_fixtures.cairo` has the same data as Cairo functions, plus the tests that already apply: `page_data` against the build (lengths, SHA-256 of the segment and the license, version, engine and gzip payload hashes) and each case's settings against `src/settings.cairo`.
+Per invalid case: the settings and the panic data `midi_segment` must revert with. `tests/page_fixtures.cairo` has the same data as Cairo functions, and the tests:
+- `page_data` against the build: lengths, SHA-256 of the segment and the license, version, engine and gzip payload hashes;
+- per valid case: `SETTINGS`; `midi_segment` byte for byte, called directly and through the library dispatcher on the declared class; the decoded HTML (`PAGE ++ D ++ SVG`) and the Beasts-layout `token_uri`, rebuilt in Cairo ([`tests/helpers.cairo`](tests/helpers.cairo)), against their length and SHA-256;
+- per invalid case: the revert with its exact panic data, directly and through the library call.
 
 ### Class size
 
-A stub class serving only the `page_data` constants (`animation_url_segment`, `script_sha256`, `version`, `license`), compiled with Scarb 2.20.1, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info):
+The class compiled with Scarb 2.20.1, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info), before and after adding the encoder, and the page constants alone:
 
-| | Stub class | Same class, `page.5` (uncompressed) | Same class, empty constants | Limit |
-| --- | --- | --- | --- | --- |
-| Sierra program | 4,369 felts | 7,226 felts | 204 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 191 KB | 319 KB | 9 KB | 4,089,446 bytes |
-| CASM bytecode | 2,563 felts | 3,681 felts | 311 felts | 81,920 felts |
+| | The class | The class without the encoder | Page constants only | Page constants only, `const` felt array (`page.6` before this class) | Limit |
+| --- | --- | --- | --- | --- | --- |
+| Sierra program | 14,377 felts | 12,676 felts | 7,358 felts | 4,369 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 727,248 bytes (18% of the limit) | 628,992 bytes | 321,148 bytes | 191,246 bytes | 4,089,446 bytes |
+| CASM bytecode | 22,242 felts (27% of the limit) | 18,093 felts | 5,289 felts | 2,563 felts | 81,920 felts |
 
-The constants take about 5% of the class size limit and 3% of the bytecode limit.
+- **The class** is `OnchainTinySynth` with the stand-in encoder. "Without the encoder" is the same class with `bytes_base64_encode` returning its input: the stand-in adds 1,701 Sierra felts, 98 KB and 4,149 CASM felts. The optimized encoder will change these figures.
+- **Page constants only** is a stub class serving `animation_url_segment`, `script_sha256`, `version` and `license`. The string-literal segment costs about 130 KB and 2,700 CASM felts more than the `const` felt array, and saves 3.4M L2 gas on every call.
+- **The rest** of the class is the settings validation and encoding.
+- The method: `contract_class.json` without debug info, and the `bytecode` of `compiled_contract_class.json`.
 
 ### Segment gas
 
-The segment's size sets its cost at every step of a consumer's `token_uri`: the class materializes it, the library call returns it, the consumer appends it to its `ByteArray`, and `token_uri` returns it again. [`tests/test_page_gas.cairo`](tests/test_page_gas.cairo) (`snforge test gas_segment`) measures materializing and appending it, in L2 gas, now and with the uncompressed `page.5` page:
+The segment's size sets its cost at every step of a consumer's `token_uri`: the class materializes it, the library call returns it, the consumer appends it to its `ByteArray`, and `token_uri` returns it again. [`tests/test_page_gas.cairo`](tests/test_page_gas.cairo) (`snforge test gas_segment`) measures materializing and appending it, in L2 gas:
 
-| | `page.5` (78,804 bytes) | Now (42,644 bytes) |
-| --- | --- | --- |
-| Materializing `animation_url_segment()` | 6.83M | 3.70M |
-| Appending it to a `ByteArray` with no pending bytes (word-aligned) | +4.00M | +2.16M |
-| Appending it after the 29-byte `data:application/json;base64,` (unaligned) | +17.25M | +9.34M |
-| The library call that returns it to a consumer (the example's gas report) | 10.82M | 5.86M |
+| | `page.5` (78,804 bytes), `const` array | `page.6` (42,644 bytes), `const` array | Now: `page.6`, string literal |
+| --- | --- | --- | --- |
+| Materializing `animation_url_segment()` | 6.83M | 3.70M | 0.28M |
+| Appending it to a `ByteArray` with no pending bytes (word-aligned) | +4.00M | +2.16M | +2.16M |
+| Appending it after the 29-byte `data:application/json;base64,` (unaligned) | +17.25M | +9.34M | +9.34M |
+| The class's side of the library call that returns it (the example's gas report) | 10.82M | 5.86M | 2.44M |
 
-The example's whole `token_uri` went from 131.0M-131.2M to 113.1M-113.5M (see [`examples/beast_consumer`](examples/beast_consumer/README.md#gas-informational)).
+The consumer's whole library call, including reading the result, is 6.2M (see [Gas and limits](#gas-and-limits)). The [Integration guide](#integration-guide) shows how a consumer lands the segment on a word boundary.
 
 ## Roadmap
 
@@ -479,7 +600,7 @@ The example's whole `token_uri` went from 131.0M-131.2M to 113.1M-113.5M (see [`
 1. **Scaffold** (this): repository layout, toolchain, interface declarations, README.
 2. **Player page JS** (done, issue #8): MIDI decode, tap-to-start, play/stop, End-of-Track looping, latency-compensated art restart, offline only.
 3. **Offline build pipeline** (done, issue #9): verifies the pinned engine by SHA-256, gzips it (issue #14), assembles and aligns the page, and generates the pre-encoded Cairo constants plus golden fixtures (reference outputs for sample MIDI and art).
-4. **Cairo class implementation**: `SynthSettings` validation and encoding (issues #1–#3), byte-for-byte parity tests against the JS reference fixtures, a `library_call` test from a mock consumer, and measurements of gas per call and class size.
+4. **Cairo class implementation** (done, issue #10, apart from the encoder): the class, `midi_segment`, `SynthSettings` validation and encoding (issue #1), byte-for-byte parity with the JS reference fixtures directly and through `library_call`, the example ported to the class, and gas and class-size measurements. **Remaining:** swap the stand-in base64 encoder for `game_components_encoding` and re-measure.
 5. **Browser validation**: Chromium, Firefox and WebKit; playback, looping, art sync, and offline behaviour.
 6. **Docs and declaration**: finalize docs, declare on Sepolia, then on mainnet, and publish the class hashes.
 
@@ -493,7 +614,7 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTI
 
 ## Examples
 
-- [`examples/beast_consumer`](examples/beast_consumer): a runnable end-to-end example of a Beasts-style NFT assembling its `token_uri` with library calls, against a mock of this class that already serves the real page, with golden fixtures and decoded output.
+- [`examples/beast_consumer`](examples/beast_consumer): a runnable end-to-end example of a Beasts-style NFT assembling its `token_uri` with library calls to this class (declared, never deployed), word-aligned, with golden fixtures and decoded output, and a real Beast token for the full-size gas measurement.
 
 ## CI
 
