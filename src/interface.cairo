@@ -118,7 +118,7 @@ pub trait IOnchainTinySynth<T> {
     /// `animation_url_segment()`.
     ///
     /// Inputs:
-    /// - `midi`: a Standard MIDI File (see "MIDI requirements" in the README). The bytes
+    /// - `midi`: a Standard MIDI File (see "MIDI contract" in the README). The bytes
     ///   are embedded verbatim (as base64 text); this function does not parse or validate
     ///   them.
     /// - `settings`: engine settings and optional custom sounds (see `types.cairo`).

@@ -14,7 +14,8 @@
     "gen:page": "node scripts/build_page.mjs",
     "check:page": "node scripts/build_page.mjs --check",
     "render-check": "node scripts/render_check.mjs",
-    "page-check": "node scripts/page_check.mjs"
+    "page-check": "node scripts/page_check.mjs",
+    "check-midi": "node scripts/check_midi.mjs"
   },
   "devDependencies": {
     "fflate": "0.8.3",

@@ -2,7 +2,7 @@
 //!
 //! In the real Beasts integration the MIDI comes from the onchain composer (an `IMidiProvider`
 //! reading the Beast's state). For the sample tokens it is a fixed one-bar loop that exercises what
-//! the README's "MIDI requirements" ask for. `scripts/reference.mjs` holds a byte-identical copy
+//! the README's "MIDI contract" recommends. `scripts/reference.mjs` holds a byte-identical copy
 //! that the golden test keeps in lockstep. Token 4 uses a synthetic score the size of the
 //! composer's largest production score, and the Beast reference sounds.
 
