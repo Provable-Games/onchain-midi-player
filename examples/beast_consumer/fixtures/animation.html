@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TinySynth player (mock)</title><style>html,body{margin:0;background:#111;color:#ddd;font:14px/1.4 monospace}#card{display:flex;flex-wrap:wrap;gap:16px;padding:16px}#view{width:250px;height:350px;background:#000}#info{flex:1;min-width:240px}h1{font-size:16px;margin:0 0 8px}h1 b{color:#f55}h2{font-size:13px;margin:12px 0 4px;color:#999}pre{margin:0;white-space:pre-wrap;word-break:break-all;background:#1b1b1f;padding:6px;max-height:220px;overflow:auto}button{font:inherit;padding:6px 12px}</style><script>/* MOCK ENGINE. The real class embeds the ~37 KB minified TinySynth engine (Provable-Games fork, pinned release, SHA-256 = script_sha256()) here. This stand-in keeps the same global and the few methods the player calls, and makes no sound. */window.WebAudioTinySynth=function(o){this.opts=o||{};this.timbres=[];this.midi=null;this.setTimbre=function(drum,slot,ops){this.timbres.push({drum:drum,slot:slot,ops:ops})};this.loadMIDI=function(b){this.midi=b};this.playMIDI=function(){};this.stopMIDI=function(){}};</script></head><body><div id="card"><img id="view" alt="token art"><div id="info"><h1>TinySynth player <b>MOCK</b></h1><button id="play">Play (mock: no audio)</button><p id="status">Loading...</p><h2>Settings</h2><pre id="settings-out"></pre><h2>MIDI</h2><pre id="midi-out"></pre></div></div><script>(function(){"use strict";
+var FX=10000,WAVES=["sine","square","sawtooth","triangle","n0","n1"];
+function $(i){return document.getElementById(i)}
+function nums(t){return t.split(",").map(Number)}
+function parseSettings(text){
+var parts=text.trim().split(";"),g=nums(parts[0]);
+var s={quality:g[0],reverb:g[1],masterVol:g[2],voices:g[3],timbres:[]};
+for(var i=1;i<parts.length;i++){var ops=parts[i].split(":"),h=nums(ops[0]),tm={drum:h[0]===1,slot:h[1],ops:[]};
+for(var j=1;j<ops.length;j++){var v=nums(ops[j]);
+tm.ops.push({g:v[0],w:WAVES[v[1]],v:v[2]/FX,t:v[3]/FX,f:v[4]/FX,a:v[5]/FX,h:v[6]/FX,d:v[7]/FX,s:v[8]/FX,r:v[9]/FX,p:v[10]/FX,q:v[11]/FX,k:v[12]/FX})}
+s.timbres.push(tm)}
+return s}
+function b64ToBytes(t){var bin=atob(t.replace(/\s+/g,"")),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u}
+function textToB64(t){var u=new TextEncoder().encode(t),bin="";for(var i=0;i<u.length;i++)bin+=String.fromCharCode(u[i]);return btoa(bin)}
+function parseMidi(u){var p=0;
+function u32(){var v=(u[p]<<24|u[p+1]<<16|u[p+2]<<8|u[p+3])>>>0;p+=4;return v}
+function u16(){var v=u[p]<<8|u[p+1];p+=2;return v}
+function tag(){var s=String.fromCharCode(u[p],u[p+1],u[p+2],u[p+3]);p+=4;return s}
+function vlq(){var v=0,b;do{b=u[p++];v=v*128+(b&127)}while(b&128);return v}
+if(tag()!=="MThd"||u32()!==6)throw new Error("not a Standard MIDI File");
+var m={format:u16(),tracks:u16(),ppq:u16(),notes:0,drumHits:0,events:0,bpm:120,endTick:0};
+if(m.ppq&32768)throw new Error("SMPTE time division is not supported");
+for(var n=0;n<m.tracks;n++){if(tag()!=="MTrk")throw new Error("missing MTrk");
+var end=u32();end+=p;var tick=0,run=0;
+while(p<end){tick+=vlq();var st=u[p];if(st&128)p++;else st=run;m.events++;
+if(st===255){var ty=u[p++],len=vlq();if(ty===81)m.bpm=60000000/(u[p]<<16|u[p+1]<<8|u[p+2]);if(ty===47)m.endTick=Math.max(m.endTick,tick);p+=len;run=0}
+else if(st===240||st===247){var sl=vlq();p+=sl;run=0}
+else{run=st;var hi=st&240,d1=u[p++],d2=(hi===192||hi===208)?0:u[p++];
+if(hi===144&&d2>0){if((st&15)===9)m.drumHits++;else m.notes++}}}
+if(p!==end)throw new Error("bad MTrk length")}
+m.bars=m.endTick/(m.ppq*4);return m}
+var state={ready:false};window.__player=state;
+document.addEventListener("DOMContentLoaded",function(){try{
+var settings=parseSettings($("settings").textContent),midi=b64ToBytes($("midi").textContent),art=$("art").textContent;
+var info=parseMidi(midi);
+$("view").src="data:image/svg+xml;base64,"+textToB64(art);
+$("settings-out").textContent="raw (mock format): "+$("settings").textContent.trim()+"\n\nparsed: "+JSON.stringify(settings,null,1);
+$("midi-out").textContent=midi.length+" bytes: format "+info.format+", "+info.tracks+" track(s), PPQ "+info.ppq+", "+info.bpm+" BPM, "+info.notes+" melody notes, "+info.drumHits+" drum hits, End-of-Track at tick "+info.endTick+" ("+info.bars+" bar(s))";
+state.settings=settings;state.midiBytes=midi.length;state.midi=info;state.artChars=art.length;state.ready=true;
+$("play").onclick=function(){var synth=new window.WebAudioTinySynth({quality:settings.quality,useReverb:settings.reverb>0,voices:settings.voices});
+settings.timbres.forEach(function(t){synth.setTimbre(t.drum?1:0,t.slot,t.ops)});synth.loadMIDI(midi);synth.playMIDI();
+state.played=true;$("status").textContent="MOCK: no audio. The real player would now start TinySynth with "+synth.timbres.length+" custom timbre(s) and loop at tick "+info.endTick+"."};
+$("status").textContent="Ready (mock player).";
+}catch(e){state.error=String(e);$("status").textContent="Error: "+e;console.error(e)}});
+})();</script><script type="text/plain" id="settings">   1,100,40,64;0,80:0,3,5000,10000,0,30,0,100,10000,330,10000,10000,0:1,0,175,0,60000,2000,0,100,10000,330,10000,10000,0;1,36:0,0,10000,0,1200000,0,200,1000,0,1000,2500,500,0</script><script type="text/plain" id="midi">TVRoZAAAAAYAAAABADBNVHJrAAAAWgD/UQMHoSAA/1gEBAIYCADAUACwB2QACkAAuQdaAJBIYACZJGQMJAAckEgACExgAJkmZAwmAByQTAAIT2AAmSRkDCQAHJBPAAhUYACZJmQMJgAckFQACP8vAA==  </script><script type="text/plain" id="art"><svg xmlns='http://www.w3.org/2000/svg' width='250' height='350' viewBox='0 0 250 350'><animate attributeName='opacity' dur='2.2s' from='1' to='0.999' repeatCount='indefinite'/><style>.n{fill:#fff;font:bold 22px monospace}.t{fill:#c9c9d1;font:14px monospace}</style><rect width='250' height='350' rx='12' fill='#1e1e22'/><rect x='4.5' y='4.5' width='241' height='341' rx='9' fill='none' stroke='#b79a5e' stroke-width='4'><animate attributeName='stroke-opacity' values='1;0.4;1' dur='3s' repeatCount='indefinite'/></rect><text x='125' y='42' text-anchor='middle' class='n'>Warlock</text><rect x='61' y='65' width='128' height='128' rx='8' fill='#000'/><foreignObject x='61' y='65' width='128' height='128'><xhtml:img xmlns:xhtml='http://www.w3.org/1999/xhtml' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR42mP4z8AARwzEcQCukw/xOF6MEQAAAABJRU5ErkJggg==' style='width:100%;height:100%;image-rendering:pixelated'/></foreignObject><text x='125' y='230' text-anchor='middle' class='t'>TIER 1</text></svg>
