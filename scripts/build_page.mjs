@@ -21,8 +21,9 @@
 //   5. Writes tests/fixtures/page.html (PAGE, byte for byte) and src/page_data.cairo (generated:
 //      animation_url_segment pre-encoded at both base64 layers, PAGE_LEN, SEGMENT_LEN,
 //      ENGINE_SHA256, GZIP_SHA256, GZIP_LEN, VERSION and the license text).
-//   6. Writes the golden fixtures for phase 4 (scripts/gen_page_fixtures.mjs):
-//      tests/fixtures/page.json and tests/page_fixtures.cairo.
+//   6. Writes the golden fixtures for the class (scripts/gen_page_fixtures.mjs):
+//      tests/fixtures/page.json and tests/page_fixtures.cairo, and the class's test fixtures
+//      (scripts/gen_class_fixtures.mjs): tests/class_fixtures.cairo.
 //
 // Usage (repository root, after `npm ci`):
 //   node scripts/build_page.mjs           write the files and print the sizes   (npm run gen:page)
@@ -38,6 +39,7 @@ import { gunzipSync } from "node:zlib";
 import { gzipSync } from "fflate";
 import { minify } from "terser";
 import { ENGINE_PIN, engineSource } from "./engine.mjs";
+import { classFixturesCairo } from "./gen_class_fixtures.mjs";
 import { pageFixtures } from "./gen_page_fixtures.mjs";
 import {
   GZIP_CLOSE, GZIP_OPEN, PAGE_PATH, PAGE_VERSIONS_PATH, SETTINGS_OPEN, SHIM_PIN, VERSION, b64, blen, bytes,
@@ -50,6 +52,7 @@ import { PLAY_ICON } from "../player/player.js";
 export const CAIRO_PATH = new URL("../src/page_data.cairo", import.meta.url);
 export const FIXTURES_JSON_PATH = new URL("../tests/fixtures/page.json", import.meta.url);
 export const FIXTURES_CAIRO_PATH = new URL("../tests/page_fixtures.cairo", import.meta.url);
+export const CLASS_FIXTURES_PATH = new URL("../tests/class_fixtures.cairo", import.meta.url);
 
 /** Terser options. Changing them (or the Terser version) changes PAGE. */
 const TERSER_OPTIONS = /** @type {import("terser").MinifyOptions} */ ({
@@ -202,7 +205,7 @@ export async function build() {
     version: VERSION, license, engineCommit: ENGINE_PIN.commit, engineSha256: ENGINE_PIN.sha256,
     gzipSha256, gzipLen: engineGzip.length, shimSha256: sha256(shim),
   });
-  return { page, cairo, fixtures, sizes, segment };
+  return { page, cairo, fixtures, classFixtures: classFixturesCairo(page), sizes, segment };
 }
 
 /**
@@ -274,7 +277,7 @@ ${cairoByteArrayConst("license", "LICENSE", license, [
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const { page, cairo, fixtures, sizes } = await build();
+  const { page, cairo, fixtures, classFixtures, sizes } = await build();
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
   let recorded;
   try {
@@ -285,6 +288,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
   const files = /** @type {Array<[URL, string]>} */ ([
     [PAGE_PATH, page], [CAIRO_PATH, cairo], [FIXTURES_JSON_PATH, fixtures.json], [FIXTURES_CAIRO_PATH, fixtures.cairo],
+    [CLASS_FIXTURES_PATH, classFixtures],
     [PAGE_VERSIONS_PATH, JSON.stringify(recorded, null, 2) + "\n"],
   ]);
   if (process.argv.includes("--check")) {

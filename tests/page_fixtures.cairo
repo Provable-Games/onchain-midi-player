@@ -4,14 +4,21 @@
 // data as tests/fixtures/page.json. Per valid case: the inputs (`case_<name>_midi`, `_settings`,
 // `_svg`, `_members`), the expected `midi_segment(midi, settings)` in full, and the expected
 // decoded animation_url HTML and Beasts-layout token_uri as length and SHA-256. Per invalid case:
-// the settings, and a test that `settings::validate` reverts with the panic data midi_segment
-// must revert with. The tests here check what exists today: the generated page_data constants
-// against the build, and each case's settings against src/settings.cairo.
+// the settings and the panic data midi_segment must revert with. The tests: the generated
+// page_data constants against the build; per valid case, SETTINGS, midi_segment (called directly
+// and through the library dispatcher on the declared class), and the decoded HTML
+// (PAGE ++ D ++ SVG) and the token_uri, rebuilt in Cairo, against the digests; per invalid case,
+// the revert, directly and through the library dispatcher, with its exact panic data.
 
 use core::sha256::compute_sha256_byte_array;
-use onchain_tinysynth::page_data;
+use onchain_tinysynth::interface::{
+    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthSafeDispatcherTrait,
+};
 use onchain_tinysynth::settings::{encode, validate};
 use onchain_tinysynth::types::SynthSettings;
+use onchain_tinysynth::{page_data, segment};
+use crate::class_fixtures;
+use crate::helpers::{beasts_token_uri, class, safe_class};
 
 /// SHA-256 of `data` as a big-endian u256, like `sha256sum`.
 pub fn sha256(data: @ByteArray) -> u256 {
@@ -178,6 +185,35 @@ fn case_default_120bpm_settings_encode_as_in_the_fixture() {
     assert_eq!(encode(@settings), case_default_120bpm_settings_text());
 }
 
+#[test]
+fn case_default_120bpm_midi_segment_matches_the_fixture() {
+    let settings = case_default_120bpm_settings();
+    let got = segment::midi_segment(case_default_120bpm_midi(), @settings);
+    assert(got == case_default_120bpm_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_default_120bpm_library_call_matches_the_fixture() {
+    let settings = case_default_120bpm_settings();
+    let got = class().midi_segment(case_default_120bpm_midi(), settings);
+    assert(got == case_default_120bpm_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_default_120bpm_html_and_token_uri_match_the_digests() {
+    let midi = case_default_120bpm_midi();
+    let settings = case_default_120bpm_settings();
+    let svg = case_default_120bpm_svg();
+    let mut html = class_fixtures::page();
+    html.append(@segment::d_fragment(midi.clone(), @settings));
+    html.append(@svg);
+    let html_digest = (html.len(), sha256(@html));
+    assert(html_digest == case_default_120bpm_animation_html_digest(), 'html != digest');
+    let uri = beasts_token_uri(@case_default_120bpm_members(), @svg, midi, @settings);
+    let uri_digest = (uri.len(), sha256(@uri));
+    assert(uri_digest == case_default_120bpm_token_uri_digest(), 'token_uri != digest');
+}
+
 // beast_140bpm: D pad 1, head pad 2, S pad 1; 139 bytes of MIDI, 334 of SETTINGS.
 
 pub fn case_beast_140bpm_midi() -> ByteArray {
@@ -306,6 +342,35 @@ fn case_beast_140bpm_settings_encode_as_in_the_fixture() {
     let settings = case_beast_140bpm_settings();
     validate(@settings);
     assert_eq!(encode(@settings), case_beast_140bpm_settings_text());
+}
+
+#[test]
+fn case_beast_140bpm_midi_segment_matches_the_fixture() {
+    let settings = case_beast_140bpm_settings();
+    let got = segment::midi_segment(case_beast_140bpm_midi(), @settings);
+    assert(got == case_beast_140bpm_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_beast_140bpm_library_call_matches_the_fixture() {
+    let settings = case_beast_140bpm_settings();
+    let got = class().midi_segment(case_beast_140bpm_midi(), settings);
+    assert(got == case_beast_140bpm_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_beast_140bpm_html_and_token_uri_match_the_digests() {
+    let midi = case_beast_140bpm_midi();
+    let settings = case_beast_140bpm_settings();
+    let svg = case_beast_140bpm_svg();
+    let mut html = class_fixtures::page();
+    html.append(@segment::d_fragment(midi.clone(), @settings));
+    html.append(@svg);
+    let html_digest = (html.len(), sha256(@html));
+    assert(html_digest == case_beast_140bpm_animation_html_digest(), 'html != digest');
+    let uri = beasts_token_uri(@case_beast_140bpm_members(), @svg, midi, @settings);
+    let uri_digest = (uri.len(), sha256(@uri));
+    assert(uri_digest == case_beast_140bpm_token_uri_digest(), 'token_uri != digest');
 }
 
 // six_timbres_format1: D pad 2, head pad 1, S pad 2; 166 bytes of MIDI, 504 of SETTINGS.
@@ -459,6 +524,35 @@ fn case_six_timbres_format1_settings_encode_as_in_the_fixture() {
     assert_eq!(encode(@settings), case_six_timbres_format1_settings_text());
 }
 
+#[test]
+fn case_six_timbres_format1_midi_segment_matches_the_fixture() {
+    let settings = case_six_timbres_format1_settings();
+    let got = segment::midi_segment(case_six_timbres_format1_midi(), @settings);
+    assert(got == case_six_timbres_format1_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_six_timbres_format1_library_call_matches_the_fixture() {
+    let settings = case_six_timbres_format1_settings();
+    let got = class().midi_segment(case_six_timbres_format1_midi(), settings);
+    assert(got == case_six_timbres_format1_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_six_timbres_format1_html_and_token_uri_match_the_digests() {
+    let midi = case_six_timbres_format1_midi();
+    let settings = case_six_timbres_format1_settings();
+    let svg = case_six_timbres_format1_svg();
+    let mut html = class_fixtures::page();
+    html.append(@segment::d_fragment(midi.clone(), @settings));
+    html.append(@svg);
+    let html_digest = (html.len(), sha256(@html));
+    assert(html_digest == case_six_timbres_format1_animation_html_digest(), 'html != digest');
+    let uri = beasts_token_uri(@case_six_timbres_format1_members(), @svg, midi, @settings);
+    let uri_digest = (uri.len(), sha256(@uri));
+    assert(uri_digest == case_six_timbres_format1_token_uri_digest(), 'token_uri != digest');
+}
+
 // unicode_art: D pad 3, head pad 0, S pad 1; 151 bytes of MIDI, 334 of SETTINGS.
 
 pub fn case_unicode_art_midi() -> ByteArray {
@@ -586,6 +680,35 @@ fn case_unicode_art_settings_encode_as_in_the_fixture() {
     assert_eq!(encode(@settings), case_unicode_art_settings_text());
 }
 
+#[test]
+fn case_unicode_art_midi_segment_matches_the_fixture() {
+    let settings = case_unicode_art_settings();
+    let got = segment::midi_segment(case_unicode_art_midi(), @settings);
+    assert(got == case_unicode_art_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_unicode_art_library_call_matches_the_fixture() {
+    let settings = case_unicode_art_settings();
+    let got = class().midi_segment(case_unicode_art_midi(), settings);
+    assert(got == case_unicode_art_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_unicode_art_html_and_token_uri_match_the_digests() {
+    let midi = case_unicode_art_midi();
+    let settings = case_unicode_art_settings();
+    let svg = case_unicode_art_svg();
+    let mut html = class_fixtures::page();
+    html.append(@segment::d_fragment(midi.clone(), @settings));
+    html.append(@svg);
+    let html_digest = (html.len(), sha256(@html));
+    assert(html_digest == case_unicode_art_animation_html_digest(), 'html != digest');
+    let uri = beasts_token_uri(@case_unicode_art_members(), @svg, midi, @settings);
+    let uri_digest = (uri.len(), sha256(@uri));
+    assert(uri_digest == case_unicode_art_token_uri_digest(), 'token_uri != digest');
+}
+
 // min_fields: D pad 4, head pad 0, S pad 2; 145 bytes of MIDI, 62 of SETTINGS.
 
 pub fn case_min_fields_midi() -> ByteArray {
@@ -699,6 +822,35 @@ fn case_min_fields_settings_encode_as_in_the_fixture() {
     let settings = case_min_fields_settings();
     validate(@settings);
     assert_eq!(encode(@settings), case_min_fields_settings_text());
+}
+
+#[test]
+fn case_min_fields_midi_segment_matches_the_fixture() {
+    let settings = case_min_fields_settings();
+    let got = segment::midi_segment(case_min_fields_midi(), @settings);
+    assert(got == case_min_fields_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_min_fields_library_call_matches_the_fixture() {
+    let settings = case_min_fields_settings();
+    let got = class().midi_segment(case_min_fields_midi(), settings);
+    assert(got == case_min_fields_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_min_fields_html_and_token_uri_match_the_digests() {
+    let midi = case_min_fields_midi();
+    let settings = case_min_fields_settings();
+    let svg = case_min_fields_svg();
+    let mut html = class_fixtures::page();
+    html.append(@segment::d_fragment(midi.clone(), @settings));
+    html.append(@svg);
+    let html_digest = (html.len(), sha256(@html));
+    assert(html_digest == case_min_fields_animation_html_digest(), 'html != digest');
+    let uri = beasts_token_uri(@case_min_fields_members(), @svg, midi, @settings);
+    let uri_digest = (uri.len(), sha256(@uri));
+    assert(uri_digest == case_min_fields_token_uri_digest(), 'token_uri != digest');
 }
 
 // max_fields: D pad 5, head pad 1, S pad 2; 134 bytes of MIDI, 725 of SETTINGS.
@@ -861,6 +1013,35 @@ fn case_max_fields_settings_encode_as_in_the_fixture() {
     assert_eq!(encode(@settings), case_max_fields_settings_text());
 }
 
+#[test]
+fn case_max_fields_midi_segment_matches_the_fixture() {
+    let settings = case_max_fields_settings();
+    let got = segment::midi_segment(case_max_fields_midi(), @settings);
+    assert(got == case_max_fields_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_max_fields_library_call_matches_the_fixture() {
+    let settings = case_max_fields_settings();
+    let got = class().midi_segment(case_max_fields_midi(), settings);
+    assert(got == case_max_fields_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_max_fields_html_and_token_uri_match_the_digests() {
+    let midi = case_max_fields_midi();
+    let settings = case_max_fields_settings();
+    let svg = case_max_fields_svg();
+    let mut html = class_fixtures::page();
+    html.append(@segment::d_fragment(midi.clone(), @settings));
+    html.append(@svg);
+    let html_digest = (html.len(), sha256(@html));
+    assert(html_digest == case_max_fields_animation_html_digest(), 'html != digest');
+    let uri = beasts_token_uri(@case_max_fields_members(), @svg, midi, @settings);
+    let uri_digest = (uri.len(), sha256(@uri));
+    assert(uri_digest == case_max_fields_token_uri_digest(), 'token_uri != digest');
+}
+
 // slot_edges: D pad 6, head pad 1, S pad 1; 142 bytes of MIDI, 352 of SETTINGS.
 
 pub fn case_slot_edges_midi() -> ByteArray {
@@ -999,6 +1180,35 @@ fn case_slot_edges_settings_encode_as_in_the_fixture() {
     assert_eq!(encode(@settings), case_slot_edges_settings_text());
 }
 
+#[test]
+fn case_slot_edges_midi_segment_matches_the_fixture() {
+    let settings = case_slot_edges_settings();
+    let got = segment::midi_segment(case_slot_edges_midi(), @settings);
+    assert(got == case_slot_edges_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_slot_edges_library_call_matches_the_fixture() {
+    let settings = case_slot_edges_settings();
+    let got = class().midi_segment(case_slot_edges_midi(), settings);
+    assert(got == case_slot_edges_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_slot_edges_html_and_token_uri_match_the_digests() {
+    let midi = case_slot_edges_midi();
+    let settings = case_slot_edges_settings();
+    let svg = case_slot_edges_svg();
+    let mut html = class_fixtures::page();
+    html.append(@segment::d_fragment(midi.clone(), @settings));
+    html.append(@svg);
+    let html_digest = (html.len(), sha256(@html));
+    assert(html_digest == case_slot_edges_animation_html_digest(), 'html != digest');
+    let uri = beasts_token_uri(@case_slot_edges_members(), @svg, midi, @settings);
+    let uri_digest = (uri.len(), sha256(@uri));
+    assert(uri_digest == case_slot_edges_token_uri_digest(), 'token_uri != digest');
+}
+
 // all_builtin_waves: D pad 7, head pad 2, S pad 1; 148 bytes of MIDI, 316 of SETTINGS.
 
 pub fn case_all_builtin_waves_midi() -> ByteArray {
@@ -1134,6 +1344,35 @@ fn case_all_builtin_waves_settings_encode_as_in_the_fixture() {
     let settings = case_all_builtin_waves_settings();
     validate(@settings);
     assert_eq!(encode(@settings), case_all_builtin_waves_settings_text());
+}
+
+#[test]
+fn case_all_builtin_waves_midi_segment_matches_the_fixture() {
+    let settings = case_all_builtin_waves_settings();
+    let got = segment::midi_segment(case_all_builtin_waves_midi(), @settings);
+    assert(got == case_all_builtin_waves_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_all_builtin_waves_library_call_matches_the_fixture() {
+    let settings = case_all_builtin_waves_settings();
+    let got = class().midi_segment(case_all_builtin_waves_midi(), settings);
+    assert(got == case_all_builtin_waves_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_all_builtin_waves_html_and_token_uri_match_the_digests() {
+    let midi = case_all_builtin_waves_midi();
+    let settings = case_all_builtin_waves_settings();
+    let svg = case_all_builtin_waves_svg();
+    let mut html = class_fixtures::page();
+    html.append(@segment::d_fragment(midi.clone(), @settings));
+    html.append(@svg);
+    let html_digest = (html.len(), sha256(@html));
+    assert(html_digest == case_all_builtin_waves_animation_html_digest(), 'html != digest');
+    let uri = beasts_token_uri(@case_all_builtin_waves_members(), @svg, midi, @settings);
+    let uri_digest = (uri.len(), sha256(@uri));
+    assert(uri_digest == case_all_builtin_waves_token_uri_digest(), 'token_uri != digest');
 }
 
 // max_length_settings: D pad 8, head pad 1, S pad 1; 160 bytes of MIDI, 8192 of SETTINGS.
@@ -1821,6 +2060,50 @@ fn case_max_length_settings_settings_encode_as_in_the_fixture() {
     assert_eq!(encode(@settings), case_max_length_settings_settings_text());
 }
 
+#[test]
+fn case_max_length_settings_midi_segment_matches_the_fixture() {
+    let settings = case_max_length_settings_settings();
+    let got = segment::midi_segment(case_max_length_settings_midi(), @settings);
+    assert(got == case_max_length_settings_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_max_length_settings_library_call_matches_the_fixture() {
+    let settings = case_max_length_settings_settings();
+    let got = class().midi_segment(case_max_length_settings_midi(), settings);
+    assert(got == case_max_length_settings_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_max_length_settings_html_and_token_uri_match_the_digests() {
+    let midi = case_max_length_settings_midi();
+    let settings = case_max_length_settings_settings();
+    let svg = case_max_length_settings_svg();
+    let mut html = class_fixtures::page();
+    html.append(@segment::d_fragment(midi.clone(), @settings));
+    html.append(@svg);
+    let html_digest = (html.len(), sha256(@html));
+    assert(html_digest == case_max_length_settings_animation_html_digest(), 'html != digest');
+    let uri = beasts_token_uri(@case_max_length_settings_members(), @svg, midi, @settings);
+    let uri_digest = (uri.len(), sha256(@uri));
+    assert(uri_digest == case_max_length_settings_token_uri_digest(), 'token_uri != digest');
+}
+
+/// The MIDI of the invalid cases (midi_segment reverts before it is used).
+pub fn invalid_midi() -> ByteArray {
+    let mut felts = INVALID_MIDI.span();
+    let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
+    assert(felts.len() == 0, 'fixture: trailing felts');
+    value
+}
+
+const INVALID_MIDI: [felt252; 6] = [
+    3, 0x4d546864000000060000000100604d54726b0000005a00ff510307a12000ff,
+    0x58040402180800c00000b0076400b9075a0090486000992464182400309048,
+    0x0018904c600099266418260030904c0018904f600099246418240030904f00,
+    0x18905460009926641826003090540018ff2f00, 19,
+];
+
 /// midi_segment must revert with ['TS: quality out of range'].
 pub fn invalid_quality_2_settings() -> SynthSettings {
     let mut felts = INVALID_QUALITY_2_SETTINGS.span();
@@ -1831,12 +2114,38 @@ pub fn invalid_quality_2_settings() -> SynthSettings {
 
 const INVALID_QUALITY_2_SETTINGS: [felt252; 6] = [2, 30, 40, 64, 0, 0];
 
+
+/// The panic data midi_segment must revert with.
+pub fn invalid_quality_2_error() -> Array<felt252> {
+    array!['TS: quality out of range']
+}
+
 #[test]
 #[should_panic(expected: 'TS: quality out of range')]
 fn invalid_quality_2_settings_revert() {
     let settings = invalid_quality_2_settings();
     validate(@settings);
     let _text = encode(@settings);
+}
+
+#[test]
+#[should_panic(expected: 'TS: quality out of range')]
+fn invalid_quality_2_midi_segment_reverts() {
+    let _segment = segment::midi_segment(invalid_midi(), @invalid_quality_2_settings());
+}
+
+// Through the library call, the panic data arrives whole, followed by 'ENTRYPOINT_FAILED'.
+#[test]
+#[feature("safe_dispatcher")]
+fn invalid_quality_2_library_call_reverts_with_the_panic_data() {
+    match safe_class().midi_segment(invalid_midi(), invalid_quality_2_settings()) {
+        Result::Ok(_) => panic!("midi_segment should revert"),
+        Result::Err(panic_data) => {
+            let mut expected = invalid_quality_2_error();
+            expected.append('ENTRYPOINT_FAILED');
+            assert_eq!(panic_data, expected);
+        },
+    }
 }
 
 /// midi_segment must revert with ['TS: volume out of range',0,0].
@@ -1851,12 +2160,38 @@ const INVALID_VOLUME_MAX_PLUS_1_SETTINGS: [felt252; 23] = [
     1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 1000001, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000, 0, 1,
 ];
 
+
+/// The panic data midi_segment must revert with.
+pub fn invalid_volume_max_plus_1_error() -> Array<felt252> {
+    array!['TS: volume out of range', 0, 0]
+}
+
 #[test]
 #[should_panic(expected: ('TS: volume out of range', 0, 0))]
 fn invalid_volume_max_plus_1_settings_revert() {
     let settings = invalid_volume_max_plus_1_settings();
     validate(@settings);
     let _text = encode(@settings);
+}
+
+#[test]
+#[should_panic(expected: ('TS: volume out of range', 0, 0))]
+fn invalid_volume_max_plus_1_midi_segment_reverts() {
+    let _segment = segment::midi_segment(invalid_midi(), @invalid_volume_max_plus_1_settings());
+}
+
+// Through the library call, the panic data arrives whole, followed by 'ENTRYPOINT_FAILED'.
+#[test]
+#[feature("safe_dispatcher")]
+fn invalid_volume_max_plus_1_library_call_reverts_with_the_panic_data() {
+    match safe_class().midi_segment(invalid_midi(), invalid_volume_max_plus_1_settings()) {
+        Result::Ok(_) => panic!("midi_segment should revert"),
+        Result::Err(panic_data) => {
+            let mut expected = invalid_volume_max_plus_1_error();
+            expected.append('ENTRYPOINT_FAILED');
+            assert_eq!(panic_data, expected);
+        },
+    }
 }
 
 /// midi_segment must revert with ['TS: duplicate timbre slot',2].
@@ -1875,12 +2210,38 @@ const INVALID_DUPLICATE_DRUM_SETTINGS: [felt252; 99] = [
     4400000, 20, 0, 30, 0, 500, 10000, 10000, 0, 1,
 ];
 
+
+/// The panic data midi_segment must revert with.
+pub fn invalid_duplicate_drum_error() -> Array<felt252> {
+    array!['TS: duplicate timbre slot', 2]
+}
+
 #[test]
 #[should_panic(expected: ('TS: duplicate timbre slot', 2))]
 fn invalid_duplicate_drum_settings_revert() {
     let settings = invalid_duplicate_drum_settings();
     validate(@settings);
     let _text = encode(@settings);
+}
+
+#[test]
+#[should_panic(expected: ('TS: duplicate timbre slot', 2))]
+fn invalid_duplicate_drum_midi_segment_reverts() {
+    let _segment = segment::midi_segment(invalid_midi(), @invalid_duplicate_drum_settings());
+}
+
+// Through the library call, the panic data arrives whole, followed by 'ENTRYPOINT_FAILED'.
+#[test]
+#[feature("safe_dispatcher")]
+fn invalid_duplicate_drum_library_call_reverts_with_the_panic_data() {
+    match safe_class().midi_segment(invalid_midi(), invalid_duplicate_drum_settings()) {
+        Result::Ok(_) => panic!("midi_segment should revert"),
+        Result::Err(panic_data) => {
+            let mut expected = invalid_duplicate_drum_error();
+            expected.append('ENTRYPOINT_FAILED');
+            assert_eq!(panic_data, expected);
+        },
+    }
 }
 
 /// midi_segment must revert with ['TS: custom wave unsupported',0,0].
@@ -1895,12 +2256,38 @@ const INVALID_CUSTOM_WAVE_SETTINGS: [felt252; 24] = [
     1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 6, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000, 0, 1,
 ];
 
+
+/// The panic data midi_segment must revert with.
+pub fn invalid_custom_wave_error() -> Array<felt252> {
+    array!['TS: custom wave unsupported', 0, 0]
+}
+
 #[test]
 #[should_panic(expected: ('TS: custom wave unsupported', 0, 0))]
 fn invalid_custom_wave_settings_revert() {
     let settings = invalid_custom_wave_settings();
     validate(@settings);
     let _text = encode(@settings);
+}
+
+#[test]
+#[should_panic(expected: ('TS: custom wave unsupported', 0, 0))]
+fn invalid_custom_wave_midi_segment_reverts() {
+    let _segment = segment::midi_segment(invalid_midi(), @invalid_custom_wave_settings());
+}
+
+// Through the library call, the panic data arrives whole, followed by 'ENTRYPOINT_FAILED'.
+#[test]
+#[feature("safe_dispatcher")]
+fn invalid_custom_wave_library_call_reverts_with_the_panic_data() {
+    match safe_class().midi_segment(invalid_midi(), invalid_custom_wave_settings()) {
+        Result::Ok(_) => panic!("midi_segment should revert"),
+        Result::Err(panic_data) => {
+            let mut expected = invalid_custom_wave_error();
+            expected.append('ENTRYPOINT_FAILED');
+            assert_eq!(panic_data, expected);
+        },
+    }
 }
 
 /// midi_segment must revert with ['TS: filter unsupported',0,0].
@@ -1916,12 +2303,38 @@ const INVALID_FILTER_SETTINGS: [felt252; 27] = [
     10000000, 0, 7071,
 ];
 
+
+/// The panic data midi_segment must revert with.
+pub fn invalid_filter_error() -> Array<felt252> {
+    array!['TS: filter unsupported', 0, 0]
+}
+
 #[test]
 #[should_panic(expected: ('TS: filter unsupported', 0, 0))]
 fn invalid_filter_settings_revert() {
     let settings = invalid_filter_settings();
     validate(@settings);
     let _text = encode(@settings);
+}
+
+#[test]
+#[should_panic(expected: ('TS: filter unsupported', 0, 0))]
+fn invalid_filter_midi_segment_reverts() {
+    let _segment = segment::midi_segment(invalid_midi(), @invalid_filter_settings());
+}
+
+// Through the library call, the panic data arrives whole, followed by 'ENTRYPOINT_FAILED'.
+#[test]
+#[feature("safe_dispatcher")]
+fn invalid_filter_library_call_reverts_with_the_panic_data() {
+    match safe_class().midi_segment(invalid_midi(), invalid_filter_settings()) {
+        Result::Ok(_) => panic!("midi_segment should revert"),
+        Result::Err(panic_data) => {
+            let mut expected = invalid_filter_error();
+            expected.append('ENTRYPOINT_FAILED');
+            assert_eq!(panic_data, expected);
+        },
+    }
 }
 
 /// midi_segment must revert with ['TS: settings too long'].
@@ -2036,10 +2449,36 @@ const INVALID_MAX_LENGTH_PLUS_1_SETTINGS: [felt252; 1362] = [
     160000, 200000, -80000, 1,
 ];
 
+
+/// The panic data midi_segment must revert with.
+pub fn invalid_max_length_plus_1_error() -> Array<felt252> {
+    array!['TS: settings too long']
+}
+
 #[test]
 #[should_panic(expected: 'TS: settings too long')]
 fn invalid_max_length_plus_1_settings_revert() {
     let settings = invalid_max_length_plus_1_settings();
     validate(@settings);
     let _text = encode(@settings);
+}
+
+#[test]
+#[should_panic(expected: 'TS: settings too long')]
+fn invalid_max_length_plus_1_midi_segment_reverts() {
+    let _segment = segment::midi_segment(invalid_midi(), @invalid_max_length_plus_1_settings());
+}
+
+// Through the library call, the panic data arrives whole, followed by 'ENTRYPOINT_FAILED'.
+#[test]
+#[feature("safe_dispatcher")]
+fn invalid_max_length_plus_1_library_call_reverts_with_the_panic_data() {
+    match safe_class().midi_segment(invalid_midi(), invalid_max_length_plus_1_settings()) {
+        Result::Ok(_) => panic!("midi_segment should revert"),
+        Result::Err(panic_data) => {
+            let mut expected = invalid_max_length_plus_1_error();
+            expected.append('ENTRYPOINT_FAILED');
+            assert_eq!(panic_data, expected);
+        },
+    }
 }

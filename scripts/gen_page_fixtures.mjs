@@ -10,8 +10,10 @@
 //                                 Beasts-layout token_uri as length + SHA-256; per invalid case the
 //                                 settings and the expected panic data
 //   tests/page_fixtures.cairo     the same as Cairo (inputs, expected midi_segment, digests), with
-//                                 the tests that already apply: page_data against the build, and
-//                                 each case's settings against src/settings.cairo
+//                                 the tests: page_data against the build; per valid case, SETTINGS,
+//                                 midi_segment (direct and by library call), the decoded HTML and
+//                                 the token_uri against the digests; per invalid case, the revert
+//                                 and its exact panic data (direct and by library call)
 //
 // The large outputs are pinned by length and SHA-256 rather than stored: each is ~50-110 KB, and
 // both are fully determined by stored pieces (tests/fixtures/page.html, D, the SVG and the members).
@@ -162,14 +164,21 @@ function cairoSource(json, cases) {
     "// data as tests/fixtures/page.json. Per valid case: the inputs (`case_<name>_midi`, `_settings`,",
     "// `_svg`, `_members`), the expected `midi_segment(midi, settings)` in full, and the expected",
     "// decoded animation_url HTML and Beasts-layout token_uri as length and SHA-256. Per invalid case:",
-    "// the settings, and a test that `settings::validate` reverts with the panic data midi_segment",
-    "// must revert with. The tests here check what exists today: the generated page_data constants",
-    "// against the build, and each case's settings against src/settings.cairo.",
+    "// the settings and the panic data midi_segment must revert with. The tests: the generated",
+    "// page_data constants against the build; per valid case, SETTINGS, midi_segment (called directly",
+    "// and through the library dispatcher on the declared class), and the decoded HTML",
+    "// (PAGE ++ D ++ SVG) and the token_uri, rebuilt in Cairo, against the digests; per invalid case,",
+    "// the revert, directly and through the library dispatcher, with its exact panic data.",
     "",
     "use core::sha256::compute_sha256_byte_array;",
-    "use onchain_tinysynth::page_data;",
+    "use onchain_tinysynth::interface::{",
+    "    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthSafeDispatcherTrait,",
+    "};",
     "use onchain_tinysynth::settings::{encode, validate};",
     "use onchain_tinysynth::types::SynthSettings;",
+    "use onchain_tinysynth::{page_data, segment};",
+    "use crate::class_fixtures;",
+    "use crate::helpers::{beasts_token_uri, class, safe_class};",
     "",
     "/// SHA-256 of `data` as a big-endian u256, like `sha256sum`.",
     "pub fn sha256(data: @ByteArray) -> u256 {",
@@ -265,22 +274,85 @@ function cairoSource(json, cases) {
       "    validate(@settings);",
       `    assert_eq!(encode(@settings), ${n}_settings_text());`,
       "}",
+      "",
+      "#[test]",
+      `fn ${n}_midi_segment_matches_the_fixture() {`,
+      `    let settings = ${n}_settings();`,
+      `    let got = segment::midi_segment(${n}_midi(), @settings);`,
+      `    assert(got == ${n}_midi_segment(), 'midi_segment != fixture');`,
+      "}",
+      "",
+      "#[test]",
+      `fn ${n}_library_call_matches_the_fixture() {`,
+      `    let settings = ${n}_settings();`,
+      `    let got = class().midi_segment(${n}_midi(), settings);`,
+      `    assert(got == ${n}_midi_segment(), 'midi_segment != fixture');`,
+      "}",
+      "",
+      "#[test]",
+      `fn ${n}_html_and_token_uri_match_the_digests() {`,
+      `    let midi = ${n}_midi();`,
+      `    let settings = ${n}_settings();`,
+      `    let svg = ${n}_svg();`,
+      "    let mut html = class_fixtures::page();",
+      "    html.append(@segment::d_fragment(midi.clone(), @settings));",
+      "    html.append(@svg);",
+      "    let html_digest = (html.len(), sha256(@html));",
+      `    assert(html_digest == ${n}_animation_html_digest(), 'html != digest');`,
+      `    let uri = beasts_token_uri(@${n}_members(), @svg, midi, @settings);`,
+      "    let uri_digest = (uri.len(), sha256(@uri));",
+      `    assert(uri_digest == ${n}_token_uri_digest(), 'token_uri != digest');`,
+      "}",
     );
   }
+  const invalidMidis = new Set(json.invalid.map((/** @type {any} */ c) => c.midi_b64));
+  if (invalidMidis.size !== 1) throw new Error("invalid cases must share one MIDI");
+  out.push(
+    "",
+    "/// The MIDI of the invalid cases (midi_segment reverts before it is used).",
+    deserializeFn("invalid_midi", "ByteArray", byteArrayFelts(Buffer.from(json.invalid[0].midi_b64, "base64"))),
+  );
   for (const c of json.invalid) {
     const n = `invalid_${c.name}`;
     const [msg, ...indices] = c.error;
+    const shouldPanic = indices.length ? `#[should_panic(expected: ('${msg}', ${indices.join(", ")}))]` : `#[should_panic(expected: '${msg}')]`;
     out.push(
       "",
       `/// midi_segment must revert with ${JSON.stringify(c.error).replace(/"/g, "'")}.`,
       deserializeFn(`${n}_settings`, "SynthSettings", serde(c.settings)),
       "",
+      "",
+      `/// The panic data midi_segment must revert with.`,
+      `pub fn ${n}_error() -> Array<felt252> {`,
+      `    array![${["'" + msg + "'", ...indices].join(", ")}]`,
+      "}",
+      "",
       "#[test]",
-      indices.length ? `#[should_panic(expected: ('${msg}', ${indices.join(", ")}))]` : `#[should_panic(expected: '${msg}')]`,
+      shouldPanic,
       `fn ${n}_settings_revert() {`,
       `    let settings = ${n}_settings();`,
       "    validate(@settings);",
       "    let _text = encode(@settings);",
+      "}",
+      "",
+      "#[test]",
+      shouldPanic,
+      `fn ${n}_midi_segment_reverts() {`,
+      `    let _segment = segment::midi_segment(invalid_midi(), @${n}_settings());`,
+      "}",
+      "",
+      "// Through the library call, the panic data arrives whole, followed by 'ENTRYPOINT_FAILED'.",
+      "#[test]",
+      '#[feature("safe_dispatcher")]',
+      `fn ${n}_library_call_reverts_with_the_panic_data() {`,
+      `    match safe_class().midi_segment(invalid_midi(), ${n}_settings()) {`,
+      "        Result::Ok(_) => panic!(\"midi_segment should revert\"),",
+      "        Result::Err(panic_data) => {",
+      `            let mut expected = ${n}_error();`,
+      "            expected.append('ENTRYPOINT_FAILED');",
+      "            assert_eq!(panic_data, expected);",
+      "        },",
+      "    }",
       "}",
     );
   }
