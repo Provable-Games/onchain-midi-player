@@ -3,11 +3,13 @@
 // repo). The page is the real one (engine and player); the repository's scripts/page_check.mjs
 // checks it in depth (sandboxed iframe, strict CSP, loop timing, art restart).
 //
-// Loads the page five ways: fixtures/animation.html from disk, the exact
+// Loads the page six ways: fixtures/animation.html from disk, the exact
 // data:text/html;base64,... animation_url from fixtures/token.json, a variant whose MIDI block holds
 // a file with two SysEx (F0) events (same notes, same End-of-Track), a variant with settings that
-// do not parse (1,1,30,40,64,0: a token missing), and a variant whose gzipped engine is corrupt
-// (one payload byte changed). For the valid pages it checks that the page's shim inflated the
+// do not parse (1,1,30,40,64,0: a token missing), a variant whose gzipped engine is corrupt
+// (one payload byte changed), and token 4's page (a real Beast SVG, the largest real score and the
+// reference sounds, from the reference: its art renders, and ▶ installs the reference sounds and
+// loops at the score's End-of-Track). For the valid pages it checks that the page's shim inflated the
 // engine (its gzip tag replaced by an inline script), that the art rendered (including the PNG
 // inside the SVG's foreignObject, by sampling a screenshot pixel), that ▶ is enabled and starts
 // TinySynth with the token's settings (custom lead on program 80, custom kick on drum 36, reverb,
@@ -28,7 +30,7 @@ import { dirname, join } from 'node:path';
 import { decodePng } from '../../../scripts/png.mjs';
 import { ENGINE_MISSING } from '../../../player/player.js';
 import { engineSource } from '../../../scripts/engine.mjs';
-import { midiWithSysex, withGzipPayload } from './reference.mjs';
+import { animationHtml, midiWithSysex, withGzipPayload } from './reference.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { PLAYWRIGHT_CORE, CHROME } = process.env;
@@ -74,18 +76,20 @@ const corruptHtml = withGzipPayload(html, (p) => {
   return b.toString('base64');
 });
 const asData = (h) => 'data:text/html;base64,' + Buffer.from(h, 'latin1').toString('base64');
-// [label, url, expected error (an invalid variant) and what the console logs]
+// [label, url, expected error (an invalid variant) and what the console logs, real Beast (token 4)]
 const targets = [
   ['fixtures/animation.html (file://)', pathToFileURL(join(root, 'fixtures', 'animation.html')).href],
   ['token.json animation_url (data: URI)', token.animation_url],
   ['SysEx MIDI variant (data: URI)', asData(sysexHtml)],
   ['unparsable settings variant 1,1,30,40,64,0 (data: URI)', asData(invalidHtml), { error: INVALID_ERROR, logged: [INVALID_ERROR] }],
   ['corrupt gzipped engine variant (data: URI)', asData(corruptHtml), { error: ENGINE_MISSING, logged: ['gunzip:', ENGINE_MISSING] }],
+  // UTF-8 bytes as latin1 characters, so asData's latin1 round trip keeps them.
+  ['token 4, a real Beast (data: URI)', asData(Buffer.from(animationHtml(4), 'utf8').toString('latin1')), undefined, true],
 ];
 
 const browser = await chromium.launch({ executablePath: CHROME || undefined, env: process.env });
 let failed = false;
-for (const [label, url, invalid] of targets) {
+for (const [label, url, invalid, real] of targets) {
   console.log(label);
   // The art is 250x350: at this viewport the <img> shows it at 1:1.
   const context = await browser.newContext({ viewport: { width: 250, height: 350 } });
@@ -118,9 +122,15 @@ for (const [label, url, invalid] of targets) {
     check(dims[0] === 250 && dims[1] === 350, `art <img> loaded (${dims.join('x')})`);
     const png = decodePng(await page.screenshot());
     if (shotDir) writeFileSync(join(shotDir, `${name}_page.png`), await page.screenshot());
-    const red = png.pixel(125, 129), card = png.pixel(30, 250); // clear of the ▶ button and the error line
-    check(red[0] > 240 && red[1] < 20 && red[2] < 20, `foreignObject PNG rendered (pixel ${red})`);
-    check(card.join() === '30,30,34', `card background rendered (pixel ${card})`);
+    if (real) {
+      // The Beast card: not the black page background in the middle of the art.
+      const mid = png.pixel(125, 175);
+      check(mid.join() !== '0,0,0', `real Beast art rendered (pixel ${mid})`);
+    } else {
+      const red = png.pixel(125, 129), card = png.pixel(30, 250); // clear of the ▶ button and the error line
+      check(red[0] > 240 && red[1] < 20 && red[2] < 20, `foreignObject PNG rendered (pixel ${red})`);
+      check(card.join() === '30,30,34', `card background rendered (pixel ${card})`);
+    }
     if (invalid) {
       check(await page.$eval('#play', (b) => b.disabled), '▶ is disabled');
       const shown = await page.textContent('#error');
@@ -139,18 +149,25 @@ for (const [label, url, invalid] of targets) {
       check(!(await page.$eval('#play', (b) => b.disabled)), '▶ is enabled');
       await page.click('#play');
       await page.waitForTimeout(300);
-      const st = await page.evaluate(() => {
+      const st = await page.evaluate((program) => {
         const { synth, opts, constructed } = window.__check;
         return {
           constructed, opts, state: synth.getAudioContext().state, loop: synth.loop, loopEnd: synth.loopEnd,
-          lfo: synth.program[80].p[1].f, kick: synth.drummap[36 - 35].p[0].p, reverbLev: synth.reverbLev, masterVol: synth.masterVol,
+          lfo: synth.program[program].p[1].f, kick: synth.drummap[36 - 35].p[0].p, reverbLev: synth.reverbLev, masterVol: synth.masterVol,
         };
-      });
+      }, real ? 0 : 80);
       check(st.constructed === 1 && st.state === 'running', `▶ starts TinySynth (AudioContext ${st.state})`);
-      check(JSON.stringify(st.opts) === '{"quality":1,"useReverb":1,"voices":64}' && st.reverbLev === 1 && st.masterVol === 0.4,
-        'constructed with the token settings: quality 1, reverb 100, volume 40, 64 voices');
-      check(st.lfo === 6 && st.kick === 0.25, 'custom lead on program 80 (6 Hz LFO) and custom kick on drum 36 installed');
-      check(st.loop === 1 && st.loopEnd === 192, 'loops at End-of-Track (tick 192)');
+      if (real) {
+        check(JSON.stringify(st.opts) === '{"quality":1,"useReverb":0,"voices":64}' && st.masterVol === 0.4,
+          'constructed with the reference settings: quality 1, no reverb, volume 40, 64 voices');
+        check(st.lfo === 6 && st.kick === 0.2813, 'reference lead on program 0 (6 Hz LFO) and reference kick on drum 36 installed');
+        check(st.loop === 1 && st.loopEnd === 49440, 'loops at the score\'s End-of-Track (tick 49440)');
+      } else {
+        check(JSON.stringify(st.opts) === '{"quality":1,"useReverb":1,"voices":64}' && st.reverbLev === 1 && st.masterVol === 0.4,
+          'constructed with the token settings: quality 1, reverb 100, volume 40, 64 voices');
+        check(st.lfo === 6 && st.kick === 0.25, 'custom lead on program 80 (6 Hz LFO) and custom kick on drum 36 installed');
+        check(st.loop === 1 && st.loopEnd === 192, 'loops at End-of-Track (tick 192)');
+      }
       check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
     }
     check(blocked.length === 0, `no network requests (requests seen: ${[...new Set(requests.map((r) => r.split(':')[0] + ':'))].join(' ')})`);

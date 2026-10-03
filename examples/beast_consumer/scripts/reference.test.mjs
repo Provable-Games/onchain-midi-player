@@ -11,9 +11,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkMidi } from '../../../player/player.js';
 import {
-  MIDI, SETTINGS_OPEN, blen, bytes, decodeTokenUri, dFragment, midiWithSysex,
-  naiveTokenUri, padLen, renderSvg, settingsFor, spaces, spliceTokenUri, tokenUriSpliced,
-  validateMidi,
+  MIDI, SETTINGS_OPEN, TOKENS, b64, blen, bytes, decodeTokenUri, dFragment, midiWithSysex,
+  naiveTokenUri, padLen, renderSvg, segmentFor, settingsFor, spaces, spliceTokenUri, tokenJsonCompact,
+  tokenParts, tokenUriNaive, tokenUriSpliced, validateMidi,
 } from './reference.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -40,6 +40,22 @@ test('the SysEx variant really contains two complete SysEx events', () => {
   assert.ok(v.includes(Buffer.from([0x00, 0xf0, 0x05, 0x7e, 0x7f, 0x09, 0x01, 0xf7])));
   assert.equal(v.readUInt32BE(18), v.length - 22);
 });
+
+for (const id of Object.keys(TOKENS).map(Number)) {
+  test(`token ${id}: word-aligned b64(S) and segment, and the alignment spaces are insignificant`, () => {
+    const p = tokenParts(id);
+    const uri = tokenUriSpliced(id);
+    const sB64 = b64(p.s);
+    const sAt = uri.indexOf(sB64);
+    const segmentAt = uri.indexOf(segmentFor(p.pageHtml));
+    assert.equal(sAt % 31, 0, 'b64(S) starts on a 31-byte word');
+    assert.equal(segmentAt % 31, 0, 'the segment starts on a 31-byte word');
+    assert.equal(uri.slice(sAt - 48, sAt), 'ICJpbWFnZSI6ImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQs', 'constant image key');
+    assert.match(uri.slice(sAt + sB64.length, segmentAt), /^LCAg(ICAg)*$/, 'constant comma and spaces');
+    assert.equal(uri, tokenUriNaive(id));
+    assert.deepEqual(decodeTokenUri(uri).json, JSON.parse(tokenJsonCompact(id)));
+  });
+}
 
 test('fixtures/token_uri.txt is the reference token_uri of token 1', () => {
   assert.equal(readFileSync(join(root, 'fixtures', 'token_uri.txt'), 'utf8'), tokenUriSpliced(1));

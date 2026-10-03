@@ -1,10 +1,13 @@
-//! End-to-end: the mock class is declared but never deployed, BeastLikeNft is deployed with its
-//! class hash, and token_uri (built with library calls) is checked byte for byte against
-//! (a) the independent JavaScript reference (golden.cairo) and (b) the in-Cairo naive reference.
+//! End-to-end: the real class (`onchain_tinysynth::contract::OnchainTinySynth`) is declared but
+//! never deployed, BeastLikeNft is deployed with its class hash, and token_uri (built with library
+//! calls) is checked byte for byte against (a) the independent JavaScript reference (golden.cairo)
+//! and (b) the in-Cairo naive reference. Token 4, a real Beast (about 132 KB), is checked against
+//! the reference's length and SHA-256.
 
 use beast_consumer::beast_like_nft::{
     IBeastLikeNftDispatcher, IBeastLikeNftDispatcherTrait, beast_image, render_svg, token_data,
 };
+use core::sha256::compute_sha256_byte_array;
 use onchain_tinysynth::interface::{
     IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
 };
@@ -14,12 +17,21 @@ use starknet::ClassHash;
 use crate::golden;
 use crate::naive::naive_token_uri;
 
-/// Declares the mock (no deploy) and deploys the NFT with its class hash.
-fn setup() -> (IBeastLikeNftDispatcher, ClassHash) {
-    let mock_class_hash = *declare("MockOnchainTinySynth").unwrap().contract_class().class_hash;
+/// Declares the class (no deploy) and deploys the NFT with its class hash.
+pub fn setup() -> (IBeastLikeNftDispatcher, ClassHash) {
+    let class_hash = *declare("OnchainTinySynth").unwrap().contract_class().class_hash;
     let nft_class = declare("BeastLikeNft").unwrap().contract_class();
-    let (address, _) = nft_class.deploy(@array![mock_class_hash.into()]).unwrap();
-    (IBeastLikeNftDispatcher { contract_address: address }, mock_class_hash)
+    let (address, _) = nft_class.deploy(@array![class_hash.into()]).unwrap();
+    (IBeastLikeNftDispatcher { contract_address: address }, class_hash)
+}
+
+/// SHA-256 of `data` as a big-endian u256, like `sha256sum`.
+pub fn sha256(data: @ByteArray) -> u256 {
+    let [a, b, c, d, e, f, g, h] = compute_sha256_byte_array(data);
+    let base: u128 = 0x100000000;
+    let high = ((a.into() * base + b.into()) * base + c.into()) * base + d.into();
+    let low = ((e.into() * base + f.into()) * base + g.into()) * base + h.into();
+    u256 { high, low }
 }
 
 fn assert_same(actual: @ByteArray, expected: @ByteArray, what: ByteArray) {
@@ -58,6 +70,15 @@ fn token_uri_3_matches_js_golden() {
     assert_same(@nft.token_uri(3), @golden::token_uri_3(), "token 3 != golden");
 }
 
+/// Token 4: a real Beast SVG (22,733 bytes), the largest real score (3,716 bytes) and the reference
+/// sounds. Its 133,525-character token_uri is pinned by length and SHA-256.
+#[test]
+fn token_uri_4_matches_js_digest() {
+    let (nft, _) = setup();
+    let uri = nft.token_uri(4);
+    assert((uri.len(), sha256(@uri)) == golden::token_uri_4_digest(), 'token 4 != digest');
+}
+
 /// Splicing equals standard nesting: the contract's token_uri equals the naive one-pass encoding
 /// of the plainly built JSON. One test per token (each has different pad lengths); a single test
 /// over all three exceeds snforge's default step limit with the naive byte-wise encoder.
@@ -92,14 +113,14 @@ fn render_svg_matches_js_golden() {
     }
 }
 
-/// The class hash is all the NFT stores; the mock exists only as a declared class, and the
+/// The class hash is all the NFT stores; the class exists only as a declared class, and the
 /// library dispatcher reaches it without any deployed TinySynth contract.
 #[test]
 fn library_call_without_deployment() {
-    let (nft, mock_class_hash) = setup();
-    assert(nft.tinysynth_class_hash() == mock_class_hash, 'class hash not stored');
+    let (nft, class_hash) = setup();
+    assert(nft.tinysynth_class_hash() == class_hash, 'class hash not stored');
 
-    let synth = IOnchainTinySynthLibraryDispatcher { class_hash: mock_class_hash };
+    let synth = IOnchainTinySynthLibraryDispatcher { class_hash };
     let segment = synth.animation_url_segment();
     assert(segment.len() == page_data::SEGMENT_LEN, 'segment length');
     assert(segment == page_data::animation_url_segment(), 'segment content');

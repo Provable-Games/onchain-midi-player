@@ -2,7 +2,7 @@
 name = "beast_consumer"
 version = "0.1.0"
 edition = "2024_07"
-description = "End-to-end example: a Beasts-style NFT injecting the onchain TinySynth player into its token_uri, against a mock of the class library."
+description = "End-to-end example: a Beasts-style NFT injecting the onchain TinySynth player into its token_uri, with library calls to the real class."
 license = "Apache-2.0"
 publish = false
 
@@ -16,6 +16,8 @@ assert_macros = "2.20.0"
 
 [[target.starknet-contract]]
 sierra = true
+# The class itself, compiled from the root crate, so the tests can declare it (never deploy it).
+build-external-contracts = ["onchain_tinysynth::contract::OnchainTinySynth"]
 
 [scripts]
 test = "snforge test"
@@ -23,7 +25,7 @@ test = "snforge test"
 [tool.scarb]
 allow-prebuilt-plugins = ["snforge_std"]
 
-# The naive-nesting tests base64-encode the whole ~64 KB token JSON byte by byte, beyond snforge's
-# default step limit.
+# The naive-nesting tests base64-encode the whole ~36 KB token JSON byte by byte, and token 4 encodes
+# a 22.7 KB SVG with the class's byte-wise stand-in encoder: beyond snforge's default step limit.
 [tool.snforge]
 max_n_steps = 100000000

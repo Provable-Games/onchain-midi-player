@@ -10,9 +10,9 @@ use onchain_tinysynth::interface::{
 use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, WaveDef, Waveform};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 
-fn mock() -> IOnchainTinySynthSafeLibraryDispatcher {
+fn synth() -> IOnchainTinySynthSafeLibraryDispatcher {
     // Declared only, never deployed.
-    let class_hash = *declare("MockOnchainTinySynth").unwrap().contract_class().class_hash;
+    let class_hash = *declare("OnchainTinySynth").unwrap().contract_class().class_hash;
     IOnchainTinySynthSafeLibraryDispatcher { class_hash }
 }
 
@@ -21,7 +21,7 @@ fn mock() -> IOnchainTinySynthSafeLibraryDispatcher {
 /// `'ENTRYPOINT_FAILED'` after them.
 #[feature("safe_dispatcher")]
 fn assert_midi_segment_reverts(settings: SynthSettings, expected: Span<felt252>) {
-    match mock().midi_segment(sound::midi(), settings) {
+    match synth().midi_segment(sound::midi(), settings) {
         Result::Ok(_) => panic_with_felt252('should have reverted'),
         Result::Err(panic_data) => {
             assert(panic_data.len() >= expected.len(), 'panic data too short');
@@ -55,7 +55,7 @@ fn one_op_timbre(drum: bool, slot: u8, wave: Waveform) -> Span<Timbre> {
 #[test]
 #[feature("safe_dispatcher")]
 fn valid_settings_do_not_revert() {
-    assert(mock().midi_segment(sound::midi(), sound::settings_for(1)).is_ok(), 'valid settings');
+    assert(synth().midi_segment(sound::midi(), sound::settings_for(1)).is_ok(), 'valid settings');
 }
 
 #[test]
@@ -115,11 +115,11 @@ fn custom_wave_table_reverts_until_issue_2() {
 #[test]
 #[feature("safe_dispatcher")]
 fn unknown_token_reverts() {
-    let mock_class_hash = *declare("MockOnchainTinySynth").unwrap().contract_class().class_hash;
+    let class_hash = *declare("OnchainTinySynth").unwrap().contract_class().class_hash;
     let (address, _) = declare("BeastLikeNft")
         .unwrap()
         .contract_class()
-        .deploy(@array![mock_class_hash.into()])
+        .deploy(@array![class_hash.into()])
         .unwrap();
     let nft = IBeastLikeNftSafeDispatcher { contract_address: address };
     match nft.token_uri(99) {

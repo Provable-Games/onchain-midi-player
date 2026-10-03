@@ -1,9 +1,10 @@
-//! The token's music: a Standard MIDI File and its `SynthSettings`.
+//! The tokens' music: a Standard MIDI File and its `SynthSettings`.
 //!
 //! In the real Beasts integration the MIDI comes from the onchain composer (an `IMidiProvider`
-//! reading the Beast's state). Here it is a fixed one-bar loop that exercises what the README's
-//! "MIDI requirements" ask for. `scripts/reference.mjs` holds a byte-identical copy that the
-//! golden test keeps in lockstep.
+//! reading the Beast's state). For the sample tokens it is a fixed one-bar loop that exercises what
+//! the README's "MIDI requirements" ask for. `scripts/reference.mjs` holds a byte-identical copy
+//! that the golden test keeps in lockstep. Token 4 uses a real score from the composer and the
+//! Beast reference sounds.
 
 use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, Waveform};
 
@@ -132,5 +133,65 @@ pub fn settings_for(tier: u8) -> SynthSettings {
     };
     SynthSettings {
         quality: 1, reverb, master_vol: 40, voices: 64, waves: [].span(), timbres: timbres(),
+    }
+}
+
+/// The Beast reference sounds (issue #1): a triangle lead with a 6 Hz vibrato LFO on program 0, a
+/// kick (triangle pitch drop plus a noise click) on drum 36 and a snare (noise plus a square body)
+/// on drum 38, with no reverb, as the production page has none. Encodes to the 334-byte `SETTINGS`
+/// of the root crate's `beast_reference` fixture.
+pub fn beast_reference_settings() -> SynthSettings {
+    let lead = Timbre {
+        drum: false,
+        slot: 0,
+        operators: array![
+            op(0, Waveform::Triangle, 3_000, 10_000, 0, 30, 0, 100, 10_000, 100, 10_000, 10_000),
+            op(1, Waveform::Triangle, 175, 0, 60_000, 2_000, 0, 100, 10_000, 100, 10_000, 10_000),
+        ]
+            .span(),
+    };
+    let kick = Timbre {
+        drum: true,
+        slot: 36,
+        operators: array![
+            op(0, Waveform::Triangle, 4_000, 0, 1_600_000, 30, 370, 500, 0, 500, 2_813, 300),
+            op(0, Waveform::WhiteNoise, 1_000, 0, 4_400_000, 20, 0, 30, 0, 500, 10_000, 10_000),
+        ]
+            .span(),
+    };
+    let snare = Timbre {
+        drum: true,
+        slot: 38,
+        operators: array![
+            op(0, Waveform::WhiteNoise, 3_500, 0, 2_640_000, 30, 0, 500, 0, 500, 10_000, 10_000),
+            op(0, Waveform::Square, 700, 0, 2_000_000, 30, 0, 200, 0, 500, 5_500, 170),
+        ]
+            .span(),
+    };
+    SynthSettings {
+        quality: 1,
+        reverb: 0,
+        master_vol: 40,
+        voices: 64,
+        waves: [].span(),
+        timbres: array![lead, kick, snare].span(),
+    }
+}
+
+/// The token's MIDI: the sample loop, or for token 4 the largest real Beast score.
+pub fn token_midi(token_id: u256) -> ByteArray {
+    if token_id == 4 {
+        crate::beast_data::heaviest_midi()
+    } else {
+        midi()
+    }
+}
+
+/// The token's settings: `settings_for(tier)`, or for token 4 the Beast reference sounds.
+pub fn token_settings(token_id: u256, tier: u8) -> SynthSettings {
+    if token_id == 4 {
+        beast_reference_settings()
+    } else {
+        settings_for(tier)
     }
 }

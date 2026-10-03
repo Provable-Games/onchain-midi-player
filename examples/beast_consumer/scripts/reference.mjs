@@ -3,17 +3,22 @@
 // This module is a deliberately independent JavaScript re-implementation of everything the Cairo
 // side of the example produces:
 //
-//   - MockOnchainTinySynth: animation_url_segment, D and midi_segment, from the repository's JS
-//     reference (scripts/page.mjs): the real PAGE, built by scripts/build_page.mjs into
+//   - the OnchainTinySynth class: animation_url_segment, D and midi_segment, from the repository's
+//     JS reference (scripts/page.mjs): the real PAGE, built by scripts/build_page.mjs into
 //     tests/fixtures/page.html, and SETTINGS from player/encode.js, which the root parity tests tie
 //     to Cairo
 //   - BeastLikeNft: token table, render_svg, JSON members, MIDI, SynthSettings, and the token_uri
-//     it splices together (the Beasts layout, also from scripts/page.mjs)
+//     it splices together (the Beasts layout, also from scripts/page.mjs, with the word alignment
+//     of `consumerPieces(..., {align: true})`)
+//   - token 4, a real Beast: the Beasts renderer's SVG, the largest real score and the reference
+//     sounds, from the repository's tests/fixtures/beasts/ and scripts/settings_fixtures.mjs
 //
 // gen_fixtures.mjs builds every token's token_uri twice (naive one-pass nesting and the spliced
 // layout), checks they are equal, and writes the golden file the Cairo tests compare against. If
 // the Cairo and the JS ever drift, the golden test fails.
 
+import { readFileSync } from 'node:fs';
+import { BEAST_SETTINGS } from '../../../scripts/settings_fixtures.mjs';
 import {
   ART_OPEN, IMAGE_KEY, MIDI_OPEN, SETTINGS_OPEN, URL_KEY, b64, blen, bytes, consumerPieces, decodeTokenUri,
   dFragment, naiveTokenJson, naiveTokenUri, padLen, pageHtml, pageScripts, segmentFor, settingsText, sha256, spaces,
@@ -47,10 +52,34 @@ export const TOKENS = {
   1: { name: 'Warlock', tier: 1 },
   2: { name: "Night's Wyvern", tier: 2 },
   3: { name: 'Fen-Troll', tier: 3 },
+  // A real Beast: its own art, music and sounds (realBeast below), for the full-size measurement.
+  4: { name: 'Shiny Warlock', tier: 1, real: true },
 };
 
 export const DESCRIPTION =
-  'A Beast-like example token. Its animation_url plays the onchain MIDI with the onchain TinySynth class (mocked here).';
+  'A Beast-like example token. Its animation_url plays the onchain MIDI with the onchain TinySynth class.';
+
+// ---------------------------------------------------------------------------------------------
+// Token 4: a real Beast (mirrors src/beast_data.cairo, which gen_fixtures.mjs writes from these)
+// ---------------------------------------------------------------------------------------------
+
+const BEASTS = new URL('../../../tests/fixtures/beasts/', import.meta.url);
+const REAL_SVG_SHA256 = '6ad6b67b75f45d04831c03c9167965c288e5729153a933e9f8c31168421dd658';
+
+/**
+ * Token 4's art, music and sounds: the Beasts renderer's SVG for a shiny animated Warlock
+ * (22,733 bytes), the largest real score (`heaviest`, 3,716 bytes) and the three Beast reference
+ * sounds (lead on program 0, kick on drum 36, snare on drum 38, no reverb).
+ */
+export function realBeast() {
+  const svg = readFileSync(new URL('warlock_shiny_animated.svg', BEASTS), 'utf8');
+  if (sha256(svg) !== REAL_SVG_SHA256) throw new Error('tests/fixtures/beasts/warlock_shiny_animated.svg changed');
+  const { scores } = JSON.parse(readFileSync(new URL('midi.json', BEASTS), 'utf8'));
+  const score = scores.find((s) => s.name === 'heaviest');
+  const midi = Buffer.from(score.midi_b64, 'base64');
+  if (midi.length !== score.bytes || sha256(midi) !== score.sha256) throw new Error('heaviest score changed');
+  return { svg, midi, settings: BEAST_SETTINGS };
+}
 
 export const PNG_DATA_URI =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR42mP4z8AARwzEcQCukw/xOF6MEQAAAABJRU5ErkJggg==';
@@ -197,16 +226,21 @@ export function midiWithSysex() {
 export function tokenParts(tokenId) {
   const t = TOKENS[tokenId];
   if (!t) throw new Error(`unknown token ${tokenId}`);
-  const svg = renderSvg(t.name, t.tier);
+  const real = t.real ? realBeast() : null;
+  const svg = real ? real.svg : renderSvg(t.name, t.tier);
   if (svg.toLowerCase().includes('</script')) throw new Error('SVG contains </script');
   const mem = members(tokenId, t.name, t.tier);
-  const settings = settingsFor(t.tier);
-  const { d, pad: dPad } = dFragment(MIDI, settings);
-  return { ...t, tokenId, svg, mem, settings, d, dPad, pageHtml: page(), ...consumerPieces(mem, svg) };
+  const midi = real ? real.midi : MIDI;
+  const settings = real ? real.settings : settingsFor(t.tier);
+  const { d, pad: dPad } = dFragment(midi, settings);
+  return { ...t, tokenId, svg, mem, midi, settings, d, dPad, pageHtml: page(), ...consumerPieces(mem, svg, ALIGN) };
 }
 
+/** The example's consumer word-aligns its two largest appends (see consumerPieces). */
+export const ALIGN = { align: true };
+
 /** What the contract assembles, piece by piece. */
-export const tokenUriSpliced = (tokenId) => spliceTokenUri(tokenParts(tokenId));
+export const tokenUriSpliced = (tokenId) => spliceTokenUri(tokenParts(tokenId), ALIGN);
 
 /** The decoded animation_url HTML: PAGE ++ D ++ SVG. */
 export const animationHtml = (tokenId) => {
@@ -214,8 +248,8 @@ export const animationHtml = (tokenId) => {
   return p.pageHtml + p.d + p.svg;
 };
 
-export const tokenJsonNaive = (tokenId) => naiveTokenJson(tokenParts(tokenId));
-export const tokenUriNaive = (tokenId) => naiveTokenUri(tokenParts(tokenId));
+export const tokenJsonNaive = (tokenId) => naiveTokenJson(tokenParts(tokenId), ALIGN);
+export const tokenUriNaive = (tokenId) => naiveTokenUri(tokenParts(tokenId), ALIGN);
 
 /** The same token as compact JSON (no alignment whitespace), for a semantic comparison. */
 export function tokenJsonCompact(tokenId) {
