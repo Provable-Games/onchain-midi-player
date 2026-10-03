@@ -4,13 +4,14 @@
 // checks it in depth (sandboxed iframe, strict CSP, loop timing, art restart).
 //
 // Loads the page seven ways: fixtures/animation.html from disk, the exact
-// data:text/html;base64,... animation_url from fixtures/token.json, a variant whose MIDI block holds
+// data:text/html;base64,... animation_url of fixtures/token_uri.txt (token 1's token_uri, which
+// test_token_uri.cairo asserts is the contract's byte for byte), a variant whose MIDI block holds
 // a file with two SysEx (F0) events (same notes, same End-of-Track), a variant with settings that
 // do not parse (1,1,30,40,64,0: a token missing), a variant whose gzipped engine is corrupt
 // (one payload byte changed), a variant whose SVG breaks the art rule (a <script> element in
 // it), and token 4's page (a real Beast SVG, the synthetic 3,716-byte score and the reference
-// sounds: its art renders, and ▶ installs the reference sounds and loops at the score's
-// End-of-Track). For the valid pages it checks that the page's shim inflated the
+// sounds, decoded from its token_uri, whose SHA-256 test_token_uri.cairo pins: its art renders, and
+// ▶ installs the reference sounds and loops at the score's End-of-Track). For the valid pages it checks that the page's shim inflated the
 // engine (its gzip tag replaced by an inline script), that the art rendered (including the PNG
 // inside the SVG's foreignObject, by sampling a screenshot pixel), that ▶ is enabled and starts
 // TinySynth with the token's settings (custom lead on program 80, custom kick on drum 36, reverb,
@@ -37,7 +38,7 @@ import { decodePng } from '../../../scripts/png.mjs';
 import { ENGINE_MISSING } from '../../../player/player.js';
 import { engineSource } from '../../../scripts/engine.mjs';
 import {
-  ART_OPEN, TOKENS, animationHtml, midiWithSysex, parseArtBlock, unsafeSvg, withGzipPayload,
+  ART_OPEN, TOKENS, decodeTokenUri, midiWithSysex, parseArtBlock, tokenUriSpliced, unsafeSvg, withGzipPayload,
 } from './reference.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -60,7 +61,8 @@ function instrument() {
   Object.defineProperty(window, 'WebAudioTinySynth', { configurable: true, get: () => Real && Wrapped, set: (v) => { Real = v; } });
 }
 
-const token = JSON.parse(readFileSync(join(root, 'fixtures', 'token.json'), 'utf8'));
+// Decoded as a marketplace decodes it.
+const token = decodeTokenUri(readFileSync(join(root, 'fixtures', 'token_uri.txt'), 'utf8').trim()).json;
 const html = readFileSync(join(root, 'fixtures', 'animation.html'), 'latin1');
 const sysex = midiWithSysex();
 const sysexHtml = html.replace(/(id="midi">)[^<]*(<\/script>)/, `$1${sysex.toString('base64')}$2`);
@@ -87,13 +89,12 @@ const asData = (h) => 'data:text/html;base64,' + Buffer.from(h, 'latin1').toStri
 // or the full-size Beast (token 4)]
 const targets = [
   ['fixtures/animation.html (file://)', pathToFileURL(join(root, 'fixtures', 'animation.html')).href],
-  ['token.json animation_url (data: URI)', token.animation_url],
+  ['token_uri.txt animation_url (data: URI)', token.animation_url],
   ['SysEx MIDI variant (data: URI)', asData(sysexHtml)],
   ['unparsable settings variant 1,1,30,40,64,0 (data: URI)', asData(invalidHtml), { error: INVALID_ERROR, logged: [INVALID_ERROR] }],
   ['corrupt gzipped engine variant (data: URI)', asData(corruptHtml), { error: ENGINE_MISSING, logged: ['gunzip:', ENGINE_MISSING] }],
   ['unsafe SVG variant, a <script> element in the art (data: URI)', asData(unsafeHtml), { truncatedArt: unsafeArt.art }],
-  // UTF-8 bytes as latin1 characters, so asData's latin1 round trip keeps them.
-  ['token 4, a full-size Beast (data: URI)', asData(Buffer.from(animationHtml(4), 'utf8').toString('latin1')), { real: true }],
+  ['token 4, a full-size Beast (data: URI)', decodeTokenUri(tokenUriSpliced(4)).json.animation_url, { real: true }],
 ];
 
 const { browser } = await launchBrowser();
