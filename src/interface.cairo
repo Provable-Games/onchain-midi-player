@@ -111,7 +111,7 @@ pub trait IOnchainTinySynth<T> {
     ///
     /// Cost: a constant, stored in the class at build time (a string literal). Nothing is
     /// base64-encoded at call time. Materializing it costs about 0.3M L2 gas; through a library
-    /// call about 6.2M, most of it returning the 42,644-byte result.
+    /// call about 6.4M, most of it returning the 43,940-byte result.
     fn animation_url_segment(self: @T) -> ByteArray;
 
     /// Returns the per-token settings and MIDI piece, encoded at both layers, to follow
