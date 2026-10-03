@@ -12,8 +12,9 @@ Implemented:
 - **The offline build pipeline (issue #9):** the pinned engine, the page build, the generated [`src/page_data.cairo`](src/page_data.cairo) and the golden fixtures for the class. See [Build pipeline](#build-pipeline).
 - **The gzipped engine (issue #14):** `PAGE` carries the engine gzipped, with a small gunzip shim, which nearly halves the segment and its gas. See [The gzipped engine](#the-gzipped-engine).
 - **The class (issue #10):** `OnchainTinySynth` in [`src/contract.cairo`](src/contract.cairo), with `midi_segment` in [`src/segment.cairo`](src/segment.cairo). It matches every golden fixture byte for byte, directly and through a library call. See [Gas and limits](#gas-and-limits).
+- **The optimized base64 encoder:** the maintainer's `game_components_encoding` package, a pinned dependency that [`src/base64.cairo`](src/base64.cairo) re-exports. A full-size Beast `token_uri` costs 0.29B L2 gas. See [The base64 encoder](#the-base64-encoder).
 
-> **Not ready to declare: the base64 encoder is a temporary stand-in.** [`src/base64.cairo`](src/base64.cairo) holds a byte-wise encoder until the maintainer's optimized encoder is published as `game_components_encoding`. The release gate (issue #12) must not pass with the stand-in in place. See [The base64 encoder](#the-base64-encoder-temporary-stand-in).
+> **Not ready to declare: the encoder must come from a tagged release.** No game-components release tag contains the encoder yet, so [`Scarb.toml`](Scarb.toml) pins it by `rev`. The release gate (issue #12) requires a tagged game-components release in place of the `rev` pin. See [The base64 encoder](#the-base64-encoder).
 
 See [Roadmap](#roadmap).
 
@@ -141,14 +142,14 @@ Only contracts can call these functions. The class is never deployed, so RPC nod
 
 The class is `onchain_tinysynth::contract::OnchainTinySynth`: an empty `#[storage]` struct, no constructor, every entry point a view. `animation_url_segment`, `script_sha256`, `version` and `license` return the generated constants of [`src/page_data.cairo`](src/page_data.cairo). `midi_segment` validates and encodes the settings ([`src/settings.cairo`](src/settings.cairo)), builds `D` and returns `b64(b64(D))` ([`src/segment.cairo`](src/segment.cairo)). Invalid settings revert with the `'TS: ...'` short string and the indices as extra panic felts; through a library call the panic data arrives whole, followed by `'ENTRYPOINT_FAILED'`.
 
-## The base64 encoder (temporary stand-in)
+## The base64 encoder
 
 All base64 in the class goes through one function, `onchain_tinysynth::base64::bytes_base64_encode(_bytes: ByteArray) -> ByteArray`: `midi_segment` (three passes) and the `base64` entry point.
 
-- **Today: a stand-in.** [`src/base64.cairo`](src/base64.cairo) is `bytes_base64_encode` and its two private helpers, copied verbatim from Provable-Games/game-components, `packages/utilities/src/utils/encoding.cairo` at commit `5e48f22` (lines 3-77; SHA-256 of those lines `03d3ce9a26c79fc259e50e85e4f431351c3b997a9ea1606e4d14917915aff4b5`), MIT. It is the same byte-wise encoder as the Beasts NFT's, at about 19.6K L2 gas per input byte. Nothing was edited; only the file's unrelated helpers were left out. Because it will not ship, its notice is not in `license()` or NOTICE.
-- **Final: the maintainer's optimized encoder.** It will be published as the zero-dependency package `game_components_encoding` (`packages/encoding` in game-components) and replace this file as a pinned dependency. It has the same signature, so the swap changes no call site. Its lab measured about 62% less encoding gas than this stand-in; the gas figures below are labelled "stand-in (v1)" where encoding is involved, with the base64 share split out so the effect of the swap can be estimated.
-- **The swap must keep the output.** The encoder's own tests ([`tests/test_base64.cairo`](tests/test_base64.cairo): RFC 4648 vectors, every byte value, every length from 0 to 100, the 31/62/93-byte word boundaries, 1-16 KB inputs, and PAGE encoded twice at call time equal to the pre-encoded segment) and every golden fixture must pass unchanged.
-- **Release gate.** The class must not be declared (issue #12) with the stand-in in place.
+- **The encoder: `game_components_encoding`.** [`src/base64.cairo`](src/base64.cairo) re-exports `bytes_base64_encode` from the maintainer's optimized word-wise encoder, the zero-dependency package `game_components_encoding` (`packages/encoding` in [game-components](https://github.com/Provable-Games/game-components)). It encodes 93-byte blocks into four 31-byte words. For large inputs it costs about 3.3K L2 gas per input byte, or 3.6K through the library call. It uses the unstable corelib features `bounded-int-utils`, `byte-span` and `corelib-get-trait`, which compile as a dependency under Scarb 2.20.1. It is MIT licensed: its license is [vendored](tests/vendor/game-components.LICENSE) and in `license()`.
+- **The pin.** [`Scarb.toml`](Scarb.toml) pins it by `rev` to `66ce934e750f8162de4f6a377357b2b8f8e5c4c0`, because no game-components release tag contains it yet. The SHA-256 of its `packages/encoding/src/encoding.cairo` is `ef6d2fc50e1b5d1d81cd81091d3c34402ad41ebcd670d03e38a2a82b74c13883`. `Scarb.lock` records the same commit.
+- **The output did not change.** It replaced a byte-wise stand-in, copied from game-components' utilities, which cost about 19.6K L2 gas per input byte. The encoder's tests ([`tests/test_base64.cairo`](tests/test_base64.cairo)) cover RFC 4648 vectors, every byte value, every length from 0 to 100, the 31/62/93-byte word boundaries, 1-16 KB inputs, and PAGE encoded twice at call time equal to the pre-encoded segment. They passed unchanged, and so did every golden fixture.
+- **Release gate.** The class must not be declared (issue #12) from the `rev` pin. Before declaring, switch it to the game-components release tag that contains this commit.
 
 ## Integration guide
 
@@ -233,11 +234,11 @@ The consumer chooses where its large pieces land by adding spaces between JSON t
 
 At most 30 groups are needed in each place (120 characters), and the decoded JSON only gains insignificant whitespace. `midi_segment` and the second `b64(S)` cannot be aligned this way: they follow the segment directly at both layers.
 
-**Your own encoder.** Consumers may use their own encoder instead of the class's `base64`, provided it produces standard RFC 4648 output. A copy compiled into the consumer also avoids passing the data through the library call: for a 22.7 KB SVG that saves about 7.4M L2 gas (444.4M instead of 451.8M with the stand-in encoder).
+**Your own encoder.** Consumers may use their own encoder instead of the class's `base64`, provided it produces standard RFC 4648 output. A copy compiled into the consumer also avoids passing the data through the library call: for a 22.7 KB SVG that saves about 7.4M L2 gas (75.2M instead of 82.6M).
 
 ## Gas and limits
 
-L2 gas, measured with snforge 0.64.0 and Scarb 2.20.1. **Figures that involve base64 are with the stand-in encoder (v1)** (see [The base64 encoder](#the-base64-encoder-temporary-stand-in)); each table gives the base64 share, so the effect of the optimized encoder can be estimated. Its lab measured about 62% less encoding gas than the stand-in; the "projected" figures apply that reduction to the base64 share only. The follow-up that swaps in the encoder re-measures all of them.
+L2 gas, measured with snforge 0.64.0 and Scarb 2.20.1, with the optimized encoder (see [The base64 encoder](#the-base64-encoder)). Tables that involve base64 give its share. Where it matters, they also give the figure with the byte-wise stand-in encoder that the class used before (about 19.6K L2 gas per input byte, against about 3.3K now).
 
 ### Entry points
 
@@ -246,25 +247,25 @@ Through `IOnchainTinySynthLibraryDispatcher` on the declared class, as a consume
 | Entry point | L2 gas | Base64 share |
 | --- | --- | --- |
 | `animation_url_segment()` | 6.2M: 0.3M to materialize the constant, the rest to return its 42,644 bytes | none |
-| `midi_segment(midi, settings)` | 5.4M with no MIDI and the default settings; 324.3M with the largest real Beast score (3,716 bytes) and the 3 reference sounds; 739.6M with that score and 8,192 bytes of `SETTINGS` (table below) | 86-100% |
-| `base64(data)` | 0.2M for 3 bytes, 20.5M for 1,023 bytes: about 19.6K per input byte | nearly all |
+| `midi_segment(midi, settings)` | 1.6M with no MIDI and the default settings; 60.7M with the largest real Beast score (3,716 bytes) and the 3 reference sounds (324.3M with the stand-in); 178.2M with that score and 8,192 bytes of `SETTINGS` (739.6M with the stand-in; table below) | 51-98% |
+| `base64(data)` | 0.2M for 3 bytes, 3.8M for 1,023 bytes, and about 3.6K per input byte for large inputs (20.5M for 1,023 bytes with the stand-in) | nearly all |
 | `script_sha256()` | 0.1M | none |
 | `version()` | 0.1M | none |
-| `license()` | 1.0M | none |
+| `license()` | 1.4M | none |
 
 ### `midi_segment` by MIDI and `SETTINGS` size
 
-Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`). Rows are real Beast scores from the onchain composer ([`tests/fixtures/beasts/`](tests/fixtures/beasts/README.md)); columns are `SETTINGS` sizes: the defaults, the 3 Beast reference sounds, 6 timbres, 32 timbres of 8 minimal operators (the most validation work) and the largest valid input (the most encoding work). Each cell is the total with the stand-in encoder, then the base64 share (`b64(midi)` plus the two passes over `D`):
+Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`). Rows are real Beast scores from the onchain composer ([`tests/fixtures/beasts/`](tests/fixtures/beasts/README.md)); columns are `SETTINGS` sizes: the defaults, the 3 Beast reference sounds, 6 timbres, 32 timbres of 8 minimal operators (the most validation work) and the largest valid input (the most encoding work). Each cell is the total, then the base64 share (`b64(midi)` plus the two passes over `D`):
 
 | MIDI | 16 bytes | 334 bytes | 504 bytes | 7,437 bytes | 8,192 bytes |
 | --- | --- | --- | --- | --- | --- |
-| none | 5.2M (96%) | 21.5M (90%) | 30.5M (89%) | 399.5M (86%) | 428.9M (88%) |
-| 816 bytes | 71.1M (99%) | 87.4M (97%) | 96.4M (96%) | 465.4M (88%) | 494.3M (90%) |
-| 1,541 bytes | 129.8M (99%) | 146.2M (98%) | 155.1M (98%) | 523.7M (89%) | 553.1M (91%) |
-| 2,266 bytes | 188.1M (100%) | 204.5M (99%) | 213.4M (98%) | 582.4M (90%) | 611.8M (92%) |
-| 2,991 bytes | 246.4M (100%) | 263.2M (99%) | 271.7M (98%) | 640.7M (91%) | 670.1M (92%) |
-| 3,716 bytes (the largest real score) | 305.1M (100%) | 321.5M (99%) | 330.4M (99%) | 699.0M (92%) | 728.4M (93%) |
-| 3,716 bytes, projected with the optimized encoder | 116.7M | 124.2M | 128.3M | 301.0M | 309.0M |
+| none | 1.4M (86%) | 5.8M (62%) | 8.4M (60%) | 113.9M (51%) | 115.1M (56%) |
+| 816 bytes | 13.2M (97%) | 17.6M (86%) | 19.8M (82%) | 126.1M (56%) | 126.7M (60%) |
+| 1,541 bytes | 23.0M (97%) | 27.8M (90%) | 30.0M (87%) | 135.8M (59%) | 136.5M (62%) |
+| 2,266 bytes | 33.4M (97%) | 37.4M (92%) | 40.3M (90%) | 146.0M (61%) | 146.7M (65%) |
+| 2,991 bytes | 43.0M (97%) | 47.6M (93%) | 49.9M (92%) | 155.9M (64%) | 156.2M (67%) |
+| 3,716 bytes (the largest real score) | 53.5M (98%) | 57.9M (94%) | 60.5M (93%) | 166.3M (66%) | 167.0M (69%) |
+| 3,716 bytes, with the stand-in encoder | 305.1M (100%) | 321.5M (99%) | 330.4M (99%) | 699.0M (92%) | 728.4M (93%) |
 
 The rest is validating and encoding `SETTINGS` (see [Sound settings](#sound-settings-and-custom-sounds)) and assembling `D`. The library call adds the cost of passing the inputs: 2.8M for the score with the reference sounds, 11.2M with 8,192 bytes of `SETTINGS`.
 
@@ -278,26 +279,26 @@ Token 4 of the example ([`examples/beast_consumer`](examples/beast_consumer/READ
 
 Its `token_uri` is 133,525 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
 
-| Piece | Stand-in encoder (v1) | Of which base64 | Projected, optimized encoder |
+| Piece | L2 gas | Of which base64 | With the stand-in encoder |
 | --- | --- | --- | --- |
-| **Whole `BeastLikeNft.token_uri`** | **1,414.6M** | **1,368.0M (97%)** | **about 566M** |
+| **Whole `BeastLikeNft.token_uri`** | **286.2M** | **239.5M (84%)** | **1,414.6M** |
 | `animation_url_segment()` (library call) | 6.2M | none | 6.2M |
-| `midi_segment()` (library call) | 323.7M | 318.2M | about 126M |
-| The consumer's base64 (4 library calls): `b64(svg)` 451.8M, `b64(S)` 602.4M, the head and `'}'` about 5M | about 1,059M | 1,049.8M | about 408M |
+| `midi_segment()` (library call) | 60.1M | 54.6M | 323.7M |
+| The consumer's base64 (4 library calls): `b64(svg)` 82.6M, `b64(S)` 110.2M, the head and `'}'` about 1M | about 194M | 184.9M | about 1,059M |
 | The appends (word-aligned layout; 29.9M unaligned) | 16.0M | none | 16.0M |
 | The rest: SVG and score constants, members, name check | about 10M | none | about 10M |
 
-- **With the stand-in encoder, a real Beast is over budget.** It costs 1.41B, over the 1B target and over Starknet's limit of 1.1×10^9 L2 gas per transaction.
-- **Most of it is the SVG.** Base64 is 97% of the total, and the two passes over the SVG are 74%. These are the same two passes Beasts' metadata makes today: it encodes the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 346M with the stand-in, about 150M projected.
-- **With the optimized encoder the projection is about 0.57B.**
-- **The sample tokens are cheaper:** a 1 KB SVG and a 112-byte MIDI cost 90.2M to 90.6M.
+- **A real Beast costs 0.29B, well under budget:** less than a third of the 1B target, or of Starknet's limit of 1.1×10^9 L2 gas per transaction. With the stand-in encoder it cost 1.41B, over both. The projection from the encoder's lab figures (62% less encoding gas) was about 0.57B; measured, encoding costs about 83% less per byte than with the stand-in.
+- **Most of it is still the SVG.** Base64 is 84% of the total, and the two passes over the SVG are 67%. These are the same two passes Beasts' metadata makes today: it encodes the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 82M (346M with the stand-in).
+- **The sample tokens are cheaper:** a 1 KB SVG and a 112-byte MIDI cost 30.1M to 30.2M (90.2M to 90.6M with the stand-in).
 
 ### The 8,192-byte `SETTINGS` cap (issue #1, Q3)
 
-- **Cost per size.** Every 1,000 bytes of `SETTINGS` add about 52M to `midi_segment` with the stand-in, about 24M projected. Of that, about 6M is validating and encoding; the rest is base64, because `SETTINGS` sits inside `D`, which is encoded twice.
-- **Realistic settings are cheap.** The 3 reference sounds (334 bytes) or 6 timbres (504 bytes) add 16-25M over the defaults with the stand-in, 1-2% of a full Beast `token_uri`.
-- **Worst case at the cap.** The largest real score with 8,192 bytes of `SETTINGS` costs 739.6M through the library call with the stand-in, about 310M projected. In the full Beast `token_uri` above, that gives 1.83B with the stand-in, about 0.76B projected.
-- **Recommendation: keep 8,192 bytes, and confirm it when the encoder is swapped.** With the optimized encoder, even the worst case is projected at about 0.76B: the cap, the largest real score and a full-size animated Beast SVG together. That leaves room under 1B. If the measured worst case after the swap is near 1B, lower the cap to 4,096 bytes before the class is declared. That bounds `midi_segment` at about 213M projected, and the full token at about 0.65B.
+- **Cost per size.** Every 1,000 bytes of `SETTINGS` add about 14M to `midi_segment` (52M with the stand-in). About 6M of that is validating and encoding. The rest is base64, because `SETTINGS` sits inside `D`, which is encoded twice.
+- **Realistic settings are cheap.** The 3 reference sounds (334 bytes) or 6 timbres (504 bytes) add 4-7M over the defaults, about 2% of a full Beast `token_uri`.
+- **Worst case at the cap: about 0.4B.** The largest real score with 8,192 bytes of `SETTINGS` costs 178.2M through the library call (739.6M with the stand-in). In the full Beast `token_uri` above, it replaces the reference sounds' 60.1M, which gives 404.3M (1.83B with the stand-in). A direct measurement agrees: token 4 with the 8,192-byte fixture `valid_max_length` in place of the reference sounds gives a 147,493-character `token_uri` that costs 407.4M.
+- **Larger art.** Each byte of SVG costs about 9K L2 gas in the full `token_uri`: the consumer's two base64 passes through the library call, plus appending `b64(S)` twice. At that rate, the worst case reaches 1B only with an SVG of roughly 85 KB, almost 4 times the animated Warlock's 22.7 KB. This is an extrapolation: the release gate (issue #12) still measures a full-size Beast `token_uri` through the RPC providers.
+- **Recommendation: keep 8,192 bytes.** The worst case is 0.41B measured: the cap, the largest real score and a full-size animated Beast SVG together. That is less than half the 1B target. Lowering the cap to 4,096 bytes would save at most about 60M (the full token at about 0.34B). Realistic sounds are far below either cap: the reference sounds are 334 bytes, and a full per-type pack of about 20 two- or three-operator timbres would be about 2.6 KB.
 
 ## Sound settings and custom sounds
 
@@ -320,7 +321,7 @@ Declared in [`src/types.cairo`](src/types.cairo). The consumer passes a typed `S
 - **Size.** `SETTINGS` is base64-encoded at call time along with the MIDI.
   - It is 16 bytes with the defaults (`1,1,30,40,64,0,0`), plus about 6 bytes per timbre and 50 bytes per operator.
   - The three Beast reference sounds (a 2-operator lead, kick and snare) come to 334 bytes.
-  - The cap is 8,192 bytes. Each 1,000 bytes add about 52M L2 gas to `midi_segment` with the stand-in encoder (see [Gas and limits](#gas-and-limits)).
+  - The cap is 8,192 bytes. Each 1,000 bytes add about 14M L2 gas to `midi_segment` (see [Gas and limits](#gas-and-limits)).
 - **Engine dependencies.** Custom waves need [webaudio-tinysynth#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26). Its storage question is [decided](https://github.com/Provable-Games/webaudio-tinysynth/issues/26#issuecomment-5965255502): each sample wave is stored as one cycle, with its own home pitch. `Filter` needs [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27). Deterministic noise needs [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7). All must land before the class is declared.
 
 ### The `SETTINGS` format
@@ -506,7 +507,7 @@ The class is declared but never deployed, so block explorers cannot call it (`st
 | `tinysynth-b70ba90+page.6` | not declared yet | not declared yet | not declared yet | `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c` | `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` / 9,862 bytes | [`b70ba90`](https://github.com/Provable-Games/webaudio-tinysynth/commit/b70ba90d63c5ea657cb67ca98de90d7f778c29bd) in [Provable-Games/webaudio-tinysynth](https://github.com/Provable-Games/webaudio-tinysynth) |
 
 - The hashes and the length are the build's, from [`src/page_data.cairo`](src/page_data.cairo) (`VERSION`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`); `npm test` fails if the row for the current `version()` disagrees with them. The SHA-256 of the whole `PAGE` for each `version()` is in [`scripts/page_versions.json`](scripts/page_versions.json).
-- **A row is final only once its class is declared.** The class hash covers the class's Cairo code as well as the page, and the base64 encoder that phase 4 implements is temporary, until the maintainer's optimized encoder is published. So the class hashes and the tag are filled in at declaration (roadmap phase 6), and until then the row can still change: a new encoder changes the class hash, and a re-pinned engine or a new page changes `version()` and the hashes. Once declared, a row never changes.
+- **A row is final only once its class is declared.** The class hash covers the class's Cairo code as well as the page. That includes the base64 encoder dependency, which is pinned by `rev` until a game-components release tag contains it; the release gate requires the tag. So the class hashes and the tag are filled in at declaration (roadmap phase 6), and until then the row can still change: a different encoder build changes the class hash, and a re-pinned engine or a new page changes `version()` and the hashes. Once declared, a row never changes.
 - `page.1` to `page.5` were development builds of the page and were never declared.
 
 ## Toolchain
@@ -568,16 +569,16 @@ Per invalid case: the settings and the panic data `midi_segment` must revert wit
 
 ### Class size
 
-The class compiled with Scarb 2.20.1, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info), before and after adding the encoder, and the page constants alone:
+The class compiled with Scarb 2.20.1, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info), with and without the encoder, and the page constants alone:
 
 | | The class | The class without the encoder | Page constants only | Page constants only, `const` felt array (`page.6` before this class) | Limit |
 | --- | --- | --- | --- | --- | --- |
-| Sierra program | 14,377 felts | 12,676 felts | 7,358 felts | 4,369 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 727,248 bytes (18% of the limit) | 628,992 bytes | 321,148 bytes | 191,246 bytes | 4,089,446 bytes |
-| CASM bytecode | 22,242 felts (27% of the limit) | 18,093 felts | 5,289 felts | 2,563 felts | 81,920 felts |
+| Sierra program | 17,676 felts | 12,755 felts | 7,438 felts | 4,369 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 922,222 bytes (23% of the limit) | 634,194 bytes | 326,475 bytes | 191,246 bytes | 4,089,446 bytes |
+| CASM bytecode | 29,293 felts (36% of the limit) | 18,145 felts | 5,341 felts | 2,563 felts | 81,920 felts |
 
-- **The class** is `OnchainTinySynth` with the stand-in encoder. "Without the encoder" is the same class with `bytes_base64_encode` returning its input: the stand-in adds 1,701 Sierra felts, 98 KB and 4,149 CASM felts. The optimized encoder will change these figures.
-- **Page constants only** is a stub class serving `animation_url_segment`, `script_sha256`, `version` and `license`. The string-literal segment costs about 130 KB and 2,700 CASM felts more than the `const` felt array, and saves 3.4M L2 gas on every call.
+- **The class** is `OnchainTinySynth` with the optimized encoder. "Without the encoder" is the same class with `bytes_base64_encode` returning its input: the encoder adds 4,921 Sierra felts, 288 KB and 11,148 CASM felts. The byte-wise stand-in it replaced added 1,701 Sierra felts, 98 KB and 4,149 CASM felts (the whole class was then 727,248 bytes and 22,242 CASM felts). The optimized encoder costs about 190 KB more class size, for about 83% less gas per encoded byte.
+- **Page constants only** is a stub class serving `animation_url_segment`, `script_sha256`, `version` and `license`. The string-literal segment costs about 130 KB and 2,700 CASM felts more than the `const` felt array, and saves 3.4M L2 gas on every call. The last column predates this class and has the 4,104-byte `license()`. The other columns have the 5,721-byte `license()`, which adds the game-components notice.
 - **The rest** of the class is the settings validation and encoding.
 - The method: `contract_class.json` without debug info, and the `bytecode` of `compiled_contract_class.json`.
 
@@ -600,9 +601,9 @@ The consumer's whole library call, including reading the result, is 6.2M (see [G
 1. **Scaffold** (this): repository layout, toolchain, interface declarations, README.
 2. **Player page JS** (done, issue #8): MIDI decode, tap-to-start, play/stop, End-of-Track looping, latency-compensated art restart, offline only.
 3. **Offline build pipeline** (done, issue #9): verifies the pinned engine by SHA-256, gzips it (issue #14), assembles and aligns the page, and generates the pre-encoded Cairo constants plus golden fixtures (reference outputs for sample MIDI and art).
-4. **Cairo class implementation** (done, issue #10, apart from the encoder): the class, `midi_segment`, `SynthSettings` validation and encoding (issue #1), byte-for-byte parity with the JS reference fixtures directly and through `library_call`, the example ported to the class, and gas and class-size measurements. **Remaining:** swap the stand-in base64 encoder for `game_components_encoding` and re-measure.
+4. **Cairo class implementation** (done, issue #10): the class, `midi_segment`, `SynthSettings` validation and encoding (issue #1), byte-for-byte parity with the JS reference fixtures directly and through `library_call`, the example ported to the class, the optimized base64 encoder (`game_components_encoding`), and gas and class-size measurements.
 5. **Browser validation**: Chromium, Firefox and WebKit; playback, looping, art sync, and offline behaviour.
-6. **Docs and declaration**: finalize docs, declare on Sepolia, then on mainnet, and publish the class hashes.
+6. **Docs and declaration**: switch the encoder dependency from its `rev` pin to a tagged game-components release, finalize docs, declare on Sepolia, then on mainnet, and publish the class hashes.
 
 ## Open decisions
 
