@@ -4,8 +4,8 @@
 #
 # Usage: ci-detect.sh   (from the repository root)
 # Writes has_package_json, has_lockfile, has_test, has_check_settings,
-# has_render_check and has_player (true or false) to GITHUB_OUTPUT, or to
-# stdout outside Actions.
+# has_check_page, has_render_check, has_page_check and has_player (true or
+# false) to GITHUB_OUTPUT, or to stdout outside Actions.
 set -euo pipefail
 
 has_script() {
@@ -30,7 +30,9 @@ outputs="$(
   echo "has_lockfile=$(flag test -f package-lock.json)"
   echo "has_test=$(flag has_script test)"
   echo "has_check_settings=$(flag has_script check:settings)"
+  echo "has_check_page=$(flag has_script check:page)"
   echo "has_render_check=$(flag has_script render-check)"
+  echo "has_page_check=$(flag has_script page-check)"
   echo "has_player=$(flag has_player_js)"
 )"
 echo "$outputs"
