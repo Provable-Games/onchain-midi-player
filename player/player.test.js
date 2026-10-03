@@ -195,8 +195,12 @@ describe("the page's player script, fake engine", () => {
     h.click(); // ■
     const stop = h.calls.slice(before);
     assert.deepEqual(stop[0], ["stopMIDI"]);
-    assert.equal(stop.length, 1 + 3 * 16);
-    assert.ok(stop.slice(1).every((x) => x[0] === "cancel" && x[3] === 1.5), "pending channel automation cancelled from now");
+    for (let ch = 0; ch < 16; ch++) {
+      // A fresh volume node into the channel's panner, the old one (and every voice on it) cut off,
+      // and the pending modulation and pan changes dropped.
+      assert.deepEqual(stop.slice(1 + 4 * ch, 5 + 4 * ch), [["connect", `chpan${ch}`], ["disconnect", "chvol", ch], ["cancel", "chmod", ch, 1.5], ["cancel", "chpan", ch, 1.5]]);
+    }
+    assert.equal(stop.length, 1 + 4 * 16);
     assert.equal(h.timers.size, 0, "pending art restart cancelled");
     assert.equal(h.els.icon.attributes.d, PLAY_ICON);
     assert.equal(h.els.play.attributes["aria-label"], "Play");
@@ -378,23 +382,35 @@ describe("the page's player script, real engine", () => {
     hits.slice(0, 3).forEach((t, i) => assert.ok(Math.abs(t - 0.5 * (i + 1)) < 1e-9, `hit ${i} at ${t} s, expected ${0.5 * (i + 1)} s`));
   });
 
-  test("■ drops controller changes TinySynth had already scheduled, so they cannot reach the next playback", async () => {
-    // PPQ 100 at 120 BPM: CC7 100 and a note at tick 0, CC7 0 at tick 100 (0.5 s), End-of-Track at 200.
-    const midi = smf({ ppq: 100, tracks: [[[0, 0xb0, 7, 100], [0, 0x90, 60, 100], [100, 0xb0, 7, 0], [50, 0x80, 60, 0], [50, 0xff, 0x2f, 0]]] });
-    const h = runPage(edited(CASES.default_120bpm, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0 });
+  test("■ cuts off drum voices and notes scheduled ahead, and the controller changes TinySynth had scheduled", async () => {
+    // PPQ 100 at 120 BPM: CC7 100, a note and a drum hit at tick 0; a drum hit and CC7 0 at tick
+    // 50 (0.25 s); End-of-Track at 200.
+    const midi = smf({ ppq: 100, tracks: [[[0, 0xb0, 7, 100], [0, 0x90, 60, 100], [0, 0x99, 36, 100], [50, 0x99, 38, 100], [0, 0xb0, 7, 0], [100, 0x80, 60, 0], [50, 0xff, 0x2f, 0]]] });
+    const h = runPage(edited(CASES.beast_140bpm, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0 });
     h.ready();
     h.click();
     await h.flush();
     const synth = h.synths[0];
-    const ctx = synth.getAudioContext();
-    h.advance(0.42); // the mute at 0.6 s is now scheduled (0.2 s ahead)
-    const vol = synth.chvol[0].gain.name;
     const log = h.audio.log;
-    const muteAt = log.findLastIndex((/** @type {any[]} */ c) => c[0] === vol && c[1] === "set" && c[2] === 0);
-    assert.ok(muteAt >= 0 && log[muteAt][3] > ctx.currentTime, "a future mute is pending");
+    h.advance(0.18); // the hit at 0.35 s (0.1 s offset) is scheduled 0.2 s ahead, the mute too
+    const old = synth.chvol.map((/** @type {any} */ n) => n.name);
+    const drumGains = log.filter((/** @type {any[]} */ c) => c[1] === "connect" && c[2] === old[9]).map((/** @type {any[]} */ c) => c[0]);
+    assert.equal(drumGains.length, 4, "both drum hits (2 operators each) feed channel 10's volume node");
+    const mute = log.find((/** @type {any[]} */ c) => c[0] === `${old[0]}.gain` && c[1] === "set" && c[2] === 0);
+    assert.ok(mute && mute[3] > synth.getAudioContext().currentTime, "a future mute is pending");
+    const from = log.length;
     h.click(); // ■
-    const cancel = log.findIndex((/** @type {any[]} */ c, /** @type {number} */ i) => i > muteAt && c[0] === vol && c[1] === "cancel");
-    assert.ok(cancel > muteAt && log[cancel][2] === ctx.currentTime && log[cancel][2] < log[muteAt][3], "cancelled from now on");
+    const after = log.slice(from);
+    for (let ch = 0; ch < 16; ch++) {
+      assert.ok(after.some((/** @type {any[]} */ c) => c[0] === old[ch] && c[1] === "disconnect"), `channel ${ch}: old volume node cut off`);
+      assert.notEqual(synth.chvol[ch].name, old[ch]);
+      assert.ok(after.some((/** @type {any[]} */ c) => c[0] === synth.chvol[ch].name && c[1] === "connect" && c[2] === synth.chpan[ch].name), `channel ${ch}: new node to the panner`);
+    }
+    // The next ▶ plays through the new nodes.
+    h.click();
+    await h.flush();
+    h.advance(0.2);
+    assert.ok(log.slice(from).some((/** @type {any[]} */ c) => c[1] === "connect" && c[2] === synth.chvol[9].name), "new drum voices use the new node");
   });
 
   test("the custom timbres are installed in the real engine", async () => {

@@ -79,18 +79,18 @@ Alignment. The consumer's own pieces (`'{' ... base64,'`, `S`, `',' <pad>`) must
 - **Settings and MIDI.** It parses and validates `SETTINGS` (`parseSettings`, with the same checks and messages as Cairo), and decodes the MIDI block (strict base64 after trimming the alignment spaces) and checks it (`checkMidi`). The check guarantees that TinySynth's parser reads the file as written and that looping is safe: it rejects running status without a channel status, tempo events that are not 3 bytes (with a one-byte length) or are 0, text events over 4 KB, F7 events and SysEx split over several events, a track without End-of-Track at its end, format 2, SMPTE timing, and a loop shorter than 50 ms.
 - **Fail closed (spec D9).** On any of these errors ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and logged. No synth is created. The art stays.
 - **▶** (a click or tap) constructs TinySynth on the first press (`createSynth`), resumes the `AudioContext` inside the gesture, reloads the MIDI (back to tick 0 at the song's starting tempo, keeping any rest before the first event), loops at End-of-Track with `setLoop(1)` and `setLoopEnd(maxTick)`, and starts playback. It then restarts the art when tick 0 is heard: after TinySynth's scheduling offset (`playTime - currentTime`, 100 ms) plus `AudioContext.outputLatency`, it re-creates the `<img>` with a distinct but equivalent URL (`data:image/svg+xml;r=<n>;base64,...`), so the browser starts a new animation timeline, and swaps it in once decoded.
-- **■** stops playback, cancels a pending art restart, and drops the controller changes TinySynth had already scheduled on its channels (so they cannot reach the next playback). The art keeps running.
+- **■** stops playback and cancels a pending art restart. It also cuts off every voice, including drum voices and notes already scheduled ahead (which TinySynth's `stopMIDI` leaves running), by replacing each channel's volume node, and drops the controller changes TinySynth had already scheduled, so nothing reaches the next playback. The art keeps running.
 - Plain JavaScript (`// @ts-check` and JSDoc), no modules, no `eval`, no network requests, no storage or cookies. It works in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles and `data:` images.
 
 Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) records them):
 
 | | Bytes |
 | --- | --- |
-| `PAGE` | 45,711 |
+| `PAGE` | 45,810 |
 | of which the engine | 37,060 |
-| of which the player (minified) | 7,456 |
-| `PAGE` without the player's settings range re-check (`validateSettings`) | 44,424 (1,287 less) |
-| `animation_url_segment()` | 81,316 |
+| of which the player (minified) | 7,552 |
+| `PAGE` without the player's settings range re-check (`validateSettings`) | 44,523 (1,287 less) |
+| `animation_url_segment()` | 81,492 |
 | `license()` | 2,594 |
 
 The range re-check stays for now (spec Q4); dropping it would save the 1,287 bytes above.
@@ -107,7 +107,7 @@ Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`.
 | `midi_segment(midi: ByteArray, settings: SynthSettings) -> ByteArray` | `b64(b64(D))`: the token's settings and MIDI blocks, then opens the art block. Validates `settings` and encodes only per-token data. |
 | `base64(data: ByteArray) -> ByteArray` | Standard RFC 4648 base64 with `=` padding, for consumers encoding their own JSON pieces. |
 | `script_sha256() -> u256` | Constant SHA-256 of the embedded engine JS (big-endian). |
-| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.3'` (see [Build pipeline](#build-pipeline)). |
+| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.4'` (see [Build pipeline](#build-pipeline)). |
 | `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice. |
 
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
@@ -351,9 +351,9 @@ A stub class serving only the `page_data` constants (`animation_url_segment`, `s
 
 | | Stub class | Same class, empty constants | Limit |
 | --- | --- | --- | --- |
-| Sierra program | 7,430 felts | 204 felts | |
+| Sierra program | 7,443 felts | 204 felts | |
 | Contract class as declared (Sierra, entry points, ABI) | 328 KB | 9 KB | 4,089,446 bytes |
-| CASM bytecode | 3,762 felts | 311 felts | 81,920 felts |
+| CASM bytecode | 3,767 felts | 311 felts | 81,920 felts |
 
 The constants take about 8% of the class size limit and 4% of the bytecode limit.
 

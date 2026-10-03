@@ -31,7 +31,7 @@ export function webAudioMock() {
     constructor(kind) { this.name = `${kind}#${++id}`; nodes[this.name] = this; log.push([this.name, "create"]); }
     /** @param {any} dest */
     connect(dest) { log.push([this.name, "connect", dest.name ?? String(dest)]); }
-    disconnect() {}
+    disconnect() { log.push([this.name, "disconnect"]); }
     /** @param {number} t */
     start(t) { log.push([this.name, "start", t]); }
     /** @param {number} t */

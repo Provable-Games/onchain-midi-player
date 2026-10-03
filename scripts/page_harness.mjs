@@ -198,7 +198,14 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     vm.createContext(sandbox);
     sandbox.WebAudioTinySynth = function FakeSynth(/** @type {any} */ opts) {
       if (constructError) throw new Error(constructError);
-      const ctx = { state: "suspended", currentTime: 1.5, outputLatency, resume: () => {
+      const ctx = {
+        state: "suspended", currentTime: 1.5, outputLatency,
+        createGain: () => ({
+          gain: { value: 1 },
+          connect: (/** @type {any} */ to) => calls.push(["connect", to.name]),
+          disconnect: () => calls.push(["disconnect", "chvol (replaced)"]),
+        }),
+        resume: () => {
         calls.push(["resume"]);
         if (resumeError) return Promise.reject(new Error(resumeError));
         ctx.state = "running";
@@ -208,9 +215,10 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
       const synth = { opts, ctx, maxTick: 0, playTime: 0, playTick: 0, tick2Time: 0.01, timbres: [] };
       // Channel nodes, whose pending automation the player cancels on ■.
       const param = (/** @type {string} */ name, /** @type {number} */ ch) => ({ cancelScheduledValues: (/** @type {number} */ t) => calls.push(["cancel", name, ch, t]) });
-      synth.chvol = Array.from({ length: 16 }, (_, ch) => ({ gain: param("chvol", ch) }));
+      synth.chvol = Array.from({ length: 16 }, (_, ch) => ({ gain: { value: 1 }, disconnect: () => calls.push(["disconnect", "chvol", ch]) }));
+      synth.out = { name: "out" };
       synth.chmod = Array.from({ length: 16 }, (_, ch) => ({ gain: param("chmod", ch) }));
-      synth.chpan = Array.from({ length: 16 }, (_, ch) => ({ pan: param("chpan", ch) }));
+      synth.chpan = Array.from({ length: 16 }, (_, ch) => ({ name: `chpan${ch}`, pan: param("chpan", ch) }));
       const record = (/** @type {string} */ name, /** @type {(...a: any[]) => void} */ f = () => {}) => (/** @type {any[]} */ ...args) => { calls.push([name, ...args]); f(...args); };
       Object.assign(synth, {
         getAudioContext: () => ctx,

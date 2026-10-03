@@ -27,7 +27,7 @@ export const PAGE_PATH = new URL("../tests/fixtures/page.html", import.meta.url)
  * build fails when PAGE changes under a recorded VERSION: bump PAGE_VERSION (or re-pin the engine),
  * then record the new VERSION with `npm run gen:page -- --record`.
  */
-export const PAGE_VERSION = 3;
+export const PAGE_VERSION = 4;
 export const VERSION = `tinysynth-${ENGINE_PIN.ref}+page.${PAGE_VERSION}`;
 export const PAGE_VERSIONS_PATH = new URL("./page_versions.json", import.meta.url);
 

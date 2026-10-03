@@ -20,8 +20,9 @@
  *    playback (keeping any rest before the first event), and restarts the art when tick 0 is
  *    heard: after TinySynth's scheduling offset (`playTime - currentTime`) plus the context's
  *    output latency.
- * 4. ■ stops playback, cancels a pending art restart and the controller changes TinySynth had
- *    already scheduled. The art keeps running.
+ * 4. ■ stops playback, cutting off every voice (drums and notes scheduled ahead included), and
+ *    cancels a pending art restart and the controller changes TinySynth had already scheduled. The
+ *    art keeps running.
  *
  * Plain browser JavaScript: no modules in the page, no eval, no network requests, no storage. Works
  * in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles
@@ -269,14 +270,19 @@ export function startPlayer() {
       if (playing) {
         setPlaying(false);
         synth.stopMIDI();
-        // TinySynth schedules controller changes (volume, expression, pan, modulation) ahead of
-        // time on its channel nodes and never cancels them; drop those still pending, so they
-        // cannot change the next playback.
-        const now = synth.getAudioContext().currentTime;
+        // stopMIDI leaves drum voices, and notes already scheduled ahead, playing, and TinySynth
+        // schedules controller changes ahead and never cancels them. Every voice reaches the output
+        // through its channel's volume node, so replace those nodes: that cuts off every voice and
+        // the volume changes they carried. Then drop the pending pan and modulation changes.
+        const ctx = synth.getAudioContext();
         for (let ch = 0; ch < 16; ch++) {
-          synth.chvol[ch].gain.cancelScheduledValues(now);
-          synth.chmod[ch].gain.cancelScheduledValues(now);
-          if (synth.chpan[ch]) synth.chpan[ch].pan.cancelScheduledValues(now);
+          const vol = ctx.createGain();
+          vol.gain.value = synth.chvol[ch].gain.value;
+          vol.connect(synth.chpan[ch] || synth.out);
+          synth.chvol[ch].disconnect();
+          synth.chvol[ch] = vol;
+          synth.chmod[ch].gain.cancelScheduledValues(ctx.currentTime);
+          if (synth.chpan[ch]) synth.chpan[ch].pan.cancelScheduledValues(ctx.currentTime);
         }
         return;
       }

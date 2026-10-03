@@ -237,12 +237,17 @@ async function checkDataPage() {
   check(Math.abs(starts[0] - play.playTime) < 1e-9, `first note at playTime (${play.playTime.toFixed(4)} s)`);
   await checkLoop(page, c);
 
+  await page.evaluate(() => { /** @type {any} */ (window).__vols = /** @type {any} */ (window).__check.synth.chvol.slice(); });
   await page.click("#play");
   st = await state(page);
   const sends = st.sends;
   await page.waitForTimeout(400);
   const stopped = await state(page);
   check(st.label === "Play" && stopped.synth.playing === 0 && stopped.sends === sends, "■ stops: nothing scheduled after it");
+  check(await page.evaluate(() => {
+    const w = /** @type {any} */ (window);
+    return w.__check.synth.chvol.every((/** @type {any} */ n, /** @type {number} */ i) => n !== w.__vols[i]);
+  }), "■ replaced every channel's volume node, cutting off drum voices and notes scheduled ahead");
 
   await page.click("#play");
   await page.waitForFunction(() => /** @type {any} */ (window).__check.imgs.length >= 3, null, { timeout: 3000 }).catch(() => {});
