@@ -6,12 +6,19 @@
 // Usage: node art_periods.mjs <art.svg>
 //
 // It lists each embedded GIF (data:image/gif;base64,...) with its frame delays and its loop, and
-// every SMIL `dur` and CSS animation duration. It does not judge which animations are visible: an
-// opacity animation from 1 to 0.999, for example, changes nothing a viewer can see.
+// every SMIL `dur` and CSS animation duration. It flags GIF delays under 20 ms, which browsers do not
+// show as encoded. It does not judge which animations are visible: an opacity animation from 1 to
+// 0.999, for example, changes nothing a viewer can see.
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+/**
+ * Frame delays below this (0 or 10 ms) are not shown as encoded: browsers substitute a longer delay,
+ * so the encoded sum is not the period a viewer sees.
+ */
+export const MIN_RELIABLE_DELAY = 20;
 
 /**
  * The frame delays of a GIF, in milliseconds, from its graphic control extensions. Walks the
@@ -92,7 +99,11 @@ export function artPeriods(svg) {
   for (const [, b64] of svg.matchAll(/data:image\/gif;base64,([A-Za-z0-9+/=]+)/g)) {
     const delays = gifDelays(Buffer.from(b64, "base64"));
     const loop = delays.reduce((a, b) => a + b, 0);
-    lines.push(`GIF: ${delays.length} frames, delays ${delays.join(", ")} ms, loop ${loop} ms`);
+    const short = delays.filter((d) => d < MIN_RELIABLE_DELAY);
+    lines.push(`GIF: ${delays.length} frames, delays ${delays.join(", ")} ms, ${short.length ? "encoded " : ""}loop ${loop} ms`);
+    if (short.length) {
+      lines.push(`  warning: ${short.length} frame delay${short.length > 1 ? "s" : ""} under ${MIN_RELIABLE_DELAY} ms; browsers show very short delays longer than encoded, so measure this GIF's period in a browser`);
+    }
   }
   for (const [, dur] of svg.matchAll(/\bdur\s*=\s*['"]([^'"]+)['"]/g)) lines.push(`SMIL dur ${dur}`);
   for (const dur of cssDurations(svg)) lines.push(`CSS animation ${dur}`);

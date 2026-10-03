@@ -25,6 +25,8 @@ SMIL dur 6s
 SMIL dur 3s
 ```
 
+If it warns about GIF delays under 20 ms, measure that GIF's period in a browser: browsers show very short delays longer than encoded.
+
 Then look at what each animation does. In that SVG:
 
 - the GIF loops every 0.8 s;

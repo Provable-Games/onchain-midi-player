@@ -259,6 +259,17 @@ describe("the skills' helper scripts", () => {
       ".b{animation-duration: 1s, 3s; animation-name: x, y; animation-delay: 9s}.c{-webkit-animation:pulse .8s}";
     assert.deepEqual(cssDurations(css), ["1s", "2400ms", "1s", "3s", ".8s"]);
     assert.throws(() => gifDelays(Buffer.from("PNG")), /not a GIF/);
+    // The Beast's GIF with its delays set to 0 and 10 ms: the encoded loop is flagged, not trusted.
+    const gif = Buffer.from(/** @type {RegExpMatchArray} */ (svg.match(/data:image\/gif;base64,([A-Za-z0-9+/=]+)/))[1], "base64");
+    const fast = Buffer.from(gif);
+    let frame = 0;
+    for (let p = fast.indexOf(Buffer.from([0x21, 0xf9, 0x04])); p >= 0; p = fast.indexOf(Buffer.from([0x21, 0xf9, 0x04]), p + 1)) {
+      fast.writeUInt16LE(frame++ % 2, p + 4);
+    }
+    assert.deepEqual(gifDelays(fast), [0, 10, 0, 10]);
+    const report = artPeriods(`<svg><image href='data:image/gif;base64,${fast.toString("base64")}'/></svg>`);
+    assert.equal(report[0], "GIF: 4 frames, delays 0, 10, 0, 10 ms, encoded loop 20 ms");
+    assert.match(report[1], /^ {2}warning: 4 frame delays under 20 ms; .*measure this GIF's period in a browser$/);
   });
 
   test("bytearray: a raw starknet_call result and sncast --json output give the token_uri", () => {
