@@ -417,8 +417,8 @@ export function constFeltArray(name, felts) {
  * A ByteArray constant as a string literal in a function body. The compiler lowers a literal to
  * the ByteArray's words as constants, so materializing it costs a fraction of deserializing a
  * `const` felt array (0.28M against 3.70M L2 gas for the 42,644-byte segment), for a larger class
- * (about 2,100 more CASM felts). Only for base64 text, which needs no escaping; `scarb fmt` leaves
- * the long literal line alone.
+ * (about 130 KB and 2,700 CASM felts more for the page constants; README, "Class size"). Only for
+ * base64 text, which needs no escaping; `scarb fmt` leaves the long literal line alone.
  * @param {string} fnName
  * @param {string} text
  * @param {string[]} doc

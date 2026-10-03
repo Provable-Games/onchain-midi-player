@@ -105,8 +105,9 @@ pub trait IOnchainTinySynth<T> {
     /// - The `animation_url` string is left open: it is continued by `midi_segment()` and
     ///   closed by the consumer's `b64(S)`.
     ///
-    /// Cost: a constant, stored in the class at build time. Nothing is base64-encoded at
-    /// call time; the cost is dominated by materializing the constant `ByteArray`.
+    /// Cost: a constant, stored in the class at build time (a string literal). Nothing is
+    /// base64-encoded at call time. Materializing it costs about 0.3M L2 gas; through a library
+    /// call about 6.2M, most of it returning the 42,644-byte result.
     fn animation_url_segment(self: @T) -> ByteArray;
 
     /// Returns the per-token settings and MIDI piece, encoded at both layers, to follow
@@ -140,12 +141,14 @@ pub trait IOnchainTinySynth<T> {
     /// - `D` closes the MIDI block and opens the art block; the consumer's following
     ///   `b64(S)` supplies the art and closes both data URIs.
     ///
-    /// Cost: validation of `settings`, plus two base64 passes over roughly
-    /// `len(midi) + len(SETTINGS)` bytes; independent of engine size. `SETTINGS` is 16 bytes
-    /// with defaults, plus about 6 bytes per timbre and 50 per operator (the 3 Beast
-    /// reference sounds: 334 bytes). Validating and encoding 6 timbres costs about 3.3M L2
-    /// gas; the largest valid `SETTINGS` (8,192 bytes) about 51M, and 32 timbres of 8
-    /// operators about 56M, before base64.
+    /// Cost: validation and encoding of `settings`, then base64 over `midi` once and over `D`
+    /// (about `len(SETTINGS) + 4 * len(midi) / 3 + 89` bytes) twice; independent of engine size.
+    /// `SETTINGS` is 16 bytes with defaults, plus about 6 bytes per timbre and 50 per operator
+    /// (the 3 Beast reference sounds: 334 bytes). Validating and encoding 6 timbres costs about
+    /// 3.3M L2 gas; the largest valid `SETTINGS` (8,192 bytes) about 51M, and 32 timbres of 8
+    /// operators about 56M. Base64 is the rest: with the temporary stand-in encoder (see
+    /// `base64`), about 320M for the largest real Beast score (3,716 bytes) with the reference
+    /// sounds, and about 740M with 8,192 bytes of `SETTINGS` (measurements in the README).
     fn midi_segment(self: @T, midi: ByteArray, settings: SynthSettings) -> ByteArray;
 
     // ------------------------------------------------------------------------------------
@@ -156,12 +159,15 @@ pub trait IOnchainTinySynth<T> {
     /// breaks. Empty input returns an empty `ByteArray`.
     ///
     /// Exposed so consumers can encode their own JSON pieces with the same encoder this
-    /// class uses. Planned as a felt-wise encoder (working on whole `ByteArray` words
-    /// rather than byte by byte). The result is a `ByteArray` so callers can splice it
-    /// directly; output length is `4 * ceil(len(data) / 3)`.
+    /// class uses (`crate::base64::bytes_base64_encode`, which also serves `midi_segment`).
+    /// The result is a `ByteArray` so callers can splice it directly; output length is
+    /// `4 * ceil(len(data) / 3)`.
     ///
-    /// Cost: linear in `len(data)`. Do not use it on large fixed data; that is why the
-    /// engine and page are stored pre-encoded.
+    /// The encoder in this revision is a temporary byte-wise stand-in; the class is declared
+    /// only with the maintainer's optimized word-wise encoder, which gives the same output.
+    ///
+    /// Cost: linear in `len(data)`; about 19.6K L2 gas per input byte with the stand-in. Do not
+    /// use it on large fixed data; that is why the engine and page are stored pre-encoded.
     fn base64(self: @T, data: ByteArray) -> ByteArray;
 
     /// SHA-256 of the embedded TinySynth engine JavaScript, decompressed: exactly the bytes of
