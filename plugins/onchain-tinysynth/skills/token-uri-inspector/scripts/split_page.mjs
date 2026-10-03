@@ -12,8 +12,10 @@
 // It writes settings.txt (SETTINGS, as written, without the alignment spaces), midi.b64 and art.svg
 // (the bytes after the art block's opening tag) to out_dir (default: the page's directory). With
 // image.svg (the token's decoded `image`), it checks that the art block holds the same bytes. It
-// checks that the art contains no `</script`, where a browser would end the art block. Exit status:
-// 0 when every check passes, 1 when one fails, 2 when the page is not an onchain TinySynth page.
+// checks that the art contains no `</script`, where a browser would end the art block. It reads its
+// inputs before writing, and refuses an out_dir where an output would overwrite an input. Exit
+// status: 0 when every check passes, 1 when one fails, 2 for a usage error, an unreadable input, or a
+// page that is not an onchain TinySynth page.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -64,26 +66,45 @@ export function checkArt(art, image) {
   return { ok, lines };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [pagePath, imagePath, outArg] = process.argv.slice(2);
+/**
+ * Runs the command line and returns the exit status. Inputs are read before anything is written,
+ * and no output may overwrite an input.
+ * @param {string[]} args
+ * @param {(line: string) => void} [out]
+ * @param {(line: string) => void} [err]
+ */
+export function run(args, out = console.log, err = console.error) {
+  const [pagePath, imagePath, outArg] = args;
   if (!pagePath) {
-    console.error("usage: node split_page.mjs <animation.html> [image.svg] [out_dir]");
-    process.exit(2);
+    err("usage: node split_page.mjs <animation.html> [image.svg] [out_dir]");
+    return 2;
   }
   const outDir = outArg ?? dirname(pagePath);
+  const outputs = ["settings.txt", "midi.b64", "art.svg"].map((name) => join(outDir, name));
+  for (const input of [pagePath, imagePath]) {
+    if (input && outputs.some((o) => resolve(o) === resolve(input))) {
+      err(`${input} would be overwritten by an output: choose another out_dir`);
+      return 2;
+    }
+  }
   let blocks;
+  /** @type {Buffer | undefined} */
+  let image;
   try {
     blocks = splitPage(readFileSync(pagePath));
+    image = imagePath ? readFileSync(imagePath) : undefined;
   } catch (e) {
-    console.error(String(/** @type {Error} */ (e).message));
-    process.exit(2);
+    err(String(/** @type {Error} */ (e).message));
+    return 2;
   }
-  writeFileSync(join(outDir, "settings.txt"), blocks.settings + "\n");
-  writeFileSync(join(outDir, "midi.b64"), blocks.midiB64 + "\n");
-  writeFileSync(join(outDir, "art.svg"), blocks.art);
-  console.log(`SETTINGS: ${blocks.settings.length} bytes; MIDI: ${blocks.midiB64.length} base64 characters; art: ${blocks.art.length} bytes`);
-  console.log(`wrote settings.txt, midi.b64 and art.svg to ${outDir}`);
-  const { ok, lines } = checkArt(blocks.art, imagePath ? readFileSync(imagePath) : undefined);
-  for (const line of lines) console.log(line);
-  process.exitCode = ok ? 0 : 1;
+  writeFileSync(outputs[0], blocks.settings + "\n");
+  writeFileSync(outputs[1], blocks.midiB64 + "\n");
+  writeFileSync(outputs[2], blocks.art);
+  out(`SETTINGS: ${blocks.settings.length} bytes; MIDI: ${blocks.midiB64.length} base64 characters; art: ${blocks.art.length} bytes`);
+  out(`wrote settings.txt, midi.b64 and art.svg to ${outDir}`);
+  const { ok, lines } = checkArt(blocks.art, image);
+  for (const line of lines) out(line);
+  return ok ? 0 : 1;
 }
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = run(process.argv.slice(2));

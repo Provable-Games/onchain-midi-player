@@ -18,14 +18,13 @@ import { dirname, join, relative, resolve } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { OPERATOR_FIELDS } from "../player/settings.js";
-import { OPERATOR_RANGES } from "../player/validate.js";
 import { ENGINE_PIN, engineSource } from "./engine.mjs";
 import { VERSION, byteArrayFelts } from "./page.mjs";
 import { buildPreview, settingsFromText } from "./preview.mjs";
 import { DEFAULT_OPERATOR } from "./settings_fixtures.mjs";
 import { artPeriods, cssDurations, gifDelays } from "../plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs";
 import { byteArrayFromFelts, tokenUriFromCall } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/bytearray.mjs";
-import { checkArt, splitPage } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/split_page.mjs";
+import { checkArt, run as splitRun, splitPage } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/split_page.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PLUGIN = join(ROOT, "plugins/onchain-tinysynth");
@@ -210,15 +209,16 @@ describe("content kept in step with the code", () => {
     for (const text of thrown) assert.ok(reference.includes("`" + text) || reference.includes("`midi: " + text + "`"), `the reference lists "${text}"`);
   });
 
-  test("the sound-design operator table matches the validator's ranges and default_operator()", () => {
+  test("the sound-design operator table matches the operator fields, their types and default_operator()", () => {
     const table = read("plugins/onchain-tinysynth/skills/sound-design/references/operator-fields.md");
     const n = (/** @type {number} */ x) => x.toLocaleString("en-US");
-    for (const [name, , key] of OPERATOR_FIELDS) {
-      const [min, max] = OPERATOR_RANGES[name];
-      const row = `| \`${name}\` | \`${key}\` | ${n(min)} to ${n(max)} | ${n(/** @type {any} */ (DEFAULT_OPERATOR)[name])} |`;
+    for (const [name, type, key] of OPERATOR_FIELDS) {
+      const row = `| \`${name}\` | \`${key}\` | \`${type}\` | ${n(/** @type {any} */ (DEFAULT_OPERATOR)[name])} |`;
       assert.ok(table.includes(row), `row: ${row}`);
     }
-    assert.ok(table.includes("| `route` | `g` | 0 to 18 | 0 |"));
+    assert.ok(table.includes("| `route` | `g` | `u8` | 0 |"));
+    // No validation ranges: they are the check table's to state (src/settings.cairo).
+    assert.doesNotMatch(table, /\d to [\d,]+ \|/);
   });
 
   test("every gas figure in the skills appears in the README", () => {
@@ -350,5 +350,26 @@ describe("the skills' helper scripts", () => {
     assert.equal(unsafe.ok, false);
     assert.match(unsafe.lines[0], /contains "<\/script" at byte 13/);
     assert.throws(() => splitPage(Buffer.from("<html></html>")), /not an onchain TinySynth page/);
+  });
+
+  test("split_page CLI: refuses to overwrite an input, and reports a differing image", () => {
+    const page = readFileSync(join(ROOT, "examples/beast_consumer/fixtures/animation.html"));
+    const sub = mkdtempSync(join(dir, "split-"));
+    const pagePath = join(sub, "animation.html");
+    const imagePath = join(sub, "art.svg"); // where the extracted art would be written by default
+    writeFileSync(pagePath, page);
+    writeFileSync(imagePath, "<svg>different</svg>");
+    /** @type {string[]} */
+    const out = [];
+    /** @type {string[]} */
+    const err = [];
+    const quiet = { out: (/** @type {string} */ l) => out.push(l), err: (/** @type {string} */ l) => err.push(l) };
+    assert.equal(splitRun([pagePath, imagePath], quiet.out, quiet.err), 2);
+    assert.match(err[0], /would be overwritten by an output/);
+    assert.equal(readFileSync(imagePath, "utf8"), "<svg>different</svg>", "the image is untouched");
+    const outDir = mkdtempSync(join(sub, "out-"));
+    assert.equal(splitRun([pagePath, imagePath, outDir], quiet.out, quiet.err), 1);
+    assert.ok(out.some((l) => /^FAIL the art block \(\d+ bytes\) differs from the image \(20 bytes\)$/.test(l)), out.join("\n"));
+    assert.ok(readFileSync(join(outDir, "art.svg")).equals(splitPage(page).art));
   });
 });
