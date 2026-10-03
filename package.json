@@ -11,6 +11,12 @@
     "test": "node --test \"player/**/*.test.js\" \"scripts/**/*.test.mjs\"",
     "gen:settings": "node scripts/gen_settings_fixtures.mjs",
     "check:settings": "node scripts/gen_settings_fixtures.mjs --check",
-    "render-check": "node scripts/render_check.mjs"
+    "gen:page": "node scripts/build_page.mjs",
+    "check:page": "node scripts/build_page.mjs --check",
+    "render-check": "node scripts/render_check.mjs",
+    "page-check": "node scripts/page_check.mjs"
+  },
+  "devDependencies": {
+    "terser": "5.51.2"
   }
 }

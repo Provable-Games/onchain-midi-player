@@ -27,5 +27,7 @@ updates:
       codex-cli:
         patterns: ["*"]
 
-  # The root package.json (PR #5) has no dependencies, so it needs no npm entry
-  # yet. Add one for directory "/" if it gains dependencies and a lockfile.
+  # The root package.json has one devDependency, Terser, pinned exactly: its
+  # version determines the bytes of the page the class embeds, so it changes
+  # only deliberately (npm run gen:page, then a new PAGE_VERSION), not through
+  # Dependabot.

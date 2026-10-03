@@ -116,7 +116,8 @@ pub trait IOnchainTinySynth<T> {
     ///   Every field is range-checked by `settings::validate`; out-of-range values revert
     ///   with a `'TS: ...'` short string followed by the 0-based indices of the offending
     ///   wave, timbre or operator, so an invalid setting can never reach the page. The
-    ///   checks, their order and their messages are listed in `settings.cairo`.
+    ///   checks, their order and their messages are listed in `settings.cairo`. They are
+    ///   enforced only here: the page parses `SETTINGS` strictly and trusts these ranges.
     ///
     /// Output (bytes, ASCII base64 text):
     ///
@@ -160,19 +161,21 @@ pub trait IOnchainTinySynth<T> {
     fn base64(self: @T, data: ByteArray) -> ByteArray;
 
     /// SHA-256 of the embedded TinySynth engine JavaScript (exactly the bytes of the pinned
-    /// fork release's minified file, as embedded in `PAGE`), stored as a constant. The
+    /// fork build's minified file, as embedded in `PAGE`), stored as a constant. The
     /// 32-byte digest is interpreted big-endian (first digest byte is the most significant
     /// byte of the `u256`), matching the usual hex form printed by `sha256sum`.
     ///
     /// The raw script is deliberately not exposed: the class is never deployed, so only
     /// contracts could call such a getter, and the script is already inside every
     /// `animation_url`. To verify, decode a `token_uri` offchain, extract the engine script
-    /// from the page, hash it, and compare with this value and the fork release's
-    /// published SHA-256.
+    /// from the page, hash it, and compare with this value and with `sha256sum` of the fork's
+    /// `webaudio-tinysynth.min.js` at the pinned commit or release (see the README).
     fn script_sha256(self: @T) -> u256;
 
     /// Short-string (at most 31 ASCII bytes) identifying the engine and page versions of
-    /// this class, e.g. `'tinysynth-pg.1+page.1'`. Changes whenever the engine, page, or
+    /// this class: `'tinysynth-<engine ref>+page.<n>'`, e.g. `'tinysynth-b70ba90+page.1'`, where
+    /// the engine ref is the pinned fork commit (short SHA) or release tag. Changes whenever the
+    /// engine, page, or
     /// built-in sound settings change, which always implies a new class hash.
     fn version(self: @T) -> felt252;
 

@@ -1,203 +1,40 @@
 // Offline reference for the beast_consumer example. Node built-ins only.
 //
 // This module is a deliberately independent JavaScript re-implementation of everything the Cairo
-// side produces:
+// side of the example produces:
 //
-//   - the mock PAGE (what the real phase-3 build pipeline will assemble around the TinySynth engine)
-//   - MockOnchainTinySynth: D, midi_segment, animation_url_segment (SETTINGS itself comes from the
-//     repository's reference encoder, player/encode.js, which the root parity tests tie to Cairo)
-//   - BeastLikeNft: token table, render_svg, JSON members, MIDI, SynthSettings
+//   - MockOnchainTinySynth: animation_url_segment, D and midi_segment, from the repository's JS
+//     reference (scripts/page.mjs): the real PAGE, built by scripts/build_page.mjs into
+//     tests/fixtures/page.html, and SETTINGS from player/encode.js, which the root parity tests tie
+//     to Cairo
+//   - BeastLikeNft: token table, render_svg, JSON members, MIDI, SynthSettings, and the token_uri
+//     it splices together (the Beasts layout, also from scripts/page.mjs)
 //
-// gen_page.mjs turns PAGE into the generated Cairo constant. gen_fixtures.mjs builds every token's
-// token_uri twice (naive one-pass nesting and the spliced layout), checks they are equal, and writes
-// the golden file the Cairo tests compare against. If the Cairo and the JS ever drift, the golden
-// test fails.
+// gen_fixtures.mjs builds every token's token_uri twice (naive one-pass nesting and the spliced
+// layout), checks they are equal, and writes the golden file the Cairo tests compare against. If
+// the Cairo and the JS ever drift, the golden test fails.
 
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { encodeSettings } from '../../../player/encode.js';
-import { validateSettings } from '../../../player/settings.js';
+import {
+  ART_OPEN, IMAGE_KEY, MIDI_OPEN, SETTINGS_OPEN, URL_KEY, b64, blen, bytes, consumerPieces, decodeTokenUri,
+  dFragment, naiveTokenJson, naiveTokenUri, padLen, pageHtml, segmentFor, settingsText, sha256, spaces,
+  spliceTokenUri, strictB64Decode,
+} from '../../../scripts/page.mjs';
 
-// ---------------------------------------------------------------------------------------------
-// Bytes and base64
-// ---------------------------------------------------------------------------------------------
+export {
+  ART_OPEN, IMAGE_KEY, MIDI_OPEN, SETTINGS_OPEN, URL_KEY, b64, blen, bytes, consumerPieces, decodeTokenUri,
+  dFragment, naiveTokenJson, naiveTokenUri, padLen, segmentFor, sha256, spaces, spliceTokenUri, strictB64Decode,
+};
 
-/** String (encoded as UTF-8, like Cairo ByteArray literals) or Buffer (binary, e.g. MIDI) -> Buffer. */
-export const bytes = (x) => (Buffer.isBuffer(x) ? x : Buffer.from(x, 'utf8'));
-/** Length in bytes, which is what every alignment rule counts. */
-export const blen = (x) => bytes(x).length;
-/** Standard RFC 4648 base64 with '=' padding, as an ASCII string. */
-export const b64 = (x) => bytes(x).toString('base64');
-export const spaces = (n) => ' '.repeat(n);
-/** Number of spaces that brings `len + extra` up to a multiple of `k`. */
-export const padLen = (len, k) => (k - (len % k)) % k;
-export const sha256 = (x) => createHash('sha256').update(bytes(x)).digest('hex');
-
-// ---------------------------------------------------------------------------------------------
-// The mock PAGE (fixed for a class version)
-// ---------------------------------------------------------------------------------------------
-
-export const PAGE_VERSION = 'mock-page.1';
-
-// Stands in for the ~37 KB minified TinySynth engine. Same global name and the few methods the
-// player uses, but it makes no sound.
-export const MOCK_ENGINE_JS =
-  '/* MOCK ENGINE. The real class embeds the ~37 KB minified TinySynth engine (Provable-Games fork,' +
-  ' pinned release, SHA-256 = script_sha256()) here. This stand-in keeps the same global and the few' +
-  ' methods the player calls, and makes no sound. */' +
-  'window.WebAudioTinySynth=function(o){this.opts=o||{};this.timbres=[];this.midi=null;' +
-  'this.calls=[];this.setQuality=function(q){this.calls.push(["setQuality",q])};' +
-  'this.setMasterVol=function(v){this.calls.push(["setMasterVol",v])};' +
-  'this.setReverbLev=function(v){this.calls.push(["setReverbLev",v])};' +
-  'this.setVoices=function(v){this.calls.push(["setVoices",v])};' +
-  'this.setTimbre=function(drum,slot,ops){this.timbres.push({drum:drum,slot:slot,ops:ops})};' +
-  'this.loadMIDI=function(b){this.midi=b};this.playMIDI=function(){};this.stopMIDI=function(){}};';
-
-// Minimal SMF reader used by the player (a summary for display). Exported separately so the Node
-// tests can run exactly these bytes of the page in node:vm.
-export const PARSE_MIDI_JS = `function parseMidi(u){var p=0;
-function u32(){var v=(u[p]<<24|u[p+1]<<16|u[p+2]<<8|u[p+3])>>>0;p+=4;return v}
-function u16(){var v=u[p]<<8|u[p+1];p+=2;return v}
-function tag(){var s=String.fromCharCode(u[p],u[p+1],u[p+2],u[p+3]);p+=4;return s}
-function vlq(){var v=0,b;do{b=u[p++];v=v*128+(b&127)}while(b&128);return v}
-if(tag()!=="MThd"||u32()!==6)throw new Error("not a Standard MIDI File");
-var m={format:u16(),tracks:u16(),ppq:u16(),notes:0,drumHits:0,events:0,bpm:120,endTick:0};
-if(m.ppq&32768)throw new Error("SMPTE time division is not supported");
-for(var n=0;n<m.tracks;n++){if(tag()!=="MTrk")throw new Error("missing MTrk");
-var end=u32();end+=p;var tick=0,run=0;
-while(p<end){tick+=vlq();var st=u[p];if(st&128)p++;else st=run;m.events++;
-if(st===255){var ty=u[p++],len=vlq();if(ty===81)m.bpm=60000000/(u[p]<<16|u[p+1]<<8|u[p+2]);if(ty===47)m.endTick=Math.max(m.endTick,tick);p+=len;run=0}
-else if(st===240||st===247){var sl=vlq();p+=sl;run=0}
-else{run=st;var hi=st&240,d1=u[p++],d2=(hi===192||hi===208)?0:u[p++];
-if(hi===144&&d2>0){if((st&15)===9)m.drumHits++;else m.notes++}}}
-if(p!==end)throw new Error("bad MTrk length")}
-m.bars=m.endTick/(m.ppq*4);return m}
-`;
-
-// The real player settings module (player/settings.js: strict parser, validator, installer), as a
-// plain script: comments and `export` keywords removed, otherwise unchanged.
-export const PLAYER_SETTINGS_JS = readFileSync(new URL('../../../player/settings.js', import.meta.url), 'utf8')
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .replace(/^\s*\/\/.*$/gm, '')
-  .replace(/^export /gm, '')
-  .split('\n')
-  .map((l) => l.trim())
-  .filter(Boolean)
-  .join('\n') + '\n';
-
-// Runs on DOMContentLoaded: the settings, MIDI and art blocks come after this script in the
-// document (the art block is unclosed and ends at EOF), so they exist only once parsing is done.
-// The art is shown first and independently; a settings or MIDI error leaves Play disabled and shows
-// the error (fail closed), and the art stays visible.
-export const PLAYER_JS = `(function(){"use strict";
-${PLAYER_SETTINGS_JS}function $(i){return document.getElementById(i)}
-function b64ToBytes(t){var bin=atob(t.replace(/\\s+/g,"")),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u}
-function textToB64(t){var u=new TextEncoder().encode(t),bin="";for(var i=0;i<u.length;i++)bin+=String.fromCharCode(u[i]);return btoa(bin)}
-${PARSE_MIDI_JS}var state={ready:false};window.__player=state;
-document.addEventListener("DOMContentLoaded",function(){var play=$("play");play.disabled=true;
-try{var art=$("art").textContent;$("view").src="data:image/svg+xml;base64,"+textToB64(art);state.artChars=art.length}
-catch(e){state.artError=String(e&&e.message||e);console.error(e)}
-try{
-var settings=parseSettings($("settings").textContent),midi=b64ToBytes($("midi").textContent),info=parseMidi(midi);
-$("settings-out").textContent="raw: "+$("settings").textContent.trim()+"\\n\\nparsed: "+JSON.stringify(settings,null,1);
-$("midi-out").textContent=midi.length+" bytes: format "+info.format+", "+info.tracks+" track(s), PPQ "+info.ppq+", "+info.bpm+" BPM, "+info.notes+" melody notes, "+info.drumHits+" drum hits, End-of-Track at tick "+info.endTick+" ("+info.bars+" bar(s))";
-state.settings=settings;state.midiBytes=midi.length;state.midi=info;state.ready=true;
-play.onclick=function(){var synth=createSynth(window.WebAudioTinySynth,settings);synth.loadMIDI(midi);synth.playMIDI();
-state.played=true;state.engine={opts:synth.opts,calls:synth.calls,timbres:synth.timbres};$("status").textContent="MOCK: no audio. The real player would now start TinySynth with "+synth.timbres.length+" custom timbre(s) and loop at tick "+info.endTick+"."};
-play.disabled=false;$("status").textContent="Ready (mock player).";
-}catch(e){state.error=String(e&&e.message||e);if(e instanceof SettingsError)state.errorCode=e.code,state.errorIndices=e.indices;$("status").textContent="Error: "+state.error;console.error(e)}});
-})();`;
-
-const PAGE_STYLE =
-  'html,body{margin:0;background:#111;color:#ddd;font:14px/1.4 monospace}' +
-  '#card{display:flex;flex-wrap:wrap;gap:16px;padding:16px}' +
-  '#view{width:250px;height:350px;background:#000}' +
-  '#info{flex:1;min-width:240px}h1{font-size:16px;margin:0 0 8px}h1 b{color:#f55}' +
-  'h2{font-size:13px;margin:12px 0 4px;color:#999}pre{margin:0;white-space:pre-wrap;word-break:break-all;' +
-  'background:#1b1b1f;padding:6px;max-height:220px;overflow:auto}button{font:inherit;padding:6px 12px}';
-
-export const SETTINGS_OPEN = '<script type="text/plain" id="settings">';
-export const MIDI_OPEN = '</script><script type="text/plain" id="midi">';
-export const ART_OPEN = '</script><script type="text/plain" id="art">';
-export const URL_KEY = '"animation_url":"data:text/html;base64,';
-export const IMAGE_KEY = '"image":"data:image/svg+xml;base64,';
-
-function countCI(haystack, needle) {
-  return haystack.toLowerCase().split(needle.toLowerCase()).length - 1;
-}
-
-/** Unpadded page: head (mock engine), body, player, then the opening of the settings block. */
-export function pageUnpadded() {
-  for (const js of [MOCK_ENGINE_JS, PLAYER_JS]) {
-    // Script data must not contain these, or the HTML parser leaves the script early or enters an
-    // escaped state.
-    for (const bad of ['</script', '<script', '<!--']) {
-      if (countCI(js, bad)) throw new Error(`script contains ${bad}`);
-    }
-  }
-  return (
-    '<!doctype html><html><head><meta charset="utf-8">' +
-    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<title>TinySynth player (mock)</title>' +
-    `<style>${PAGE_STYLE}</style>` +
-    `<script>${MOCK_ENGINE_JS}</script>` +
-    '</head><body><div id="card"><img id="view" alt="token art">' +
-    '<div id="info"><h1>TinySynth player <b>MOCK</b></h1>' +
-    '<button id="play" disabled>Play (mock: no audio)</button><p id="status">Loading...</p>' +
-    '<h2>Settings</h2><pre id="settings-out"></pre><h2>MIDI</h2><pre id="midi-out"></pre>' +
-    '</div></div>' +
-    `<script>${PLAYER_JS}</script>` +
-    SETTINGS_OPEN
-  );
-}
-
-/** PAGE: padded with spaces to len % 9 == 0. The spaces fall inside the settings block. */
-export function page() {
-  const p = pageUnpadded();
-  const out = p + spaces(padLen(blen(p), 9));
-  if (blen(out) % 9) throw new Error('PAGE not 9-aligned');
-  // Exactly the two intended closers: the engine placeholder and the player.
-  if (countCI(out, '</script') !== 2) throw new Error('unexpected </script in PAGE');
-  if (!out.endsWith(SETTINGS_OPEN + spaces(padLen(blen(p), 9)))) throw new Error('PAGE tail');
-  return out;
-}
-
-/** b64('"animation_url":"data:text/html;base64,' ++ b64(pageHtml)) for any 9-aligned page. */
-export function segmentFor(pageHtml) {
-  if (blen(pageHtml) % 9) throw new Error('page not 9-aligned');
-  const inner = URL_KEY + b64(pageHtml);
-  if (blen(inner) % 3) throw new Error('segment inner not 3-aligned');
-  const seg = b64(inner);
-  if (seg.includes('=')) throw new Error('segment padded');
-  return seg;
-}
+/** PAGE: the real page of this class version (tests/fixtures/page.html), 9-aligned. */
+export const page = () => pageHtml();
 
 /** animation_url_segment(): the segment for this class version's PAGE. */
 export const animationUrlSegment = () => segmentFor(page());
 
-// ---------------------------------------------------------------------------------------------
-// MockOnchainTinySynth.midi_segment
-// ---------------------------------------------------------------------------------------------
+/** SETTINGS, validated and encoded by the repository's JS reference. */
+export const settingsAscii = settingsText;
 
-/**
- * SETTINGS: the real format (issue #1, format version 1), from the repository's reference encoder
- * (player/encode.js) after the reference validator, which mirror src/settings.cairo check for check.
- */
-export function settingsAscii(s) {
-  const out = encodeSettings(validateSettings(s));
-  if (!/^[0-9,-]*$/.test(out)) throw new Error('SETTINGS charset');
-  return out;
-}
-
-/** D = SETTINGS MIDI_OPEN b64(midi) <pad> ART_OPEN, with 0..8 pad spaces so len(D) % 9 == 0. */
-export function dFragment(midi, settings) {
-  const head = settingsAscii(settings) + MIDI_OPEN + b64(midi);
-  const pad = padLen(blen(head) + blen(ART_OPEN), 9);
-  const d = head + spaces(pad) + ART_OPEN;
-  if (blen(d) % 9) throw new Error('D not 9-aligned');
-  return { d, pad };
-}
-
+/** midi_segment(midi, settings) = b64(b64(D)). */
 export const midiSegment = (midi, settings) => b64(b64(dFragment(midi, settings).d));
 
 // ---------------------------------------------------------------------------------------------
@@ -339,11 +176,13 @@ export function validateMidi(m) {
 }
 
 /**
- * Test variant of MIDI with a SysEx event (00 F0 01 F7) and an escape event (00 F7 02 01 02)
- * inserted after the tempo meta event, MTrk length adjusted. Same notes, same End-of-Track tick.
+ * Test variant of MIDI with two complete SysEx events (00 F0 01 F7, and GM System On:
+ * 00 F0 05 7E 7F 09 01 F7) inserted after the tempo meta event, MTrk length adjusted. Same notes,
+ * same End-of-Track tick. (The page rejects F7 escape and continuation events, which TinySynth
+ * would misread.)
  */
 export function midiWithSysex() {
-  const insert = Buffer.from([0x00, 0xf0, 0x01, 0xf7, 0x00, 0xf7, 0x02, 0x01, 0x02]);
+  const insert = Buffer.from([0x00, 0xf0, 0x01, 0xf7, 0x00, 0xf0, 0x05, 0x7e, 0x7f, 0x09, 0x01, 0xf7]);
   const at = 22 + 7; // after the 7-byte tempo event
   const out = Buffer.concat([MIDI.subarray(0, at), insert, MIDI.subarray(at)]);
   out.writeUInt32BE(MIDI.readUInt32BE(18) + insert.length, 18);
@@ -353,48 +192,6 @@ export function midiWithSysex() {
 // ---------------------------------------------------------------------------------------------
 // token_uri: spliced (what the contract does) and naive (one pass, standard nesting)
 // ---------------------------------------------------------------------------------------------
-
-/** The consumer's own pieces for given JSON members and SVG, padded with JSON whitespace. */
-export function consumerPieces(mem, svg) {
-  const svgB64 = b64(svg);
-  const headPad = padLen(blen('{' + mem + ',' + IMAGE_KEY), 3);
-  const head = '{' + mem + ',' + spaces(headPad) + IMAGE_KEY;
-  const sPad = padLen(svgB64.length + 1, 3);
-  const s = svgB64 + '"' + spaces(sPad);
-  return { svgB64, head, headPad, s, sPad, comma: ',  ' };
-}
-
-/**
- * The spliced token_uri for any members / SVG / 9-aligned page / 9-aligned D, assembled exactly
- * as BeastLikeNft does it.
- */
-export function spliceTokenUri({ mem, svg, pageHtml, d }) {
-  const c = consumerPieces(mem, svg);
-  for (const piece of [c.head, c.s, c.comma]) if (blen(piece) % 3) throw new Error('unaligned piece');
-  if (blen(d) % 9) throw new Error('D not 9-aligned');
-  const sB64 = b64(c.s);
-  return (
-    'data:application/json;base64,' + b64(c.head) + sB64 + b64(c.comma) + segmentFor(pageHtml) +
-    b64(b64(d)) + sB64 + b64('}')
-  );
-}
-
-/**
- * Naive reference: the whole JSON as one string with standard nested data URIs, then base64 it
- * once. The whitespace between JSON tokens is the same insignificant whitespace the spliced version
- * uses for alignment (checked separately against compact JSON).
- */
-export function naiveTokenJson({ mem, svg, pageHtml, d }) {
-  const c = consumerPieces(mem, svg);
-  return (
-    '{' + mem + ',' + spaces(c.headPad) +
-    '"image":"data:image/svg+xml;base64,' + c.svgB64 + '"' + spaces(c.sPad) + ',  ' +
-    '"animation_url":"data:text/html;base64,' + b64(pageHtml + d + svg) + '"' + spaces(c.sPad) +
-    '}'
-  );
-}
-
-export const naiveTokenUri = (parts) => 'data:application/json;base64,' + b64(naiveTokenJson(parts));
 
 export function tokenParts(tokenId) {
   const t = TOKENS[tokenId];
@@ -469,41 +266,4 @@ export function cairoByteArrayFn(name, x, doc) {
     '    Serde::deserialize(ref span).unwrap()',
     '}',
   ].join('\n');
-}
-
-// ---------------------------------------------------------------------------------------------
-// Decoder: token_uri -> human-inspectable layers
-// ---------------------------------------------------------------------------------------------
-
-const JSON_PREFIX = 'data:application/json;base64,';
-const SVG_PREFIX = 'data:image/svg+xml;base64,';
-const HTML_PREFIX = 'data:text/html;base64,';
-
-/** Strict base64 decode: rejects anything that does not round-trip (e.g. '=' mid-stream). */
-export function strictB64Decode(s) {
-  const buf = Buffer.from(s, 'base64');
-  if (buf.toString('base64') !== s) throw new Error('not canonical standard base64');
-  return buf;
-}
-
-/**
- * Decodes a token_uri exactly as a marketplace would: JSON layer, then the two data URIs. Every
- * layer is returned as its raw bytes; the JSON is decoded as strict UTF-8 (invalid UTF-8 throws),
- * and `svg` / `html` are UTF-8 text views for convenience. Write assets from the raw buffers.
- */
-export function decodeTokenUri(uri) {
-  if (!uri.startsWith(JSON_PREFIX)) throw new Error('not a base64 JSON data URI');
-  if (/[^\x21-\x7e]/.test(uri)) throw new Error('token_uri must be printable ASCII');
-  const jsonBytes = strictB64Decode(uri.slice(JSON_PREFIX.length));
-  const jsonText = new TextDecoder('utf-8', { fatal: true }).decode(jsonBytes);
-  const json = JSON.parse(jsonText);
-  if (!json.image.startsWith(SVG_PREFIX)) throw new Error('image is not a base64 SVG data URI');
-  if (!json.animation_url.startsWith(HTML_PREFIX)) throw new Error('animation_url is not base64 HTML');
-  const svgBytes = strictB64Decode(json.image.slice(SVG_PREFIX.length));
-  const htmlBytes = strictB64Decode(json.animation_url.slice(HTML_PREFIX.length));
-  return {
-    jsonBytes, jsonText, json, svgBytes, htmlBytes,
-    svg: svgBytes.toString('utf8'),
-    html: htmlBytes.toString('utf8'),
-  };
 }

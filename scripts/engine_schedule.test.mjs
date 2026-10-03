@@ -7,73 +7,16 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import vm from "node:vm";
-import { createSynth, installSettings, parseSettings } from "../player/settings.js";
+import { createSynth, decodeSettings, installSettings } from "../player/settings.js";
 import { engineSource } from "./engine.mjs";
+import { webAudioMock } from "./webaudio_mock.mjs";
 import { encodeSettings } from "../player/encode.js";
 import { BEAST_SETTINGS } from "./settings_fixtures.mjs";
 
 /** Loads the engine into a fresh context with a recording WebAudio mock. */
 function loadEngine() {
-  /** @type {any[][]} */
-  const log = [];
-  /** @type {Record<string, any>} */
-  const nodes = {};
-  let id = 0;
-  class Param {
-    /** @param {string} name @param {number} value */
-    constructor(name, value) { this.name = name; this.value = value; }
-    /** @param {number} v @param {number} t */
-    setValueAtTime(v, t) { log.push([this.name, "set", v, t]); }
-    /** @param {number} v @param {number} t */
-    linearRampToValueAtTime(v, t) { log.push([this.name, "ramp", v, t]); }
-    /** @param {number} v @param {number} t @param {number} c */
-    setTargetAtTime(v, t, c) { log.push([this.name, "target", v, t, c]); }
-    cancelScheduledValues() {}
-  }
-  class Node {
-    /** @param {string} kind */
-    constructor(kind) { this.name = `${kind}#${++id}`; nodes[this.name] = this; log.push([this.name, "create"]); }
-    /** @param {any} dest */
-    connect(dest) { log.push([this.name, "connect", dest.name ?? String(dest)]); }
-    disconnect() {}
-    /** @param {number} t */
-    start(t) { log.push([this.name, "start", t]); }
-    /** @param {number} t */
-    stop(t) { log.push([this.name, "stop", t]); }
-  }
-  class Osc extends Node {
-    constructor() {
-      super("osc");
-      this.frequency = new Param(this.name + ".frequency", 440);
-      this.detune = new Param(this.name + ".detune", 0);
-    }
-    /** @param {string} t */
-    set type(t) { log.push([this.name, "type", t]); }
-    setPeriodicWave() {}
-  }
-  class Src extends Node {
-    constructor() {
-      super("src");
-      this.playbackRate = new Param(this.name + ".playbackRate", 1);
-      this.detune = new Param(this.name + ".detune", 0);
-    }
-  }
-  class Gain extends Node {
-    constructor() { super("gain"); this.gain = new Param(this.name + ".gain", 1); }
-  }
-  class Ctx {
-    constructor() { this.sampleRate = 8000; this.currentTime = 0; this.state = "running"; this.destination = new Node("dest"); }
-    createGain() { return new Gain(); }
-    createOscillator() { return new Osc(); }
-    createBufferSource() { return new Src(); }
-    /** @param {number} ch @param {number} len */
-    createBuffer(ch, len) { const d = Array.from({ length: ch }, () => new Float32Array(len)); return { getChannelData: (/** @type {number} */ i) => d[i] }; }
-    createStereoPanner() { const n = new Node("pan"); return Object.assign(n, { pan: new Param(n.name + ".pan", 0) }); }
-    createDynamicsCompressor() { return new Node("comp"); }
-    createConvolver() { return new Node("conv"); }
-    createPeriodicWave() { return {}; }
-  }
-  const sandbox = { AudioContext: Ctx, performance: { now: () => 0 }, setInterval: () => 0, clearInterval() {}, console };
+  const { AudioContext, log, nodes } = webAudioMock();
+  const sandbox = { AudioContext, performance: { now: () => 0 }, setInterval: () => 0, clearInterval() {}, console };
   vm.createContext(sandbox);
   vm.runInContext(engineSource(), sandbox);
   return { Synth: /** @type {any} */ (sandbox).WebAudioTinySynth, log, nodes };
@@ -86,7 +29,7 @@ function noteOn(/** @type {any} */ synth, /** @type {any[][]} */ log, /** @type 
   return log.slice(from);
 }
 
-const settings = parseSettings(encodeSettings(BEAST_SETTINGS));
+const settings = decodeSettings(encodeSettings(BEAST_SETTINGS));
 const T = 1;
 
 describe("reference timbres in the real engine", () => {
@@ -141,7 +84,7 @@ describe("reference timbres in the real engine", () => {
   test("a MIDI program change selects a custom program; a drum note selects a custom drum", () => {
     const { Synth, log, nodes } = loadEngine();
     const lead80 = { ...BEAST_SETTINGS.timbres[0], slot: 80 };
-    const synth = createSynth(Synth, parseSettings(encodeSettings({ ...BEAST_SETTINGS, timbres: [lead80, BEAST_SETTINGS.timbres[1]] })));
+    const synth = createSynth(Synth, decodeSettings(encodeSettings({ ...BEAST_SETTINGS, timbres: [lead80, BEAST_SETTINGS.timbres[1]] })));
     synth.send([0xc0, 80]); // program change, channel 1
     let from = log.length;
     synth.send([0x90, 69, 100], T); // note on

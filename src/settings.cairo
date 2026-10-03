@@ -2,9 +2,10 @@
 //!
 //! Specified in issue #1 (spec and shared-wave-table amendment):
 //! <https://github.com/Provable-Games/onchain-tinysynth/issues/1>. The JavaScript
-//! counterparts are `player/settings.js` (strict parser, the same checks with the same
-//! messages, and the TinySynth installer) and `player/encode.js` (reference encoder); shared
-//! fixtures keep both byte-for-byte identical.
+//! counterparts are `player/settings.js` (the page's strict parser and TinySynth installer; the
+//! page does not repeat these checks), `player/validate.js` (reference of these checks, with the
+//! same messages; tooling only) and `player/encode.js` (reference encoder); shared fixtures keep
+//! them byte-for-byte identical.
 //!
 //! # Grammar
 //!

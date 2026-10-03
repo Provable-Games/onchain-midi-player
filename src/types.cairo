@@ -4,7 +4,9 @@
 //! (issue #1). Custom waveforms (issue #2) and filters (issue #3) are part of the types and
 //! of the `SETTINGS` grammar already, but are rejected until those issues land.
 //! `midi_segment` reverts with a descriptive error when any value is out of range; the
-//! exact checks, their order and their messages are listed in `crate::settings`.
+//! exact checks, their order and their messages are listed in `crate::settings`. This is the
+//! only place they are enforced: the player page parses `SETTINGS` strictly but does not
+//! repeat the range checks.
 //!
 //! # Fixed-point numbers
 //!

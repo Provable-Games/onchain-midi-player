@@ -5,10 +5,10 @@
 use beast_consumer::beast_like_nft::{
     IBeastLikeNftDispatcher, IBeastLikeNftDispatcherTrait, beast_image, render_svg, token_data,
 };
-use beast_consumer::mock_page_data;
 use onchain_tinysynth::interface::{
     IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
 };
+use onchain_tinysynth::page_data;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ClassHash;
 use crate::golden;
@@ -101,19 +101,16 @@ fn library_call_without_deployment() {
 
     let synth = IOnchainTinySynthLibraryDispatcher { class_hash: mock_class_hash };
     let segment = synth.animation_url_segment();
-    assert(segment.len() == mock_page_data::SEGMENT_LEN, 'segment length');
-    assert(segment == mock_page_data::animation_url_segment(), 'segment content');
-    // The pre-encoded piece splices mid-stream: no '=' anywhere.
-    let mut i = 0;
-    while i != segment.len() {
-        assert(segment[i] != '=', 'segment is padded');
-        i += 1;
-    }
+    assert(segment.len() == page_data::SEGMENT_LEN, 'segment length');
+    assert(segment == page_data::animation_url_segment(), 'segment content');
+    // The pre-encoded piece splices mid-stream: no '=' padding (which could only end it).
+    assert(segment[segment.len() - 1] != '=', 'segment is padded');
     assert(synth.base64("}") == "fQ==", 'base64 padding');
     assert(synth.base64("Man") == "TWFu", 'base64');
     assert(synth.base64("") == "", 'base64 empty');
-    assert(synth.script_sha256() == mock_page_data::ENGINE_SHA256, 'script_sha256');
-    assert(synth.version() == 'mock-tinysynth.0+mock-page.1', 'version');
+    assert(synth.script_sha256() == page_data::ENGINE_SHA256, 'script_sha256');
+    assert(synth.version() == page_data::VERSION, 'version');
+    assert(synth.license() == page_data::license(), 'license');
 }
 
 /// Prints the contract's token_uri for the sample token, to decode the actual Cairo output:
