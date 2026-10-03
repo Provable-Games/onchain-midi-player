@@ -215,6 +215,8 @@ fn token_uri(
 }
 ```
 
+**Art (required).** The SVG must never contain `</script`, in any letter case; see [Art (SVG) requirements](#art-svg-requirements).
+
 **Base64 alignment (required).** Every piece passed to `base64`, except the final `'}'`, must be a multiple of 3 bytes long. Otherwise the encoder emits `=` padding mid-stream and the concatenation is no longer valid base64. The consumer pads with spaces between JSON tokens (`pad3`); the class pads `PAGE` and `D` itself.
 
 **Word alignment (optional, saves gas).** A Cairo `ByteArray` stores 31-byte words. `append` onto a `ByteArray` whose length is a multiple of 31 copies whole words; at any other length it splits every word of the appended piece in two, which costs about 4x as much. Measured in L2 gas:

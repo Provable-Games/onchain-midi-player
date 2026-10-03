@@ -7,6 +7,8 @@ Tokens 1-3 are small samples that together cover every padding length. Token 4 i
 - **music:** the largest real score from the onchain composer, 3,716 bytes;
 - **sounds:** the 3 Beast reference sounds.
 
+Token 4's art and score are third-party data under their own terms, not this example's Apache-2.0 license. They are copied into the generated `src/beast_data.cairo` for testing only; see [`tests/fixtures/beasts/`](../../tests/fixtures/beasts/README.md#licenses).
+
 ```
 examples/beast_consumer/
 ├── Scarb.toml                     separate package; depends on the root crate (path = "../..") and
