@@ -5,8 +5,9 @@
 //
 // Usage: node art_periods.mjs <art.svg>
 //
-// It lists each embedded GIF (data:image/gif;base64,...) with its frame delays and its loop, and
-// every SMIL `dur` and CSS animation duration. It flags GIF delays under 20 ms (or missing), which
+// It lists each embedded GIF (data:image/gif;base64,...) with its frame delays and its loop, every
+// SMIL `dur` (one repeat of the animation's values), and every CSS animation's iteration duration,
+// doubled for `alternate` animations, which repeat every two iterations. It flags GIF delays under 20 ms (or missing), which
 // browsers do not show as encoded. It does not judge which animations are visible: an opacity animation from 1 to
 // 0.999, for example, changes nothing a viewer can see.
 
@@ -62,15 +63,28 @@ export function gifDelays(bytes) {
 }
 
 /**
- * The durations of every CSS animation in a text: each entry of an `animation` shorthand list (its
- * first time value is the duration; a second one is the delay) and of an `animation-duration` list.
- * @param {string} text
- * @returns {string[]}
+ * A CSS time ("1.5s", "800ms") in milliseconds.
+ * @param {string} time
  */
-export function cssDurations(text) {
-  /** @type {string[]} */
-  const durations = [];
-  for (const [, property, value] of text.matchAll(/(?<![\w-])(?:-webkit-)?animation(-duration)?\s*:\s*([^;}'"]+)/g)) {
+const ms = (time) => Math.round(parseFloat(time) * (time.endsWith("ms") ? 1 : 1000));
+
+/**
+ * Every CSS animation in a text: each entry of an `animation` shorthand list (its first time value is
+ * the iteration duration; a second one is the delay) and of an `animation-duration` list. A CSS
+ * duration is one iteration: with `alternate` or `alternate-reverse` the art repeats only every two
+ * iterations, which `alternate` records for shorthand entries. An `animation-direction` property is
+ * reported on its own, since it cannot be matched to its animations here.
+ * @param {string} text
+ * @returns {Array<{duration: string, alternate: boolean} | {direction: string}>}
+ */
+export function cssAnimations(text) {
+  /** @type {Array<{duration: string, alternate: boolean} | {direction: string}>} */
+  const found = [];
+  for (const [, property, value] of text.matchAll(/(?<![\w-])(?:-webkit-)?animation(-duration|-direction)?\s*:\s*([^;}'"]+)/g)) {
+    if (property === "-direction") {
+      if (/\balternate/.test(value)) found.push({ direction: value.trim() });
+      continue;
+    }
     // Split the list at top-level commas only: cubic-bezier(...) and steps(...) hold commas too.
     let depth = 0;
     let entry = "";
@@ -85,13 +99,18 @@ export function cssDurations(text) {
     }
     entries.push(entry);
     for (const e of entries) {
-      const time = e.replace(/\([^)]*\)/g, "").match(/(?<![\w.-])(\d*\.?\d+m?s)(?!\w)/);
-      if (time) durations.push(time[1]);
-      else if (property) durations.push(e.trim());
+      const bare = e.replace(/\([^)]*\)/g, "");
+      const time = bare.match(/(?<![\w.-])(\d*\.?\d+m?s)(?!\w)/);
+      const duration = time ? time[1] : e.trim();
+      found.push({ duration, alternate: !property && /(?<![\w-])alternate(-reverse)?(?![\w-])/.test(bare) });
     }
   }
-  return durations;
+  return found;
 }
+
+/** The iteration durations of every CSS animation in a text (see cssAnimations). */
+export const cssDurations = (/** @type {string} */ text) =>
+  cssAnimations(text).flatMap((a) => ("duration" in a ? [a.duration] : []));
 
 /**
  * The report lines for an SVG's text.
@@ -111,7 +130,11 @@ export function artPeriods(svg) {
     }
   }
   for (const [, dur] of svg.matchAll(/\bdur\s*=\s*['"]([^'"]+)['"]/g)) lines.push(`SMIL dur ${dur}`);
-  for (const dur of cssDurations(svg)) lines.push(`CSS animation ${dur}`);
+  for (const a of cssAnimations(svg)) {
+    if ("direction" in a) lines.push(`CSS animation-direction ${a.direction}: an alternate animation repeats every 2 iterations`);
+    else if (a.alternate) lines.push(`CSS animation iteration ${a.duration}, alternate: repeats every ${2 * ms(a.duration)} ms`);
+    else lines.push(`CSS animation iteration ${a.duration}`);
+  }
   if (!lines.length) lines.push("no GIF, SMIL or CSS animation found");
   return lines;
 }

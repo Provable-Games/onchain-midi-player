@@ -27,6 +27,8 @@ SMIL dur 3s
 
 If it warns about GIF delays under 20 ms, measure that GIF's period in a browser: browsers show very short delays longer than encoded.
 
+A CSS duration is one iteration. With `animation-direction: alternate` or `alternate-reverse` the art plays forward then back, so it repeats every two iterations: `art_periods.mjs` doubles a shorthand entry it can see is alternate, and flags a separate `animation-direction` for you to match by hand. A SMIL `dur` covers the whole `values` list, so `values='1;0.4;1'` with `dur='3s'` repeats every 3 s.
+
 Then look at what each animation does. In that SVG:
 
 - the GIF loops every 0.8 s;

@@ -100,7 +100,8 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 - **The measurement method changes the number about 2.5×.** Measured on the example's full-size Beast (`snforge test gas_t4_token_uri`): about 299M with `--tracked-resource sierra-gas`, about 762M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M: that account's class is Sierra 1.6, which forces cairo-steps (VM) accounting for the whole transaction.
   - Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
   - Treat devnet estimates through the predeployed accounts as inflated by about 2.0–2.6×.
-- **Marketplaces call `token_uri` with `starknet_call`, and providers cap call gas.** On Sepolia, one public provider reverted `Out of gas` on the example's full-size Beast while others served it (README [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments), issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)). Call your worst-case token through the providers your marketplaces and indexers use; the token-uri-inspector shows how.
+- **Keep every class in the `token_uri` call chain at Sierra 1.7 or later:** the NFT, any proxy, the MIDI provider and this class. A Cairo 0 or older-Sierra frame switches itself and every call below it to Cairo-steps accounting, which is sticky downward and has its own step cap. That is the same mechanism that inflates the devnet estimates above.
+- **Providers' call caps decide who can read a full token, not the protocol.** Node software caps `starknet_call` differently (some compiled in, some configurable), and hosted providers do not document their caps. On Sepolia, one public provider reverted `Out of gas` on the example's full-size Beast while others served it (README [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments), issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)). The node defaults are collected in the README's "Network and node limits" section, added with the settings-limits change. Call your worst-case token through the providers your marketplaces and indexers use; the token-uri-inspector shows how.
 
 ## 8. Choose the class hash
 
@@ -115,6 +116,7 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 - [ ] SVG never contains `</script`; names and fields restricted; tested on real renderer output.
 - [ ] Every score passes `check-midi` in CI; settings constant or from permanent traits.
 - [ ] Golden test against the JS reference; the decoded page equals `npm run preview` for the same inputs.
+- [ ] Every class in the `token_uri` call chain at Sierra 1.7 or later.
 - [ ] Worst-case `token_uri` measured in Sierra gas and called through your providers.
 
 The example's longer checklist: [Integration checklist for a real NFT](https://github.com/Provable-Games/onchain-tinysynth/blob/main/examples/beast_consumer/README.md#integration-checklist-for-a-real-nft-such-as-beasts).

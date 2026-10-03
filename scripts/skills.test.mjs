@@ -284,7 +284,13 @@ describe("the skills' helper scripts", () => {
   test("art_periods: the full-size Beast's GIF loop and SMIL durations", () => {
     const svg = read("tests/fixtures/beasts/warlock_shiny_animated.svg");
     assert.deepEqual(artPeriods(svg), ["GIF: 4 frames, delays 200, 200, 200, 200 ms, loop 800 ms", "SMIL dur 2.2s", "SMIL dur 6s", "SMIL dur 3s"]);
-    assert.deepEqual(artPeriods("<svg><style>.a{animation: spin 1.5s linear infinite}</style></svg>"), ["CSS animation 1.5s"]);
+    assert.deepEqual(artPeriods("<svg><style>.a{animation: spin 1.5s linear infinite}</style></svg>"), ["CSS animation iteration 1.5s"]);
+    // An alternate animation repeats every two iterations.
+    assert.deepEqual(artPeriods("<style>.m{animation: move 1s linear alternate infinite, glow 800ms alternate-reverse infinite}</style>"),
+      ["CSS animation iteration 1s, alternate: repeats every 2000 ms", "CSS animation iteration 800ms, alternate: repeats every 1600 ms"]);
+    assert.deepEqual(artPeriods("<style>.m{animation-duration: 1s; animation-direction: alternate}</style>"),
+      ["CSS animation iteration 1s", "CSS animation-direction alternate: an alternate animation repeats every 2 iterations"]);
+    assert.deepEqual(artPeriods("<style>.m{animation: alternate-name 3s infinite}</style>"), ["CSS animation iteration 3s"], "an animation name is not a direction");
     // Every entry of a list, with commas inside timing functions, and the duration before a delay.
     const css = ".a{animation: fade 1s cubic-bezier(0.1, 0.7, 1, 0.1) 0.5s infinite, spin 2400ms steps(4, end) infinite}" +
       ".b{animation-duration: 1s, 3s; animation-name: x, y; animation-delay: 9s}.c{-webkit-animation:pulse .8s}";

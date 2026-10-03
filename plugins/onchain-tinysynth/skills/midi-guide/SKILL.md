@@ -73,7 +73,7 @@ The full list of honoured and ignored messages is in the README: [Messages TinyS
 
 The player restarts the art only on ▶, timed to when tick 0 is heard. It does not restart the art at loop points: after ▶, music and art stay in step only if the music's timing matches the art's animation periods. If they do not match, they drift visibly. That is a period mismatch, not clock drift.
 
-1. **Measure the art's periods:** GIF frame delays (in 10 ms units) and SMIL `dur` or CSS animation durations. From the checkout, `node plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs art.svg` prints them. Ignore animations that change nothing visible.
+1. **Measure the art's periods:** GIF frame delays (in 10 ms units), SMIL `dur` (one repeat of the animation's `values`), and CSS animation durations (one iteration; with `alternate` or `alternate-reverse` the art repeats every two iterations). From the checkout, `node plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs art.svg` prints them. Ignore animations that change nothing visible.
 2. **Choose the tempo:** make the beat, or a subdivision of it, a whole number of frames.
 3. **Choose the pass length:** make it (the `loop` that `check-midi` prints, `maxTick` × the tick time) a whole multiple of every visible art period, so every pass starts in phase.
 
