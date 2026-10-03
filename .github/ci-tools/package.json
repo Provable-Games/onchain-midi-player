@@ -1,0 +1,12 @@
+{
+  "name": "onchain-tinysynth-ci-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pins the tools CI installs for .github/workflows/ci.yml: TypeScript (tsc --checkJs on player/) and Playwright (headless Chromium checks). Not a runtime dependency of the class or the page.",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "playwright-core": "1.63.0",
+    "typescript": "7.0.2"
+  }
+}

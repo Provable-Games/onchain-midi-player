@@ -1,0 +1,235 @@
+name: CI
+
+# Cairo (format, build, test), JavaScript tests and type checks, generated-file
+# drift, and headless Chromium checks. Steps that need the root package.json,
+# its scripts or player/ (added by PR #5) are switched on by a detection step
+# after checkout, so this file needs no change when they land. A job-level
+# hashFiles() would be evaluated before checkout and never activate.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    # Explicit bash runs with -eo pipefail.
+    shell: bash
+
+env:
+  NODE_VERSION: "24"
+  CI_TOOLS: .github/ci-tools
+
+jobs:
+  cairo:
+    name: cairo
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Downloads only (registry and git dependencies). Builds take seconds, so
+      # target/ is not cached. The key carries the architecture and the pinned
+      # toolchain, which the setup action's own cache key omits.
+      - name: Cache Scarb downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/scarb
+          key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'examples/beast_consumer/Scarb.lock') }}
+          restore-keys: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-
+
+      # Versions come from .tool-versions: scarb 2.20.1, starknet-foundry 0.64.0.
+      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
+        with:
+          tool-versions: .tool-versions
+          cache: false
+
+      - uses: foundry-rs/setup-snfoundry@16e23ddd0e2845f38727c92f4b913a7b728cda9e # v6.0.0
+        with:
+          tool-versions: .tool-versions
+
+      - name: Toolchain
+        run: |
+          scarb --version
+          snforge --version
+          uname -m
+
+      - name: Root package
+        run: |
+          scarb fmt --check
+          scarb build
+          snforge test
+
+      - name: examples/beast_consumer
+        working-directory: examples/beast_consumer
+        run: |
+          scarb fmt --check
+          scarb build
+          snforge test
+
+      # Scarb 2.20.1 has no --locked flag; fail if a build rewrote a lockfile.
+      - name: Lockfiles unchanged
+        run: git diff --exit-code -- Scarb.lock examples/beast_consumer/Scarb.lock
+
+  javascript:
+    name: javascript
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect optional checks
+        id: detect
+        run: bash .github/scripts/ci-detect.sh
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.CI_TOOLS }}/package-lock.json
+
+      - name: Example Node tests
+        working-directory: examples/beast_consumer
+        run: node --test scripts/*.test.mjs
+
+      - name: Install root dependencies
+        if: steps.detect.outputs.has_lockfile == 'true'
+        run: npm ci --no-audit --no-fund
+
+      - name: Root npm test
+        if: steps.detect.outputs.has_test == 'true'
+        run: npm test
+
+      - name: Install pinned TypeScript
+        if: steps.detect.outputs.has_player == 'true'
+        working-directory: ${{ env.CI_TOOLS }}
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Type-check player/ (tsc --checkJs)
+        if: steps.detect.outputs.has_player == 'true'
+        run: |
+          tools="$GITHUB_WORKSPACE/$CI_TOOLS/node_modules"
+          "$tools/.bin/tsc" --version
+          mapfile -d '' files < <(find player -name '*.js' -print0 | sort -z)
+          "$tools/.bin/tsc" --noEmit --allowJs --checkJs --target es2022 \
+            --module nodenext --moduleResolution nodenext --lib es2022,dom \
+            --typeRoots "$tools/@types" --types node "${files[@]}"
+
+  generated:
+    name: generated
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect optional checks
+        id: detect
+        run: bash .github/scripts/ci-detect.sh
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Regenerate the example's page and fixtures
+        working-directory: examples/beast_consumer
+        run: |
+          node scripts/gen_page.mjs
+          node scripts/gen_fixtures.mjs
+
+      - name: Install root dependencies
+        if: steps.detect.outputs.has_check_settings == 'true' && steps.detect.outputs.has_lockfile == 'true'
+        run: npm ci --no-audit --no-fund
+
+      - name: Settings fixtures are byte-stable
+        if: steps.detect.outputs.has_check_settings == 'true'
+        run: npm run check:settings
+
+      - name: No drift from committed files
+        run: |
+          git status --porcelain
+          git diff --exit-code
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "::error::Generators created files that are not committed."
+            exit 1
+          fi
+
+  browser:
+    name: browser
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect optional checks
+        id: detect
+        run: bash .github/scripts/ci-detect.sh
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.CI_TOOLS }}/package-lock.json
+
+      - name: Install pinned Playwright
+        working-directory: ${{ env.CI_TOOLS }}
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # The browser build is fixed by the playwright-core version in the lockfile.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/ci-tools/package-lock.json') }}
+
+      # Downloads the headless shell only on a cache miss; the system libraries
+      # are installed every run.
+      - name: Install Chromium headless shell and system libraries
+        working-directory: ${{ env.CI_TOOLS }}
+        run: npx --no-install playwright-core install --with-deps --only-shell chromium
+
+      # TODO(roadmap phase 5): add Firefox and WebKit (a browser matrix) once the
+      # player page is validated across engines.
+
+      # Both scripts launch Playwright's own headless shell: CHROME stays unset.
+      - name: Example browser check
+        working-directory: examples/beast_consumer
+        env:
+          PLAYWRIGHT_CORE: ${{ github.workspace }}/.github/ci-tools/node_modules/playwright-core
+        run: |
+          mkdir -p "$RUNNER_TEMP/screenshots"
+          node scripts/browser_check.mjs "$RUNNER_TEMP/screenshots"
+
+      - name: Install root dependencies
+        if: steps.detect.outputs.has_render_check == 'true' && steps.detect.outputs.has_lockfile == 'true'
+        run: npm ci --no-audit --no-fund
+
+      - name: Render check of the reference timbres
+        if: steps.detect.outputs.has_render_check == 'true'
+        env:
+          PLAYWRIGHT_CORE: ${{ github.workspace }}/.github/ci-tools/node_modules/playwright-core
+        run: npm run render-check
+
+      - name: Upload screenshots
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: ignore
+          retention-days: 7
