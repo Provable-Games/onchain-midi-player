@@ -87,22 +87,25 @@ export const PLAYER_SETTINGS_JS = readFileSync(new URL('../../../player/settings
 
 // Runs on DOMContentLoaded: the settings, MIDI and art blocks come after this script in the
 // document (the art block is unclosed and ends at EOF), so they exist only once parsing is done.
-const PLAYER_JS = `(function(){"use strict";
+// The art is shown first and independently; a settings or MIDI error leaves Play disabled and shows
+// the error (fail closed), and the art stays visible.
+export const PLAYER_JS = `(function(){"use strict";
 ${PLAYER_SETTINGS_JS}function $(i){return document.getElementById(i)}
 function b64ToBytes(t){var bin=atob(t.replace(/\\s+/g,"")),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u}
 function textToB64(t){var u=new TextEncoder().encode(t),bin="";for(var i=0;i<u.length;i++)bin+=String.fromCharCode(u[i]);return btoa(bin)}
 ${PARSE_MIDI_JS}var state={ready:false};window.__player=state;
-document.addEventListener("DOMContentLoaded",function(){try{
-var settings=parseSettings($("settings").textContent),midi=b64ToBytes($("midi").textContent),art=$("art").textContent;
-var info=parseMidi(midi);
-$("view").src="data:image/svg+xml;base64,"+textToB64(art);
+document.addEventListener("DOMContentLoaded",function(){var play=$("play");play.disabled=true;
+try{var art=$("art").textContent;$("view").src="data:image/svg+xml;base64,"+textToB64(art);state.artChars=art.length}
+catch(e){state.artError=String(e&&e.message||e);console.error(e)}
+try{
+var settings=parseSettings($("settings").textContent),midi=b64ToBytes($("midi").textContent),info=parseMidi(midi);
 $("settings-out").textContent="raw: "+$("settings").textContent.trim()+"\\n\\nparsed: "+JSON.stringify(settings,null,1);
 $("midi-out").textContent=midi.length+" bytes: format "+info.format+", "+info.tracks+" track(s), PPQ "+info.ppq+", "+info.bpm+" BPM, "+info.notes+" melody notes, "+info.drumHits+" drum hits, End-of-Track at tick "+info.endTick+" ("+info.bars+" bar(s))";
-state.settings=settings;state.midiBytes=midi.length;state.midi=info;state.artChars=art.length;state.ready=true;
-$("play").onclick=function(){var synth=createSynth(window.WebAudioTinySynth,settings);synth.loadMIDI(midi);synth.playMIDI();
+state.settings=settings;state.midiBytes=midi.length;state.midi=info;state.ready=true;
+play.onclick=function(){var synth=createSynth(window.WebAudioTinySynth,settings);synth.loadMIDI(midi);synth.playMIDI();
 state.played=true;state.engine={opts:synth.opts,calls:synth.calls,timbres:synth.timbres};$("status").textContent="MOCK: no audio. The real player would now start TinySynth with "+synth.timbres.length+" custom timbre(s) and loop at tick "+info.endTick+"."};
-$("status").textContent="Ready (mock player).";
-}catch(e){state.error=String(e);$("status").textContent="Error: "+e;console.error(e)}});
+play.disabled=false;$("status").textContent="Ready (mock player).";
+}catch(e){state.error=String(e&&e.message||e);if(e instanceof SettingsError)state.errorCode=e.code,state.errorIndices=e.indices;$("status").textContent="Error: "+state.error;console.error(e)}});
 })();`;
 
 const PAGE_STYLE =
@@ -140,7 +143,7 @@ export function pageUnpadded() {
     `<script>${MOCK_ENGINE_JS}</script>` +
     '</head><body><div id="card"><img id="view" alt="token art">' +
     '<div id="info"><h1>TinySynth player <b>MOCK</b></h1>' +
-    '<button id="play">Play (mock: no audio)</button><p id="status">Loading...</p>' +
+    '<button id="play" disabled>Play (mock: no audio)</button><p id="status">Loading...</p>' +
     '<h2>Settings</h2><pre id="settings-out"></pre><h2>MIDI</h2><pre id="midi-out"></pre>' +
     '</div></div>' +
     `<script>${PLAYER_JS}</script>` +

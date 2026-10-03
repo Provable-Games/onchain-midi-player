@@ -21,6 +21,7 @@ examples/beast_consumer/
 │   ├── gen_fixtures.mjs           writes tests/golden.cairo and fixtures/
 │   ├── decode.mjs                 decodes any token_uri into its layers
 │   ├── reference.test.mjs         Node tests: MIDI parsing (incl. SysEx), UTF-8 decoding
+│   ├── player_failure.test.mjs    Node tests: the page's player fails closed (art stays visible)
 │   └── browser_check.mjs          optional headless check of the decoded page
 └── fixtures/                      the sample token (token 1, "Warlock"), decoded
 ```
@@ -65,9 +66,9 @@ The three example tokens are chosen so that every pad length occurs:
 
 | token | name | head pad | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 0 | 2 | 4 | 25,069 |
-| 2 | Night's Wyvern | 2 | 0 | 5 | 25,097 |
-| 3 | Fen-Troll | 1 | 1 | 6 | 25,081 |
+| 1 | Warlock | 0 | 2 | 4 | 25,485 |
+| 2 | Night's Wyvern | 2 | 0 | 5 | 25,513 |
+| 3 | Fen-Troll | 1 | 1 | 6 | 25,497 |
 
 Only `reverb` varies between tokens (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding.
 
@@ -100,7 +101,7 @@ node scripts/gen_page.mjs       # regenerate src/mock_page_data.cairo
 node scripts/gen_fixtures.mjs   # regenerate tests/golden.cairo and fixtures/; prints the pad table
 scarb build
 snforge test                    # 15 tests, plus 1 ignored print helper
-node --test scripts/*.test.mjs  # 9 Node tests: reference, decoder, the player's MIDI parser
+node --test "scripts/**/*.test.mjs"  # 17 Node tests: reference, decoder, MIDI parser, player failure paths
 snforge test matches_js_golden --gas-report   # token_uri gas, per contract and selector
 ```
 
@@ -130,7 +131,19 @@ So the contract's output equals both an independent JS implementation and plain 
 - `fixtures/image.svg`: the `image`, decoded. Open it in a browser.
 - `fixtures/animation.html`: the `animation_url`, decoded. Open it in a browser, offline: it shows the art, the raw and parsed settings, and the MIDI summary (112 bytes, format 0, PPQ 48, 120 BPM, 4 notes, 4 drum hits, End-of-Track at tick 192).
 
-The optional headless check loads the page from disk, from the exact `data:` URI in `token.json`, and as a variant whose MIDI block holds a file with SysEx (F0) and escape (F7) events. It confirms that the settings and MIDI parse, that the art renders (it samples a pixel of the PNG inside the SVG's `foreignObject`), that there are no console errors, and that there are no network requests:
+The optional headless check loads the page four ways:
+- from disk;
+- from the exact `data:` URI in `token.json`;
+- as a variant whose MIDI block holds a file with SysEx (F0) and escape (F7) events;
+- as a variant with invalid settings (`1,2,30,40,64,0,0`).
+
+For the valid pages it confirms that the settings and MIDI parse, that the art renders (it samples a pixel of the PNG inside the SVG's `foreignObject`), and that Play is enabled.
+
+For the invalid variant it confirms that the page fails closed: the art still renders, Play is disabled, and the validator's error is shown.
+
+Every page must make no network requests and log no console errors other than the expected one.
+
+The same failure paths (invalid or unparsable settings, corrupt MIDI) are also tested without a browser in `scripts/player_failure.test.mjs`, which runs the page's player script in `node:vm`.
 
 ```sh
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
@@ -154,8 +167,8 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
 
 | Call | L2 gas |
 | --- | --- |
-| `BeastLikeNft.token_uri`, tokens 1-3 | 103.1M-103.6M |
-| of which `animation_url_segment` (materializing the 20 KB constant) | 3.9M |
+| `BeastLikeNft.token_uri`, tokens 1-3 | 103.4M-103.8M |
+| of which `animation_url_segment` (materializing the 20 KB constant) | 4.0M |
 | of which `midi_segment` (validation, `SETTINGS`, two base64 passes) | 26.6M |
 | of which 5 `base64` library calls (SVG, `S`, head, `',  '`, `'}'`) | about 61M in total, the largest single call 31M |
 
