@@ -2,7 +2,9 @@
 //!
 //! `crate::settings::validate` checks only what the format or the engine requires: `quality`
 //! is 0 or 1, `voices` at least 1, the counts, slots and routes, and the gates below. Every
-//! other numeric field takes any value of its integer type, since the engine accepts them all.
+//! other numeric field takes any value of its integer type. At extremes, `key_scale`, and `ratio`
+//! in long FM chains, make the engine compute non-finite values and throw while playing (README,
+//! "Extreme operator values").
 //! Custom waveforms (issue #2) and filters (issue #3) are part of the types and of the
 //! `SETTINGS` grammar already, but are rejected until those issues land. `midi_segment` reverts
 //! with a descriptive error when a check fails; the exact checks, their order and their

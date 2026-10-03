@@ -67,8 +67,10 @@
 //!
 //! Only what the format or the engine requires is checked. The other numeric fields (`reverb`,
 //! `master_vol`, the upper end of `voices`, and every operator value) take any value of their
-//! integer type: the engine accepts them all (`setMasterVol`, `setReverbLev` and `setVoices` assign
-//! them, and Web Audio clamps frequencies), and the network prices what they cost.
+//! integer type: the engine takes them (`setMasterVol`, `setReverbLev` and `setVoices` assign them,
+//! and Web Audio clamps frequencies), and the network prices what they cost. At extremes,
+//! `key_scale`, and `ratio` in long FM chains, make the engine compute non-finite gains or
+//! frequencies and throw while playing (README, "Extreme operator values").
 //!
 //! Check 16 cannot be reached while check 15 is in force; issue #2 removes checks 5 and 15
 //! without changing the grammar or the format version.

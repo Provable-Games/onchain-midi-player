@@ -139,25 +139,32 @@ export const structuralMax = () => settings({
 // ------------------------------------------------------------------------------------------
 
 /**
- * Every field at its maximum (its type's, for the fields the class does not range-check), with
- * routes at their limits (FM on op 7 from op 8, AM chains).
+ * The fields that multiply into the engine's gains and frequencies (`volume`, `ratio`,
+ * `pitch_ratio`, `key_scale`) at the largest values that always play: the old ranges (100.0,
+ * 64.0, 16.0, +-8.0). At their type's extremes the engine computes non-finite AudioParam values
+ * and throws while playing (scripts/page_check.mjs plays these fixtures).
+ */
+const PLAYABLE = { volume: 1000000, ratio: 640000, pitch_ratio: 160000, key_scale: 80000 };
+
+/**
+ * Every field at its maximum, with routes at their limits (FM on op 7 from op 8, AM chains): the
+ * type's maximum, except the multiplying fields at their largest playable values (`PLAYABLE`).
  */
 const MAX_FIELDS = settings({
   quality: 1, reverb: 255, master_vol: 255, voices: 255,
   timbres: [{
     drum: false, slot: 127,
     operators: [0, 1, 2, 12, 4, 15, 6, 17].map((route) => op({
-      route, wave: "Sawtooth", volume: U32_MAX, ratio: U32_MAX, offset_hz: I32_MAX, attack: U32_MAX,
-      hold: U32_MAX, decay: U32_MAX, sustain: U32_MAX, release: U32_MAX, pitch_ratio: U32_MAX,
-      pitch_time: U32_MAX, key_scale: I32_MAX,
+      route, wave: "Sawtooth", offset_hz: I32_MAX, attack: U32_MAX, hold: U32_MAX, decay: U32_MAX,
+      sustain: U32_MAX, release: U32_MAX, pitch_time: U32_MAX, ...PLAYABLE,
     })),
   }],
 });
 
-/** Every field at its minimum. */
+/** Every field at its minimum (`key_scale` at its smallest playable value, -8.0). */
 const MIN_FIELDS = settings({
   quality: 0, reverb: 0, master_vol: 0, voices: 1,
-  timbres: [{ drum: true, slot: 35, operators: [op({ ...NARROW, offset_hz: I32_MIN, key_scale: I32_MIN })] }],
+  timbres: [{ drum: true, slot: 35, operators: [op({ ...NARROW, offset_hz: I32_MIN, key_scale: -PLAYABLE.key_scale })] }],
 });
 
 /** Slot edges, and the same number in both banks (programs and drums are separate). */

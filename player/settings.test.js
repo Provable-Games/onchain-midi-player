@@ -220,34 +220,32 @@ describe("installer", () => {
   });
 
   test("handles every field at its type's extremes: u32 max, i32 min and max", () => {
-    // The class checks no range on these fields, so the page must take their whole type.
-    const max = fixtures.valid.find((/** @type {any} */ f) => f.name === "max_fields");
-    const min = fixtures.valid.find((/** @type {any} */ f) => f.name === "min_fields");
-    const top = decodeSettings(max.settings_text);
-    const bottom = decodeSettings(min.settings_text);
-    assert.deepEqual(top, max.settings);
-    assert.deepEqual(bottom, min.settings);
-    const [hi] = toTinySynthOps(top.timbres[0]);
+    // The class checks no range on these fields, so the parser and the conversion must take their
+    // whole type. (Whether the engine plays such values is the engine's: see the fixtures' note.)
+    const u = 4294967295;
+    const fields = (/** @type {number} */ i32) => [u, u, i32, u, u, u, u, u, u, u, i32].join(",");
+    const text = `1,1,255,255,255,0,2,0,0,1,0,2,${fields(2147483647)},0,1,35,1,0,4,${fields(-2147483648)},0`;
+    const s = decodeSettings(text);
+    assert.equal(encodeSettings(s), text);
+    const [hi] = toTinySynthOps(s.timbres[0]);
     assert.deepEqual(hi, {
       g: 0, w: "sawtooth", v: 429496.7295, t: 429496.7295, f: 214748.3647, a: 429496.7295, h: 429496.7295,
       d: 429496.7295, s: 429496.7295, r: 429496.7295, p: 429496.7295, q: 429496.7295, k: 214748.3647,
     });
-    const [lo] = toTinySynthOps(bottom.timbres[0]);
+    const [lo] = toTinySynthOps(s.timbres[1]);
     assert.equal(lo.f, -214748.3648);
     assert.equal(lo.k, -214748.3648);
-    for (const o of [...toTinySynthOps(top.timbres[0]), lo]) {
-      for (const v of Object.values(o)) if (typeof v === "number") assert.ok(Number.isFinite(v));
-    }
-    const synth = createSynth(FakeSynth, top);
+    for (const o of [hi, lo]) for (const v of Object.values(o)) if (typeof v === "number") assert.ok(Number.isFinite(v));
+    const synth = createSynth(FakeSynth, s);
     assert.deepEqual(synth.calls.slice(0, 5), [
       ["new", { quality: 1, useReverb: 1, voices: 255 }],
       ["setQuality", 1], ["setMasterVol", 2.55], ["setReverbLev", 2.55], ["setVoices", 255],
     ]);
     // One past each type's extreme is malformed, not accepted.
-    malformedText(max.settings_text.replace("4294967295", "4294967296"));
-    malformedText(max.settings_text.replace("2147483647", "2147483648"));
-    malformedText(min.settings_text.replace("-2147483648", "-2147483649"));
-    malformedText(max.settings_text.replace(/^1,1,255/, "1,1,256"));
+    malformedText(text.replace("4294967295", "4294967296"));
+    malformedText(text.replace("2147483647", "2147483648"));
+    malformedText(text.replace("-2147483648", "-2147483649"));
+    malformedText(text.replace(/^1,1,255/, "1,1,256"));
   });
 
   test("is idempotent and passes fresh operator objects every time", () => {
