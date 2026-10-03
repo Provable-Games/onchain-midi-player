@@ -99,7 +99,7 @@ function check(cond, msg) {
   if (!cond) failures++;
 }
 const info = (/** @type {string} */ msg) => console.log(`  info ${msg}`);
-const clock = (/** @type {number} */ s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+const clock = (/** @type {number} */ s) => `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`;
 const ms = (/** @type {number} */ s) => (1000 * s).toFixed(1);
 
 /**
