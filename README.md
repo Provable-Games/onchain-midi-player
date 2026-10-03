@@ -159,7 +159,7 @@ All base64 in the class goes through one function, `onchain_tinysynth::base64::b
 
 ## Integration guide
 
-How a consumer such as Beasts builds its `token_uri` (the layout above), with the word alignment described below. [`examples/beast_consumer`](examples/beast_consumer) runs exactly this against the class.
+How a consumer such as Beasts builds its `token_uri` (the layout above), with the word alignment described below. [`examples/beast_consumer`](examples/beast_consumer) runs exactly this against the class. AI agents can install the [`integrator-guide`](#agent-skills) skill, which walks through it.
 
 ```cairo
 use onchain_tinysynth::interface::{
@@ -796,6 +796,43 @@ The Beast and MIDI test fixtures are Apache-2.0 as well. The Beast SVG in [`test
 ## Examples
 
 - [`examples/beast_consumer`](examples/beast_consumer): a runnable end-to-end example of a Beasts-style NFT assembling its `token_uri` with library calls to this class (declared, never deployed), word-aligned, with golden fixtures and decoded output, and a full-size Beast token (a real Beast SVG and a synthetic score of the largest production size) for the full-size gas measurement.
+
+## Agent skills
+
+Four skills help AI agents working in other repositories, such as an NFT contract, integrate the player and drive it with MIDI. They live in [`plugins/onchain-tinysynth/skills/`](plugins/onchain-tinysynth/skills), summarise this README and link to it, and never hardcode class hashes: they point to [Deployments](#deployments).
+
+| Skill | For |
+| --- | --- |
+| [`integrator-guide`](plugins/onchain-tinysynth/skills/integrator-guide/SKILL.md) | Adding the player to a contract's `token_uri`: the library dispatcher, holding the class hash, the Beasts layout, the art rule, snforge tests, gas and RPC caps |
+| [`midi-guide`](plugins/onchain-tinysynth/skills/midi-guide/SKILL.md) | Writing MIDI for the player: previewing offline, where it differs from standard MIDI players, every `checkMidi` rule, keeping the music in sync with the art |
+| [`sound-design`](plugins/onchain-tinysynth/skills/sound-design/SKILL.md) | The `SynthSettings` a contract passes: engine settings, custom timbres, `'TS: …'` errors, building settings in Cairo |
+| [`token-uri-inspector`](plugins/onchain-tinysynth/skills/token-uri-inspector/SKILL.md) | Fetching, decoding, verifying, rebuilding and viewing a deployed or local `token_uri`, and checking RPC call caps |
+
+**Install in Claude Code.** The repository is a plugin marketplace ([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)) with one plugin, `onchain-tinysynth`. In the other project:
+
+```sh
+claude plugin marketplace add Provable-Games/onchain-tinysynth    # or Provable-Games/onchain-tinysynth#<tag> to pin a ref
+claude plugin install onchain-tinysynth@onchain-tinysynth --scope project
+```
+
+Inside a session, `/plugin marketplace add Provable-Games/onchain-tinysynth` and `/plugin install onchain-tinysynth@onchain-tinysynth` do the same. The skills then run as `/onchain-tinysynth:midi-guide` and so on, and Claude loads them when a task matches. To offer them to everyone who opens the project, commit this to its `.claude/settings.json`. Claude Code prompts each collaborator to install plugins from a marketplace the project declares, and a plugin like this one, kept inside its marketplace, then loads without a per-user install. Cloud sessions skip project marketplaces: they never show the workspace trust dialog.
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "onchain-tinysynth": { "source": { "source": "github", "repo": "Provable-Games/onchain-tinysynth" } }
+  },
+  "enabledPlugins": { "onchain-tinysynth@onchain-tinysynth": true }
+}
+```
+
+The plugin sets no `version`, so Claude Code versions it by commit: `claude plugin update onchain-tinysynth@onchain-tinysynth` brings the latest skills (auto-update is off by default for third-party marketplaces).
+
+**Without Claude Code.** Each `SKILL.md` follows the open [Agent Skills](https://agentskills.io/specification) format (YAML frontmatter with `name` and `description`, then Markdown), so any agent can read the files. Copying a skill folder into another agent's skills directory, or into a project's `.claude/skills/`, also works; copy the whole `skills/` folder to keep the links between skills.
+
+**The tools the skills use** (`check-midi`, `preview`, `verify_engine.mjs`, the example's `decode.mjs`) need a clone of this repository at the commit of the class's `version()`, and Node 22 or later; none needs `npm ci`. The skills' own helper scripts use Node built-ins only.
+
+**Drift guards.** [`scripts/skills.test.mjs`](scripts/skills.test.mjs), run by `npm test`, checks that the frontmatter and the plugin manifests follow the formats, that every README anchor and repository path the skills link to exists, that the MIDI reference lists every `checkMidi` message, that the operator table matches the validator, that every gas figure in the skills appears in this README, and that the skills hardcode nothing a re-pin changes (`VERSION`, the engine commit, page and segment sizes, long hex hashes).
 
 ## CI
 
