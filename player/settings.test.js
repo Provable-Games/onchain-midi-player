@@ -146,6 +146,15 @@ describe("decoder strictness", () => {
     // A count one short leaves a token over.
     malformed(`1,1,30,40,64,255,${waves},0`);
   });
+  test("encodes and decodes a wave table of a million samples (no argument-limit spread)", () => {
+    const samples = Array.from({ length: 1000000 }, (_, i) => (i % 2 ? 127 : -128));
+    const s = { quality: 1, reverb: 30, master_vol: 40, voices: 64, waves: [{ Samples: samples }, { Harmonics: samples.map((x) => x + 128) }], timbres: [] };
+    const text = encodeSettings(s);
+    assert.ok(text.startsWith("1,1,30,40,64,2,1,1000000,-128,127,") && text.length > 7000000);
+    const back = decodeSettings(text);
+    assert.equal(/** @type {{Samples: number[]}} */ (back.waves[0]).Samples.length, 1000000);
+    assert.deepEqual(back, s);
+  });
   test("a count larger than the tokens left fails at once, before reading or allocating its items", () => {
     // Wave lengths have no bound, so only the input bounds them. The error names the token after
     // the count: no item was read.

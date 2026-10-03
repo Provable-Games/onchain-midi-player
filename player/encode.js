@@ -42,9 +42,11 @@ export function encodeSettings(s) {
   out.push(int(s.waves.length, "u32", "waves.length"));
   s.waves.forEach((w, i) => {
     if ("Harmonics" in w) {
-      out.push("0", String(w.Harmonics.length), ...w.Harmonics.map((x) => int(x, "u16", `waves[${i}]`)));
+      out.push("0", String(w.Harmonics.length));
+      for (const x of w.Harmonics) out.push(int(x, "u16", `waves[${i}]`)); // no spread: tables have no length bound
     } else if ("Samples" in w) {
-      out.push("1", String(w.Samples.length), ...w.Samples.map((x) => int(x, "i8", `waves[${i}]`)));
+      out.push("1", String(w.Samples.length));
+      for (const x of w.Samples) out.push(int(x, "i8", `waves[${i}]`));
     } else throw new TypeError(`waves[${i}] must be {Harmonics} or {Samples}`);
   });
   out.push(int(s.timbres.length, "u32", "timbres.length"));

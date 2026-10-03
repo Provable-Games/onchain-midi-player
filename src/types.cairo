@@ -157,12 +157,13 @@ pub enum Waveform {
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub enum WaveDef {
     /// Band-limited wave from harmonic amplitudes: element `i` is the relative amplitude of
-    /// harmonic `i + 1`. Range: 1..=256 elements, the engine's limit (fork issue #26).
+    /// harmonic `i + 1`. At least 1 element, with no upper bound: the engine takes any length
+    /// (fork issue #26, decision D-028).
     Harmonics: Span<u16>,
     /// Single-cycle wave from samples, played sample-and-hold at the note's pitch, giving
     /// exact chip waveforms such as a 4-bit stepped triangle or a 12.5% pulse. Each sample
-    /// maps -128..=127 to -1.0..=1.0. Range: 2..=1024 samples, the engine's limit (fork issue
-    /// #26).
+    /// maps -128..=127 to -1.0..=1.0. At least 1 sample, with no upper bound: the engine takes any
+    /// length (fork issue #26, decision D-028).
     Samples: Span<i8>,
 }
 

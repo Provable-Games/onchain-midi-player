@@ -42,8 +42,11 @@ export function serde(s) {
   /** @type {(number | string)[]} */
   const f = [s.quality, s.reverb, s.master_vol, s.voices, s.waves.length];
   for (const w of s.waves) {
-    if ("Harmonics" in w) f.push(0, w.Harmonics.length, ...w.Harmonics);
-    else f.push(1, w.Samples.length, ...w.Samples);
+    // No spread: wave tables have no length bound, and a spread call is bounded by the engine's
+    // argument limit.
+    const table = "Harmonics" in w ? w.Harmonics : w.Samples;
+    f.push("Harmonics" in w ? 0 : 1, table.length);
+    for (const x of table) f.push(x);
   }
   f.push(s.timbres.length);
   for (const t of s.timbres) {
