@@ -13,6 +13,7 @@ examples/beast_consumer/
 │   ├── golden.cairo               generated: expected token_uri / SVG per token, and the raw PAGE
 │   ├── naive.cairo                naive reference: plain JSON, base64-encoded once
 │   ├── test_token_uri.cairo       golden parity, naive parity, library call without deployment
+│   ├── test_art_safety.cairo      the art rule on the rendered SVG (no `</script`)
 │   └── test_reverts.cairo         invalid SynthSettings and unknown tokens revert
 ├── scripts/
 │   ├── reference.mjs              independent JS reference of everything above
@@ -20,6 +21,7 @@ examples/beast_consumer/
 │   ├── decode.mjs                 decodes any token_uri into its layers
 │   ├── reference.test.mjs         Node tests: the MIDI (incl. SysEx), UTF-8 decoding
 │   ├── player.test.mjs            Node tests: the page's player on the tokens, and its failure paths
+│   ├── art_safety.test.mjs        Node tests: the art rule, and the truncated art an unsafe SVG gives
 │   └── browser_check.mjs          optional headless check of the decoded page
 └── fixtures/                      the sample token (token 1, "Warlock"), decoded
 ```
@@ -97,8 +99,8 @@ From `examples/beast_consumer` (Scarb 2.20.1 and Starknet Foundry 0.64.0, per th
 ```sh
 node scripts/gen_fixtures.mjs   # regenerate tests/golden.cairo and fixtures/; prints the pad table
 scarb build
-snforge test                    # 17 tests, plus 1 ignored print helper
-node --test "scripts/**/*.test.mjs"  # 16 Node tests: reference, decoder, MIDI, the page's player
+snforge test                    # 20 tests, plus 1 ignored print helper
+node --test "scripts/**/*.test.mjs"  # 24 Node tests: reference, decoder, MIDI, the page's player, the art rule
 snforge test matches_js_golden --gas-report   # token_uri gas, per contract and selector
 ```
 
@@ -128,16 +130,19 @@ So the contract's output equals both an independent JS implementation and plain 
 - `fixtures/image.svg`: the `image`, decoded. Open it in a browser.
 - `fixtures/animation.html`: the `animation_url`, decoded. Open it in a browser, offline: it shows the art with the ▶/■ button, and plays the one-bar MIDI (112 bytes, PPQ 48, 120 BPM, End-of-Track at tick 192) in a loop with the token's custom lead and kick.
 
-The optional headless check loads the page five ways:
+The optional headless check loads the page six ways:
 - from disk;
 - from the exact `data:` URI in `token.json`;
 - as a variant whose MIDI block holds a file with SysEx (F0) events;
 - as a variant with settings that do not parse (`1,1,30,40,64,0`, a token missing);
-- as a variant whose gzipped engine is corrupt (one payload byte changed).
+- as a variant whose gzipped engine is corrupt (one payload byte changed);
+- as a variant whose SVG breaks the [art rule](../../README.md#art-svg-requirements) (a `<script>` element in it).
 
 For the valid pages it confirms that the page's shim inflated the engine (its gzip tag replaced by the pinned build, byte for byte), that the art renders (it samples a pixel of the PNG inside the SVG's `foreignObject`), that ▶ is enabled, and that ▶ starts TinySynth with the token's settings: the custom lead on program 80, the custom kick on drum 36, the reverb and volume, and the End-of-Track loop at tick 192.
 
 For the invalid variants it confirms that the page fails closed: the art still renders, ▶ is disabled, the error is shown (the parser's, or `engine: TinySynth did not load`), and no synth is created. (Range checks are Cairo's job: the page only parses `SETTINGS`.)
+
+For the unsafe SVG it confirms the failure the art rule prevents: Chromium ends the art block at the SVG's `</script>` (exactly where `parseArtBlock` in `scripts/reference.mjs` predicts), the art `<img>` is broken, and the rest of the SVG lands in the page as elements (its `<style>`, and a `<text>` holding the token's name). The engine and ▶ are unaffected. `scripts/art_safety.test.mjs` shows the same truncation without a browser.
 
 Every page must make no network requests (the gzip tag's `data:` URI included, which the check watches through the DevTools protocol) and log no console errors other than the expected ones. The repository's `npm run page-check` checks the page in more depth: in a sandboxed iframe, under a strict CSP, the inflation order, the loop timing, the art restart, and more failure variants.
 
@@ -150,7 +155,7 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
 
 ## Integration checklist for a real NFT (such as Beasts)
 
-- [ ] **The SVG never contains `</script`** (case-insensitive). It is the unclosed last block of the page, so the HTML parser would end it there. Beasts' guarantees carry over: name charset `A-Z a-z 0-9`, space, `'`, `-` (no `<` or `/`); fixed reviewed literals; art URIs validated as strict base64.
+- [ ] **The SVG never contains `</script`** (case-insensitive). It is the unclosed last block of the page, so the HTML parser would end it there (see [Art (SVG) requirements](../../README.md#art-svg-requirements)). Beasts' guarantees carry over: name charset `A-Z a-z 0-9`, space, `'`, `-` (no `<` or `/`); fixed reviewed literals; art URIs validated as strict base64. The class never sees the SVG, so check the rule in your own tests, as this example does: `assertArtSafe` in `scripts/reference.mjs` and `contains_script_end_tag` in `tests/test_art_safety.cairo`.
 - [ ] **Base64 the SVG once** and reuse `b64(S)` for both `image` and the art.
 - [ ] **Pad your pieces to multiples of 3** with spaces between JSON tokens: `'{' members ',' <pad> '"image":"data:image/svg+xml;base64,'`, then `svg_b64 '"' <pad>`, then `',  '`. Only the final `'}'` may produce `=`.
 - [ ] **Key order**: members, then `image`, then `animation_url` last, because the art closes the `animation_url` string.
