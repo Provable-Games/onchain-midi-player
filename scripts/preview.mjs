@@ -127,8 +127,13 @@ export function settingsShape(value) {
       if (o.filter !== null) exactKeys(o.filter, FILTER_KEYS, `${at}.filter`);
     });
   });
-  // The scalar types (u8, u32, i32, bool, the enum names), with the encoder's own messages.
-  encodeSettings(/** @type {SynthSettings} */ (value), { limit: Infinity });
+  // The scalar types (u8, u32, i32, bool, the enum names), with the encoder's own messages. A
+  // SettingsError here is a check of the class (such as a length limit), reported by buildPreview.
+  try {
+    encodeSettings(/** @type {SynthSettings} */ (value));
+  } catch (e) {
+    if (!(e instanceof SettingsError)) throw e;
+  }
   return /** @type {SynthSettings} */ (value);
 }
 
