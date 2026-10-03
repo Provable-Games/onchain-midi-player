@@ -1,0 +1,31 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # The tools CI installs (TypeScript, @types/node, playwright-core). A
+  # playwright-core update also changes the browser cache key in ci.yml.
+  - package-ecosystem: npm
+    directory: /.github/ci-tools
+    schedule:
+      interval: monthly
+    groups:
+      ci-tools:
+        patterns: ["*"]
+
+  # The Codex CLI pin used by the AI-review workflows, a separate package.
+  - package-ecosystem: npm
+    directory: /.github/scripts/codex-cli
+    schedule:
+      interval: monthly
+    groups:
+      codex-cli:
+        patterns: ["*"]
+
+  # The root package.json (PR #5) has no dependencies, so it needs no npm entry
+  # yet. Add one for directory "/" if it gains dependencies and a lockfile.
