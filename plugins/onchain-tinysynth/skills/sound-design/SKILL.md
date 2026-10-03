@@ -27,9 +27,12 @@ Get the tools: Node 22 or later, and a clone whose `grep 'pub const VERSION' src
 
 ## What the class checks
 
-`midi_segment` checks only what the format and the engine require, and the network prices the rest: since PR [#28](https://github.com/Provable-Games/onchain-tinysynth/pull/28) the other numeric fields take any value of their integer type. Earlier classes also range-checked `reverb`, `master_vol`, `voices` and the operator values. The check table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/settings.cairo), in the checkout that matches your class, lists every check, its order and its message. README: [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds).
+`midi_segment` reverts on exactly the checks in the table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/settings.cairo), in the checkout whose `VERSION` matches your class. Trust that table and `preview`, which runs the same checks; do not rely on remembered ranges, because they differ between class versions:
 
-The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`, and the wave lengths in the check table). Read them from your checkout rather than from memory: they follow the format and the engine, and they change between versions.
+- The `page.6` class (the Sepolia classes in the README's [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments)) range-checks `reverb`, `master_vol`, `voices` and every operator value, and caps the `SETTINGS` length (`'TS: settings too long'`).
+- PR [#28](https://github.com/Provable-Games/onchain-tinysynth/pull/28) narrows the checks to what the format and the engine require, and drops the length cap, for the next class version (`page.7`). The network then prices what the values cost.
+
+The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`; wave lengths are in the check table). Read them from your checkout.
 
 ## Engine-wide fields
 
@@ -38,7 +41,7 @@ The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MA
 | `quality` | 1 | Built-in sound set: 0 chip-tune (one oscillator per note), 1 FM. |
 | `reverb` | 30 | Reverb level in percent; 0 turns reverb off. Engine-wide: MIDI CC91 does nothing. |
 | `master_vol` | 40 | Master volume in percent of full scale. The default is below TinySynth's 50, because dense passages clipped at 50 in quality 1. |
-| `voices` | 64 | Melodic notes at once across all channels; at least 1. |
+| `voices` | 64 | Melodic notes at once across all channels. |
 | `waves` | empty | Custom waves revert `'TS: custom wave unsupported'` until issue #2. |
 | `timbres` | empty | Custom sounds (below), up to `MAX_TIMBRES`. |
 
@@ -51,7 +54,7 @@ The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MA
   - Modulators (`route` 1–10 for FM, 11–18 for AM) must come after the operator they target, so operator 1 always has `route` 0.
   - The first operator's `decay` × 3.5 is the length of every drum hit.
   - The first operator's `release` × 3.5 is how long a melodic voice lasts after note-off.
-- Every field, its TinySynth key, type, default and meaning: [references/operator-fields.md](references/operator-fields.md). Extreme values can make the engine throw while playing (since #28, the README covers this under "Extreme operator values"): preview them.
+- Every field, its TinySynth key, type, default and meaning: [references/operator-fields.md](references/operator-fields.md). Preview unusual values: extreme ones can make the engine misbehave while playing.
 - From TinySynth's `soundedit.html` (in the fork): `g` becomes `route`; `w` becomes `wave` (`sine`, `square`, `sawtooth`, `triangle`, `n0`, `n1` map to `Sine` … `MetallicNoise`); multiply every other value by 10,000 and round. Fields TinySynth leaves out take `default_operator()`. README: [Designing a custom sound](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#designing-a-custom-sound).
 
 ## Not accepted in v1
@@ -64,7 +67,7 @@ The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MA
 ## Wire format, size and gas
 
 - The class validates the settings, then writes them into the page as `SETTINGS`: a flat list of canonical decimal integers (only `0-9`, `-` and `,`), fields in declaration order, a length before every list, enums as their variant index, `bool` as 0/1, `Option` as 0 or 1 followed by the value. Format version 1. README: [The `SETTINGS` format](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-settings-format); grammar in [`src/settings.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/settings.cairo).
-- Size: `1,1,30,40,64,0,0` with the defaults, plus about 6 bytes per timbre and 50 per operator. `preview` prints the size. Since #28 there is no byte cap: the network decides what a size costs (the README's "Network and node limits" section, added by #28). Earlier classes revert past a fixed length with `'TS: settings too long'`.
+- Size: `1,1,30,40,64,0,0` with the defaults, plus about 6 bytes per timbre and 50 per operator. `preview` prints the size. Whether the class caps the length depends on its version (above); either way the gas grows with it.
 - Gas: `SETTINGS` is base64-encoded at call time with the MIDI, about 14M L2 gas per 1,000 bytes ([README](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#gas-and-limits)).
 
 ## `'TS: …'` errors

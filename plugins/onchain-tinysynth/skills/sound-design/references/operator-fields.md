@@ -1,6 +1,6 @@
 # Operator fields
 
-`Operator` in [`src/types.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/types.cairo), which documents each field. Values are stored integers of the Cairo type shown; fractional fields are fixed point, value / 10,000. Defaults are `default_operator()`, TinySynth's own operator defaults. What the class rejects is the check table in [`src/settings.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/settings.cairo): since #28 only `route`, `wave` and `filter` are checked, and the numeric fields take any value of their type. `npm test` fails if a row here disagrees with `player/settings.js` or the fixture defaults.
+`Operator` in [`src/types.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/types.cairo), which documents each field. Values are stored integers of the Cairo type shown; fractional fields are fixed point, value / 10,000. Defaults are `default_operator()`, TinySynth's own operator defaults. What the class rejects is the check table in [`src/settings.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/settings.cairo), in the checkout that matches your class: the `page.6` class has a range for every numeric field, and PR #28 removes those ranges for `page.7`. This table gives no ranges for that reason. `npm test` fails if a row here disagrees with `player/settings.js` or the fixture defaults.
 
 | Field | TinySynth key | Type | Default (stored) | Meaning |
 | --- | --- | --- | --- | --- |
