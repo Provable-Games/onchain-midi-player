@@ -100,7 +100,7 @@ Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) recor
 
 The player does not re-check settings ranges: dropping that re-check (and the install path's custom-wave guards, which only repeated Cairo rules) saved 1,512 bytes of the uncompressed `PAGE` (45,810 to 44,298). The build fails if a validation rule reappears in the player.
 
-The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own shim and minified player script in `node:vm` against a fake DOM, the shim inflating the real engine from the page's payload, with a recording engine and with the real engine on a WebAudio mock; [`player/gunzip.test.js`](player/gunzip.test.js): the shim's inflation) and in headless Chromium, Firefox and WebKit (`npm run page-check`: as an offline `data:` URI, in a sandboxed iframe and under a strict CSP; the inflation and its order, the loop period against `maxTick x tick2Time`, the art restart by screenshots of a probe animation, and the failure paths, including a corrupt, truncated or missing gzip payload).
+The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own shim and minified player script in `node:vm` against a fake DOM, the shim inflating the real engine from the page's payload, with a recording engine and with the real engine on a WebAudio mock; [`player/gunzip.test.js`](player/gunzip.test.js): the shim's inflation) and in headless Chromium, Firefox and WebKit, on the class's output (`npm run page-check` and `npm run drift-check`; see [Browser validation](#browser-validation)).
 
 Engine differences the browser checks show (Playwright's builds: Chromium 153, Firefox 155, WebKit 26.6):
 
@@ -675,6 +675,7 @@ npm run check-midi -- song.mid   # check MIDI files against the page's MIDI cont
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromium \
   npm run render-check   # optional: render the reference timbres in a headless browser
 PLAYWRIGHT_CORE=... PLAYWRIGHT_BROWSER=firefox npm run page-check   # optional: the page; chromium, firefox or webkit
+PLAYWRIGHT_CORE=... PLAYWRIGHT_BROWSER=webkit npm run drift-check -- --minutes 10   # optional: art against sound over a session
 ```
 
 The engine tests, the page build and the page checks use the vendored engine (`tests/vendor/`, SHA-256 checked on every load).
@@ -735,6 +736,46 @@ The segment's size sets its cost at every step of a consumer's `token_uri`: the 
 
 The consumer's whole library call, including reading the result, is 6.4M (see [Gas and limits](#gas-and-limits)). The [Integration guide](#integration-guide) shows how a consumer lands the segment on a word boundary.
 
+## Browser validation
+
+Issue #11's automatable checks, on Playwright's Chromium 153, Firefox 155 and WebKit 26.6. They load the class's output: every golden case's `token_uri` is checked against the length and SHA-256 that snforge pins the class's output to, then decoded as a marketplace decodes it ([`scripts/fixture_pages.mjs`](scripts/fixture_pages.mjs)); the example decodes its tokens' `token_uri` (token 1 byte for byte the contract's, token 4 pinned by SHA-256). CI runs every check on every engine, the drift check for 1 minute.
+
+| Issue #11 scope | Check |
+| --- | --- |
+| Chromium, Firefox and WebKit | the CI `browser` job: one leg per engine |
+| Playback starts only on a tap; ▶/■ toggles | [`page_check.mjs`](scripts/page_check.mjs): `checkDataPage` (clicks), `checkTouch` (taps); `browser_check.mjs` |
+| Seamless End-of-Track loop, correct tempo | `checkLoop`: passes start `maxTick x tick2Time` apart, which must equal the pass length of the MIDI's own tempo map, to 1 µs; [`drift_check.mjs`](scripts/drift_check.mjs) for a whole session |
+| The art restarts in sync on ▶ | `checkDataPage`: screenshots of a probe animation |
+| Drift over a 10-minute session | `drift_check.mjs` (`npm run drift-check -- --minutes 10`): results below |
+| Every failure path keeps the art, ▶ disabled | `checkFailures` (settings, MIDI), `checkEngineFailures` (gzip payload), `checkAudioFailures` (no Web Audio; `resume()` rejects); `browser_check.mjs` |
+| No network requests; offline from `data:` and `file://` | every load (requests blocked and listed; for the gzip tag's `data:` URI, see [CI](#ci)); `checkDataPage`, `checkFile` |
+| Sandboxed iframe, strict CSP, marketplace-style frames | `checkIframe`, `checkCsp` with `checkCspControl`, `checkEmbeds` (a `srcdoc` frame; the page re-served from another origin) |
+| Offline renders of the reference timbres | [`render_check.mjs`](scripts/render_check.mjs) |
+| Which marketplaces render `data:` HTML; iOS Safari and Android Chrome; indexers, wallets and RPC providers on a full-size `token_uri` | manual |
+
+Every check that CI runs passes on all three engines. The 10-minute drift check passes on WebKit and fails on Firefox and Chromium. Runs of the drift check at `9fb9a3b`, one engine at a time, on a shared 32-core Linux machine, the `beast_140bpm` page with a probe art that sweeps once per pass, a checkpoint every 10 s:
+
+| 10 minutes | Chromium 153 | Firefox 155 | WebKit 26.6 |
+| --- | --- | --- | --- |
+| The art's drift from the sound (trend; at most 20 ms) | +378.9 ms: fails (a trend overstates a step: +281.6 ms first to last) | +59.9 ms: fails | -0.1 ms: passes |
+| The art against the page clock (trend) | -0.4 ms | +94.6 ms | -0.2 ms |
+| The audio clock against the page clock | -280.2 ms, in stalls (largest 41.2 ms) | +35.4 ms (58 ppm) | -0.5 ms (-0.7 ppm) |
+| Largest checkpoint distance from the trend (at most 20 ms) | 95.9 ms | 13.4 ms | 8.4 ms |
+| Passes, none missing, on the tempo map's grid | 352, within 0.001 µs | 352, within 0.001 µs | 352, within 0.001 µs |
+| Messages scheduled, none late; the smallest lead | 6,682; 91.3 ms | 6,683; 82.6 ms | 6,682; 47.8 ms |
+| `outputLatency` | 32 ms | 48 ms | 0 |
+
+Findings for the maintainer. Neither is a player bug, and this PR makes no `PAGE` change:
+
+- **On Firefox the art drifts against the sound: +60 ms over 10 minutes** (+62 ms in an earlier run), the art ahead. In headless Firefox the image's animation runs about 160 ppm fast against `performance.now()`, with or without audio, and the audio clock on the null sink about 60 ppm fast. The player syncs the art once per ▶, so the difference adds up, about 6 ms a minute. Re-syncing the art on every pass would bound it to one pass; that is a `PAGE` change. Firefox on a real display is a manual check.
+- **On Firefox, noise operators at a high frequency ratio play slower than real time.** The `max_length_settings` golden case (88 noise operators at `ratio` 64x) renders at 0.12x real time: its audio clock runs at an eighth of real time, so the music is slow and broken up. With `ratio` 1x it renders in real time, and Chromium and WebKit render all nine golden cases in real time. Whether to cap the ratio in `settings::validate`, fix it in the engine, or accept it is open; CI does not check it.
+
+Known limitations:
+
+- **The audio devices are virtual.** Chromium's headless shell and WebKit clock their audio themselves, and Firefox plays to a PulseAudio null sink. So the drift check measures the page and TinySynth against those clocks, not a sound card's. A consumer sound card's sample clock is commonly tens of ppm off the system clock, and since the art is synced once per ▶, 50 ppm would move the art 30 ms over 10 minutes. Real hardware is a manual check.
+- **Chromium's headless audio clock stalls under CPU load.** In the run above, while other jobs held the machine at a load average of 6.5 to 13.5, it lost 280 ms in stalls, the largest 41 ms; an earlier run at a load of 4 to 5 lost 30 ms in one stall, and the art drifted +44 ms. 1-minute runs on a quieter machine showed no drift. The art followed the page clock throughout; the drift check prints the audio clock's largest step, which tells a stall from a page fault. A real device can underrun too, and the art then stays ahead by the stall.
+- **WebKit reports `outputLatency` 0**, so on WebKit the drift and the restart are measured against the scheduled sound. Its `getOutputTimestamp().performanceTime` runs at twice the rate in this build, so the drift check samples `currentTime` against `performance.now()` itself.
+
 ## Roadmap
 
 0. **Fork release with fixes** (in the `webaudio-tinysynth` fork): MIDI parser bounds fix (#4), pinned tagged build with a published SHA-256 (#5), deterministic reverb and noise buffers (#7), custom waveform API (#26) and per-operator filter (#27). Fractional tempo and `loopEnd` are already merged.
@@ -742,7 +783,7 @@ The consumer's whole library call, including reading the result, is 6.4M (see [G
 2. **Player page JS** (done, issue #8): MIDI decode, tap-to-start, play/stop, End-of-Track looping, latency-compensated art restart, offline only.
 3. **Offline build pipeline** (done, issue #9): verifies the pinned engine by SHA-256, gzips it (issue #14), assembles and aligns the page, and generates the pre-encoded Cairo constants plus golden fixtures (reference outputs for sample MIDI and art).
 4. **Cairo class implementation** (done, issue #10): the class, `midi_segment`, `SynthSettings` validation and encoding (issue #1), byte-for-byte parity with the JS reference fixtures directly and through `library_call`, the example ported to the class, the optimized base64 encoder (`game_components_encoding`), and gas and class-size measurements.
-5. **Browser validation** (started, issue #11): Chromium, Firefox and WebKit; playback, looping, art sync, and offline behaviour. CI runs every browser check on all three engines.
+5. **Browser validation** (issue #11): the automatable checks run in CI on Chromium, Firefox and WebKit; the 10-minute drift check passes on WebKit only (see [Browser validation](#browser-validation)). The marketplace survey, mobile, real hardware, and the service and RPC checks are manual.
 6. **Docs and declaration**: finalize docs, declare on Sepolia, then on mainnet, and publish the class hashes.
 
 ## Open decisions
@@ -768,7 +809,7 @@ GitHub Actions runs on every pull request and on pushes to `main`, on `ubuntu-24
 | `cairo` | Scarb 2.20.1 and snforge 0.64.0 from `.tool-versions`: `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer`; the Scarb lockfiles stay unchanged |
 | `javascript` | Node 24: the example's Node tests; `npm ci` (when `package-lock.json` exists) and `npm test` when the root `package.json` has a `test` script; `tsc --checkJs` on `player/` when it exists |
 | `generated` | Reruns `scripts/gen_midi_fixtures.mjs` (the synthetic scores) and the example's `gen_fixtures.mjs`, then `npm run check:settings` and `npm run check:page` (the engine hash, the page, `src/page_data.cairo` and the page fixtures) when those scripts exist, then fails on any diff |
-| `browser` | Passes when all three engine legs pass. Each leg, `browser (chromium)`, `browser (firefox)` and `browser (webkit)` (fail-fast off), installs that Playwright browser (for Chromium, its headless shell) with its system libraries, then runs the example's `browser_check.mjs` and, when those scripts exist, `npm run render-check` and `npm run page-check`, with `PLAYWRIGHT_BROWSER` set to its engine. The Firefox leg first starts PulseAudio with a null sink: Firefox runs an `AudioContext` only with an audio output device, and the runner has no sound card |
+| `browser` | Passes when all three engine legs pass. Each leg, `browser (chromium)`, `browser (firefox)` and `browser (webkit)` (fail-fast off), installs that Playwright browser (for Chromium, its headless shell) with its system libraries, then runs the example's `browser_check.mjs` and, when those scripts exist, `npm run render-check`, `npm run page-check` and a 1-minute `npm run drift-check`, with `PLAYWRIGHT_BROWSER` set to its engine. The Firefox leg first starts PulseAudio with a null sink: Firefox runs an `AudioContext` only with an audio output device, and the runner has no sound card |
 
 The browser checks are the same on every engine but one: that the gzip tag's `data:` URI is never fetched shows directly only through Chromium's DevTools protocol, because Playwright's request events, `route()` and Resource Timing skip `data:` URLs on every engine. On Firefox and WebKit, `page-check` and `browser_check.mjs` print `skip` for that check on each load. `page-check` proves it on every engine another way: its strict-CSP load reports no violation, although the CSP blocks `data:` scripts, and a control page under the same CSP shows that the engine reports a violation for a plain `<script src="data:...">`. The checks also turn off Firefox's tab icons (`browser.chrome.site_icons`): Firefox fetches `/favicon.ico` for every http(s) page by itself, and the page never asks for it.
 
@@ -805,6 +846,7 @@ for PLAYWRIGHT_BROWSER in chromium firefox webkit; do   # the browser checks, on
   (cd examples/beast_consumer && node scripts/browser_check.mjs)
   npm run render-check
   npm run page-check
+  npm run drift-check -- --minutes 1
 done
 
 # Review helpers
