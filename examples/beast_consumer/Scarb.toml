@@ -25,7 +25,9 @@ test = "snforge test"
 [tool.scarb]
 allow-prebuilt-plugins = ["snforge_std"]
 
-# The naive-nesting tests base64-encode the whole ~36 KB token JSON byte by byte, and token 4 encodes
-# a 22.7 KB SVG with the class's byte-wise stand-in encoder: beyond snforge's default step limit.
+# Two kinds of test go beyond snforge's default step limit, neither because of the class's encoder:
+# the naive-nesting tests (`*_equals_naive_nesting`) base64-encode the whole ~36 KB token JSON with
+# their own byte-at-a-time encoder, and `token_uri_4_matches_js_digest` computes the SHA-256 of
+# token 4's 133,525-byte token_uri in Cairo.
 [tool.snforge]
 max_n_steps = 100000000

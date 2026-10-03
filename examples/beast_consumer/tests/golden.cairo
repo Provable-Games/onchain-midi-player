@@ -5571,8 +5571,8 @@ pub fn svg_3() -> ByteArray {
     Serde::deserialize(ref span).unwrap()
 }
 
-/// token_uri of token 4 ("Shiny Warlock", a real Beast: 22733-byte SVG, 3716-byte score, the
+/// token_uri of token 4 ("Shiny Warlock", a full-size Beast: 22733-byte SVG, 3716-byte score, the
 /// reference sounds) as (length, SHA-256). The JS reference checked it equals naive nesting.
 pub fn token_uri_4_digest() -> (u32, u256) {
-    (133525, 0x9be43bf36118a684fd968066aae8e6312c20efa3798b702f5e7e4d0288c54037)
+    (133525, 0x1e53206dcf61a03c19a133937f9f0abbe954538879cd23d7d2660af1509e957f)
 }

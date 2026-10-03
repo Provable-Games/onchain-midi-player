@@ -1,11 +1,13 @@
 // @ts-check
-// Node tests for scripts/page.mjs: the VERSION record that keeps version() tied to the page, and the
-// row of README.md's Versions table that publishes it.
+// Node tests for scripts/page.mjs: the VERSION record that keeps version() tied to the page, the
+// row of README.md's Versions table that publishes it, and the notices in license().
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { PAGE_VERSIONS_PATH, VERSION, checkPageVersion, pageHtml, sha256 } from "./page.mjs";
+import {
+  PAGE_VERSIONS_PATH, VERSION, checkPageVersion, encoderLicense, licenseText, pageHtml, sha256, shimLicense,
+} from "./page.mjs";
 
 test("the committed PAGE is the one recorded for VERSION", () => {
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
@@ -41,4 +43,18 @@ test("README.md's Versions table has a row for VERSION with the build's hashes",
   assert.equal(cells[4], `\`${page.engine_sha256}\``, "script_sha256()");
   assert.equal(cells[5], `\`${page.gzip_sha256}\` / ${page.gzip_len.toLocaleString("en-US")} bytes`, "gzip payload");
   assert.ok(cells[6].startsWith(`[\`${page.engine_commit.slice(0, 7)}\`](https://github.com/Provable-Games/webaudio-tinysynth/commit/${page.engine_commit})`), "engine fork commit");
+});
+
+test("license(): NOTICE first, then fflate's and game-components' MIT licenses", () => {
+  const text = licenseText();
+  const notice = readFileSync(new URL("../NOTICE", import.meta.url), "utf8").trimEnd();
+  assert.ok(text.startsWith(`${notice}\n`), "license() starts with NOTICE");
+  const shim = text.indexOf(shimLicense().trimEnd());
+  const encoder = text.indexOf(encoderLicense().trimEnd());
+  assert.ok(shim > 0 && encoder > shim, "fflate's license, then game-components'");
+  // The encoder's notice is there because Scarb.toml compiles game_components_encoding into the class.
+  const manifest = readFileSync(new URL("../Scarb.toml", import.meta.url), "utf8");
+  assert.match(manifest, /^game_components_encoding = \{ git = "https:\/\/github\.com\/Provable-Games\/game-components", /m);
+  assert.match(notice, /game_components_encoding/);
+  assert.match(encoderLicense(), /^MIT License\n\nCopyright \(c\) 2026 Provable Games\n/);
 });

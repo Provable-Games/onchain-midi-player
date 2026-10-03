@@ -108,6 +108,18 @@ describe("valid files", () => {
     for (const s of scores.slice(fixtures.valid.length)) assert.ok(checkScore(s).ok, s.label);
   });
 
+  test("every synthetic score of tests/fixtures/midi/scores.json passes, with its size and loop length", () => {
+    const { scores: fixtures } = JSON.parse(read("tests/fixtures/midi/scores.json").toString("utf8"));
+    const scores = scoresFromArg(path("tests/fixtures/midi/scores.json"));
+    assert.equal(scores.length, fixtures.length);
+    fixtures.forEach((/** @type {any} */ f, /** @type {number} */ i) => {
+      const r = checkScore(scores[i]);
+      assert.ok(r.ok, `${f.name}: ${!r.ok && r.error}`);
+      assert.match(r.label, new RegExp(`: scores\\[${i}\\] ${f.name}$`));
+      assert.deepEqual([r.size, Number(r.seconds.toFixed(2))], [f.bytes, f.duration_seconds], f.name);
+    });
+  });
+
   test("every form of input gives the same result", () => {
     /** @type {Array<[string, string]>} */
     const inputs = [

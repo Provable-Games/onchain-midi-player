@@ -3,8 +3,8 @@
 //! In the real Beasts integration the MIDI comes from the onchain composer (an `IMidiProvider`
 //! reading the Beast's state). For the sample tokens it is a fixed one-bar loop that exercises what
 //! the README's "MIDI contract" recommends. `scripts/reference.mjs` holds a byte-identical copy
-//! that the golden test keeps in lockstep. Token 4 uses a real score from the composer and the
-//! Beast reference sounds.
+//! that the golden test keeps in lockstep. Token 4 uses a synthetic score the size of the
+//! composer's largest production score, and the Beast reference sounds.
 
 use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, Waveform};
 
@@ -178,7 +178,7 @@ pub fn beast_reference_settings() -> SynthSettings {
     }
 }
 
-/// The token's MIDI: the sample loop, or for token 4 the largest real Beast score.
+/// The token's MIDI: the sample loop, or for token 4 the full-size synthetic score (3,716 bytes).
 pub fn token_midi(token_id: u256) -> ByteArray {
     if token_id == 4 {
         crate::beast_data::heaviest_midi()

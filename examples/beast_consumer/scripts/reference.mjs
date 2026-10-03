@@ -10,8 +10,9 @@
 //   - BeastLikeNft: token table, render_svg, JSON members, MIDI, SynthSettings, and the token_uri
 //     it splices together (the Beasts layout, also from scripts/page.mjs, with the word alignment
 //     of `consumerPieces(..., {align: true})`)
-//   - token 4, a real Beast: the Beasts renderer's SVG, the largest real score and the reference
-//     sounds, from the repository's tests/fixtures/beasts/ and scripts/settings_fixtures.mjs
+//   - token 4, a full-size Beast: the Beasts renderer's SVG (tests/fixtures/beasts/), a synthetic
+//     score the size of the largest production score (tests/fixtures/midi/) and the reference
+//     sounds (scripts/settings_fixtures.mjs)
 //
 // gen_fixtures.mjs builds every token's token_uri twice (naive one-pass nesting and the spliced
 // layout), checks they are equal, and writes the golden file the Cairo tests compare against. If
@@ -52,7 +53,8 @@ export const TOKENS = {
   1: { name: 'Warlock', tier: 1 },
   2: { name: "Night's Wyvern", tier: 2 },
   3: { name: 'Fen-Troll', tier: 3 },
-  // A real Beast: its own art, music and sounds (realBeast below), for the full-size measurement.
+  // A full-size Beast: a real Beast's art, a full-size score and the reference sounds (realBeast
+  // below), for the full-size measurement.
   4: { name: 'Shiny Warlock', tier: 1, real: true },
 };
 
@@ -60,21 +62,23 @@ export const DESCRIPTION =
   'A Beast-like example token. Its animation_url plays the onchain MIDI with the onchain TinySynth class.';
 
 // ---------------------------------------------------------------------------------------------
-// Token 4: a real Beast (mirrors src/beast_data.cairo, which gen_fixtures.mjs writes from these)
+// Token 4: a full-size Beast (mirrors src/beast_data.cairo, which gen_fixtures.mjs writes from these)
 // ---------------------------------------------------------------------------------------------
 
 const BEASTS = new URL('../../../tests/fixtures/beasts/', import.meta.url);
+const SCORES = new URL('../../../tests/fixtures/midi/scores.json', import.meta.url);
 const REAL_SVG_SHA256 = '6ad6b67b75f45d04831c03c9167965c288e5729153a933e9f8c31168421dd658';
 
 /**
  * Token 4's art, music and sounds: the Beasts renderer's SVG for a shiny animated Warlock
- * (22,733 bytes), the largest real score (`heaviest`, 3,716 bytes) and the three Beast reference
- * sounds (lead on program 0, kick on drum 36, snare on drum 38, no reverb).
+ * (22,733 bytes), the synthetic score `heaviest` (3,716 bytes, the size of the largest production
+ * score) and the three Beast reference sounds (lead on program 0, kick on drum 36, snare on drum 38,
+ * no reverb).
  */
 export function realBeast() {
   const svg = readFileSync(new URL('warlock_shiny_animated.svg', BEASTS), 'utf8');
   if (sha256(svg) !== REAL_SVG_SHA256) throw new Error('tests/fixtures/beasts/warlock_shiny_animated.svg changed');
-  const { scores } = JSON.parse(readFileSync(new URL('midi.json', BEASTS), 'utf8'));
+  const { scores } = JSON.parse(readFileSync(SCORES, 'utf8'));
   const score = scores.find((s) => s.name === 'heaviest');
   const midi = Buffer.from(score.midi_b64, 'base64');
   if (midi.length !== score.bytes || sha256(midi) !== score.sha256) throw new Error('heaviest score changed');
