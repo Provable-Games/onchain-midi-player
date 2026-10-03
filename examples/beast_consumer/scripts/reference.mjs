@@ -16,13 +16,14 @@
 
 import {
   ART_OPEN, IMAGE_KEY, MIDI_OPEN, SETTINGS_OPEN, URL_KEY, b64, blen, bytes, consumerPieces, decodeTokenUri,
-  dFragment, naiveTokenJson, naiveTokenUri, padLen, pageHtml, segmentFor, settingsText, sha256, spaces,
-  spliceTokenUri, strictB64Decode,
+  dFragment, naiveTokenJson, naiveTokenUri, padLen, pageHtml, pageScripts, segmentFor, settingsText, sha256, spaces,
+  spliceTokenUri, strictB64Decode, withGzipPayload,
 } from '../../../scripts/page.mjs';
 
 export {
   ART_OPEN, IMAGE_KEY, MIDI_OPEN, SETTINGS_OPEN, URL_KEY, b64, blen, bytes, consumerPieces, decodeTokenUri,
-  dFragment, naiveTokenJson, naiveTokenUri, padLen, segmentFor, sha256, spaces, spliceTokenUri, strictB64Decode,
+  dFragment, naiveTokenJson, naiveTokenUri, padLen, pageScripts, segmentFor, sha256, spaces, spliceTokenUri,
+  strictB64Decode, withGzipPayload,
 };
 
 /** PAGE: the real page of this class version (tests/fixtures/page.html), 9-aligned. */

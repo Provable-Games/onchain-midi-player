@@ -1,16 +1,22 @@
 // @ts-check
 // Node tests for the page's player (player/player.js): the MIDI checks as a module, and the real
-// page's player script (the minified <script> in tests/fixtures/page.html, byte for byte) run in
-// node:vm against a fake DOM, with a recording fake engine and with the real pinned engine.
+// page's scripts (the gunzip shim and the minified player in tests/fixtures/page.html, byte for
+// byte) run in node:vm against a fake DOM: the shim inflates the real engine from the page's gzip
+// payload, then the player runs with a recording fake engine or with that real engine. Includes the
+// D9 failure paths of the gzip payload (corrupt, truncated, missing, no engine after inflation).
 //
 // Run: node --test "player/**/*.test.js" "scripts/**/*.test.mjs"   (or npm test)
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
-import { PLAY_ICON, STOP_ICON, artUrl, checkMidi, decodeMidi } from "./player.js";
+import { gzipSync } from "node:zlib";
+import { ENGINE_MISSING, PLAY_ICON, STOP_ICON, artUrl, checkMidi, decodeMidi } from "./player.js";
+import { ENGINE_SHA256, engineSource } from "../scripts/engine.mjs";
 import { runPage } from "../scripts/page_harness.mjs";
-import { ART_OPEN, MIDI_OPEN, SETTINGS_OPEN, pageHtml, pageScripts } from "../scripts/page.mjs";
+import {
+  ART_OPEN, GZIP_CLOSE, GZIP_OPEN, MIDI_OPEN, SETTINGS_OPEN, SHIM_PIN, pageHtml, pageScripts, sha256, withGzipPayload,
+} from "../scripts/page.mjs";
 import { riff, smf } from "../scripts/page_fixtures.mjs";
 
 const fixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/page.json", import.meta.url), "utf8"));
@@ -122,8 +128,27 @@ describe("the page", () => {
     assert.ok(button && / disabled>$/.test(button[0]), "disabled attribute");
     assert.ok(PAGE.includes(`<path id="icon" d="${PLAY_ICON}"/>`));
     assert.ok(PAGE.endsWith(SETTINGS_OPEN + " ".repeat(fixtures.page.page_pad)));
-    const { player } = pageScripts(PAGE);
-    assert.ok(!/\b(?:eval|Function|fetch|XMLHttpRequest|localStorage|sessionStorage|indexedDB|cookie|import)\b/.test(player), "no eval, network, storage or modules");
+    const { shim, player } = pageScripts(PAGE);
+    for (const js of [shim, player]) {
+      assert.ok(!/\b(?:eval|Function|fetch|XMLHttpRequest|localStorage|sessionStorage|indexedDB|cookie|import)\b/.test(js), "no eval, network, storage or modules");
+    }
+  });
+
+  test("PAGE: the engine gzipped in <head>, then the shim, then (in <body>) the player; the hashes match", () => {
+    const { engineGzip, engine, shim, player } = pageScripts(PAGE);
+    assert.equal(engine, engineSource(), "the payload inflates to the pinned engine, byte for byte");
+    assert.equal(sha256(engine), ENGINE_SHA256);
+    assert.equal(sha256(engineGzip), fixtures.page.gzip_sha256);
+    assert.equal(engineGzip.length, fixtures.page.gzip_len);
+    assert.deepEqual([...engineGzip.subarray(0, 10)], [31, 139, 8, 0, 0, 0, 0, 0, 2, 3], "gzip header: no flags, no timestamp, level 9, Unix");
+    assert.equal(sha256(shim), SHIM_PIN.sha256, "the pinned shim");
+    assert.equal(sha256(shim), fixtures.page.shim_sha256);
+    const at = (/** @type {string} */ s) => PAGE.indexOf(s);
+    assert.ok(at(GZIP_OPEN) < at(`<script>${shim}</script>`) && at(`<script>${shim}</script>`) < at("</head><body>"), "gzip tag, then the shim, in <head>");
+    assert.ok(at("</head><body>") < at(`<script>${player}</script>`), "the player in <body>, not compressed");
+    // Base64 has no `<`, `"` or `&`: the payload cannot end its tag or its attribute.
+    const payload = PAGE.slice(at(GZIP_OPEN) + GZIP_OPEN.length, at(GZIP_CLOSE));
+    assert.match(payload, /^[A-Za-z0-9+/]+=*$/);
   });
 
   test("artUrl: the canonical data URL, and distinct but equivalent URLs for restarts", () => {
@@ -143,13 +168,15 @@ describe("the page's player script, fake engine", () => {
       const art = h.art();
       assert.ok(art);
       assert.equal(art.src, "data:image/svg+xml;base64," + Buffer.from(c.svg).toString("base64"));
-      // The art block is read and shown before the settings and MIDI blocks are read.
+      // The shim inserts the inflated engine before the player registers its DOMContentLoaded
+      // listener; then the art block is read and shown before the settings and MIDI blocks.
       const order = h.page.events.map((e) => (e[0] === "read" ? e[1] : e[0]));
-      assert.deepEqual(order, ["art", "src", "prepend", "settings", "midi"]);
+      assert.deepEqual(order, ["script", "listen", "art", "src", "prepend", "settings", "midi"]);
       assert.equal(h.els.play.disabled, false);
       assert.equal(h.els.error.hidden, true);
       assert.deepEqual(h.calls, []);
       assert.deepEqual(h.consoleErrors, []);
+      assert.deepEqual(h.uncaught, []);
     });
   }
 
@@ -323,6 +350,72 @@ describe("the page's player script, fake engine", () => {
     assert.equal(h.els.icon.attributes.d, PLAY_ICON);
     assert.deepEqual(h.consoleErrors, ["resume refused"]);
   });
+});
+
+describe("the page's gunzip shim and the engine (D9: the art and the error still show)", () => {
+  const base = CASES.beast_140bpm;
+  const html = htmlOf(base);
+  const artSrc = "data:image/svg+xml;base64," + Buffer.from(base.svg).toString("base64");
+  /** The page with the payload's bytes edited. */
+  const editBytes = (/** @type {(b: Buffer) => Buffer} */ f) => withGzipPayload(html, (p) => f(Buffer.from(p, "base64")).toString("base64"));
+  /** The page with a gzip payload of `js` (made with Node's zlib: any valid gzip must inflate). */
+  const withScript = (/** @type {string} */ js) => withGzipPayload(html, () => gzipSync(js).toString("base64"));
+
+  test("the shim inflates the engine and runs it before the player script runs", () => {
+    const h = runPage(html);
+    // One inline script replaced the gzip tag: the engine, byte for byte.
+    assert.equal(h.page.head.length, 1);
+    const [inline] = h.page.head;
+    assert.equal(inline.tag, "script");
+    assert.deepEqual(inline.attributes, {}, "an inline script: no type, no src");
+    assert.equal(inline._text, engineSource());
+    assert.equal(h.engineLoaded, true);
+    assert.deepEqual(h.page.events.slice(0, 2), [["script", engineSource().length], ["listen", "DOMContentLoaded"]]);
+    assert.deepEqual(h.consoleErrors, []);
+    assert.deepEqual(h.uncaught, []);
+  });
+
+  test("a corrupt gzip tag is logged and left in place; the next one still inflates", () => {
+    const corrupt = GZIP_OPEN + Buffer.from("not gzip").toString("base64") + GZIP_CLOSE;
+    const h = runPage(html.replace(GZIP_OPEN, corrupt + GZIP_OPEN));
+    assert.equal(h.page.head.length, 2);
+    assert.equal(h.page.head[0].attributes.type, "text/javascript+gzip", "the corrupt tag stays");
+    assert.equal(h.page.head[1]._text, engineSource());
+    assert.deepEqual(h.consoleErrors, ["gunzip: invalid gzip data"]);
+    h.ready();
+    assert.equal(h.els.play.disabled, false);
+  });
+
+  /** @type {Array<[string, string, string[], string[]]>} [label, html, console errors before the player's, uncaught] */
+  const failures = [
+    ["a corrupt payload (one byte changed mid-stream)", editBytes((b) => { const c = Buffer.from(b); c[c.length >> 1] ^= 0x55; return c; }), ["gunzip:"], []],
+    ["a truncated payload", editBytes((b) => b.subarray(0, b.length >> 1)), ["gunzip:"], []],
+    ["a payload with a wrong CRC-32", editBytes((b) => { const c = Buffer.from(b); c[c.length - 8] ^= 1; return c; }), ["gunzip: CRC-32 or length mismatch"], []],
+    ["a payload that is not gzip", withGzipPayload(html, () => Buffer.from("plain text").toString("base64")), ["gunzip: invalid gzip data"], []],
+    ["a payload that is not base64", withGzipPayload(html, () => "@@@@"), [""], []],
+    ["no gzip tag", withGzipPayload(html, () => null), [], []],
+    ["a payload that defines no engine", withScript("/* not TinySynth */"), [], []],
+    ["a payload whose script throws", withScript("throw new Error('engine failed')"), [], ["engine failed"]],
+  ];
+  for (const [label, page, before, uncaught] of failures) {
+    test(`D9, ${label}: art shown, ▶ disabled, "${ENGINE_MISSING}" shown and logged, no synth`, () => {
+      const h = runPage(page);
+      assert.equal(h.engineLoaded, false);
+      assert.deepEqual(h.uncaught, uncaught);
+      h.ready();
+      assert.equal(h.art()?.src, artSrc, "art rendered");
+      assert.equal(h.els.play.disabled, true);
+      assert.equal(h.els.play.title, ENGINE_MISSING);
+      assert.equal(h.els.error.textContent, ENGINE_MISSING);
+      assert.equal(h.els.error.hidden, false);
+      assert.equal(h.consoleErrors.length, before.length + 1);
+      before.forEach((prefix, i) => assert.ok(h.consoleErrors[i].startsWith(prefix), `shim logged ${JSON.stringify(h.consoleErrors[i])}`));
+      assert.equal(h.consoleErrors.at(-1), ENGINE_MISSING);
+      h.click();
+      assert.deepEqual(h.calls, [], "no synth constructed");
+      assert.equal(h.timers.size, 0);
+    });
+  }
 });
 
 describe("the page's player script, real engine", () => {

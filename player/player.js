@@ -2,19 +2,23 @@
 /**
  * The page's player: shows the token's art, then plays its MIDI with TinySynth behind a ▶/■ toggle.
  *
- * The page (see scripts/build_page.mjs) is the engine `<script>`, then this file and
- * `player/settings.js` flattened into one plain script (their `import`/`export` lines removed,
- * wrapped in a function, minified), then three inert text blocks that follow the player in the
- * document: `#settings` (SETTINGS, after PAGE's alignment spaces), `#midi` (base64 of the MIDI file,
+ * The page (see scripts/build_page.mjs) is the engine, gzipped in a
+ * `<script type="text/javascript+gzip" src="data:...">` that the gunzip shim (`player/gunzip.js`,
+ * the next `<script>`) replaces with the inflated engine while the page is parsed, then this file
+ * and `player/settings.js` flattened into one plain script (their `import`/`export` lines removed,
+ * wrapped in a function, minified, and not compressed, so the art and errors never depend on
+ * inflation), then three inert text blocks that follow the player in the document: `#settings` (SETTINGS, after PAGE's alignment spaces), `#midi` (base64 of the MIDI file,
  * then D's alignment spaces) and `#art` (the raw SVG, unclosed until the end of the document). They
  * exist only once the document is parsed, so the player starts on DOMContentLoaded:
  *
  * 1. Art first: the SVG is shown in an <img> as a base64 data URL, before and independently of
  *    everything else. Nothing that follows can hide it.
- * 2. SETTINGS is parsed strictly (`decodeSettings`: the grammar, Cairo types and count caps; the
+ * 2. The engine must have loaded (`WebAudioTinySynth` defined: the shim inflated it and it ran).
+ *    SETTINGS is parsed strictly (`decodeSettings`: the grammar, Cairo types and count caps; the
  *    class has already range-checked every value with `settings::validate`), and the MIDI is
- *    decoded and checked (`decodeMidi`). On any failure (spec D9) ▶ stays disabled, the exact error is shown and put in
- *    its title and logged, and no synth is ever created. Otherwise ▶ is enabled.
+ *    decoded and checked (`decodeMidi`). On any failure (spec D9) ▶ stays disabled, the exact
+ *    error is shown and put in its title and logged, and no synth is ever created. Otherwise ▶ is
+ *    enabled.
  * 3. ▶ (a click or tap): the first one constructs TinySynth with the settings (`createSynth`).
  *    Every ▶ resumes the AudioContext inside the gesture, reloads the MIDI (back to tick 0 at the
  *    song's starting tempo), loops at End-of-Track (`setLoop(1)`, `setLoopEnd(maxTick)`), starts
@@ -35,6 +39,9 @@ import { createSynth, decodeSettings } from "./settings.js";
 /** Icon path data (24x24 viewBox) of the toggle: ▶ while stopped, ■ while playing. */
 export const PLAY_ICON = "M8 5v14l11-7z";
 export const STOP_ICON = "M6 6h12v12H6z";
+
+/** The error shown when the engine did not load (it was not inflated, or failed when it ran). */
+export const ENGINE_MISSING = "engine: TinySynth did not load";
 
 /** A loop shorter than this would make TinySynth's scheduler spin; such MIDI is rejected. */
 const MIN_LOOP_SECONDS = 0.05;
@@ -241,12 +248,14 @@ export function startPlayer() {
       img.src = artUrl(svg, ++restarts);
     };
 
-    // 2. Settings and MIDI; on failure ▶ stays disabled and no synth is created.
+    // 2. The engine, settings and MIDI; on failure ▶ stays disabled and no synth is created.
     /** @type {import("./settings.js").SynthSettings} */
     let settings;
     /** @type {Uint8Array} */
     let midi;
     try {
+      // Missing if its gzip payload did not inflate (the shim logged why) or the engine failed.
+      if (typeof (/** @type {any} */ (window).WebAudioTinySynth) != "function") throw new Error(ENGINE_MISSING);
       settings = decodeSettings($("settings").textContent || "");
       midi = decodeMidi($("midi").textContent || "");
     } catch (e) {
