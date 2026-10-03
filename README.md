@@ -757,23 +757,23 @@ Every check that CI runs passes on all three engines. The 10-minute drift check 
 
 | 10 minutes | Chromium 153 | Firefox 155 | WebKit 26.6 |
 | --- | --- | --- | --- |
-| The art's drift from the sound (trend; at most 20 ms) | +378.9 ms: fails (a trend overstates a step: +281.6 ms first to last) | +59.9 ms: fails | -0.1 ms: passes |
-| The art against the page clock (trend) | -0.4 ms | +94.6 ms | -0.2 ms |
-| The audio clock against the page clock | -280.2 ms, in stalls (largest 41.2 ms) | +35.4 ms (58 ppm) | -0.5 ms (-0.7 ppm) |
-| Largest checkpoint distance from the trend (at most 20 ms) | 95.9 ms | 13.4 ms | 8.4 ms |
+| The art's drift from the sound (trend; at most 20 ms) | +31.5 ms: fails | +59.9 ms: fails | -0.1 ms: passes |
+| The art against the page clock (trend) | +1.8 ms | +94.6 ms | -0.2 ms |
+| The audio clock against the page clock | -30.1 ms, in one stall at 7:56 | +35.4 ms (58 ppm) | -0.5 ms (-0.7 ppm) |
+| Largest checkpoint distance from the trend (at most 20 ms) | 19.1 ms | 13.4 ms | 8.4 ms |
 | Passes, none missing, on the tempo map's grid | 352, within 0.001 µs | 352, within 0.001 µs | 352, within 0.001 µs |
-| Messages scheduled, none late; the smallest lead | 6,682; 91.3 ms | 6,683; 82.6 ms | 6,682; 47.8 ms |
+| Messages scheduled, none late; the smallest lead | 6,683; 84.5 ms | 6,683; 82.6 ms | 6,682; 47.8 ms |
 | `outputLatency` | 32 ms | 48 ms | 0 |
 
 Findings for the maintainer. Neither is a player bug, and this PR makes no `PAGE` change:
 
-- **On Firefox the art drifts against the sound: +60 ms over 10 minutes** (+62 ms in an earlier run), the art ahead. In headless Firefox the image's animation runs about 160 ppm fast against `performance.now()`, with or without audio, and the audio clock on the null sink about 60 ppm fast. The player syncs the art once per ▶, so the difference adds up, about 6 ms a minute. Re-syncing the art on every pass would bound it to one pass; that is a `PAGE` change. Firefox on a real display is a manual check.
+- **On Firefox the art drifts against the sound: +60 ms over 10 minutes** (+62 ms in an earlier run), the art ahead. In headless Firefox the image's animation runs about 160 ppm fast against `performance.now()`, with or without audio, and the audio clock on the null sink about 60 ppm fast. The player syncs the art once per ▶, so the difference adds up, about 6 ms a minute (12 ms in a minute on CI's arm64 runner, which the 1-minute CI run still passes). Re-syncing the art on every pass would bound it to one pass; that is a `PAGE` change. Firefox on a real display is a manual check.
 - **On Firefox, noise operators at a high frequency ratio play slower than real time.** The `max_length_settings` golden case (88 noise operators at `ratio` 64x) renders at 0.12x real time: its audio clock runs at an eighth of real time, so the music is slow and broken up. With `ratio` 1x it renders in real time, and Chromium and WebKit render all nine golden cases in real time. Whether to cap the ratio in `settings::validate`, fix it in the engine, or accept it is open; CI does not check it.
 
 Known limitations:
 
 - **The audio devices are virtual.** Chromium's headless shell and WebKit clock their audio themselves, and Firefox plays to a PulseAudio null sink. So the drift check measures the page and TinySynth against those clocks, not a sound card's. A consumer sound card's sample clock is commonly tens of ppm off the system clock, and since the art is synced once per ▶, 50 ppm would move the art 30 ms over 10 minutes. Real hardware is a manual check.
-- **Chromium's headless audio clock stalls under CPU load.** In the run above, while other jobs held the machine at a load average of 6.5 to 13.5, it lost 280 ms in stalls, the largest 41 ms; an earlier run at a load of 4 to 5 lost 30 ms in one stall, and the art drifted +44 ms. 1-minute runs on a quieter machine showed no drift. The art followed the page clock throughout; the drift check prints the audio clock's largest step, which tells a stall from a page fault. A real device can underrun too, and the art then stays ahead by the stall.
+- **Chromium's headless audio clock stalls.** In each of three 10-minute runs it fell behind the page clock in steps, and the art stayed that far ahead of the sound: one 31 ms step at a load average of 2 to 4 (the run above; the offset was flat for the 8 minutes before it), one 30 ms step at 4 to 5 (art +44 ms), and 280 ms of steps while other jobs held the machine at 6.5 to 13.5 (art +379 ms). The art followed the page clock within 2 ms in the two runs that measured it, and the drift check prints the audio clock's largest step, which tells a stall from a page fault. A real device can underrun too, and the art then stays ahead by the stall.
 - **WebKit reports `outputLatency` 0**, so on WebKit the drift and the restart are measured against the scheduled sound. Its `getOutputTimestamp().performanceTime` runs at twice the rate in this build, so the drift check samples `currentTime` against `performance.now()` itself.
 
 ## Roadmap
