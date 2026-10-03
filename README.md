@@ -4,7 +4,12 @@ A Cairo class library for Starknet that serves a fully onchain, offline-playable
 
 ## Status
 
-Scaffold only. The interface is declared in [`src/interface.cairo`](src/interface.cairo) and the settings types in [`src/types.cairo`](src/types.cairo); there is no implementation yet, and none will be written until the design below is approved. Nothing described here as behaviour of the class or the player page exists yet. See [Roadmap](#roadmap).
+The interface is declared in [`src/interface.cairo`](src/interface.cairo) and the settings types in [`src/types.cairo`](src/types.cairo).
+
+Implemented so far:
+- **Settings (issue #1):** validation and the `SETTINGS` encoding in [`src/settings.cairo`](src/settings.cairo), with its JavaScript counterpart in [`player/`](player). See [Sound settings and custom sounds](#sound-settings-and-custom-sounds).
+
+The class itself, the page and the player are not implemented yet. Anything else described here as behaviour of the class or the player page does not exist yet. See [Roadmap](#roadmap).
 
 ## How it works
 
@@ -144,18 +149,103 @@ Declared in [`src/types.cairo`](src/types.cairo). The consumer passes a typed `S
 
 | Type | Contents |
 | --- | --- |
-| `SynthSettings` | `quality` (0 chip-tune, 1 FM), `reverb` (0–100 %), `master_vol` (0–100 %), `voices` (1–64), and `timbres: Span<Timbre>` |
+| `SynthSettings` | `quality` (0 chip-tune, 1 FM), `reverb` (0–100 %), `master_vol` (0–100 %), `voices` (1–64), `waves: Span<WaveDef>` (custom waveforms shared by all timbres, 0–16) and `timbres: Span<Timbre>` (0–32) |
 | `Timbre` | A custom sound replacing General MIDI program `slot` (0–127), or drum note `slot` (35–81) when `drum` is true. Holds 1–8 operators |
 | `Operator` | One oscillator, using TinySynth's 13-parameter model: `route` (output, FM or AM target), `wave`, `volume`, `ratio`, `offset_hz`, `attack`, `hold`, `decay`, `sustain`, `release`, `pitch_ratio`, `pitch_time`, `key_scale`, plus an optional `filter` |
-| `Waveform` | `Sine`, `Square`, `Sawtooth`, `Triangle`, `WhiteNoise`, `MetallicNoise`, `Harmonics(Span<u16>)` (band-limited custom wave), `Samples(Span<i8>)` (single-cycle chip wave, played sample-and-hold) |
+| `Waveform` | `Sine`, `Square`, `Sawtooth`, `Triangle`, `WhiteNoise`, `MetallicNoise`, or `Custom(index)`: entry `index` of `SynthSettings.waves` |
+| `WaveDef` | `Harmonics(Span<u16>)` (band-limited custom wave, 1–64 harmonics) or `Samples(Span<i8>)` (single-cycle chip wave played sample-and-hold, 2–256 samples) |
 | `Filter` | `LowPass`, `HighPass` or `BandPass`, with a cutoff (in Hz or key-tracked) and Q. Fixed, with no envelope |
 
 - **Units.** Fractional fields are fixed-point integers in units of `1 / FIXED_POINT_SCALE` (10,000), because Cairo has no floating point. For example `5_000` = 0.5.
-- **Validation.** `midi_segment` range-checks every field and reverts with a descriptive error, so invalid settings never reach the page. The proposed ranges are documented on each field and finalized in issues #1–#3.
+- **Validation.** `settings::validate` checks every field, in a fixed order, and reverts with a `'TS: ...'` short string followed by the 0-based indices of the offending wave, timbre or operator, for example `('TS: volume out of range', 3, 1)`. Invalid settings never reach the page. The ranges are documented on each field in `types.cairo`. The checks and messages are listed in [`src/settings.cairo`](src/settings.cairo).
+- **Not yet accepted.** Custom waves (a non-empty `waves`, or `Waveform::Custom`) revert with `'TS: custom wave unsupported'` until issue #2 lands. Filters revert with `'TS: filter unsupported'` until issue #3 lands. Their encoding is already part of the format, so lifting these checks changes neither the grammar nor the format version.
 - **Selecting sounds.** A MIDI file selects a custom sound the ordinary way: a program change to its slot, or the drum note on channel 10. Only programs 0–127 and drum notes 35–81 are reachable from MIDI.
 - **Consistency.** For a given class hash, the same settings and MIDI always produce the same sound. To keep a token's sound fixed, pass constants, or values derived only from permanent traits.
-- **Cost.** Each custom sound adds roughly 100–200 bytes of page text, which is base64-encoded at call time along with the MIDI.
-- **Engine dependencies.** `Harmonics` and `Samples` need [webaudio-tinysynth#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26). `Filter` needs [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27). Deterministic noise needs [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7). All must land before the class is declared.
+- **Size.** `SETTINGS` is base64-encoded at call time along with the MIDI.
+  - It is 16 bytes with the defaults (`1,1,30,40,64,0,0`), plus about 6 bytes per timbre and 50 bytes per operator.
+  - The three Beast reference sounds (a 2-operator lead, kick and snare) come to 334 bytes.
+  - The cap is 8,192 bytes.
+- **Engine dependencies.** Custom waves need [webaudio-tinysynth#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26). Its storage question is [decided](https://github.com/Provable-Games/webaudio-tinysynth/issues/26#issuecomment-5965255502): each sample wave is stored as one cycle, with its own home pitch. `Filter` needs [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27). Deterministic noise needs [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7). All must land before the class is declared.
+
+### The `SETTINGS` format
+
+The class writes settings into the page as `SETTINGS`, format version 1.
+- **Syntax.** A flat list of canonical decimal integers separated by commas (`[0-9,-]` only, so it can never close its `<script>` block).
+- **Structure.** Fields in declaration order, a length before every list, enums as their variant index, `bool` as 0/1, and `Option` as 0 (`None`) or 1 followed by the value.
+- **Spec.** The grammar, the 31 checks and their messages are in [`src/settings.cairo`](src/settings.cairo). They were specified in issue #1 ([spec](https://github.com/Provable-Games/onchain-tinysynth/issues/1#issuecomment-5964892140), [shared-wave-table amendment](https://github.com/Provable-Games/onchain-tinysynth/issues/1#issuecomment-5965159953)).
+
+```text
+1,1,0,40,64,0,3,                                         version, quality, reverb, master_vol, voices, 0 waves, 3 timbres
+0,0,2,0,3,3000,10000,0,30,0,100,10000,100,10000,10000,0,0,1,3,175,0,60000,2000,0,100,10000,100,10000,10000,0,0,
+1,36,2,…                                                 (Beast reference lead, then kick and snare; line breaks for reading only)
+```
+
+The crate exports:
+- the pure functions `onchain_tinysynth::settings::{validate, encode, validate_and_encode}`;
+- the helpers `default_settings()` and `default_operator()` (TinySynth's operator defaults in fixed-point);
+- the limits as constants (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`, `MAX_SETTINGS_LEN`, …).
+
+Gas (snforge, L2 gas, net of building the input):
+
+| Input | `SETTINGS` bytes | `validate` | `encode` |
+| --- | --- | --- | --- |
+| no timbres | 16 | 12K | 108K |
+| 6 timbres (Beast lead, kick, snare, two hats, bass) | 504 | 306K | 3.0M |
+| 32 timbres × 8 operators, all fields 0 (most validation work) | 7,437 | 6.2M | 49.6M |
+| largest valid input, 32 timbres filled to 8,192 bytes (most encoding work) | 8,192 | 2.5M | 48.2M |
+
+### Player JavaScript (`player/`)
+
+Plain, dependency-free, CSP-safe JavaScript (`// @ts-check` with JSDoc, no `eval`), used by the page and by the tests:
+
+- [`player/settings.js`](player/settings.js) is the module the page will use. It provides:
+  - `parseSettings(text)`: a strict decoder, plus the same checks as Cairo with the same messages and indices; it throws a `SettingsError`;
+  - `createSynth(WebAudioTinySynth, settings)`: constructs TinySynth with `quality`, `useReverb` and `voices`, then calls `installSettings`;
+  - `installSettings(synth, settings)`: calls `setQuality`, then sets master volume, reverb level and voices, then calls `setTimbre` for each timbre. Call it again after anything that changes the quality.
+
+  On any error the page must fail closed: no audio, and a visible error.
+- [`player/encode.js`](player/encode.js) is the reference encoder, for Node and tooling only.
+
+Shared fixtures keep Cairo and JavaScript byte-for-byte identical:
+- `scripts/settings_fixtures.mjs` defines them, including the Beast reference timbres.
+- `scripts/gen_settings_fixtures.mjs` writes `tests/fixtures/settings.json` and `tests/settings_fixtures.cairo` (generated; do not edit).
+- Every fixture is asserted on both sides: the encoded bytes for valid input, and the exact panic data for invalid input.
+
+### Designing a custom sound
+
+1. **Design the sound** in TinySynth's `soundedit.html` (in the fork) or by hand, as a TinySynth timbre: a list of operators `{g, w, t, f, v, a, h, d, s, r, p, q, k}`.
+2. **Convert each operator:**
+   - `g` becomes `route`;
+   - `w` becomes `wave`: `sine`, `square`, `sawtooth`, `triangle`, `n0`, `n1` map to `Sine` … `MetallicNoise`;
+   - multiply every other value by 10,000 and round to an integer: `v` (`volume`), `t` (`ratio`), `f` (`offset_hz`), `a` (`attack`), `h` (`hold`), `d` (`decay`), `s` (`sustain`), `r` (`release`), `p` (`pitch_ratio`), `q` (`pitch_time`), `k` (`key_scale`).
+
+   Fields TinySynth leaves out take its defaults (`default_operator()`).
+3. **Respect the engine's rules:**
+   - Modulators (`route` 1–10 for FM, 11–18 for AM) must come after the operator they target, so operator 1 always has `route: 0`.
+   - The first operator's `decay` × 3.5 is the length of every drum note.
+   - The first operator's `release` × 3.5 is how long a melodic voice lasts after note-off.
+4. **Choose a slot.** Put the timbre in a program slot (0–127) or a drum slot (35–81), and select it from the MIDI with a program change or a drum note on channel 10.
+
+The Beast reference lead, as Cairo:
+
+```cairo
+use onchain_tinysynth::settings::default_operator;
+use onchain_tinysynth::types::{Operator, Timbre, Waveform};
+
+// Triangle carrier, 3 ms attack, full sustain, 10 ms release.
+let carrier = Operator {
+    wave: Waveform::Triangle, volume: 3_000, attack: 30, hold: 0, sustain: 10_000, release: 100,
+    ..default_operator()
+};
+// 6 Hz triangle LFO on operator 1's frequency: +-30 cents (2^(30/1200) - 1 = 0.0175), faded in over 0.2 s.
+let lfo = Operator {
+    route: 1, wave: Waveform::Triangle, volume: 175, ratio: 0, offset_hz: 60_000, attack: 2_000,
+    hold: 0, sustain: 10_000, release: 100, ..default_operator()
+};
+let lead = Timbre { drum: false, slot: 0, operators: [carrier, lfo].span() };
+```
+
+The kick and snare are in `scripts/settings_fixtures.mjs`. `npm run render-check` renders all three sounds in headless Chromium and measures them (optional; needs Playwright). The checks: pitch and vibrato, the kick's pitch drop, and the snare's noise burst.
 
 ## MIDI requirements
 
@@ -193,9 +283,21 @@ Both are pinned in [`.tool-versions`](.tool-versions) for asdf.
 
 ```sh
 scarb build      # compile
-snforge test     # run tests (none yet)
+snforge test     # Cairo tests, including the generated parity fixtures and the gas_ tests
 scarb fmt        # format
 ```
+
+The JavaScript needs only Node (22 or later), no `npm install`:
+
+```sh
+npm test                 # node --test "player/**/*.test.js" "scripts/**/*.test.mjs"
+npm run gen:settings     # regenerate tests/fixtures/settings.json and tests/settings_fixtures.cairo
+npm run check:settings   # fail if they are out of date
+PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
+  npm run render-check   # optional: render the reference timbres in headless Chromium
+```
+
+The engine tests use a vendored copy of the fork's build (`tests/vendor/`, SHA-256 checked on every load).
 
 ## Roadmap
 
@@ -209,7 +311,7 @@ scarb fmt        # format
 
 ## Open decisions
 
-- **Settings encoding and ranges**: the fixed-point scale, per-field ranges, caps (timbres per call, operators per timbre, wave lengths) and the ASCII `SETTINGS` format are proposals until issues #1–#3 settle them.
+- **Custom waves and filters**: their types, ranges and encoding are fixed by issue #1, but accepting them, and their player side, belong to issues #2 and #3.
 - **Alignment of pre-encoded pieces**: as described above, `PAGE` and `D` need 9-byte alignment (not just 3-byte) to splice at both base64 layers. Where the padding spaces go in `PAGE` should be confirmed during phase 2/3.
 
 ## License
