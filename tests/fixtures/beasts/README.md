@@ -8,12 +8,8 @@ A real Beast SVG, the art of the full-size Beasts `token_uri` in [`examples/beas
 
 The scores that play with it are synthetic, generated in this repository: see [`tests/fixtures/midi/`](../midi/README.md).
 
-## Licenses
+## License
 
-This file is third-party data under its own terms, **not** under this repository's Apache-2.0 license. It is used only as a non-production test and gas fixture: the class never contains it. The example's generated `examples/beast_consumer/src/beast_data.cairo` copies the SVG and carries the same notice.
+`warlock_shiny_animated.svg` is Beasts artwork, Copyright (c) 2025 Provable Games Inc. Provable Games licenses this fixture under the Apache License, Version 2.0, for this repository, like the rest of the repository; the maintainer granted this on 2026-10-03. The notice next to the file, [`warlock_shiny_animated.svg.license`](warlock_shiny_animated.svg.license), records the grant.
 
-`warlock_shiny_animated.svg` is Beasts artwork, Copyright (c) 2025 Provable Games Inc. The beasts-v3 repository distributes it with two license files, copied verbatim from the same commit into [`licenses/`](licenses):
-- [`licenses/beasts-v3-BUSL_LICENSE`](licenses/beasts-v3-BUSL_LICENSE), the Business Source License 1.1 for "Beast Collectibles";
-- [`licenses/beasts-v3-MIT_LICENSE`](licenses/beasts-v3-MIT_LICENSE).
-
-BUSL 1.1 grants copying, redistribution and non-production use, and requires the license to be displayed on each copy; that is why the texts are here.
+The grant covers this file only. beasts-v3 distributes its own copy, and the other Beasts artwork, under its own terms. The example's generated `src/beast_data.cairo` copies the SVG under the same Apache-2.0 grant.
