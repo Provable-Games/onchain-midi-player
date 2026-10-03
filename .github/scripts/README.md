@@ -28,7 +28,7 @@ Each provider workflow runs four jobs. Require the two gates in the branch rules
 | `Codex review gate` | yes | Codex review outcome for this head |
 | `Claude review gate` | yes | Claude review outcome for this head |
 | `Codex review credential check`, `Claude review credential check` | no | Reports only whether the provider's secret is set |
-| `Codex review setup`, `Claude review setup` | no | Policy, trusted configuration and change detection |
+| `Codex review setup`, `Claude review setup` | no | Policy, trusted configuration, change detection and the dependency sources |
 | `Codex review / onchain-tinysynth`, `Claude review / onchain-tinysynth` | no | The credential-bearing review run |
 | `Codex review comment`, `Claude review comment` | no | Publishes the bot comment |
 | `Review helper tests` (`review-helpers.yml`) | optional | Runs `test_review.py`, shellcheck, and actionlint on every workflow |
@@ -160,6 +160,7 @@ All jobs run on `ubuntu-24.04-arm`. Both CLIs publish linux-arm64 builds.
 | Expired, revoked or rejected Codex credential | Fails with "Codex authentication failed: the org secret CODEX_AUTH_DOT_JSON needs to be refreshed (or switch to an API-key credential)" |
 | Claude transcript without an init message, from another working directory, session or file, with a non-read-only tool, or with another model | Fails; a final result alone is never accepted |
 | Trusted configuration changed during the run | Fails before any result is recorded |
+| Dependency sources cannot be prepared (Scarb install, fetch, a lockfile out of date, upload or download) | No effect on the gate by itself: a warning names the step, the review runs, and its prompt says the sources are unavailable |
 | CLI failure, cancellation, timeout, missing or blank output | Fails. Partial output from a failed run is discarded, even `lgtm`. |
 | Output that is not exactly `lgtm`, valid findings, or `Review incomplete: …` | Fails as incomplete; the raw text is shown in the comment |
 | Output containing a credential value in any detected form | Fails; the output is withheld |
@@ -202,6 +203,71 @@ or `### [` and write nothing before, between or after the findings.
   findings. Models sometimes add a sentence such as "I've finished
   reading the files", and rejecting an otherwise valid review for it adds
   noise without adding safety.
+
+## Static review and dependency sources
+
+Both reviews are static. The reviewer reads the code and the review context,
+but it has no network access and the project's toolchains are not installed:
+the required CI checks (`cairo`, `javascript`, `generated`, `browser`) build
+and test every head. The shared policy therefore keeps `Review incomplete` for
+missing review material (git history or the merge base, a diff or changed file
+too large to read or unreadable, truncated output), and states that a build,
+test, tool or dependency fetch that cannot run is expected and is not such a
+reason. Before this rule, Codex answered pull request #22, which replaced the
+base64 encoder with a git dependency, with "Review incomplete" because it could
+neither fetch the dependency nor run Scarb.
+
+So that a dependency change can still be judged on its source, the setup job
+fetches the head's Scarb dependencies for the review job:
+
+1. Only for the `review` policy, it installs Scarb with
+   `software-mansion/setup-scarb` (the SHA `ci.yml` uses) at the version in the
+   head's `.tool-versions`, without a cache.
+2. In a copy of the head (`git archive`), never in `src/`, it runs
+   `scarb --no-proc-macros fetch` and then
+   `scarb --offline --no-proc-macros metadata` for the root package and
+   `examples/beast_consumer`. Scarb 2.20.1 has no `--locked` flag, so the step
+   stops if either command changed a committed `Scarb.lock`.
+3. For each git and registry package in the metadata, it copies the source to
+   `$RUNNER_TEMP/deps/<package>@<locked commit or version>`. A git dependency
+   gets its whole repository at the locked commit (checked with
+   `git rev-parse HEAD`), without `.git`; a registry package gets its published
+   files without `target/` (prebuilt plugin binaries). Package names and
+   revisions are validated before they become paths. `SOURCES.txt` gives each
+   package's directory and its `source`. Links and special files are deleted.
+4. It uploads the directory as the `codex-dependency-sources` (or
+   `claude-dependency-sources`) artifact. The publish and gate jobs read
+   results from `codex-review-*` (`claude-review-*`), which never matches it,
+   so no file in a dependency can pose as a review result.
+
+The review job downloads the artifact to `$RUNNER_TEMP/deps`, deletes anything
+but regular files and directories, makes it read-only, and passes the path to
+`review.py prompt` in `REVIEW_DEPS_DIR`. Claude also gets it as an `--add-dir`.
+The prompt lists the package directories, taking only names of the form
+`<package>@<revision>` from them. Each of these steps has a timeout and
+continues on error: if one fails, the review still runs, and the prompt says
+the dependency sources could not be prepared, which is not a reason for
+`Review incomplete`.
+
+`REVIEW_DEPS_DIR` is an environment variable rather than an option because the
+helpers come from the base revision, and a base revision whose helpers predate
+it must ignore it rather than fail.
+
+Security, within the trust boundary below:
+
+- Fork and Dependabot pull requests never reach the fetch, because it runs only
+  for the `review` policy. The setup job holds no secret and only
+  `contents: read`, so no runner that processes the pull request's manifests
+  later holds a credential, and Scarb is never on the review job's `PATH`,
+  which Codex's sandbox inherits.
+- The fetch only downloads: nothing is built, and `--no-proc-macros` stops Scarb
+  loading any procedural macro or plugin. The Scarb version comes from the
+  head, but `setup-scarb` installs only official Software Mansion releases.
+- The review still runs in Codex's read-only sandbox, behind the unchanged
+  write and network probes, or with Claude's read-only tools. Dependency
+  sources are review material: `AGENTS.md` and `CLAUDE.md` files in them do not
+  load as instructions (`project_doc_max_bytes=0` for Codex,
+  `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=0` for Claude).
 
 ## Comments
 
@@ -297,6 +363,9 @@ completed", so an old `lgtm` never stays under a new head.
   and the review text are uploaded, for one day.
 - The comment job checks the current head through the API before writing, and
   runs the base revision's helpers without secrets.
+- The setup job fetches the head's Scarb dependency sources for the reviewer,
+  without building anything or loading a procedural macro (see Static review
+  and dependency sources).
 - This repository is private. If the base commit is missing from the full-history
   checkout (the base moved after the event), the trusted-configuration step's
   fallback `git fetch` runs without credentials (`persist-credentials: false`)
@@ -342,7 +411,8 @@ shellcheck .github/scripts/*.sh
 actionlint .github/workflows/*.yml
 ```
 
-The tests need Python 3.9 or later (CI uses the runner's Python), Git and Bash. They replace `gh` and the Codex CLI
+The tests need Python 3.9 or later (CI uses the runner's Python), Git and Bash; the dependency fetch tests also
+need `jq` and `timeout`, as on the runner, and are skipped without them. They replace `gh`, Scarb and the Codex CLI
 with local fakes. Set `REVIEW_TEST_BUN` to a Bun 1.3.14 binary to also run the
 test showing that the action's Bun step loads no `bunfig.toml` or `.env` from
 the checkout. The tests cannot show that real credentials, runners or provider

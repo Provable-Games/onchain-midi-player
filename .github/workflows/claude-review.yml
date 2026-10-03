@@ -48,7 +48,7 @@ jobs:
     # A title or body edit (no base change) starts nothing.
     if: ${{ !(github.event.action == 'edited' && !github.event.changes.base) }}
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
@@ -126,6 +126,91 @@ jobs:
           python3 -I -B trusted/.github/scripts/review.py prepare --config-root trusted --provider claude
           --repo-dir src --event "$GITHUB_EVENT_PATH" --config-sha "$CONFIG_SHA" --bootstrap "$BOOTSTRAP"
 
+      # Dependency sources for the reviewer, which has no network access (see
+      # .github/scripts/README.md, "Static review and dependency sources"). This
+      # job holds no secret, nothing here builds or loads a procedural macro, and
+      # a failure or timeout only leaves the review without the sources, which
+      # its prompt then says.
+      - name: Install the pinned Scarb
+        id: scarb
+        if: steps.policy.outputs.policy == 'review'
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
+        with:
+          tool-versions: src/.tool-versions
+          cache: false
+
+      - name: Fetch the Scarb dependency sources
+        id: deps
+        if: steps.scarb.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          # begin scarb-dependency-sources
+          set -euo pipefail
+          warn() { echo "::warning title=AI review dependency sources::$1 The review runs without dependency sources."; exit 1; }
+          out="$RUNNER_TEMP/deps"
+          work="$RUNNER_TEMP/deps-work"
+          export SCARB_CACHE="$RUNNER_TEMP/scarb-cache" SCARB_CONFIG="$RUNNER_TEMP/scarb-config"
+          rm -rf "$out" "$work" "$SCARB_CACHE" "$SCARB_CONFIG"
+          mkdir -p "$out" "$work/head" "$SCARB_CONFIG"
+          : > "$out/SOURCES.txt"
+          : > "$work/packages.tsv"
+          # Fetch in a copy of the head: Scarb may rewrite a lockfile, and src/
+          # must stay exactly the reviewed revision.
+          git -C src archive --format=tar HEAD | tar -x -C "$work/head"
+          for package in . examples/beast_consumer; do
+            dir="$work/head/$package"
+            [ -f "$dir/Scarb.toml" ] || continue
+            [ -f "$dir/Scarb.lock" ] || warn "$package has no committed Scarb.lock."
+            cp "$dir/Scarb.lock" "$work/committed.lock"
+            # fetch only downloads, nothing is built, and --no-proc-macros keeps
+            # Scarb from loading any procedural macro or plugin.
+            timeout 120 scarb --no-proc-macros --manifest-path "$dir/Scarb.toml" fetch
+            timeout 30 scarb --offline --no-proc-macros --manifest-path "$dir/Scarb.toml" \
+              metadata --format-version 1 > "$work/metadata.json"
+            cmp -s "$work/committed.lock" "$dir/Scarb.lock" ||
+              warn "$package/Scarb.lock does not match its Scarb.toml (Scarb changed it)."
+            jq -r '.packages[] | select((.source // "") | startswith("git+") or startswith("registry+"))
+              | [.name, .version, .source, .root] | @tsv' "$work/metadata.json" >> "$work/packages.tsv"
+          done
+          while IFS=$'\t' read -r name version source root; do
+            if [[ "$source" == git+* ]]; then
+              rev="${source##*#}"
+              top="$(git -C "$root" rev-parse --show-toplevel)"
+              [[ "$rev" =~ ^[0-9a-f]{40}$ && "$(git -C "$top" rev-parse HEAD)" == "$rev" ]] ||
+                warn "$name is not checked out at its locked commit ($source)."
+            else
+              rev="$version"
+              top="$root"
+            fi
+            [[ "$name" =~ ^[a-z_][a-z0-9_]{0,63}$ && "$rev" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$ ]] ||
+              warn "Unexpected package name or revision: $name $rev."
+            printf '%s\t%s\n' "$name@$rev${root#"$top"}" "$source" >> "$out/SOURCES.txt"
+            [ -e "$out/$name@$rev" ] && continue
+            mkdir "$out/$name@$rev"
+            # Sources only: no .git, and no target/ (prebuilt plugin binaries).
+            tar -C "$top" --exclude=./.git --exclude=./target -cf - . | tar -C "$out/$name@$rev" -xf -
+          done < <(LC_ALL=C sort -u "$work/packages.tsv")
+          # Keep only regular files and directories: a link could point outside.
+          find "$out" ! -type f ! -type d -delete
+          cat "$out/SOURCES.txt"
+          # end scarb-dependency-sources
+
+      - name: Upload the dependency sources
+        if: steps.deps.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          # Must not match the claude-review-* pattern that publish and gate read results from.
+          name: claude-dependency-sources
+          path: ${{ runner.temp }}/deps
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
   review:
     name: Claude review / ${{ matrix.agent_id }}
     needs: prepare
@@ -190,9 +275,36 @@ jobs:
             exit 1
           fi
 
+      # Optional context from the setup job. Without it, the prompt says that
+      # the dependency sources are unavailable.
+      - name: Download the dependency sources
+        id: deps
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: claude-dependency-sources
+          path: ${{ runner.temp }}/deps
+
+      - name: Make the dependency sources read-only
+        env:
+          DOWNLOAD: ${{ steps.deps.outcome }}
+        run: |
+          # begin dependency-sources-read-only
+          set -euo pipefail
+          deps="$RUNNER_TEMP/deps"
+          if [ "$DOWNLOAD" != success ]; then
+            rm -rf "$deps"
+            echo "::warning title=AI review dependency sources::This review has no dependency sources (download $DOWNLOAD); see the setup job's log."
+            exit 0
+          fi
+          find "$deps" ! -type f ! -type d -delete
+          chmod -R a-w "$deps"
+          # end dependency-sources-read-only
+
       - name: Build the review prompt
         id: prompt
         env:
+          REVIEW_DEPS_DIR: ${{ runner.temp }}/deps
           CONFIG_SHA: ${{ needs.prepare.outputs.config_sha }}
           BOOTSTRAP: ${{ needs.prepare.outputs.bootstrap }}
           AGENT_ID: ${{ matrix.agent_id }}
@@ -223,9 +335,11 @@ jobs:
           CLAUDE_REVIEW_MODEL: ${{ vars.CLAUDE_REVIEW_MODEL }}
           CLAUDE_REVIEW_EFFORT: ${{ vars.CLAUDE_REVIEW_EFFORT }}
           CONTEXT_DIR: ${{ steps.prompt.outputs.context_dir }}
-        run: >-
-          python3 -I -B trusted/.github/scripts/review.py claude-args --config-root trusted
-          --add-dir "$GITHUB_WORKSPACE/src" --add-dir "$CONTEXT_DIR"
+        run: |
+          set -euo pipefail
+          dirs=(--add-dir "$GITHUB_WORKSPACE/src" --add-dir "$CONTEXT_DIR")
+          if [ -d "$RUNNER_TEMP/deps" ]; then dirs+=(--add-dir "$RUNNER_TEMP/deps"); fi
+          python3 -I -B trusted/.github/scripts/review.py claude-args --config-root trusted "${dirs[@]}"
 
       # The base action runs Claude Code without GitHub tools or a GitHub token.
       # Its SHA fixes the Claude Code version it installs (2.1.288 for v1.0.240).
