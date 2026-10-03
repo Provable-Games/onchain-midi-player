@@ -48,13 +48,12 @@ another fflate version means re-deriving and reviewing the shim, vendoring that 
 ## game-components license
 
 - `game-components.LICENSE`: the MIT License of [game-components](https://github.com/Provable-Games/game-components)
-  (Copyright (c) 2026 Provable Games), byte for byte as its `LICENSE` file at commit
-  `fd4ed385671e5ab610bc5c9c48cfc819ff4965eb` (game-components PR #161, Git blob `de51257`). SHA-256
+  (Copyright (c) 2026 Provable Games), byte for byte as its `LICENSE` file at the pinned commit
+  `66ce934e750f8162de4f6a377357b2b8f8e5c4c0` (added in game-components PR #161; Git blob `de51257`). SHA-256
   `4f7adc00655ded5638937698858cd3b302ee48069b924c6e456b9ef6e3f35f10`.
 
 The class's base64 encoder is the package `game_components_encoding` (`packages/encoding` of game-components), a Scarb
 dependency pinned in [`Scarb.toml`](../../Scarb.toml). It is compiled into the class, so its license goes into the class's
-`license()` text. The pinned commit, `652b349`, predates the `LICENSE` file: game-components' README declared the MIT
-License there, and `fd4ed38`, the next commit, adds only this file. `ENCODER_PIN` in
-[`scripts/page.mjs`](../../scripts/page.mjs) checks its SHA-256 whenever it is read. When the dependency moves to a release
-tag, check this file against the tag's `LICENSE`.
+`license()` text. `ENCODER_PIN` in [`scripts/page.mjs`](../../scripts/page.mjs) checks the file's SHA-256 whenever it is
+read. To verify: `git -C <game-components> show 66ce934:LICENSE | sha256sum`. When the dependency moves to a release tag,
+check this file against the tag's `LICENSE`.
