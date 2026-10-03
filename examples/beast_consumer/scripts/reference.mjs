@@ -191,14 +191,57 @@ export function midiWithSysex() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// The art rule: the SVG must never contain `</script` (README: "Art (SVG) requirements")
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The consumer-side check of the art rule, for tests and tooling (the class never sees the SVG).
+ * The SVG is the raw text of the page's last block, `<script type="text/plain" id="art">`, which
+ * the HTML parser ends at the first `</script`. Returns `svg`; throws if it contains `</script` in
+ * any letter case. tests/test_art_safety.cairo has the same check in Cairo.
+ */
+export function assertArtSafe(svg) {
+  const at = svg.search(/<\/script/i);
+  if (at >= 0) throw new Error(`SVG contains ${JSON.stringify(svg.slice(at, at + 8))} at byte ${Buffer.byteLength(svg.slice(0, at))}`);
+  return svg;
+}
+
+/**
+ * The art block of a decoded animation_url HTML as the HTML parser reads it: the raw text from the
+ * art block's opening tag up to the first `</script` (ASCII case-insensitive) followed by
+ * whitespace, `/` or `>`, where the tokenizer ends the element; `rest` is everything after that,
+ * which the parser reads as page markup. A model of the one tokenizer rule that applies to a valid
+ * page, whose art block runs to the end of the document. It leaves out the `<!--` ... `<script`
+ * escape states, which only matter for an SVG that already breaks the rule; browser_check.mjs
+ * compares it with Chromium.
+ */
+export function parseArtBlock(html) {
+  const at = html.indexOf(ART_OPEN);
+  if (at < 0) throw new Error('no art block');
+  const art = html.slice(at + ART_OPEN.length);
+  const end = art.search(/<\/script[\t\n\f\r />]/i);
+  return end < 0 ? { art, rest: '' } : { art: art.slice(0, end), rest: art.slice(end) };
+}
+
+/**
+ * Test variant of render_svg that breaks the art rule: a `<script>` element right after the
+ * opening `<svg>` tag. Valid SVG, and harmless in an `<img>`, but its `</script>` ends the page's
+ * art block (see parseArtBlock).
+ */
+export function unsafeSvg(name, tier) {
+  const svg = renderSvg(name, tier);
+  const at = svg.indexOf('>') + 1;
+  return svg.slice(0, at) + '<script>/* a script in the art */</script>' + svg.slice(at);
+}
+
+// ---------------------------------------------------------------------------------------------
 // token_uri: spliced (what the contract does) and naive (one pass, standard nesting)
 // ---------------------------------------------------------------------------------------------
 
 export function tokenParts(tokenId) {
   const t = TOKENS[tokenId];
   if (!t) throw new Error(`unknown token ${tokenId}`);
-  const svg = renderSvg(t.name, t.tier);
-  if (svg.toLowerCase().includes('</script')) throw new Error('SVG contains </script');
+  const svg = assertArtSafe(renderSvg(t.name, t.tier));
   const mem = members(tokenId, t.name, t.tier);
   const settings = settingsFor(t.tier);
   const { d, pad: dPad } = dFragment(MIDI, settings);
