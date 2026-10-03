@@ -42,7 +42,8 @@ const DRUM_HIGH = 81;
 /**
  * @typedef {{endTick: number, notes: number, channels: number[]}} TrackSummary
  * @typedef {{notes: number, programs: number[], drumNotes: number[]}} ChannelSummary
- * @typedef {{format: number, division: number, tracks: TrackSummary[], channels: Map<number, ChannelSummary>}} Summary
+ * @typedef {{format: number, division: number, tracks: TrackSummary[], channels: Map<number, ChannelSummary>,
+ *   rhythmSysEx: boolean}} Summary rhythmSysEx: a GS "use for rhythm part" SysEx, which TinySynth honours
  * @typedef {{label: string, size: number | null, ok: true, maxTick: number, seconds: number, summary: Summary}
  *   | {label: string, size: number | null, ok: false, error: string}} Result
  */
@@ -70,7 +71,8 @@ export function scoresFromContents(label, buf, ext) {
 
 /**
  * Every "midi_b64" string in a JSON document, at any depth, labelled with its path and the "name"
- * string next to it.
+ * string next to it. A "midi_b64" that holds an object or array is searched too; one that holds a
+ * number, boolean or null is an input error, so a broken fixture is never skipped silently.
  * @param {string} label
  * @param {string} json
  * @returns {Score[]}
@@ -93,7 +95,13 @@ export function scoresFromJson(label, json) {
         const where = [path, typeof o.name === "string" ? o.name : ""].filter(Boolean).join(" ");
         scores.push({ label: `${label}: ${where || "midi_b64"}`, b64: o.midi_b64 });
       }
-      for (const [k, v] of Object.entries(o)) if (k !== "midi_b64") walk(v, path ? `${path}.${k}` : k);
+      for (const [k, v] of Object.entries(o)) {
+        const at = path ? `${path}.${k}` : k;
+        if (k === "midi_b64" && typeof v !== "string" && (v === null || typeof v !== "object")) {
+          throw new InputError(`${label}: ${at} is not a string`);
+        }
+        if (k !== "midi_b64" || typeof v !== "string") walk(v, at);
+      }
     }
   };
   walk(doc, "");
@@ -163,6 +171,7 @@ export function summarize(u) {
   const channels = new Map();
   /** @type {TrackSummary[]} */
   const tracks = [];
+  let rhythmSysEx = false;
   for (let t = 0; t < u16(10); t++) {
     const end = p + 8 + u16(p + 4) * 65536 + u16(p + 6);
     p += 8;
@@ -178,6 +187,8 @@ export function summarize(u) {
       if (st === 0xff || st === 0xf0) {
         if (st === 0xff) p++; // the meta event's type
         const n = vlq(); // read before adding: `p += vlq()` would add to the old p
+        // GS use for rhythm part, F0 41 dd 42 12 40 1x 15 vv cs F7, as TinySynth's send() matches it.
+        if (st === 0xf0 && n === 10 && u[p] === 0x41 && u[p + 2] === 0x42 && u[p + 3] === 0x12 && u[p + 4] === 0x40 && (u[p + 5] & 0xf0) === 0x10 && u[p + 6] === 0x15) rhythmSysEx = true;
         p += n;
       } else {
         run = st;
@@ -207,6 +218,7 @@ export function summarize(u) {
         .sort((a, b) => a[0] - b[0])
         .map(([ch, c]) => [ch, { notes: c.notes, programs: sorted(c.programs), drumNotes: sorted(c.drumNotes) }]),
     ),
+    rhythmSysEx,
   };
 }
 
@@ -221,7 +233,7 @@ const channelName = (/** @type {number} */ ch) => (ch === DRUMS ? "channel 10 (d
 export function formatResult(r) {
   const size = r.size === null ? "size unknown (not base64)" : plural(r.size, "byte");
   if (!r.ok) return [`FAIL ${r.label}`, `  ${r.error}`, `  ${size}`];
-  const { format, division, tracks, channels } = r.summary;
+  const { format, division, tracks, channels, rhythmSysEx } = r.summary;
   const lines = [
     `PASS ${r.label}`,
     `  ${size}, format ${format}, ${plural(tracks.length, "track")}, ${division} ticks per quarter note`,
@@ -236,7 +248,7 @@ export function formatResult(r) {
     if (ch === DRUMS) {
       const silent = c.drumNotes.filter((n) => n < DRUM_LOW || n > DRUM_HIGH);
       const notes = c.drumNotes.length ? `, drum notes ${c.drumNotes.join(", ")}` : "";
-      const warn = silent.length ? ` (silent, outside ${DRUM_LOW}-${DRUM_HIGH}: ${silent.join(", ")})` : "";
+      const warn = silent.length && !rhythmSysEx ? ` (silent, outside ${DRUM_LOW}-${DRUM_HIGH}: ${silent.join(", ")})` : "";
       lines.push(`  ${channelName(ch)}: ${plural(c.notes, "note")}${notes}${warn}`);
     } else {
       const programs = c.programs.length ? `programs ${c.programs.join(", ")}` : "no program change (program 0)";
@@ -244,6 +256,7 @@ export function formatResult(r) {
     }
   }
   if (!channels.has(DRUMS)) lines.push(`  ${channelName(DRUMS)}: not used`);
+  if (rhythmSysEx) lines.push("  note: a GS use-for-rhythm-part SysEx can change which channels are drums; this summary assumes channel 10 only");
   return lines;
 }
 

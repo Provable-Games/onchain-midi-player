@@ -84,6 +84,17 @@ describe("valid files", () => {
     assert.deepEqual(formatResult(r).slice(-2), ["  channel 1: 1 note, no program change (program 0)", "  channel 10 (drums): not used"]);
   });
 
+  test("a GS use-for-rhythm-part SysEx qualifies the drum summary instead of calling notes silent", () => {
+    // Track 3 of SONG, preceded by F0 41 10 42 12 40 10 15 00 1B F7: channel 10 becomes melodic.
+    const gs = [0, 0xf0, 0x0a, 0x41, 0x10, 0x42, 0x12, 0x40, 0x10, 0x15, 0x00, 0x1b, 0xf7];
+    const song = smf({ format: 0, ppq: 96, tracks: [[gs, [0, 0x99, 36, 100], [48, 0x99, 90, 100], [48, 0x89, 36, 0], [288, ...EOT]]] });
+    const lines = formatResult(checkScore({ label: "gs", bytes: new Uint8Array(song) }));
+    assert.deepEqual(lines.slice(-2), [
+      "  channel 10 (drums): 2 notes, drum notes 36, 90",
+      "  note: a GS use-for-rhythm-part SysEx can change which channels are drums; this summary assumes channel 10 only",
+    ]);
+  });
+
   test("every score of tests/fixtures/page.json passes, with the fixtures' maxTick and loop length", () => {
     const fixtures = JSON.parse(read("tests/fixtures/page.json").toString("utf8"));
     const scores = scoresFromArg(path("tests/fixtures/page.json"));
@@ -212,6 +223,14 @@ describe("exit status", () => {
     assert.equal(cli([file("broken.json", JSON.stringify({ name: "x", midi_b64: "TVRoZA" }))]).status, 1);
   });
 
+  test("1 for a failing score under a midi_b64 that holds an object", () => {
+    const json = file("nested-bad.json", JSON.stringify({ good: { name: "good", midi_b64: SONG_B64 }, odd: { midi_b64: { name: "bad", midi_b64: "TVRoZA==" } } }));
+    assert.deepEqual(scoresFromArg(json).map((s) => s.label.slice(json.length + 2)), ["good good", "odd.midi_b64 bad"]);
+    const out = cli([json]);
+    assert.equal(out.status, 1);
+    assert.match(out.stdout, /\nFAIL .*odd\.midi_b64 bad\n  midi: truncated \(byte 4\)\n/);
+  });
+
   test("2 on a usage error or an input that cannot be read", () => {
     const usage = cli([]);
     assert.equal(usage.status, 2);
@@ -220,9 +239,10 @@ describe("exit status", () => {
     assert.match(cli([missing]).stderr, new RegExp(`^ERROR ${missing.replace(/[.\\]/g, "\\$&")}: no such file`));
     const notJson = file("not.json", "{ midi_b64: ");
     const noMidi = file("empty.json", JSON.stringify({ scores: [{ name: "x" }] }));
+    const nullMidi = file("null.json", JSON.stringify({ scores: [{ name: "x", midi_b64: SONG_B64 }, { name: "y", midi_b64: null }] }));
     const subdir = join(dir, "sub");
     mkdirSync(subdir);
-    for (const arg of [missing, notJson, noMidi, subdir, "song"]) {
+    for (const arg of [missing, notJson, noMidi, nullMidi, subdir, "song"]) {
       const out = cli([arg]);
       assert.equal(out.status, 2, arg);
       assert.match(out.stderr, /^ERROR /, arg);
