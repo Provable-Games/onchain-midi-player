@@ -193,7 +193,8 @@ const SLOT_EDGES = settings({
 const ALL_WAVES = settings({
   timbres: [{
     drum: false, slot: 1,
-    operators: ["Sine", "Square", "Sawtooth", "Triangle", "WhiteNoise", "MetallicNoise"].map((wave) => op({ wave })),
+    operators: /** @type {Array<Operator["wave"]>} */ (["Sine", "Square", "Sawtooth", "Triangle", "WhiteNoise", "MetallicNoise"])
+      .map((wave) => op({ wave })),
   }],
 });
 
