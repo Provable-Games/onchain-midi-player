@@ -1,4 +1,4 @@
-# Vendored engine
+# Vendored engine and shim license
 
 The pinned TinySynth engine, from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>,
 at commit `b70ba90d63c5ea657cb67ca98de90d7f778c29bd`:
@@ -11,8 +11,9 @@ at commit `b70ba90d63c5ea657cb67ca98de90d7f778c29bd`:
 - License: Apache License 2.0. Copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games (see the fork's NOTICE
   and this repository's [NOTICE](../../NOTICE)).
 
-This is the engine the class embeds: `scripts/build_page.mjs` puts the minified file's exact bytes into the page, and
-`script_sha256()` returns its SHA-256. The engine tests and the render and page checks run the same file. The pin is
+This is the engine the class embeds: `scripts/build_page.mjs` gzips the minified file's exact bytes into the page (the
+page's gunzip shim inflates them back in the browser), and `script_sha256()` returns the SHA-256 of the decompressed
+bytes. The engine tests and the render and page checks run the same file. The pin is
 the one line `ENGINE_PIN` in [`scripts/engine.mjs`](../../scripts/engine.mjs), which checks both hashes on every load,
 so a mismatch fails before anything is generated. Nothing needs network access.
 
@@ -28,4 +29,18 @@ To a later commit, or to a tagged fork release once the fork publishes them:
    commit or the tag) and prints the new `ENGINE_PIN` line. It only reads the checkout.
 3. Replace the `ENGINE_PIN` line in `scripts/engine.mjs`, delete the old files here, and run
    `npm run gen:page -- --record` (the new engine ref is a new `VERSION`). The
-   page, `src/page_data.cairo` (including `VERSION`, `ENGINE_SHA256` and the license text) and the fixtures follow.
+   page (with a new gzip payload), `src/page_data.cairo` (including `VERSION`, `ENGINE_SHA256`, `GZIP_SHA256` and the
+   license text) and the fixtures follow.
+
+## fflate license
+
+- `fflate-0.8.3.LICENSE`: the MIT License of [fflate](https://github.com/101arrowz/fflate) 0.8.3, exactly as distributed
+  in its npm package (Copyright (c) 2026 Arjun Barrett). SHA-256
+  `0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551`.
+
+The page's gunzip shim, [`player/gunzip.js`](../../player/gunzip.js), is derived from fflate 0.8.3's `gunzipSync`, and the
+build compresses the engine with the same fflate version (pinned in `package-lock.json`). This file goes into the
+class's `license()` text. `SHIM_PIN` in [`scripts/page.mjs`](../../scripts/page.mjs) checks its SHA-256 whenever it is read,
+and the build checks that it equals the installed fflate's `LICENSE` and that the installed version is 0.8.3. Moving to
+another fflate version means re-deriving and reviewing the shim, vendoring that version's license, and updating
+`SHIM_PIN`.

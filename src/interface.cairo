@@ -17,10 +17,14 @@
 //! - `<pad>`: zero or more ASCII spaces (0x20) inserted only to reach a length
 //!   alignment. Spaces are placed where they are insignificant: between JSON tokens, or
 //!   around base64 text that the player trims.
-//! - `PAGE`: the fixed HTML page of this class version (TinySynth engine, player, and the
-//!   opening of the settings text block). It ends with the opening tag
+//! - `PAGE`: the fixed HTML page of this class version (the TinySynth engine, gzipped in a
+//!   `<script type="text/javascript+gzip" src="data:text/javascript;base64,...">` tag, the
+//!   gunzip shim that inflates it in the browser, the player, and the opening of the
+//!   settings text block). It ends with the opening tag
 //!   `<script type="text/plain" id="settings">`, followed by any alignment `<pad>` (which
-//!   then falls inside the settings block and is ignored by the player).
+//!   then falls inside the settings block and is ignored by the player). The gzip payload is
+//!   base64 text, which contains no `<`, `"` or `&`, so it can close neither its tag nor
+//!   its attribute.
 //! - `SETTINGS`: the ASCII encoding of a `SynthSettings` value (see `types.cairo`), format
 //!   version 1, as specified in `settings.cairo` (issue #1): comma-separated canonical
 //!   decimal integers, at most 8,192 bytes. It contains only digits, `-` and `,`, so it can
@@ -160,16 +164,19 @@ pub trait IOnchainTinySynth<T> {
     /// engine and page are stored pre-encoded.
     fn base64(self: @T, data: ByteArray) -> ByteArray;
 
-    /// SHA-256 of the embedded TinySynth engine JavaScript (exactly the bytes of the pinned
-    /// fork build's minified file, as embedded in `PAGE`), stored as a constant. The
-    /// 32-byte digest is interpreted big-endian (first digest byte is the most significant
-    /// byte of the `u256`), matching the usual hex form printed by `sha256sum`.
+    /// SHA-256 of the embedded TinySynth engine JavaScript, decompressed: exactly the bytes of
+    /// the pinned fork build's minified file, which `PAGE` carries gzipped and the page
+    /// inflates. Stored as a constant. The 32-byte digest is interpreted big-endian (first
+    /// digest byte is the most significant byte of the `u256`), matching the usual hex form
+    /// printed by `sha256sum`.
     ///
     /// The raw script is deliberately not exposed: the class is never deployed, so only
     /// contracts could call such a getter, and the script is already inside every
-    /// `animation_url`. To verify, decode a `token_uri` offchain, extract the engine script
-    /// from the page, hash it, and compare with this value and with `sha256sum` of the fork's
-    /// `webaudio-tinysynth.min.js` at the pinned commit or release (see the README).
+    /// `animation_url`. To verify, decode a `token_uri` offchain, take the `src` of the page's
+    /// `text/javascript+gzip` tag, base64-decode it after the `data:text/javascript;base64,`
+    /// prefix (its SHA-256 is `page_data::GZIP_SHA256`), gunzip it, hash the result, and
+    /// compare with this value and with `sha256sum` of the fork's `webaudio-tinysynth.min.js`
+    /// at the pinned commit or release (see the README).
     fn script_sha256(self: @T) -> u256;
 
     /// Short-string (at most 31 ASCII bytes) identifying the engine and page versions of
@@ -181,6 +188,7 @@ pub trait IOnchainTinySynth<T> {
 
     /// Returns the license notice for this class: Apache License 2.0, covering both this
     /// library and the embedded TinySynth engine (upstream copyright notice plus the
-    /// notice describing the modifications made in the Provable-Games fork).
+    /// notice describing the modifications made in the Provable-Games fork), then the MIT
+    /// License of fflate, from which the page's gunzip shim is derived.
     fn license(self: @T) -> ByteArray;
 }
