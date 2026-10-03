@@ -262,6 +262,23 @@ describe("the page's player script, fake engine", () => {
     assert.deepEqual(h.consoleErrors, []);
   });
 
+  test("▶ on an engine without AudioContext.outputLatency: the art restarts after the scheduling offset alone", async () => {
+    const c = CASES.beast_140bpm;
+    const h = runPage(htmlOf(c), { outputLatency: null });
+    h.ready();
+    h.click();
+    assert.equal("outputLatency" in h.synths[0].getAudioContext(), false);
+    await h.flush();
+    assert.deepEqual(h.calls.slice(-4).map((x) => x[0]), ["loadMIDI", "setLoop", "setLoopEnd", "playMIDI"]);
+    // playTime - currentTime (0.1 s), plus nothing: not NaN, which setTimeout would treat as 0.
+    assert.equal(h.timers.size, 1);
+    assert.ok(Math.abs([...h.timers.values()][0].delay - 100) < 1e-9);
+    h.runTimers();
+    h.loadImages();
+    assert.equal(h.art()?.src, "data:image/svg+xml;r=1;base64," + Buffer.from(c.svg).toString("base64"));
+    assert.deepEqual(h.consoleErrors, []);
+  });
+
   test("toggle: ■ stops and cancels a pending art restart; ▶ again restarts from the top with the same synth", async () => {
     const h = runPage(htmlOf(CASES.default_120bpm));
     h.ready();
