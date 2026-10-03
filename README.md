@@ -8,8 +8,10 @@ The interface is declared in [`src/interface.cairo`](src/interface.cairo) and th
 
 Implemented so far:
 - **Settings (issue #1):** validation and the `SETTINGS` encoding in [`src/settings.cairo`](src/settings.cairo), with its JavaScript counterpart in [`player/`](player). See [Sound settings and custom sounds](#sound-settings-and-custom-sounds).
+- **The player page (issue #8):** [`player/player.js`](player/player.js), with the settings module, in the fixed page `PAGE`. See [The player page](#the-player-page).
+- **The offline build pipeline (issue #9):** the pinned engine, the page build, the generated [`src/page_data.cairo`](src/page_data.cairo) and the golden fixtures for the class. See [Build pipeline](#build-pipeline).
 
-The class itself, the page and the player are not implemented yet. Anything else described here as behaviour of the class or the player page does not exist yet. See [Roadmap](#roadmap).
+The class itself (`midi_segment`, the fast `base64`, the contract) is not implemented yet (phase 4, issue #10). See [Roadmap](#roadmap).
 
 ## How it works
 
@@ -69,15 +71,31 @@ Decoded, the `animation_url` value after its `data:text/html;base64,` prefix is 
 
 Alignment. The consumer's own pieces (`'{' ... base64,'`, `S`, `',' <pad>`) must each have a length that is a multiple of 3 before encoding. The class's pre-encoded pieces sit at both layers, so they need `len(X) % 9 == 0`: 3-alignment at the HTML layer, and `len(b64(X)) = 4·len(X)/3` must also be a multiple of 3 at the JSON layer. The class pads `PAGE` and `D` to multiples of 9 itself. The 39-byte `"animation_url":"data:text/html;base64,` prefix is already a multiple of 3.
 
-### What the player page does (planned)
+### The player page
 
-- Reads the settings block, configures TinySynth (quality, reverb, volume, voices) and installs any custom sounds.
-- Decodes the embedded MIDI from its text block.
-- Starts audio on tap, since browser autoplay rules block audio before a user gesture.
-- Play/stop control.
-- Loops at the MIDI's End-of-Track time.
-- On tap, restarts the art together with the audio, compensating for audio output latency, so the music stays in sync with GIF-style animated art.
-- Makes no network requests and plays offline.
+`PAGE` is [`tests/fixtures/page.html`](tests/fixtures/page.html), byte for byte: head and styles, the engine `<script>` (the pinned fork build's exact bytes), a small ▶/■ button, the player `<script>`, then the opening of the settings block and its alignment spaces. The per-token `D` and the SVG follow it at call time. The player ([`player/player.js`](player/player.js) and [`player/settings.js`](player/settings.js), flattened into one plain script and minified) starts on DOMContentLoaded:
+
+- **Art first.** It shows the art block in an `<img>` as `data:image/svg+xml;base64,...` (the SVG re-encoded as UTF-8), before and independently of the settings and the MIDI. The art fills the frame; the button overlays the bottom-right corner.
+- **Settings and MIDI.** It parses and validates `SETTINGS` (`parseSettings`, with the same checks and messages as Cairo), and decodes the MIDI block (strict base64 after trimming the alignment spaces) and checks it (`checkMidi`). The check guarantees that TinySynth's parser reads the file as written and that looping is safe: it rejects running status without a channel status, tempo events that are not 3 bytes or are 0, a track without End-of-Track at its end, format 2, SMPTE timing, and a loop shorter than 50 ms.
+- **Fail closed (spec D9).** On any of these errors ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and logged. No synth is created. The art stays.
+- **▶** (a click or tap) constructs TinySynth on the first press (`createSynth`), resumes the `AudioContext` inside the gesture, reloads the MIDI (back to tick 0 at the song's starting tempo), loops at End-of-Track with `setLoop(1)` and `setLoopEnd(maxTick)`, and starts playback. It then restarts the art when the first note is heard: after TinySynth's scheduling offset (`playTime - currentTime`, 100 ms) plus `AudioContext.outputLatency`, it re-creates the `<img>` with a distinct but equivalent URL (`data:image/svg+xml;r=<n>;base64,...`), so the browser starts a new animation timeline, and swaps it in once decoded.
+- **■** stops playback. The art keeps running.
+- Plain JavaScript (`// @ts-check` and JSDoc), no modules, no `eval`, no network requests, no storage or cookies. It works in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles and `data:` images.
+
+Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) records them):
+
+| | Bytes |
+| --- | --- |
+| `PAGE` | 45,189 |
+| of which the engine | 37,060 |
+| of which the player (minified) | 6,938 |
+| `PAGE` without the player's settings range re-check (`validateSettings`) | 43,911 (1,278 less) |
+| `animation_url_segment()` | 80,388 |
+| `license()` | 2,594 |
+
+The range re-check stays for now (spec Q4); dropping it would save the 1,278 bytes above.
+
+The page is tested in Node ([`player/player.test.js`](player/player.test.js): the page's own minified player script in `node:vm` against a fake DOM, with a recording engine and with the real engine on a WebAudio mock) and in headless Chromium (`npm run page-check`: as an offline `data:` URI, in a sandboxed iframe and under a strict CSP; the loop period against `maxTick x tick2Time`, the art restart by screenshots of a probe animation, and the failure paths).
 
 ## Interface
 
@@ -89,7 +107,7 @@ Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`.
 | `midi_segment(midi: ByteArray, settings: SynthSettings) -> ByteArray` | `b64(b64(D))`: the token's settings and MIDI blocks, then opens the art block. Validates `settings` and encodes only per-token data. |
 | `base64(data: ByteArray) -> ByteArray` | Standard RFC 4648 base64 with `=` padding, for consumers encoding their own JSON pieces. |
 | `script_sha256() -> u256` | Constant SHA-256 of the embedded engine JS (big-endian). |
-| `version() -> felt252` | Short string identifying the engine and page versions, e.g. `'tinysynth-pg.1+page.1'`. |
+| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.1'`. |
 | `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice. |
 
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
@@ -198,12 +216,13 @@ Gas (snforge, L2 gas, net of building the input):
 
 Plain, dependency-free, CSP-safe JavaScript (`// @ts-check` with JSDoc, no `eval`), used by the page and by the tests:
 
-- [`player/settings.js`](player/settings.js) is the module the page will use. It provides:
+- [`player/settings.js`](player/settings.js) is the page's settings module. It provides:
   - `parseSettings(text)`: a strict decoder, plus the same checks as Cairo with the same messages and indices; it throws a `SettingsError`;
   - `createSynth(WebAudioTinySynth, settings)`: constructs TinySynth with `quality`, `useReverb` and `voices`, then calls `installSettings`;
   - `installSettings(synth, settings)`: calls `setQuality`, then sets master volume, reverb level and voices, then calls `setTimbre` for each timbre. Call it again after anything that changes the quality.
 
-  On any error the page must fail closed: no audio, and a visible error.
+  On any error the page fails closed: no audio, and a visible error.
+- [`player/player.js`](player/player.js) is the rest of the page's player (see [The player page](#the-player-page)).
 - [`player/encode.js`](player/encode.js) is the reference encoder, for Node and tooling only.
 
 Shared fixtures keep Cairo and JavaScript byte-for-byte identical:
@@ -262,13 +281,13 @@ The class embeds the bytes as base64 text and does not parse or validate them. I
 ## Engine provenance and verification
 
 - Engine: TinySynth from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>. The fork removes the GUI and is licensed Apache-2.0, like upstream.
-- The class embeds the minified JS of a pinned, tagged release of the fork. The tag and its SHA-256 will be recorded here once the release is cut (Roadmap phase 0).
-- The build pipeline downloads or rebuilds the pinned release, checks its SHA-256 against the recorded value, and fails on mismatch before generating any Cairo constants.
+- The class embeds the fork's own minified build at a pinned commit: currently `b70ba90` (`b70ba90d63c5ea657cb67ca98de90d7f778c29bd`), SHA-256 `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c`. It moves to a tagged release once the fork publishes one (roadmap phase 0); re-pinning is a one-line change (see [`tests/vendor/README.md`](tests/vendor/README.md)).
+- The build is offline: the minified file and the fork's NOTICE are vendored in [`tests/vendor/`](tests/vendor), and `ENGINE_PIN` in [`scripts/engine.mjs`](scripts/engine.mjs) checks both SHA-256 hashes on every load, failing before anything is generated.
 - Anyone can verify a declared class:
-  1. Check out the pinned tag of the fork and run its build (`npm install && npm run build`) to reproduce the minified file.
-  2. Decode a consumer's `token_uri` offchain (JSON layer, then HTML layer), extract the engine script from the page, and compare it byte-for-byte with the rebuilt file.
-  3. Compare the SHA-256 of both with the release's published SHA-256 and with `script_sha256()` (readable by a consumer contract or its tests).
-  4. Rebuild this repository at the matching commit and compare the resulting class hash with the declared one.
+  1. Check out the pinned commit or tag of the fork and run its build (`npm install && npm run build`) to reproduce `webaudio-tinysynth.min.js`.
+  2. Decode a consumer's `token_uri` offchain (JSON layer, then HTML layer), extract the engine script (the page's first `<script>`), and compare it byte for byte with the rebuilt file.
+  3. Compare the SHA-256 of both with `script_sha256()` (readable by a consumer contract or its tests).
+  4. Rebuild this repository at the matching commit (`npm ci && npm run gen:page`, then `scarb build`) and compare the resulting class hash with the declared one.
 
 ## Versioning
 
@@ -278,8 +297,9 @@ Class hashes are immutable. The engine and the player page are stored in the cla
 
 - Scarb 2.20.1 (Cairo 2.20)
 - Starknet Foundry 0.64.0 (`snforge`, `sncast`)
+- Node 22 or later (CI uses 24)
 
-Both are pinned in [`.tool-versions`](.tool-versions) for asdf.
+Scarb and Starknet Foundry are pinned in [`.tool-versions`](.tool-versions) for asdf.
 
 ```sh
 scarb build      # compile
@@ -287,24 +307,62 @@ snforge test     # Cairo tests, including the generated parity fixtures and the 
 scarb fmt        # format
 ```
 
-The JavaScript needs only Node (22 or later), no `npm install`:
+The tests and the example need only Node, no `npm install`. Rebuilding the page needs the pinned Terser (`npm ci`, once):
 
 ```sh
 npm test                 # node --test "player/**/*.test.js" "scripts/**/*.test.mjs"
 npm run gen:settings     # regenerate tests/fixtures/settings.json and tests/settings_fixtures.cairo
 npm run check:settings   # fail if they are out of date
+npm ci && npm run gen:page   # rebuild the page, src/page_data.cairo and the page fixtures
+npm run check:page       # fail if any of them is out of date
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
   npm run render-check   # optional: render the reference timbres in headless Chromium
+PLAYWRIGHT_CORE=... CHROME=... npm run page-check   # optional: the page in headless Chromium
 ```
 
-The engine tests use a vendored copy of the fork's build (`tests/vendor/`, SHA-256 checked on every load).
+The engine tests, the page build and the page checks use the vendored engine (`tests/vendor/`, SHA-256 checked on every load).
+
+## Build pipeline
+
+[`scripts/build_page.mjs`](scripts/build_page.mjs) (`npm run gen:page`, or `npm run check:page` to verify) is offline and reproducible: running it twice gives byte-identical files.
+
+1. Loads the pinned engine and its NOTICE; a hash mismatch fails here.
+2. Flattens `player/settings.js` and `player/player.js` into one script (their `import` lines and `export` keywords removed) and minifies it with Terser, pinned exactly in `package-lock.json`.
+3. Assembles `PAGE` and pads it with spaces to `len % 9 == 0`; the spaces fall inside the settings block, where the player trims them.
+4. Writes:
+   - [`tests/fixtures/page.html`](tests/fixtures/page.html): `PAGE`;
+   - [`src/page_data.cairo`](src/page_data.cairo) (generated, do not edit): `animation_url_segment()` pre-encoded at both base64 layers, `PAGE_LEN`, `SEGMENT_LEN`, `ENGINE_SHA256`, `VERSION` and `license()`. The large constants are `const` felt arrays (stored once as data in the class bytecode) deserialized into a `ByteArray`; materializing the segment costs about 7.0M L2 gas;
+   - the golden fixtures for the class: [`tests/fixtures/page.json`](tests/fixtures/page.json) and [`tests/page_fixtures.cairo`](tests/page_fixtures.cairo) (below).
+
+`VERSION` is `tinysynth-<engine ref>+page.<PAGE_VERSION>`; bump `PAGE_VERSION` in [`scripts/page.mjs`](scripts/page.mjs) whenever the page changes in a class that will be declared.
+
+### Golden fixtures
+
+Computed by the JS reference ([`scripts/page.mjs`](scripts/page.mjs)) from the inputs in [`scripts/page_fixtures.mjs`](scripts/page_fixtures.mjs). Nine valid cases (MIDI, settings, SVG, JSON members) cover every `D` padding length (0-8) and every consumer padding length (0-2 for the head and for `S`); six invalid cases cover settings reverts. Per valid case:
+
+- the expected `midi_segment(midi, settings)` in full, with `SETTINGS`, `D` and its pad;
+- the decoded `animation_url` HTML (`PAGE ++ D ++ SVG`) and the Beasts-layout `token_uri`, as length and SHA-256. They are 46-110 KB each and fully determined by stored pieces, so they are pinned by digest rather than stored. The example's three tokens hold complete `token_uri` goldens.
+
+Per invalid case: the settings and the panic data `midi_segment` must revert with. `tests/page_fixtures.cairo` has the same data as Cairo functions, plus the tests that already apply: `page_data` against the build (lengths, SHA-256 of the segment and the license, version, engine hash) and each case's settings against `src/settings.cairo`.
+
+### Class size
+
+A stub class serving only the `page_data` constants (`animation_url_segment`, `script_sha256`, `version`, `license`), compiled with Scarb 2.20.1, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info):
+
+| | Stub class | Same class, empty constants | Limit |
+| --- | --- | --- | --- |
+| Sierra program | 7,354 felts | 204 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 324 KB | 9 KB | 4,089,446 bytes |
+| CASM bytecode | 3,732 felts | 311 felts | 81,920 felts |
+
+The constants take about 8% of the class size limit and 4% of the bytecode limit.
 
 ## Roadmap
 
 0. **Fork release with fixes** (in the `webaudio-tinysynth` fork): MIDI parser bounds fix (#4), pinned tagged build with a published SHA-256 (#5), deterministic reverb and noise buffers (#7), custom waveform API (#26) and per-operator filter (#27). Fractional tempo and `loopEnd` are already merged.
 1. **Scaffold** (this): repository layout, toolchain, interface declarations, README.
-2. **Player page JS**: MIDI decode, tap-to-start, play/stop, End-of-Track looping, latency-compensated art restart, offline only.
-3. **Offline build pipeline**: verifies the pinned engine by SHA-256, assembles and aligns the page, and generates the pre-encoded Cairo constants plus golden fixtures (reference outputs for sample MIDI and art).
+2. **Player page JS** (done, issue #8): MIDI decode, tap-to-start, play/stop, End-of-Track looping, latency-compensated art restart, offline only.
+3. **Offline build pipeline** (done, issue #9): verifies the pinned engine by SHA-256, assembles and aligns the page, and generates the pre-encoded Cairo constants plus golden fixtures (reference outputs for sample MIDI and art).
 4. **Cairo class implementation**: `SynthSettings` validation and encoding (issues #1–#3), byte-for-byte parity tests against the JS reference fixtures, a `library_call` test from a mock consumer, and measurements of gas per call and class size.
 5. **Browser validation**: Chromium, Firefox and WebKit; playback, looping, art sync, and offline behaviour.
 6. **Docs and declaration**: finalize docs, declare on Sepolia, then on mainnet, and publish the class hashes.
@@ -312,7 +370,7 @@ The engine tests use a vendored copy of the fork's build (`tests/vendor/`, SHA-2
 ## Open decisions
 
 - **Custom waves and filters**: their types, ranges and encoding are fixed by issue #1, but accepting them, and their player side, belong to issues #2 and #3.
-- **Alignment of pre-encoded pieces**: as described above, `PAGE` and `D` need 9-byte alignment (not just 3-byte) to splice at both base64 layers. Where the padding spaces go in `PAGE` should be confirmed during phase 2/3.
+- **The player's settings range re-check**: about 1.3 KB of `PAGE` (see [The player page](#the-player-page)). Kept for now.
 
 ## License
 
@@ -320,7 +378,7 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTI
 
 ## Examples
 
-- [`examples/beast_consumer`](examples/beast_consumer): a runnable end-to-end example of a Beasts-style NFT assembling its `token_uri` with library calls, against a mock of this class, with golden fixtures and decoded output.
+- [`examples/beast_consumer`](examples/beast_consumer): a runnable end-to-end example of a Beasts-style NFT assembling its `token_uri` with library calls, against a mock of this class that already serves the real page, with golden fixtures and decoded output.
 
 ## CI
 
@@ -330,8 +388,8 @@ GitHub Actions runs on every pull request and on pushes to `main`, on `ubuntu-24
 | --- | --- |
 | `cairo` | Scarb 2.20.1 and snforge 0.64.0 from `.tool-versions`: `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer`; the Scarb lockfiles stay unchanged |
 | `javascript` | Node 24: the example's Node tests; `npm ci` (when `package-lock.json` exists) and `npm test` when the root `package.json` has a `test` script; `tsc --checkJs` on `player/` when it exists |
-| `generated` | Reruns the example's `gen_page.mjs` and `gen_fixtures.mjs`, and `npm run check:settings` when that script exists, then fails on any diff |
-| `browser` | Installs Playwright's Chromium headless shell with its system libraries, then runs the example's `browser_check.mjs` and, when that script exists, `npm run render-check`. Firefox and WebKit follow in roadmap phase 5 |
+| `generated` | Reruns the example's `gen_fixtures.mjs`, then `npm run check:settings` and `npm run check:page` (the engine hash, the page, `src/page_data.cairo` and the page fixtures) when those scripts exist, then fails on any diff |
+| `browser` | Installs Playwright's Chromium headless shell with its system libraries, then runs the example's `browser_check.mjs` and, when those scripts exist, `npm run render-check` and `npm run page-check`. Firefox and WebKit follow in roadmap phase 5 |
 
 The optional steps switch on by themselves when the root `package.json`, its scripts or `player/` exist ([`.github/scripts/ci-detect.sh`](.github/scripts/ci-detect.sh)). TypeScript, `@types/node` and `playwright-core` are pinned in [`.github/ci-tools`](.github/ci-tools); Dependabot updates them and the actions monthly.
 
@@ -349,10 +407,9 @@ Run the same checks locally from the repository root (Scarb and snforge from `.t
 ```sh
 scarb fmt --check && scarb build && snforge test
 (cd examples/beast_consumer && scarb fmt --check && scarb build && snforge test)
-(cd examples/beast_consumer && node --test scripts/*.test.mjs \
-  && node scripts/gen_page.mjs && node scripts/gen_fixtures.mjs)
+(cd examples/beast_consumer && node --test scripts/*.test.mjs && node scripts/gen_fixtures.mjs)
+npm ci && npm test && npm run check:settings && npm run check:page
 git diff --exit-code                     # generators left no drift
-npm test && npm run check:settings       # once the root package.json exists
 
 # Pinned tools for the type check and the browser checks
 (cd .github/ci-tools && npm ci --ignore-scripts)
@@ -362,7 +419,8 @@ $T/.bin/tsc --noEmit --allowJs --checkJs --target es2022 --module nodenext \
 (cd .github/ci-tools && npx playwright-core install --only-shell chromium)   # add --with-deps for system libraries
 PLAYWRIGHT_CORE="$PWD/$T/playwright-core" sh -c \
   'cd examples/beast_consumer && node scripts/browser_check.mjs'
-PLAYWRIGHT_CORE="$PWD/$T/playwright-core" npm run render-check   # once the script exists
+PLAYWRIGHT_CORE="$PWD/$T/playwright-core" npm run render-check
+PLAYWRIGHT_CORE="$PWD/$T/playwright-core" npm run page-check
 
 # Review helpers
 python3 -I -B -m unittest discover -s .github/scripts -p 'test_*.py'
