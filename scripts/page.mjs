@@ -58,6 +58,23 @@ export function shimLicense() {
 }
 
 /**
+ * The class's base64 encoder: `game_components_encoding`, a Scarb dependency (see Scarb.toml). Its
+ * code is compiled into the class, so its MIT license goes into license(). `license` is
+ * game-components' LICENSE file, vendored and SHA-256 checked (see tests/vendor/README.md).
+ */
+export const ENCODER_PIN = {
+  license: new URL("../tests/vendor/game-components.LICENSE", import.meta.url),
+  licenseSha256: "4f7adc00655ded5638937698858cd3b302ee48069b924c6e456b9ef6e3f35f10",
+};
+
+/** game-components' MIT license, after checking its SHA-256. */
+export function encoderLicense() {
+  const text = readFileSync(ENCODER_PIN.license, "utf8");
+  if (sha256(text) !== ENCODER_PIN.licenseSha256) throw new Error(`${ENCODER_PIN.license.pathname}: sha256 ${sha256(text)}, expected ${ENCODER_PIN.licenseSha256} (ENCODER_PIN in scripts/page.mjs)`);
+  return text;
+}
+
+/**
  * Checks that `version` names exactly this PAGE in the record of versions (VERSION -> sha256(PAGE)),
  * so version() can never stay the same while the page changes. With `record`, a VERSION not yet in
  * it is added. Returns the (possibly extended) record; throws if the page changed under a recorded
@@ -83,7 +100,7 @@ export function checkPageVersion(versions, version, digest, { record = false } =
 
 /**
  * The text license() returns: this library's notice and license, then the embedded engine's, then
- * the gunzip shim's.
+ * the gunzip shim's, then the base64 encoder's.
  */
 export function licenseText() {
   const notice = readFileSync(new URL("../NOTICE", import.meta.url), "utf8").trimEnd();
@@ -110,6 +127,12 @@ export function licenseText() {
     "which inflates the engine in the browser. Its license follows.",
     "",
     shimLicense().trimEnd(),
+    "",
+    "The class also embeds the base64 encoder of game-components (the package game_components_encoding,",
+    "https://github.com/Provable-Games/game-components), which encodes the per-token data at call time.",
+    "Its license follows.",
+    "",
+    encoderLicense().trimEnd(),
     "",
   ].join("\n");
 }

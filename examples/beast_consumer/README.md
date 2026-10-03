@@ -1,6 +1,6 @@
 # Example: a Beasts-style NFT with the onchain TinySynth player
 
-A runnable end-to-end example of how an NFT that already renders its own SVG (modelled on the Beasts NFT) adds the onchain TinySynth player to its `token_uri`. It calls the real class, `onchain_tinysynth::contract::OnchainTinySynth`, which the tests declare and never deploy: the NFT stores its class hash and reaches it with library calls. The class's base64 encoder is still the temporary stand-in (see the root [README](../../README.md#the-base64-encoder-temporary-stand-in)), so the gas figures here are with that encoder.
+A runnable end-to-end example of how an NFT that already renders its own SVG (modelled on the Beasts NFT) adds the onchain TinySynth player to its `token_uri`. It calls the real class, `onchain_tinysynth::contract::OnchainTinySynth`, which the tests declare and never deploy: the NFT stores its class hash and reaches it with library calls. The class's base64 encoder is the maintainer's optimized encoder, `game_components_encoding` (see the root [README](../../README.md#the-base64-encoder)).
 
 Tokens 1-3 are small samples that together cover every padding length. Token 4 is a full-size Beast, for a full-size measurement:
 - **art:** the Beasts renderer's SVG for a shiny, animated Warlock, 22,733 bytes;
@@ -96,7 +96,6 @@ Everything the NFT calls is the real class: the page (the gzipped engine, the gu
 
 | | This example | Production |
 | --- | --- | --- |
-| The class's base64 encoder | the temporary byte-wise stand-in | the maintainer's optimized encoder (about 62% less encoding gas in its lab), with the same output |
 | MIDI | a fixed one-bar SMF in `sound.cairo` (tokens 1-3); a synthetic score of production size (token 4) | the onchain composer's output |
 | Art | `render_svg` (tokens 1-3); a real Beasts SVG (token 4) | the Beasts renderer |
 
@@ -115,7 +114,7 @@ snforge test matches_js --gas-report   # token_uri gas, per contract and selecto
 snforge test gas_                      # token 4 piece by piece (see Gas)
 ```
 
-The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~36 KB token JSON byte by byte, and token 4 encodes a 22.7 KB SVG with the class's byte-wise stand-in, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
+The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~36 KB token JSON byte by byte, and the token 4 test computes the SHA-256 of its 133,525-character `token_uri` in Cairo, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
 
 To decode the actual contract output rather than the JS reference:
 
@@ -179,27 +178,27 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
 
 ## Gas
 
-L2 gas, with the class's **stand-in encoder (v1)**; the root [README](../../README.md#gas-and-limits) has the class's own measurements and the projection with the optimized encoder.
+L2 gas, with the class's optimized encoder; the root [README](../../README.md#gas-and-limits) has the class's own measurements and the comparison with the byte-wise stand-in encoder it replaced.
 
 `snforge test matches_js --gas-report`:
 
 | Call | Tokens 1-3 (1 KB SVG, 112-byte MIDI) | Token 4 (a full-size Beast) |
 | --- | --- | --- |
-| `BeastLikeNft.token_uri` | 90.2M-90.6M | 1,414.6M |
+| `BeastLikeNft.token_uri` | 30.1M-30.2M | 286.2M |
 | of which `animation_url_segment` (the class's side) | 2.4M | 2.4M |
-| of which `midi_segment` (the class's side) | 23.5M | 322.5M |
-| of which 4 `base64` calls (the class's side): SVG, `S`, the head, `'}'` | 52.3M-52.6M | 1,049.8M |
+| of which `midi_segment` (the class's side) | 5.8M | 59.0M |
+| of which 4 `base64` calls (the class's side): SVG, `S`, the head, `'}'` | 9.9M-10.0M | 184.9M |
 
 Token 4 piece by piece, in the consumer's context, each net of its inputs (`snforge test gas_`, [`tests/test_gas.cairo`](tests/test_gas.cairo)):
 
 | Piece | L2 gas |
 | --- | --- |
 | `animation_url_segment()` through the library call, reading the result included | 6.2M |
-| `midi_segment()` through the library call | 323.7M |
-| `b64(svg)`, 22,733 bytes: through the class's `base64` / with the same encoder compiled in | 451.8M / 444.4M |
-| `b64(S)`, 30,315 bytes, through the class's `base64` | 602.4M |
+| `midi_segment()` through the library call | 60.1M |
+| `b64(svg)`, 22,733 bytes: through the class's `base64` / with the same encoder compiled in | 82.6M / 75.2M |
+| `b64(S)`, 30,315 bytes, through the class's `base64` | 110.2M |
 | Every append, in the word-aligned layout / without the alignment spaces | 16.0M / 29.9M |
 
-Base64 is 97% of token 4's `token_uri`, and the two passes over the SVG alone are 74%. With the stand-in that is 1.41B, over the 1B target; with the optimized encoder it is projected at about 0.57B.
+Base64 is 84% of token 4's `token_uri`, and the two passes over the SVG alone are 67%. That is 0.29B, well under the 1B target. With the byte-wise stand-in encoder the class used before, token 4 cost 1.41B (tokens 1-3: 90.2M-90.6M), and the projection for the optimized encoder was about 0.57B.
 
-Before this example called the real class, its mock gave 113.1M-113.5M for tokens 1-3. Three changes brought that down to 90.2M-90.6M: the segment became a string literal, the comma piece became a constant, and the layout was aligned.
+Before this example called the real class, its mock gave 113.1M-113.5M for tokens 1-3. Three changes brought that down to 90.2M-90.6M with the stand-in encoder: the segment became a string literal, the comma piece became a constant, and the layout was aligned. The optimized encoder then brought it to 30.1M-30.2M.
