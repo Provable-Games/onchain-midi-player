@@ -10,10 +10,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
+import vm from "node:vm";
 import { gzipSync } from "node:zlib";
 import { ENGINE_MISSING, PLAY_ICON, STOP_ICON, artUrl, checkMidi, decodeMidi } from "./player.js";
 import { ENGINE_SHA256, engineSource } from "../scripts/engine.mjs";
 import { runPage } from "../scripts/page_harness.mjs";
+import { webAudioMock } from "../scripts/webaudio_mock.mjs";
 import {
   ART_OPEN, GZIP_CLOSE, GZIP_OPEN, MIDI_OPEN, SETTINGS_OPEN, SHIM_PIN, pageHtml, pageScripts, sha256, withGzipPayload,
 } from "../scripts/page.mjs";
@@ -119,6 +121,54 @@ describe("decodeMidi and checkMidi", () => {
   test("format 1: End-of-Track tick is the latest track's; tempo map from every track", () => {
     const f1 = smf({ format: 1, ppq: 100, tracks: [[[0, 0xff, 0x51, 0x03, 0x0f, 0x42, 0x40], [400, 0xff, 0x2f, 0x00]], [[0, 0x90, 60, 100], [300, 0x80, 60, 0], [500, 0xff, 0x2f, 0x00]]] });
     assert.deepEqual(checkMidi(new Uint8Array(f1)), { maxTick: 800, seconds: 8 });
+  });
+
+  test("whatever checkMidi accepts, the pinned engine's loadMIDI reads without throwing, to the same End-of-Track tick", () => {
+    // The engine throws coded SMF_* errors on malformed files (fork #4, #6). checkMidi runs first and
+    // is stricter, so a file the page accepts never reaches one of those throws. Checked on the
+    // fixtures and accepted vectors, then on seeded random mutations of them.
+    const { AudioContext } = webAudioMock();
+    const sandbox = { AudioContext, performance: { now: () => 0 }, setInterval: () => 0, clearInterval() {}, console };
+    vm.createContext(sandbox);
+    vm.runInContext(engineSource(), sandbox);
+    const synth = new (/** @type {any} */ (sandbox).WebAudioTinySynth)({ quality: 1, useReverb: 0 });
+    const text = (/** @type {number} */ type, /** @type {number} */ n) => [0x00, 0xff, type, 0x80 | (n >> 7), n & 127, ...Array(n).fill(0x41)];
+    const seeds = [
+      ...fixtures.valid.map((/** @type {any} */ c) => Buffer.from(c.midi_b64, "base64")),
+      riff({ ppq: 96, us: 500000, sysex: true }),
+      riff({ ppq: 480, us: 600000, format1: true }),
+      track([...text(0x01, 300), ...text(0x7f, 200), ...note, ...EOT]),
+      smf({ format: 1, ppq: 100, tracks: [[[0, 0xff, 0x51, 0x03, 0x0f, 0x42, 0x40], [400, 0xff, 0x2f, 0x00]], [[0, 0x90, 60, 100], [300, 0x80, 60, 0], [500, 0xff, 0x2f, 0x00]]] }),
+    ];
+    /** loadMIDI's End-of-Track tick, or the message of the error it throws. */
+    const load = (/** @type {Uint8Array} */ u) => {
+      try {
+        synth.loadMIDI(u);
+        return synth.maxTick;
+      } catch (e) {
+        return String(/** @type {Error} */ (e).message);
+      }
+    };
+    for (const u of seeds) assert.equal(load(new Uint8Array(u)), checkMidi(new Uint8Array(u)).maxTick);
+    let seed = 1;
+    const rand = (/** @type {number} */ n) => Math.floor(((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32) * n);
+    let accepted = 0;
+    for (let i = 0; i < 6000; i++) {
+      const u = new Uint8Array(seeds[i % seeds.length]);
+      for (let k = 1 + rand(3); k--;) {
+        const at = rand(u.length);
+        u[at] = [rand(256), u[at] ^ (1 << rand(8)), [0x00, 0x7f, 0x80, 0xff, 0x2f, 0x51, 0xf0, 0xf7][rand(8)]][rand(3)];
+      }
+      let maxTick;
+      try {
+        maxTick = checkMidi(u).maxTick;
+      } catch {
+        continue;
+      }
+      accepted++;
+      assert.equal(load(u), maxTick, `mutation ${i}`);
+    }
+    assert.ok(accepted > 1000, `${accepted} accepted mutations`);
   });
 });
 
@@ -528,5 +578,37 @@ describe("the page's player script, real engine", () => {
     assert.equal(synth.program[0].p[1].f, 6, "lead LFO at 6 Hz");
     assert.equal(synth.drummap[36 - 35].p[0].p, 0.2813, "kick pitch drop");
     assert.equal(synth.useReverb, 0, "reverb 0: no convolver");
+  });
+
+  test("a song with no events other than tempo: ▶ plays nothing and shows no error, the art restarts, ■ and ▶ still work", async () => {
+    // checkMidi accepts it (a valid file with a loop of at least 50 ms). The engine (fork #9) leaves
+    // such a song stopped: playMIDI returns without setting playTime, so there is no tick 0 to time
+    // the art restart to, and the restart is not delayed (setTimeout takes the NaN delay as 0).
+    const songs = {
+      "End-of-Track only": smf({ ppq: 96, tracks: [[[192, 0xff, 0x2f, 0]]] }),
+      "tempo only": smf({ ppq: 96, tracks: [[[0, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20], [192, 0xff, 0x2f, 0]]] }),
+    };
+    for (const [label, midi] of Object.entries(songs)) {
+      const h = runPage(edited(CASES.default_120bpm, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0 });
+      h.ready();
+      for (const press of [1, 2]) {
+        h.click(); // ▶
+        await h.flush();
+        const synth = h.synths[0];
+        assert.equal(synth.playing, 0, `${label}, ▶ ${press}: the engine stays stopped`);
+        assert.equal(h.els.icon.attributes.d, STOP_ICON, `${label}, ▶ ${press}: the toggle shows ■`);
+        assert.equal(h.timers.size, 1, `${label}, ▶ ${press}: an art restart is scheduled`);
+        h.runTimers();
+        h.loadImages();
+        assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, press), `${label}, ▶ ${press}: the art restarted`);
+        h.advance(1);
+        assert.deepEqual(synth.sent, [], `${label}, ▶ ${press}: nothing scheduled`);
+        h.click(); // ■
+        assert.equal(h.els.icon.attributes.d, PLAY_ICON);
+      }
+      assert.equal(h.els.error.hidden, true, `${label}: no error shown`);
+      assert.deepEqual(h.consoleErrors, [], `${label}: nothing logged`);
+      assert.deepEqual(h.uncaught, []);
+    }
   });
 });

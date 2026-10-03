@@ -72,9 +72,16 @@ export function decodeMidi(text) {
  * that loops safely, and returns its End-of-Track tick (TinySynth's `maxTick`) and the length of one
  * pass in seconds. Throws `Error("midi: ...")` otherwise.
  *
- * TinySynth's parser stops reading a track only at an End-of-Track event (not at the chunk length),
- * starts running status at 0x90, keeps it across meta and SysEx events, and assumes a 3-byte tempo.
- * So this rejects, beyond plain format errors: running status with no channel status before it in
+ * The rules come from TinySynth's original parser, which stopped reading a track only at an
+ * End-of-Track event (not at the chunk length), started running status at 0x90, kept it across meta
+ * and SysEx events, and assumed a 3-byte tempo. The pinned engine (the fork from commit 4b29ff1 on)
+ * reads with bounds and throws a coded `SMF_*` error on malformed input, but still accepts some
+ * files this rejects (a track without End-of-Track, bytes after it or after the last track, F7
+ * events, split SysEx). So the page keeps this stricter check and runs it first: malformed files
+ * fail here, with these messages, and whatever this accepts the engine reads without throwing, to
+ * the same End-of-Track tick (player/player.test.js).
+ *
+ * This rejects, beyond plain format errors: running status with no channel status before it in
  * the track, or after a meta or SysEx event; a tempo event that is not 3 bytes (with a one-byte
  * length) or is 0; status bytes F1-F6 and F8-FE; data bytes above 127; a track without
  * End-of-Track exactly at its end; text meta events over 4096 bytes; F7 events (TinySynth turns
@@ -305,8 +312,8 @@ export function startPlayer() {
           synth.loadMIDI(midi);
           synth.setLoop(1);
           synth.setLoopEnd(synth.maxTick);
-          // loadMIDI leaves playTick at the first event's tick; playMIDI resets it to 0 when that
-          // is End-of-Track's tick.
+          // loadMIDI leaves playTick at the first event's tick. Keep it: the original engine's
+          // playMIDI reset it to 0 when that was End-of-Track's tick.
           const first = synth.playTick;
           synth.playMIDI();
           // The art restarts with tick 0: TinySynth plays from playTime, plus the output latency.
