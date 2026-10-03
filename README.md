@@ -443,13 +443,13 @@ The rules follow from how TinySynth reads a file: it stops reading a track at En
 
 ### Playback
 
-- **Start.** Nothing plays until ▶ is pressed (a click or tap). Each ▶ reloads the MIDI and plays it from tick 0, after resetting every channel: program 0, volume (CC7) 100, pan (CC10) 64, expression (CC11) 127, modulation 0, sustain off, pitch bend centred, bend range MSB 2 (see RPN 0 below), fine, coarse and master tuning 0, and channel 10 as the only drum channel. The tempo is 120 BPM until the first tempo event. A rest before the first event is kept.
+- **Start.** Nothing plays until ▶ is pressed (a click or tap). Each ▶ reloads the MIDI and plays it from tick 0, after resetting every channel: program 0, volume (CC7) 100, pan (CC10) 64, expression (CC11) 127, modulation 0, sustain off, pitch bend centred, bend range MSB 2 (see RPN 0 below), fine, coarse and master tuning 0, and channel 10 as the only drum channel. GS scale tuning is not reset: it keeps its last value across ▶. The tempo is 120 BPM until the first tempo event. A rest before the first event is kept.
 - **Tracks.** TinySynth merges all tracks into one list by tick; events at the same tick keep file order, track by track. A track does not loop on its own: if it ends before the others, it is silent until the pass ends.
 - **Tempo.** A tempo change takes effect at its tick, from any track. The BPM is 60,000,000 divided by the tempo value, kept fractional.
 - **Loop.** The song always loops. A pass ends at `maxTick`, the latest End-of-Track tick of any track (the player calls `setLoop(1)` and `setLoopEnd(maxTick)`), and the next pass starts at tick 0, keeping the rest before the first event.
 - **State between passes.** At each loop point the tempo returns to 120 BPM, and a tempo event at tick 0 applies at once. Nothing else is reset: programs, controllers, pitch bend, RPN settings and tuning carry over from the end of the previous pass, and notes still sounding at End-of-Track keep sounding. Events at tick 0 run again on every pass, so a song that sets its state at tick 0 starts every pass the same way. Otherwise the first pass starts from the defaults above, and later passes from wherever the previous one ended.
 - **■** stops playback, cuts every voice (drum hits and notes already scheduled ahead included), and cancels the volume, expression, pan and modulation changes TinySynth had already scheduled. The art keeps running.
-- **Scheduling.** TinySynth schedules events about 0.2 s ahead. Each message takes effect at its own time, except CC120, CC121 and CC123–127, which act when they are scheduled (see below).
+- **Scheduling.** TinySynth schedules events about 0.2 s ahead. Each message takes effect at its own time, except CC120, CC121 and CC123–127 (see below) and the voice limit (see [Limits](#limits)), which act when the event is scheduled.
 
 ### Channels and instruments
 
@@ -484,7 +484,7 @@ Ignored, with no effect: every other controller, including bank select (CC0, CC3
 
 ### Limits
 
-- **Polyphony:** at most `SynthSettings.voices` (1–64) melodic notes at once, across all channels. A note beyond that cuts a released note first (the one ending soonest), otherwise the held note that started earliest (of notes that started together, the one latest in the file). A drum hit takes no voice and is never cut, but it applies the limit too: right after one, at most `voices` − 1 melodic notes remain, so with `voices` 1 every drum hit cuts the melody.
+- **Polyphony:** at most `SynthSettings.voices` (1–64) melodic notes at once, across all channels. A note beyond that cuts a released note first (the one ending soonest), otherwise the held note that started earliest (of notes that started together, the one latest in the file). The cut happens when the new note is scheduled, up to about 0.2 s before it sounds, so the cut note ends early. A drum hit takes no voice and is never cut, but it applies the limit too: right after one, at most `voices` − 1 melodic notes remain, so with `voices` 1 every drum hit cuts the melody.
 - **Range:** 16 channels, programs 0–127, notes 0–127 (drum notes 35–81), and velocity 1–127, with loudness following its square.
 - **Timing:** 1–32,767 ticks per quarter note, tempo 1–16,777,215 µs per quarter note, and a pass of at least 50 ms.
 - **Size:** text events at most 4,096 bytes. Nothing else in the page limits the size; gas does (see the recommendations).
@@ -501,7 +501,7 @@ The full list is in [Verifying the engine](#verifying-the-engine).
 
 Nothing checks these; a file that ignores them still plays.
 
-- **Set the state at tick 0:** tempo, program, volume (CC7), pan (CC10) and any controller the song changes, so that every pass starts the same way.
+- **Set the state at tick 0:** tempo, program, volume (CC7), pan (CC10), and any controller or GS scale tuning the song changes, so that every pass, and every ▶, starts the same way.
 - **Put End-of-Track at the loop point:** the latest End-of-Track should sit exactly where the song loops, such as the last bar line.
 - **Release every note by End-of-Track:** a note still held there sounds into the next pass.
 - **Put the note-off first:** at one tick, put a note's note-off before the next note-on of the same pitch on that channel. The other way round, the note-off releases the new note too.
