@@ -1,27 +1,25 @@
 # Example: a Beasts-style NFT with the onchain TinySynth player
 
-A runnable end-to-end example of how an NFT that already renders its own SVG (modelled on the Beasts NFT) adds the onchain TinySynth player to its `token_uri`. The TinySynth class does not exist yet, so `MockOnchainTinySynth` stands in for it: it implements the declared `IOnchainTinySynth` interface and returns output in the exact layout the real class will use, with a small mock page in place of the engine and player (it does embed the real settings parser).
+A runnable end-to-end example of how an NFT that already renders its own SVG (modelled on the Beasts NFT) adds the onchain TinySynth player to its `token_uri`. The TinySynth class does not exist yet, so `MockOnchainTinySynth` stands in for it: it implements the declared `IOnchainTinySynth` interface and returns output in the exact layout the real class will use. Its page is already the real one (the pinned TinySynth engine and the real player, from the crate's generated `page_data`), and its settings validation and encoding are real; only its `base64` is a simple byte-wise stand-in until the class lands (phase 4, issue #10).
 
 ```
 examples/beast_consumer/
 ├── Scarb.toml                     separate package; depends on the root crate (path = "../..")
 ├── src/
-│   ├── mock_tinysynth.cairo       MockOnchainTinySynth: the class library stand-in
-│   ├── mock_page_data.cairo       generated: the mock PAGE, pre-encoded at both layers
+│   ├── mock_tinysynth.cairo       MockOnchainTinySynth: the class library stand-in (real page_data)
 │   ├── beast_like_nft.cairo       BeastLikeNft: render_svg, members, token_uri assembly
 │   └── sound.cairo                the token's MIDI file and SynthSettings
 ├── tests/
-│   ├── golden.cairo               generated: expected token_uri / SVG per token, and raw PAGE
+│   ├── golden.cairo               generated: expected token_uri / SVG per token, and the raw PAGE
 │   ├── naive.cairo                naive reference: plain JSON, base64-encoded once
 │   ├── test_token_uri.cairo       golden parity, naive parity, library call without deployment
 │   └── test_reverts.cairo         invalid SynthSettings and unknown tokens revert
 ├── scripts/
 │   ├── reference.mjs              independent JS reference of everything above
-│   ├── gen_page.mjs               writes src/mock_page_data.cairo
 │   ├── gen_fixtures.mjs           writes tests/golden.cairo and fixtures/
 │   ├── decode.mjs                 decodes any token_uri into its layers
-│   ├── reference.test.mjs         Node tests: MIDI parsing (incl. SysEx), UTF-8 decoding
-│   ├── player_failure.test.mjs    Node tests: the page's player fails closed (art stays visible)
+│   ├── reference.test.mjs         Node tests: the MIDI (incl. SysEx), UTF-8 decoding
+│   ├── player.test.mjs            Node tests: the page's player on the tokens, and its failure paths
 │   └── browser_check.mjs          optional headless check of the decoded page
 └── fixtures/                      the sample token (token 1, "Warlock"), decoded
 ```
@@ -51,9 +49,9 @@ examples/beast_consumer/
      D     SETTINGS </script><script type="text/plain" id="midi"> b64(midi) </script>
            <script type="text/plain" id="art">
      SVG   raw SVG, the unclosed art block, ending at EOF
-7. Player, on DOMContentLoaded: reads #settings (parse), #midi (strip whitespace, decode),
-   #art (re-encode as data:image/svg+xml;base64 and show it in an <img>); Play starts the synth
-   (mock: no audio).
+7. Player, on DOMContentLoaded: shows #art first (re-encoded as data:image/svg+xml;base64 in an
+   <img>), then parses #settings and decodes and checks #midi; ▶ starts TinySynth with the
+   settings, loops at End-of-Track and restarts the art in sync. See the root README.
 ```
 
 `token_uri` is assembled from base64 pieces that are each encoded on their own, using `b64(X ++ Y) == b64(X) ++ b64(Y)` when `len(X) % 3 == 0`. The full layout and alignment rules are in the root [README](../../README.md#consumer-token_uri-layout-the-beasts-layout) and walked through step by step in the comments of [`beast_like_nft.cairo`](src/beast_like_nft.cairo). In short:
@@ -66,9 +64,9 @@ The three example tokens are chosen so that every pad length occurs:
 
 | token | name | head pad | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 0 | 2 | 4 | 25,485 |
-| 2 | Night's Wyvern | 2 | 0 | 5 | 25,513 |
-| 3 | Fen-Troll | 1 | 1 | 6 | 25,497 |
+| 1 | Warlock | 0 | 2 | 4 | 85,245 |
+| 2 | Night's Wyvern | 2 | 0 | 5 | 85,273 |
+| 3 | Fen-Troll | 1 | 1 | 6 | 85,257 |
 
 Only `reverb` varies between tokens (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding.
 
@@ -80,32 +78,29 @@ Today, Beasts renders the SVG, base64-encodes it for `image`, builds the whole J
 
 | | This example | Real class |
 | --- | --- | --- |
-| Engine | a one-line placeholder `<script>` with the same global name; no sound | the ~37 KB minified TinySynth from a pinned release of the Provable-Games fork |
-| Player | parses `SETTINGS` with the real `player/settings.js` (embedded as a plain script) and displays the blocks; Play installs the settings into the mock engine with the real `createSynth` | tap-to-start audio, play/stop, End-of-Track looping, art restart in sync |
+| Page (engine and player) | real: `onchain_tinysynth::page_data`, generated by the root `scripts/build_page.mjs` around the pinned TinySynth build | same |
+| `animation_url_segment`, `script_sha256`, `version`, `license` | real `page_data` constants | same |
 | `SETTINGS` format | real (issue #1): the crate's `settings::encode` | same |
 | Validation | real: the crate's `settings::validate`, every field, `'TS: ...'` messages | same |
 | Custom waves (`SynthSettings.waves`, `Waveform::Custom`), filters | revert (`'TS: custom wave unsupported'`, `'TS: filter unsupported'`), as in the real class until issues #2 and #3 | issues #2 and #3 |
-| `base64` | byte-wise | planned word-wise, about 3.4x cheaper in prior art |
-| `script_sha256` | SHA-256 of the placeholder script | SHA-256 of the pinned engine release |
-| `version`, `license` | mock strings | real version string and Apache-2.0 notice |
+| `base64` | byte-wise, encoded at call time | planned word-wise, about 3.4x cheaper in prior art (phase 4) |
 | MIDI | a fixed one-bar SMF in `sound.cairo` | the onchain composer's output |
 
-The page is built the same way the real build pipeline will build it: assembled and padded offline, pre-encoded at both layers, and stored as a generated constant (`gen_page.mjs` mirrors roadmap phase 3).
+The page is built offline at the repository root (`npm run gen:page`): assembled and padded, pre-encoded at both layers, and stored as a generated constant. The example's scripts read the built page from `tests/fixtures/page.html` and need no `npm install`.
 
 ## Run it
 
 From `examples/beast_consumer` (Scarb 2.20.1 and Starknet Foundry 0.64.0, per the root `.tool-versions`; the scripts need only Node, no `npm install`):
 
 ```sh
-node scripts/gen_page.mjs       # regenerate src/mock_page_data.cairo
 node scripts/gen_fixtures.mjs   # regenerate tests/golden.cairo and fixtures/; prints the pad table
 scarb build
-snforge test                    # 15 tests, plus 1 ignored print helper
-node --test "scripts/**/*.test.mjs"  # 17 Node tests: reference, decoder, MIDI parser, player failure paths
+snforge test                    # 17 tests, plus 1 ignored print helper
+node --test "scripts/**/*.test.mjs"  # 15 Node tests: reference, decoder, MIDI, the page's player
 snforge test matches_js_golden --gas-report   # token_uri gas, per contract and selector
 ```
 
-Both generators are deterministic: running them again leaves `git diff` empty, and their output is already in `scarb fmt` style.
+The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~64 KB token JSON byte by byte, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
 
 To decode the actual contract output rather than the JS reference:
 
@@ -129,7 +124,7 @@ So the contract's output equals both an independent JS implementation and plain 
 - `fixtures/token_uri.txt`: the exact `token_uri` of token 1, identical to the contract's output.
 - `fixtures/token.json`: the decoded JSON, pretty-printed. Keys are `name`, `description`, `attributes`, `image`, `animation_url`.
 - `fixtures/image.svg`: the `image`, decoded. Open it in a browser.
-- `fixtures/animation.html`: the `animation_url`, decoded. Open it in a browser, offline: it shows the art, the raw and parsed settings, and the MIDI summary (112 bytes, format 0, PPQ 48, 120 BPM, 4 notes, 4 drum hits, End-of-Track at tick 192).
+- `fixtures/animation.html`: the `animation_url`, decoded. Open it in a browser, offline: it shows the art with the ▶/■ button, and plays the one-bar MIDI (112 bytes, PPQ 48, 120 BPM, End-of-Track at tick 192) in a loop with the token's custom lead and kick.
 
 The optional headless check loads the page four ways:
 - from disk;
@@ -137,13 +132,13 @@ The optional headless check loads the page four ways:
 - as a variant whose MIDI block holds a file with SysEx (F0) and escape (F7) events;
 - as a variant with invalid settings (`1,2,30,40,64,0,0`).
 
-For the valid pages it confirms that the settings and MIDI parse, that the art renders (it samples a pixel of the PNG inside the SVG's `foreignObject`), and that Play is enabled.
+For the valid pages it confirms that the art renders (it samples a pixel of the PNG inside the SVG's `foreignObject`), that ▶ is enabled, and that ▶ starts TinySynth with the token's settings: the custom lead on program 80, the custom kick on drum 36, the reverb and volume, and the End-of-Track loop at tick 192.
 
-For the invalid variant it confirms that the page fails closed: the art still renders, Play is disabled, and the validator's error is shown.
+For the invalid variant it confirms that the page fails closed: the art still renders, ▶ is disabled, the validator's error is shown, and no synth is created.
 
-Every page must make no network requests and log no console errors other than the expected one.
+Every page must make no network requests and log no console errors other than the expected one. The repository's `npm run page-check` checks the page in more depth: in a sandboxed iframe, under a strict CSP, the loop timing and the art restart.
 
-The same failure paths (invalid or unparsable settings, corrupt MIDI) are also tested without a browser in `scripts/player_failure.test.mjs`, which runs the page's player script in `node:vm`.
+The same player paths (the tokens' settings, invalid or unparsable settings, corrupt MIDI) are also tested without a browser in `scripts/player.test.mjs`, which runs the page's player script in `node:vm`.
 
 ```sh
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
@@ -167,8 +162,8 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core CHROME=/path/to/chrome \
 
 | Call | L2 gas |
 | --- | --- |
-| `BeastLikeNft.token_uri`, tokens 1-3 | 103.4M-103.8M |
-| of which `animation_url_segment` (materializing the 20 KB constant) | 4.0M |
+| `BeastLikeNft.token_uri`, tokens 1-3 | 131.8M-132.1M |
+| of which `animation_url_segment` (materializing the 80 KB constant and returning it through the library call) | 11.0M |
 | of which `midi_segment` (validation, `SETTINGS`, two base64 passes) | 26.6M |
 | of which 5 `base64` library calls (SVG, `S`, head, `',  '`, `'}'`) | about 61M in total, the largest single call 31M |
 

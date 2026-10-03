@@ -22,3 +22,8 @@ test = "snforge test"
 
 [tool.scarb]
 allow-prebuilt-plugins = ["snforge_std"]
+
+# The naive-nesting tests base64-encode the whole ~64 KB token JSON byte by byte, beyond snforge's
+# default step limit.
+[tool.snforge]
+max_n_steps = 100000000

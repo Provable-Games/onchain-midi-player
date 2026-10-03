@@ -4,15 +4,15 @@
 //! output layout the real class will use, so a consumer written against it needs no change when
 //! the real class hash is swapped in. What is mocked:
 //!
-//! - `animation_url_segment()` returns a pre-encoded constant, as the real class will, but the page
-//!   is a mock (engine placeholder + mock player around the real settings parser) instead of
-//!   TinySynth + the real player. It
-//!   is generated offline by `scripts/gen_page.mjs` into `mock_page_data.cairo`.
+//! - `animation_url_segment()`, `script_sha256()`, `version()` and `license()` are real: they
+//!   return the crate's generated `page_data` constants (the real page with the pinned TinySynth
+//!   engine and the real player, pre-encoded offline by `scripts/build_page.mjs` at the repository
+//!   root).
 //! - `midi_segment()` is real apart from `base64()`: it uses the crate's `settings::validate` and
 //!   `settings::encode` (issue #1), so `SETTINGS` is the real format and invalid settings revert
 //!   with the real `'TS: ...'` messages.
-//! - `base64()` is a straightforward byte-wise encoder; the real class plans a word-wise one.
-//! - `script_sha256()`, `version()` and `license()` return mock constants.
+//! - `base64()` is a straightforward byte-wise encoder; the real class plans a word-wise one
+//!   (phase 4, issue #10).
 //!
 //! Like the real class, it has no storage and no constructor, and it is declared but never
 //! deployed: consumers reach it only through `library_call`.
@@ -117,8 +117,8 @@ pub fn d_fragment(midi: @ByteArray, settings: @SynthSettings) -> ByteArray {
 #[starknet::contract]
 pub mod MockOnchainTinySynth {
     use onchain_tinysynth::interface::IOnchainTinySynth;
+    use onchain_tinysynth::page_data;
     use onchain_tinysynth::types::SynthSettings;
-    use crate::mock_page_data;
 
     // No storage and no constructor: the class runs in the caller's context via library_call
     // and must not touch the caller's storage.
@@ -127,9 +127,9 @@ pub mod MockOnchainTinySynth {
 
     #[abi(embed_v0)]
     impl MockOnchainTinySynthImpl of IOnchainTinySynth<ContractState> {
-        /// The pre-encoded constant from `mock_page_data.cairo`. No base64 work at call time.
+        /// The pre-encoded constant from the crate's `page_data`. No base64 work at call time.
         fn animation_url_segment(self: @ContractState) -> ByteArray {
-            mock_page_data::animation_url_segment()
+            page_data::animation_url_segment()
         }
 
         /// Validates `settings`, builds `D`, and returns `b64(b64(D))`.
@@ -145,17 +145,17 @@ pub mod MockOnchainTinySynth {
             super::base64(@data)
         }
 
-        /// MOCK: SHA-256 of the engine placeholder script embedded in the mock page.
+        /// SHA-256 of the pinned engine script embedded in the page.
         fn script_sha256(self: @ContractState) -> u256 {
-            mock_page_data::ENGINE_SHA256
+            page_data::ENGINE_SHA256
         }
 
         fn version(self: @ContractState) -> felt252 {
-            'mock-tinysynth.0+mock-page.1'
+            page_data::VERSION
         }
 
         fn license(self: @ContractState) -> ByteArray {
-            "MOCK. This is not a license notice. The real onchain TinySynth class returns the Apache-2.0 notice for the library and the embedded TinySynth engine (copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games)."
+            page_data::license()
         }
     }
 }
