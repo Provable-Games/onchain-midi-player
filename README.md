@@ -121,8 +121,8 @@ The engine was 37,060 of the uncompressed page's 44,298 bytes, and the segment's
 
 | Hash (SHA-256) | Of | Where |
 | --- | --- | --- |
-| `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c` | the engine, decompressed: the fork's `webaudio-tinysynth.min.js` at `b70ba90` | `script_sha256()`, `page_data::ENGINE_SHA256` |
-| `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` | the gzip payload in `PAGE` (9,862 bytes) | `page_data::GZIP_SHA256`, `page_data::GZIP_LEN` |
+| `b49e8ceb802b7665cd6f66100dc390874c806a8894be464273d43c532940fc55` | the engine, decompressed: the fork's `webaudio-tinysynth.min.js` at `4b29ff1` (36,960 bytes) | `script_sha256()`, `page_data::ENGINE_SHA256` |
+| `dec711614d61133881b642bc93829a26a7ac1cc8b7b34e5dd25f4f2482aa5d63` | the gzip payload in `PAGE` (10,406 bytes) | `page_data::GZIP_SHA256`, `page_data::GZIP_LEN` |
 | `bf6316a818dc7519afafa5af7bf826af5280c9950d208f0a2822f4295ab0d4df` | the minified gunzip shim | `SHIM_PIN` in [`scripts/page.mjs`](scripts/page.mjs) |
 
 ## Interface
@@ -135,7 +135,7 @@ Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`.
 | `midi_segment(midi: ByteArray, settings: SynthSettings) -> ByteArray` | `b64(b64(D))`: the token's settings and MIDI blocks, then opens the art block. Validates `settings` and encodes only per-token data. |
 | `base64(data: ByteArray) -> ByteArray` | Standard RFC 4648 base64 with `=` padding, for consumers encoding their own JSON pieces. The same encoder `midi_segment` uses. |
 | `script_sha256() -> u256` | Constant SHA-256 of the embedded engine JS, decompressed (big-endian). |
-| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b70ba90+page.6'` (see [Build pipeline](#build-pipeline)). |
+| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-4b29ff1+page.6'`, an interim build (see [Versions](#versions) and [Build pipeline](#build-pipeline)). |
 | `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice, then the MIT licenses of fflate, from which the page's gunzip shim derives, and of game-components, whose base64 encoder the class embeds. |
 
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
@@ -432,7 +432,8 @@ The consumer's SVG must never contain `</script`, in any letter case.
 ## Engine provenance and verification
 
 - Engine: TinySynth from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>. The fork removes the GUI and is licensed Apache-2.0, like upstream.
-- The class embeds the fork's own minified build at a pinned commit: currently `b70ba90` (`b70ba90d63c5ea657cb67ca98de90d7f778c29bd`), SHA-256 `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c`. It moves to a tagged release once the fork publishes one (roadmap phase 0); re-pinning is a one-line change (see [`tests/vendor/README.md`](tests/vendor/README.md)).
+- The class embeds the fork's own minified build at a pinned commit: currently `4b29ff1` (`4b29ff10d40989fd97967ed26ee4b2c95dbd8a26`), SHA-256 `b49e8ceb802b7665cd6f66100dc390874c806a8894be464273d43c532940fc55`, an interim pin (below). It moves to a tagged release once the fork publishes one (roadmap phase 0); re-pinning is a one-line change (see [`tests/vendor/README.md`](tests/vendor/README.md)).
+- **Interim pins.** Until the fork tags a release, the engine may be pinned to a commit of the fork's `improve/integration` branch, as it is now, to test the fork's fixes against this class early. Such a build is for compatibility testing only and must never be declared: declaration requires the engine re-pinned to a tagged fork release with a published SHA-256 (the release gate, issue #12), which gives a new `version()`.
 - The build is offline: the minified file and the fork's NOTICE are vendored in [`tests/vendor/`](tests/vendor), and `ENGINE_PIN` in [`scripts/engine.mjs`](scripts/engine.mjs) checks both SHA-256 hashes on every load, failing before anything is generated.
 - Anyone can check the engine in any token against these values, and rebuild it: see [Verifying the engine](#verifying-the-engine).
 
@@ -479,19 +480,18 @@ What a class hash fixes, and what the consumer supplies:
    node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256()>
    ```
 
-   For the current version, all three print the gzip payload's SHA-256 `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` (9,862 bytes) and the engine's `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c` (37,060 bytes).
+   For the current version, all three print the gzip payload's SHA-256 `dec711614d61133881b642bc93829a26a7ac1cc8b7b34e5dd25f4f2482aa5d63` (10,406 bytes) and the engine's `b49e8ceb802b7665cd6f66100dc390874c806a8894be464273d43c532940fc55` (36,960 bytes).
 3. **Compare.** The engine's SHA-256 must equal the class's `script_sha256()` (the hex form of the `u256` is the `sha256sum` string; a consumer contract or its tests can read it) and the `script_sha256()` column of [Versions](#versions), in the row of the class's `version()`. The gzip payload's SHA-256 and length must match that row too.
 4. **Optionally, rebuild the engine** from the fork commit in that row. The fork commits its minified build, and rebuilding it from the source reproduces it:
 
    ```sh
    git clone https://github.com/Provable-Games/webaudio-tinysynth && cd webaudio-tinysynth
-   git checkout b70ba90d63c5ea657cb67ca98de90d7f778c29bd
+   git checkout 4b29ff10d40989fd97967ed26ee4b2c95dbd8a26
    sha256sum webaudio-tinysynth.min.js   # the committed build
-   npm install --no-save terser@5.51.2 && npm run build
-   sha256sum webaudio-tinysynth.min.js   # rebuilt: the same hash
+   npm ci && npm run verify              # rebuilds it and compares the bytes
    ```
 
-   The fork's `package.json` accepts any Terser 5 from 5.14.0, so the command pins the version the build was reproduced with (5.51.2). A tagged fork release with a published SHA-256 is roadmap phase 0.
+   The fork pins its build: Terser 5.51.2 exactly, in its `package.json` and `package-lock.json`, with every option in `scripts/build.js`. `npm run verify` rebuilds the minified file and its source map into a temporary directory, fails on any byte difference from the committed files, and prints their SHA-256 (`npm run build` rebuilds them in place instead). A tagged fork release with a published SHA-256 is roadmap phase 0.
 5. **Optionally, check the rest of the page and the class.** `verify_engine.mjs` also prints the SHA-256 and length of the fixed page `PAGE` (the decoded page up to the opening tag of the settings block and its alignment spaces), which [`scripts/page_versions.json`](scripts/page_versions.json) records for every `version()`. A matching `PAGE` also proves that the payload you hashed sits in the page's own engine tag, the one that runs, and that the shim and the player around it are the class's. To check the class itself, check out this repository at the row's release tag, rebuild the page with `npm ci && npm run check:page` (the pinned Terser and fflate; it fails on any difference from the committed `PAGE` and `src/page_data.cairo`), run `scarb build`, compute the class hash (for example with `sncast utils class-hash --contract-name OnchainTinySynth`, the class `onchain_tinysynth::contract::OnchainTinySynth`), and compare it with the row's class hash.
 
 ## Versioning
@@ -504,11 +504,12 @@ The class is declared but never deployed, so block explorers cannot call it (`st
 
 | `version()` | Class hash (Sepolia) | Class hash (mainnet) | Release tag | `script_sha256()` (decompressed engine) | Gzip payload SHA-256 / length | Engine fork commit |
 | --- | --- | --- | --- | --- | --- | --- |
-| `tinysynth-b70ba90+page.6` | not declared yet | not declared yet | not declared yet | `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c` | `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` / 9,862 bytes | [`b70ba90`](https://github.com/Provable-Games/webaudio-tinysynth/commit/b70ba90d63c5ea657cb67ca98de90d7f778c29bd) in [Provable-Games/webaudio-tinysynth](https://github.com/Provable-Games/webaudio-tinysynth) |
+| `tinysynth-4b29ff1+page.6` | **not for declaration** (interim) | **not for declaration** (interim) | none: **interim**, not a release | `b49e8ceb802b7665cd6f66100dc390874c806a8894be464273d43c532940fc55` | `dec711614d61133881b642bc93829a26a7ac1cc8b7b34e5dd25f4f2482aa5d63` / 10,406 bytes | [`4b29ff1`](https://github.com/Provable-Games/webaudio-tinysynth/commit/4b29ff10d40989fd97967ed26ee4b2c95dbd8a26) on the `improve/integration` branch of [Provable-Games/webaudio-tinysynth](https://github.com/Provable-Games/webaudio-tinysynth): **interim** (`improve/integration` commit, not a release; not for declaration) |
 
 - The hashes and the length are the build's, from [`src/page_data.cairo`](src/page_data.cairo) (`VERSION`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`); `npm test` fails if the row for the current `version()` disagrees with them. The SHA-256 of the whole `PAGE` for each `version()` is in [`scripts/page_versions.json`](scripts/page_versions.json).
 - **A row is final only once its class is declared.** The class hash covers the class's Cairo code as well as the page. That includes the base64 encoder dependency, game-components `v3.1.0` (commit `66ce934`, recorded in `Scarb.lock`). So the class hashes and the tag are filled in at declaration (roadmap phase 6), and until then the row can still change: a different encoder build changes the class hash, and a re-pinned engine or a new page changes `version()` and the hashes. Once declared, a row never changes.
-- `page.1` to `page.5` were development builds of the page and were never declared.
+- **`tinysynth-4b29ff1+page.6` is interim** (`improve/integration` commit, not a release; not for declaration). It pins the engine to a commit of the fork's `improve/integration` branch to test the fork's fixes against this class early (see [Engine provenance](#engine-provenance-and-verification)). Its class must never be declared: the release gate (issue #12) requires the engine re-pinned to a tagged fork release, which gives a new `version()`.
+- `page.1` to `page.5` were development builds of the page, and `tinysynth-b70ba90+page.6` the same page with the engine at fork commit `b70ba90` (`script_sha256()` `5aa3edbc13371694a83ec0f285a5d39d4e4a31b18a259c0bbdcbd5969f710c2c`, gzip payload `4b3a12672d2580f11f324e27b65d804ae94ca38665c4b9f588e3109cb0b4945e` / 9,862 bytes). None was declared.
 
 ## Toolchain
 
