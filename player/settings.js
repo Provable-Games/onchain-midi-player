@@ -4,9 +4,10 @@
  * the page.
  *
  * `SETTINGS` (format version 1) is the ASCII encoding of the Cairo `SynthSettings` value that the
- * class writes into the page, after `settings::validate` has checked every value. The page parses
- * it strictly (the grammar, canonical integers, Cairo type bounds, count bounds, known tags, every
- * token consumed) and installs it; it does not repeat Cairo's range and semantic checks. The JS
+ * class writes into the page, after `settings::validate` has checked it (counts, slots, routes and
+ * the gates; every other field may take any value of its type). The page parses it strictly (the
+ * grammar, canonical integers, Cairo type bounds, count bounds, known tags, every token consumed)
+ * and installs it; it does not repeat Cairo's checks. The JS
  * reference of those checks, for tooling and the parity tests, is `player/validate.js`; the
  * reference encoder is `player/encode.js`. Shared fixtures (`tests/fixtures/settings.json`) keep
  * them byte-for-byte identical to `src/settings.cairo`.
@@ -107,12 +108,13 @@ const CANONICAL = /^(0|-?[1-9][0-9]*)$/;
  * Decodes SETTINGS text into a `SynthSettings` object, following the grammar strictly: format
  * version 1, canonical integers only, every value within its Cairo type, counts read and checked
  * against the parse bounds and the tokens left before their items (so a corrupt count can never
- * make the page loop or allocate past the input), known tags only, every token consumed. Leading and trailing spaces (U+0020 only) are ignored: the
- * page's alignment padding falls inside the settings block, before SETTINGS. Throws a
+ * make the page loop or allocate past the input), known tags only, every token consumed. Leading
+ * and trailing spaces (U+0020 only) are ignored: the page's alignment padding falls inside the
+ * settings block, before SETTINGS. Throws a
  * `SettingsError` on any violation; the page then fails closed (no audio, visible error).
  *
- * It does not apply Cairo's range and semantic checks (`settings::validate`, whose JS reference is
- * `validateSettings` in player/validate.js): the class validates every value before writing it.
+ * It does not apply Cairo's checks (`settings::validate`, whose JS reference is `validateSettings`
+ * in player/validate.js): the class validates the settings before writing them.
  * A count beyond its parse bound is reported with the message of the Cairo check, which fails too.
  * @param {string} text
  * @returns {SynthSettings}
