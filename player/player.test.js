@@ -605,8 +605,7 @@ describe("the page's player script, real engine", () => {
     const first = [...h.timers.keys()][0];
     while (synth.getPlayStatus().startTime < tick0 + 0.5) h.advance(0.06);
     assert.deepEqual([...h.timers.keys()], [first], "the ▶ restart is kept, not replaced");
-    h.runTimers(); // the ▶ restart fires
-    h.advance(0.06); // the next poll: pass 1 is still ahead
+    h.runTimers(); // the ▶ restart fires, and times the next pass at once: pass 1 is still ahead
     assert.equal(h.timers.size, 1);
     assert.ok(Math.abs(ctx.currentTime + [...h.timers.values()][0].delay / 1000 - (tick0 + 1)) < 1e-9, "pass 1 timed to its tick 0");
     h.runTimers();
@@ -621,6 +620,34 @@ describe("the page's player script, real engine", () => {
     assert.equal(h.timers.size, 0, "pass 2 is skipped: the art keeps its phase");
     while (!h.timers.size) h.advance(0.06);
     assert.ok(Math.abs(ctx.currentTime + [...h.timers.values()][0].delay / 1000 - (tick0 + 3)) < 1e-9, "pass 3 is synced");
+  });
+
+  test("a 100 ms loop: the art restarts at every pass, though startTime moves on by two passes at a time", async () => {
+    // PPQ 100 at 120 BPM: a note at tick 0, its note-off at tick 1, End-of-Track at tick 20 (0.1 s).
+    // The engine schedules 0.2 s ahead, so one 60 ms step can move startTime on by two passes.
+    const midi = smf({ ppq: 100, tracks: [[[0, 0x90, 60, 100], [1, 0x80, 60, 0], [19, 0xff, 0x2f, 0]]] });
+    const h = runPage(edited(CASES.default_120bpm, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0.01 });
+    h.ready();
+    h.click();
+    const synth = h.synths[0];
+    const tick0 = synth.getAudioContext().currentTime + 0.1;
+    await h.flush();
+    /** @type {number[]} */
+    const due = [];
+    /** @type {number[]} */
+    const seen = [synth.getPlayStatus().startTime];
+    for (let i = 0; i < 40; i++) {
+      h.advance(0.06);
+      const st = synth.getPlayStatus().startTime;
+      if (st !== seen.at(-1)) seen.push(st);
+      due.push(...h.runDue());
+    }
+    assert.ok(seen.slice(1).some((st, i) => st - seen[i] > 0.15), "startTime moved on by two passes in one step");
+    const passes = due.map((t) => Math.round((t - 0.01 - tick0) * 1e6) / 1e5);
+    assert.ok(passes.length >= 20, `${passes.length} restarts`);
+    assert.deepEqual(passes, passes.map((_, k) => k), "one restart per pass, each at its tick 0 plus the output latency, none skipped");
+    h.click(); // ■
+    assert.equal(h.timers.size, 0);
   });
 
   test("■ (the engine's stopMIDI) cuts drum hits scheduled ahead and the controller changes TinySynth had scheduled", async () => {

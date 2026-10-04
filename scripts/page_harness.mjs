@@ -174,7 +174,7 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
 
   /** @type {Array<() => void>} */
   let ready = [];
-  /** @type {Map<number, {fn: () => void, delay: number}>} */
+  /** @type {Map<number, {fn: () => void, delay: number, at: number}>} at: the AudioContext time when set */
   const timers = new Map();
   /** @type {Map<number, {fn: () => void, delay: number}>} the engine's and the page's intervals */
   const intervals = new Map();
@@ -208,7 +208,10 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
         if (type === "DOMContentLoaded") ready.push(fn);
       },
     },
-    setTimeout: (/** @type {() => void} */ fn, /** @type {number} */ delay) => { timers.set(++timerId, { fn, delay }); return timerId; },
+    setTimeout: (/** @type {() => void} */ fn, /** @type {number} */ delay) => {
+      timers.set(++timerId, { fn, delay, at: synths.length ? synths[0].getAudioContext().currentTime : 0 });
+      return timerId;
+    },
     clearTimeout: (/** @type {number} */ id) => { timers.delete(id); },
     setInterval: (/** @type {() => void} */ fn, /** @type {number} */ delay) => { intervals.set(++timerId, { fn, delay }); return timerId; },
     clearInterval: (/** @type {number} */ id) => { intervals.delete(id); },
@@ -320,6 +323,22 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
       for (const [id, t] of [...timers]) {
         timers.delete(id);
         t.fn();
+      }
+    },
+    /**
+     * Runs the timeouts that are due by the AudioContext clock (the harness runs the page clock with
+     * it), and those they set that are due too. Returns the time each was due, in order.
+     */
+    runDue() {
+      const now = synths[0].getAudioContext().currentTime;
+      /** @type {number[]} */
+      const ran = [];
+      for (;;) {
+        const due = [...timers].find(([, t]) => t.at + t.delay / 1000 <= now + 1e-9);
+        if (!due) return ran;
+        timers.delete(due[0]);
+        ran.push(due[1].at + due[1].delay / 1000);
+        due[1].fn();
       }
     },
     /** Fires the onload handler of every image created so far (images "decode" on demand here). */

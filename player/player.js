@@ -30,9 +30,11 @@
  *    starts, and the player, polling it every 50 ms, restarts the art at the new time. That bounds
  *    any drift between the image's clock and the audio clock to one pass; when the pass is a whole
  *    multiple of the art's period, the art is already at its start there, so the restart is not
- *    seen. At most one restart is pending: a pass seen while one is pending waits for the next
- *    poll, and a pass start already past when seen (the page was stalled) is skipped, so the art
- *    keeps its phase until the next pass rather than restarting late.
+ *    seen. At most one restart is pending; when it fires, the next is timed at once. On a short
+ *    loop, where startTime can move on by more than one pass between polls, the player walks pass
+ *    by pass (`checkMidi`'s pass length) from the last pass it timed. A pass start already past
+ *    when reached (the page was stalled) is skipped, so the art keeps its phase until the next
+ *    pass rather than restarting late.
  * 5. ■ stops playback (TinySynth's `stopMIDI` cuts every voice, drum hits and notes scheduled
  *    ahead included, and cancels the controller changes it had scheduled), and cancels the pending
  *    art restart and the polling. The art keeps running.
@@ -268,11 +270,13 @@ export function startPlayer() {
     let settings;
     /** @type {Uint8Array} */
     let midi;
+    let pass = 0; // one pass in seconds, under the MIDI's tempo map: the engine's pass with loopEnd = maxTick
     try {
       // Missing if its gzip payload did not inflate (the shim logged why) or the engine failed.
       if (typeof (/** @type {any} */ (window).WebAudioTinySynth) != "function") throw new Error(ENGINE_MISSING);
       settings = decodeSettings($("settings").textContent || "");
       midi = decodeMidi($("midi").textContent || "");
+      pass = checkMidi(midi).seconds;
     } catch (e) {
       fail(e);
       return;
@@ -310,23 +314,34 @@ export function startPlayer() {
           synth.setLoop(1);
           synth.setLoopEnd(synth.getPlayStatus().maxTick);
           synth.playMIDI();
-          /** @type {number | null | undefined} the pass start the art was last timed to */
+          /** @type {number | null | undefined} the pass start the art was last timed to (or skipped) */
           let synced;
           /**
-           * Times an art restart to tick 0 of the current pass, as heard. On ▶ (`first`) always,
-           * at once without a pass start; afterwards only for a new pass start that is still
-           * ahead, and only when no restart is pending.
+           * Times an art restart to tick 0 of a pass, as heard, unless one is pending. On ▶
+           * (`first`): the current pass, at once without a pass start. Afterwards: the pass after
+           * the last one synced, once startTime has reached it. On a short loop startTime can move
+           * on by more than one pass between calls, so this walks pass by pass from the last one
+           * synced, skipping any whose start is already past, and takes the engine's own value
+           * when it reaches it.
            * @param {boolean} [first]
            */
           const sync = (first) => {
-            const start = synth.getPlayStatus().startTime;
-            if (start === synced || (timer && !first)) return;
+            const latest = synth.getPlayStatus().startTime;
+            const lag = ctx.outputLatency || 0;
+            let start = latest;
+            if (timer || latest === synced) return;
+            if (!first && latest !== null && synced != null) {
+              start = synced + pass;
+              while (start < latest - 1e-6 && start + lag < ctx.currentTime) start += pass;
+              if (start > latest - 1e-6) start = latest;
+            }
             synced = start;
-            const delay = start === null ? 0 : start - ctx.currentTime + (ctx.outputLatency || 0);
+            const delay = start === null ? 0 : start - ctx.currentTime + lag;
             if (!first && (start === null || delay < 0)) return;
             timer = window.setTimeout(() => {
               timer = 0;
               restartArt(current);
+              sync();
             }, Math.max(0, delay * 1000));
           };
           sync(true);
