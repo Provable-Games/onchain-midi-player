@@ -1,13 +1,13 @@
 ---
 name: sound-design
-description: Design the sound of an NFT that uses the onchain TinySynth player (Provable-Games/onchain-tinysynth) through the SynthSettings value its contract passes to midi_segment - quality, reverb, master volume, voices, custom waveforms (single-cycle sample tables and harmonic waves) and custom FM or chip timbres that replace General MIDI programs or drum notes. Use when choosing or tuning instruments and drums, defining chip waves such as stepped triangles, pulses or LFSR noise, converting a TinySynth soundedit timbre to Cairo fixed point, fixing a settings revert from midi_segment (the TS errors), or previewing settings offline before deploying.
+description: Design the sound of an NFT that uses the onchain TinySynth player (Provable-Games/onchain-tinysynth) through the SynthSettings value its contract passes to midi_segment - quality, reverb, master volume, voices, custom waveforms (single-cycle sample tables and harmonic waves), fixed low-, high- and band-pass filters, and custom FM or chip timbres that replace General MIDI programs or drum notes. Use when choosing or tuning instruments and drums, defining chip waves such as stepped triangles, pulses or LFSR noise, filtering a voice (chip hi-hats, filtered leads and basses), converting a TinySynth soundedit timbre to Cairo fixed point, fixing a settings revert from midi_segment (the TS errors), or previewing settings offline before deploying.
 license: Apache-2.0
 compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-tinysynth whose VERSION in src/page_data.cairo equals the class's version(); Cairo steps need the Scarb version in its .tool-versions.
 ---
 
 # Sound design with `SynthSettings`
 
-The contract passes a `SynthSettings` value to `midi_segment` on every `token_uri` call. It sets the built-in sound set, reverb, master volume, voices, custom waves and custom timbres. The source of truth is the README's [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds) and [`src/types.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/types.cairo).
+The contract passes a `SynthSettings` value to `midi_segment` on every `token_uri` call. It sets the built-in sound set, reverb, master volume, voices, custom waves and custom timbres, whose outputs can carry a fixed filter. The source of truth is the README's [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds) and [`src/types.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/types.cairo).
 
 Boundary: the [midi-guide](../midi-guide/SKILL.md) skill covers what goes in the `.mid` (notes, program changes, controllers). This skill covers what the contract passes in `SynthSettings`. Wiring it into `token_uri` is the [integrator-guide](../integrator-guide/SKILL.md) skill.
 
@@ -31,8 +31,9 @@ Get the tools: Node 22 or later, and a clone whose `grep 'pub const VERSION' src
 
 From `page.7`:
 
-- Validation covers what the format and the engine require: `quality` is 0 or 1, `voices` at least 1, the counts, the slots, the routes, the wave index and the gate for issue #3 (filters). Every other number takes any value of its integer type, every wave sample and harmonic included, except the five operator fields below.
+- Validation covers what the format and the engine require: `quality` is 0 or 1, `voices` at least 1, the counts, the slots, the routes, the wave index, and that a filter sits on an audio output with a cutoff and a Q above 0. Every other number takes any value of its integer type, every wave sample and harmonic included, except the five operator fields below.
 - From `page.9` custom waves are accepted (issue #2, below). A `page.7` or `page.8` class reverts them with `'TS: custom wave unsupported'`.
+- From `page.10` filters are accepted (issue #3, below). A `page.7`, `page.8` or `page.9` class reverts them with `'TS: filter unsupported'`.
 - There is no `SETTINGS` length cap: the network prices the cost ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-size-of-settings-no-byte-cap), [Network and node limits](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#network-and-node-limits)).
 - Five operator fields have interim engine bounds: `ratio`, `pitch_ratio`, `volume`, `sustain` and `key_scale`. The pinned engine computes non-finite values past them and throws, and the throwing note stalls the whole song. The `page.9` engine validates the values `setTimbre` receives but not what they multiply into, so the bounds stay. They are removed once the engine's guard for computed values lands (the fork's task T5.2; release gate, issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). README: [Engine limits on operator values](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#engine-limits-on-operator-values).
 
@@ -92,9 +93,39 @@ let waves = [
 let pulse_carrier = Operator { wave: Waveform::Custom(0), ..default_operator() };
 ```
 
+## Filters
+
+From `page.10` (issue [#3](https://github.com/Provable-Games/onchain-tinysynth/issues/3), using the engine's fixed operator filter from fork issue [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27)). README: [Filters](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#filters), the source of truth for this section.
+
+- **One fixed filter per audio output:** `filter: Option::Some(Filter { kind, cutoff, key_track, q })` on an operator whose `route` is 0. It sits between the operator's envelope and the channel, is set at note-on and has no envelope, so no sweeps. FM and AM paths are never filtered: a filter on a modulator reverts `'TS: filter on modulator'`.
+- **`kind`:** `LowPass`, `HighPass` or `BandPass`.
+- **`cutoff`**, fixed point: Hz, or with `key_track` a multiple of the note's frequency (tuned, before `ratio`, `offset_hz`, bend and the pitch envelope), so a lead keeps its brightness across the keyboard. On drums use Hz: a drum timbre's note is its drum note.
+- **`q`**, fixed point: a linear Q. `7_071` (0.7071) is flat for a low- or high-pass, and higher values add a resonant peak at the cutoff. A band-pass's bandwidth is its centre ÷ `q`.
+- **Ranges:** a cutoff and a Q above 0 (`'TS: filter cutoff out of range'`, `'TS: filter q out of range'`); nothing else is checked. The engine clamps the computed cutoff to 0.45 × the sample rate (21,600 Hz at 48 kHz), so very high or key-tracked cutoffs are safe, and filters add no interim engine bound.
+- **Chip hi-hats are now possible:** `MetallicNoise` at `ratio` 0 and `offset_hz` 390 Hz through a 3 kHz high-pass (`cutoff` 30,000,000, `q` 7,071), as the closed and open hats of the `filters` entry in [`tests/fixtures/settings.json`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/tests/fixtures/settings.json). They measure at least 24 dB less energy below 1 kHz than above 4 kHz (about 34 to 36 dB, against about 9 dB unfiltered).
+- **Filtered leads and basses:** a sawtooth or square through a key-tracked low-pass, for example `cutoff` 40,000 (4× the note); a band-pass on `WhiteNoise` gives breath and formant textures.
+- **Porting from TinySynth:** `fl`, `ff`, `fq` and `fk` become `kind` (`lowpass` is `LowPass`, and so on), `cutoff` = `ff` × 10,000, `q` = `fq` × 10,000 (TinySynth's default `fq` is 0.7071) and `key_track` = `fk` == 1.
+- **Cost:** a filter adds 15 to 26 bytes of `SETTINGS`. Six filtered voices take `midi_segment` with a full-size score to 62.4M, against 60.7M for the three reference sounds.
+- **Without a filter** an operator plays exactly as before: the player passes no filter fields, and the engine builds no filter node.
+
+```cairo
+use onchain_tinysynth::settings::default_operator;
+use onchain_tinysynth::types::{Filter, FilterKind, Operator, Waveform};
+
+// A closed chip hi-hat: metallic noise through a flat 3 kHz high-pass.
+let hat = Operator {
+    wave: Waveform::MetallicNoise, volume: 2_000, ratio: 0, offset_hz: 3_900_000, hold: 0,
+    decay: 150,
+    filter: Option::Some(
+        Filter { kind: FilterKind::HighPass, cutoff: 30_000_000, key_track: false, q: 7_071 },
+    ),
+    ..default_operator()
+};
+```
+
 ## Not accepted yet
 
-- Filters (`filter: Some(...)`): `'TS: filter unsupported'` until issue [#3](https://github.com/Provable-Games/onchain-tinysynth/issues/3) (Tier 3), which needs fork issue [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27). The interim engine pin already has its fixed operator filters (README: [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds)); the class and the player use them once issue #3 lands. Their encoding is already in the format, so lifting the check changes neither the grammar nor the format version.
+- Nothing from `page.10`: the class accepts every part of the format. An earlier class reverts filters (`'TS: filter unsupported'`, before `page.10`) and custom waves (`'TS: custom wave unsupported'`, before `page.9`).
 - `WhiteNoise` and `MetallicNoise` are accepted and seeded from `page.9`; with an earlier class their buffers vary slightly per page load.
 
 ## Wire format, size and gas

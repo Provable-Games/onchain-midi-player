@@ -17,6 +17,6 @@
 | `pitch_ratio` | `p` | `u32` | 10,000 | Pitch envelope target as a multiple of the start frequency. Below 1 drops the pitch (kicks, toms). *Engine limit.* |
 | `pitch_time` | `q` | `u32` | 10,000 | Pitch envelope time constant in seconds. |
 | `key_scale` | `k` | `i32` | 0 | Level × 2^((note − 60) / 12 × `key_scale`). Negative softens high notes. *Engine limit.* |
-| `filter` | | `Option<Filter>` | `None` | `Some` reverts in v1 (issue #3). |
+| `filter` | `fl`, `ff`, `fq`, `fk` | `Option<Filter>` | `None` | A fixed filter on an audio output (`route` 0 only), from `page.10` (issue #3; an earlier class reverts `Some`): `kind` `LowPass`, `HighPass` or `BandPass`; `cutoff` in Hz, or a multiple of the note frequency when `key_track` is set; `q` a linear Q (7,071 is flat). `cutoff` and `q` are fixed point and must be above 0. |
 
 The envelope ramps up linearly over `attack`, holds for `hold`, then approaches `sustain` × `volume` with time constant `decay`. After note-off it decays to zero with time constant `release`.
