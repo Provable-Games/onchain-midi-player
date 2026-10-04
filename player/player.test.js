@@ -593,6 +593,29 @@ describe("the page's player script, real engine", () => {
     assert.deepEqual(h.consoleErrors, []);
   });
 
+  test("a pass's restart whose timer fires late (a stalled page) is skipped; the next pass is timed", async () => {
+    const h = runPage(restLoop(), { engine: "real", outputLatency: 0 });
+    h.ready();
+    h.click();
+    const synth = h.synths[0];
+    const ctx = synth.getAudioContext();
+    const tick0 = ctx.currentTime + 0.1;
+    await h.flush();
+    h.runTimers(); // the ▶ restart
+    h.loadImages();
+    while (!h.timers.size) h.advance(0.06); // pass 1's restart is pending, due at tick0 + 1
+    while (ctx.currentTime < tick0 + 1.1) h.advance(0.06); // the page stalls past it
+    const before = h.art();
+    h.runTimers(); // fires 0.1 s late
+    h.loadImages();
+    assert.equal(h.art(), before, "no late restart: the art keeps its phase");
+    while (!h.timers.size) h.advance(0.06);
+    assert.ok(Math.abs(ctx.currentTime + [...h.timers.values()][0].delay / 1000 - (tick0 + 2)) < 1e-9, "pass 2 is timed");
+    h.runTimers();
+    h.loadImages();
+    assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, 2), "pass 2 restarts the art");
+  });
+
   test("restart images that decode out of order: an older one never replaces a newer one", async () => {
     const h = runPage(restLoop(), { engine: "real", outputLatency: 0 });
     h.ready();

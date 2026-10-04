@@ -34,8 +34,9 @@
  *    seen. At most one restart is pending; when it fires, the next is timed at once. On a short
  *    loop, where startTime can move on by more than one pass between polls, the player walks pass
  *    by pass (`checkMidi`'s pass length) from the last pass it timed. A pass start already past
- *    when reached (the page was stalled) is skipped, so the art keeps its phase until the next
- *    pass rather than restarting late.
+ *    when reached, or a pass's restart timer that fires more than 50 ms late (the page was
+ *    stalled), is skipped, so the art keeps its phase until the next pass rather than restarting
+ *    late. The restart on ▶ is never skipped.
  * 5. ■ stops playback (TinySynth's `stopMIDI` cuts every voice, drum hits and notes scheduled
  *    ahead included, and cancels the controller changes it had scheduled), and cancels the pending
  *    art restart and the polling. The art keeps running.
@@ -54,6 +55,11 @@ export const STOP_ICON = "M6 6h12v12H6z";
 /** The error shown when the engine did not load (it was not inflated, or failed when it ran). */
 export const ENGINE_MISSING = "engine: TinySynth did not load";
 
+/**
+ * A pass's art restart whose timer fires later than this after its time (a stalled page) is
+ * skipped: the art keeps its phase until the next pass rather than restarting late.
+ */
+const LATE_SECONDS = 0.05;
 /** A loop shorter than this would make TinySynth's scheduler spin; such MIDI is rejected. */
 const MIN_LOOP_SECONDS = 0.05;
 /**
@@ -345,7 +351,7 @@ export function startPlayer() {
             if (!first && (start === null || delay < 0)) return;
             timer = window.setTimeout(() => {
               timer = 0;
-              restartArt(current);
+              if (first || ctx.currentTime - start - lag < LATE_SECONDS) restartArt(current);
               sync();
             }, Math.max(0, delay * 1000));
           };
