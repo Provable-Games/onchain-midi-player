@@ -388,10 +388,11 @@ describe("the skills' helper scripts", () => {
     assert.throws(() => decodeTokenUri(uri), /image is not a base64 SVG data URI/);
     // decode.mjs writes no image.svg; split_page needs none; preview rebuilds the page from art.svg.
     const sub = mkdtempSync(join(dir, "external-"));
+    writeFileSync(join(sub, "image.svg"), "<svg>an earlier token's image</svg>"); // must not survive
     const decode = spawnSync(process.execPath, [join(ROOT, "examples/beast_consumer/scripts/decode.mjs"), file(sub, "uri.txt", uri), sub], { encoding: "utf8" });
     assert.equal(decode.status, 0, decode.stderr);
     assert.match(decode.stdout, /image: "https:\/\/example\.com\/1\.png" \(not a base64 SVG data URI; not written\)/);
-    assert.ok(!existsSync(join(sub, "image.svg")));
+    assert.ok(!existsSync(join(sub, "image.svg")), "no image.svg, not even a stale one");
     assert.equal(splitRun([join(sub, "animation.html")], () => {}, () => {}), 0);
     const art = readFileSync(join(sub, "art.svg"));
     const settings = settingsFromText("settings.txt", readFileSync(join(sub, "settings.txt"), "utf8"));

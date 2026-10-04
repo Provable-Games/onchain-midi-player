@@ -9,7 +9,7 @@
 //                                 base64 SVG data URI; any other image is reported, not written)
 //     token.json                  the parsed JSON, pretty-printed as UTF-8
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { decodeTokenUriLayers } from '../../../scripts/page.mjs';
 
@@ -23,7 +23,9 @@ const uri = readFileSync(src === '-' ? 0 : src, 'utf8').trim();
 const { json, svgBytes, htmlBytes } = decodeTokenUriLayers(uri);
 mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, 'token.json'), JSON.stringify(json, null, 2) + '\n', 'utf8');
+// No SVG image: remove an image.svg left from an earlier token, so it is never compared with this one.
 if (svgBytes) writeFileSync(join(outDir, 'image.svg'), svgBytes);
+else rmSync(join(outDir, 'image.svg'), { force: true });
 writeFileSync(join(outDir, 'animation.html'), htmlBytes);
 console.log(`name: ${json.name}`);
 const image = svgBytes ? `${svgBytes.length} bytes of SVG` : `${JSON.stringify(String(json.image).slice(0, 60))} (not a base64 SVG data URI; not written)`;
