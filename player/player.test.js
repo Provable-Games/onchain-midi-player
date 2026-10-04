@@ -668,20 +668,25 @@ describe("the page's player script, real engine", () => {
     const synth = h.synths[0];
     const tick0 = synth.getAudioContext().currentTime + 0.1;
     await h.flush();
-    /** @type {number[]} */
-    const due = [];
+    /** @type {Array<{due: number, images: string[]}>} */
+    const ran = [];
     /** @type {number[]} */
     const seen = [synth.getPlayStatus().startTime];
-    for (let i = 0; i < 40; i++) {
-      h.advance(0.06);
+    // The clock in 5 ms steps: the engine's sequencer every 60 ms, the poll every 50 ms, and each
+    // timeout within 5 ms of its time, as in a browser that is not stalled.
+    for (let i = 0; i < 480; i++) {
+      ran.push(...h.run(0.005));
       const st = synth.getPlayStatus().startTime;
       if (st !== seen.at(-1)) seen.push(st);
-      due.push(...h.runDue());
+      h.loadImages();
     }
     assert.ok(seen.slice(1).some((st, i) => st - seen[i] > 0.15), "startTime moved on by two passes in one step");
-    const passes = due.map((t) => Math.round((t - 0.01 - tick0) * 1e6) / 1e5);
+    // Every timeout created exactly one restart image (none skipped as late), for consecutive passes.
+    assert.ok(ran.every((r) => r.images.length === 1), `restart images per timeout: ${ran.map((r) => r.images.length).join(",")}`);
+    const passes = ran.map((r) => Math.round((r.due - 0.01 - tick0) * 1e6) / 1e5);
     assert.ok(passes.length >= 20, `${passes.length} restarts`);
     assert.deepEqual(passes, passes.map((_, k) => k), "one restart per pass, each at its tick 0 plus the output latency, none skipped");
+    assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, passes.length), "each restart's image was swapped in");
     h.click(); // ■
     assert.equal(h.timers.size, 0);
   });

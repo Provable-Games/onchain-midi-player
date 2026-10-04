@@ -326,19 +326,45 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
       }
     },
     /**
+     * Advances the AudioContext clock in `step` increments, running each interval when its own
+     * period has passed (the engine's every 60 ms, the player's poll every 50 ms) and the timeouts
+     * as they fall due (runDue). Returns what runDue returned, in order.
+     */
+    run(/** @type {number} */ seconds, step = 0.005) {
+      const ctx = synths[0].getAudioContext();
+      const end = ctx.currentTime + seconds;
+      /** @type {Array<{due: number, images: string[]}>} */
+      const ran = [];
+      while (ctx.currentTime < end - 1e-9) {
+        ctx.currentTime = Math.round((ctx.currentTime + step) * 1e6) / 1e6;
+        for (const iv of [...intervals.values()]) {
+          const t = /** @type {any} */ (iv);
+          if (t.last === undefined) t.last = ctx.currentTime - step;
+          if (ctx.currentTime - t.last >= iv.delay / 1000 - 1e-9) {
+            t.last = ctx.currentTime;
+            iv.fn();
+          }
+        }
+        ran.push(...this.runDue());
+      }
+      return ran;
+    },
+    /**
      * Runs the timeouts that are due by the AudioContext clock (the harness runs the page clock with
-     * it), and those they set that are due too. Returns the time each was due, in order.
+     * it), and those they set that are due too. Returns, in order, the time each was due and the
+     * images its callback created (an art restart creates one).
      */
     runDue() {
       const now = synths[0].getAudioContext().currentTime;
-      /** @type {number[]} */
+      /** @type {Array<{due: number, images: string[]}>} */
       const ran = [];
       for (;;) {
         const due = [...timers].find(([, t]) => t.at + t.delay / 1000 <= now + 1e-9);
         if (!due) return ran;
         timers.delete(due[0]);
-        ran.push(due[1].at + due[1].delay / 1000);
+        const from = created.length;
         due[1].fn();
+        ran.push({ due: due[1].at + due[1].delay / 1000, images: created.slice(from).map((img) => img.src) });
       }
     },
     /**

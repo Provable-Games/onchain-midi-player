@@ -114,7 +114,7 @@ snforge test matches_js --gas-report   # token_uri gas, per contract and selecto
 snforge test gas_                      # token 4 piece by piece (see Gas)
 ```
 
-The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~36 KB token JSON byte by byte, and the token 4 test computes the SHA-256 of its 134,869-character `token_uri` in Cairo, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
+The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~41 KB token JSON byte by byte, and the token 4 test computes the SHA-256 of its 140,645-character `token_uri` in Cairo, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
 
 To decode the actual contract output rather than the JS reference:
 
