@@ -21,13 +21,21 @@
  *    enabled.
  * 3. ▶ (a click or tap): the first one constructs TinySynth with the settings (`createSynth`).
  *    Every ▶ resumes the AudioContext inside the gesture, reloads the MIDI (back to tick 0 at the
- *    song's starting tempo), loops at End-of-Track (`setLoop(1)`, `setLoopEnd(maxTick)`), starts
- *    playback (keeping any rest before the first event), and restarts the art when tick 0 is
- *    heard: after TinySynth's scheduling offset (`playTime - currentTime`) plus the context's
- *    output latency.
- * 4. ■ stops playback, cutting off every voice (drums and notes scheduled ahead included), and
- *    cancels a pending art restart and the controller changes TinySynth had already scheduled. The
- *    art keeps running.
+ *    song's starting tempo), loops at End-of-Track (`setLoop(1)`, `setLoopEnd(maxTick)`) and starts
+ *    playback. With `loopEnd` set, the engine keeps any rest before the first event on every pass.
+ * 4. The art restarts when tick 0 is heard: at `getPlayStatus().startTime` (the AudioContext time
+ *    at which tick 0 of the current pass sounds) plus the context's output latency, or at once if
+ *    the engine is not playing (a song with no events but tempo, which it leaves stopped). Then it
+ *    restarts again at every pass: `startTime` moves to the next pass up to 0.2 s before that pass
+ *    starts, and the player, polling it every 50 ms, restarts the art at the new time. That bounds
+ *    any drift between the image's clock and the audio clock to one pass; when the pass is a whole
+ *    multiple of the art's period, the art is already at its start there, so the restart is not
+ *    seen. At most one restart is pending: a pass seen while one is pending waits for the next
+ *    poll, and a pass start already past when seen (the page was stalled) is skipped, so the art
+ *    keeps its phase until the next pass rather than restarting late.
+ * 5. ■ stops playback (TinySynth's `stopMIDI` cuts every voice, drum hits and notes scheduled
+ *    ahead included, and cancels the controller changes it had scheduled), and cancels the pending
+ *    art restart and the polling. The art keeps running.
  *
  * Plain browser JavaScript: no modules in the page, no eval, no network requests, no storage. Works
  * in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles
@@ -270,11 +278,12 @@ export function startPlayer() {
       return;
     }
 
-    // 3-4. The ▶/■ toggle.
+    // 3-5. The ▶/■ toggle, and the art restarts.
     /** @type {any} */
     let synth = null;
     let playing = false;
-    let timer = 0;
+    let timer = 0; // the pending art restart, or 0
+    let poll = 0; // the interval that follows startTime to each pass
     /** @param {boolean} on */
     const setPlaying = (on) => {
       playing = on;
@@ -284,23 +293,11 @@ export function startPlayer() {
     button.onclick = () => {
       const current = ++run;
       window.clearTimeout(timer);
+      window.clearInterval(poll);
+      timer = 0;
       if (playing) {
         setPlaying(false);
         synth.stopMIDI();
-        // stopMIDI leaves drum voices, and notes already scheduled ahead, playing, and TinySynth
-        // schedules controller changes ahead and never cancels them. Every voice reaches the output
-        // through its channel's volume node, so replace those nodes: that cuts off every voice and
-        // the volume changes they carried. Then drop the pending pan and modulation changes.
-        const ctx = synth.getAudioContext();
-        for (let ch = 0; ch < 16; ch++) {
-          const vol = ctx.createGain();
-          vol.gain.value = synth.chvol[ch].gain.value;
-          vol.connect(synth.chpan[ch] || synth.out);
-          synth.chvol[ch].disconnect();
-          synth.chvol[ch] = vol;
-          synth.chmod[ch].gain.cancelScheduledValues(ctx.currentTime);
-          if (synth.chpan[ch]) synth.chpan[ch].pan.cancelScheduledValues(ctx.currentTime);
-        }
         return;
       }
       try {
@@ -311,19 +308,29 @@ export function startPlayer() {
           if (current !== run) return;
           synth.loadMIDI(midi);
           synth.setLoop(1);
-          synth.setLoopEnd(synth.maxTick);
-          // loadMIDI leaves playTick at the first event's tick. Keep it: the original engine's
-          // playMIDI reset it to 0 when that was End-of-Track's tick.
-          const first = synth.playTick;
+          synth.setLoopEnd(synth.getPlayStatus().maxTick);
           synth.playMIDI();
-          // The art restarts with tick 0: TinySynth plays from playTime, plus the output latency.
-          const delay = synth.playTime - ctx.currentTime + (ctx.outputLatency || 0);
-          timer = window.setTimeout(() => restartArt(current), Math.max(0, delay * 1000));
-          // TinySynth plays the first event at playTime whatever its tick, so a leading rest
-          // would be lost on the first pass. Restore it, timed as TinySynth times it on every
-          // later pass (at the starting 120 BPM: no tempo event can precede the first event).
-          synth.playTick = first;
-          synth.playTime += first * synth.tick2Time;
+          /** @type {number | null | undefined} the pass start the art was last timed to */
+          let synced;
+          /**
+           * Times an art restart to tick 0 of the current pass, as heard. On ▶ (`first`) always,
+           * at once without a pass start; afterwards only for a new pass start that is still
+           * ahead, and only when no restart is pending.
+           * @param {boolean} [first]
+           */
+          const sync = (first) => {
+            const start = synth.getPlayStatus().startTime;
+            if (start === synced || (timer && !first)) return;
+            synced = start;
+            const delay = start === null ? 0 : start - ctx.currentTime + (ctx.outputLatency || 0);
+            if (!first && (start === null || delay < 0)) return;
+            timer = window.setTimeout(() => {
+              timer = 0;
+              restartArt(current);
+            }, Math.max(0, delay * 1000));
+          };
+          sync(true);
+          poll = window.setInterval(() => sync(), 50);
         }).catch((/** @type {unknown} */ e) => {
           setPlaying(false);
           fail(e);

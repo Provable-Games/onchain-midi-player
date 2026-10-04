@@ -2,9 +2,12 @@
 // @ts-check
 // Long-session check, opt-in: does the art stay in sync with the sound over a whole session (issue
 // #11: drift over a 10-minute session, audio clock against image animation)? The player restarts
-// the art once, on ▶, timed to tick 0 as heard. After that the art runs on the page's clock (the
+// the art on ▶ and again at every pass, each time timed to the pass's tick 0 as heard (TinySynth's
+// startTime plus the output latency). Between restarts the art runs on the page's clock (the
 // image's animation timeline), the sound on the AudioContext's, and TinySynth loops on its own
-// schedule. On Chromium, Firefox or WebKit, this plays for --minutes and checks:
+// schedule, so the two can drift apart by at most what one pass lets them. The probe sweeps once
+// per pass, so the pass is a whole multiple of the art's period and the restarts must not show.
+// On Chromium, Firefox or WebKit, this plays for --minutes and checks:
 //
 //   art against sound  At each checkpoint (every --every seconds), seven screenshots of a probe
 //                      art: a bar that sweeps the frame once per pass of the song, repeating. The
@@ -18,6 +21,9 @@
 //                      tempo map gives (checkMidi: the fixture's midi_loop_seconds), to 1 µs, with
 //                      no pass missing: the tempo stays right and the loop seamless all session.
 //   the scheduler      No message is scheduled behind the audio clock (a late note).
+//   the restarts       The art restarted at (at least 90% of) the passes heard after ▶. The player
+//                      skips a pass whose start is already past when it sees it (a stalled page),
+//                      so a few may be missing; the count is printed.
 //   the clocks         Printed: the audio clock against the page clock (performance.now()), as the
 //                      change in their offset over the session, as a rate in ppm and as its largest
 //                      step (a stall of the audio clock, an underrun, is a negative one), and the
@@ -133,7 +139,7 @@ function instrument() {
     const play = synth.playMIDI;
     synth.playMIDI = () => {
       play();
-      st.plays.push({ at: performance.now(), playTime: synth.playTime, currentTime: ctx.currentTime });
+      st.plays.push({ at: performance.now(), startTime: synth.getPlayStatus().startTime, currentTime: ctx.currentTime });
       if (st.plays.length === 1) setInterval(() => st.clock.push([performance.now(), ctx.currentTime]), 250);
     };
     return synth;
@@ -219,7 +225,7 @@ try {
     const st = /** @type {any} */ (window).__drift;
     return st.plays.length >= 1 && st.imgs.length >= 2;
   }, null, { timeout: 15000 });
-  const start = await page.evaluate(() => /** @type {any} */ (window).__drift.plays[0].playTime);
+  const start = await page.evaluate(() => /** @type {any} */ (window).__drift.plays[0].startTime);
   info(`▶ to the art restart: ${Date.now() - t0} ms`);
 
   const session = Date.now();
@@ -233,7 +239,7 @@ try {
   const end = await page.evaluate(() => {
     const st = /** @type {any} */ (window).__drift;
     const ctx = st.synth.getAudioContext();
-    return { sends: st.sends, clock: st.clock, plays: st.plays.length, constructed: st.constructed, playing: st.synth.playing, state: ctx.state, time: ctx.currentTime };
+    return { sends: st.sends, clock: st.clock, plays: st.plays.length, imgs: st.imgs.length, constructed: st.constructed, playing: st.synth.playing, state: ctx.state, time: ctx.currentTime };
   });
 
   const found = rows.every((r) => r.found);
@@ -258,7 +264,13 @@ try {
   const heardPasses = Math.floor((end.time - start) / PASS) + 1;
   Object.assign(summary, { passes: grid.passes, maxGridErrorUs: grid.maxError * 1e6 });
   check(grid.consecutive && grid.passes >= heardPasses && grid.maxError <= MAX_GRID_ERROR,
-    `${grid.passes} passes, none missing, each starting on playTime + k x ${PASS} s (the MIDI's tempo map): largest error ${(grid.maxError * 1e6).toFixed(3)} µs`);
+    `${grid.passes} passes, none missing, each starting on startTime + k x ${PASS} s (the MIDI's tempo map): largest error ${(grid.maxError * 1e6).toFixed(3)} µs`);
+
+  // imgs: the art shown on load, the restart on ▶, then one per pass (each swapped in once decoded).
+  const passRestarts = end.imgs - 2;
+  Object.assign(summary, { passRestarts, passesSincePlay: heardPasses - 1 });
+  check(passRestarts >= 0.9 * (heardPasses - 1) && passRestarts <= heardPasses - 1,
+    `the art restarted at ${passRestarts} of the ${heardPasses - 1} passes heard after the first (at least 90%; a pass seen only after its start is skipped)`);
 
   const lead = leads(end.sends);
   Object.assign(summary, { messages: end.sends.length, minLeadMs: 1000 * lead.min, late: lead.late });

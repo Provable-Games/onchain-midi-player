@@ -24,8 +24,9 @@
 // CSP load reports no violation although its CSP blocks data: scripts, and a control page shows the
 // engine reports one for a plain <script src="data:...">. On the data: page it also checks that ▶
 // restarts the art: the probe art is a bar sweeping linearly over 8 s, and screenshots before and
-// after ▶ show the bar where time-since-restart (not time-since-load) puts it, and it prints when
-// the page became ready. It prints how long each ▶ took to start playback. Failure variants
+// after ▶ show the bar where time-since-restart (not time-since-load) puts it; that the art
+// restarts again at every pass, each time at the pass's tick 0 as heard (its startTime plus the
+// output latency), and never after ■; and it prints when the page became ready. It prints how long each ▶ took to start playback. Failure variants
 // (unparsable settings, invalid MIDI; a corrupt, truncated or missing gzip payload, or one without
 // the engine) must keep the art visible, keep ▶ disabled, show the exact error and construct no
 // synth. So must the failures ▶ can meet: no Web Audio at all, or an AudioContext whose resume()
@@ -113,7 +114,8 @@ function instrument() {
     const play = synth.playMIDI;
     synth.playMIDI = () => {
       play();
-      st.plays.push({ at: performance.now(), currentTime: ctx.currentTime, playTime: synth.playTime, delay: synth.playTime - ctx.currentTime + (ctx.outputLatency || 0), outputLatency: ctx.outputLatency });
+      const startTime = synth.getPlayStatus().startTime;
+      st.plays.push({ at: performance.now(), currentTime: ctx.currentTime, startTime, delay: startTime - ctx.currentTime + (ctx.outputLatency || 0), outputLatency: ctx.outputLatency });
     };
     return synth;
   }
@@ -210,7 +212,7 @@ const state = (frame) => frame.evaluate(() => {
     icon: document.getElementById("icon")?.getAttribute("d"), title: b.title, error: err.hidden ? null : err.textContent,
     imgs: st.imgs, img: img && { src: img.src, complete: img.complete, w: img.naturalWidth, h: img.naturalHeight, count: document.querySelectorAll("img").length },
     plays: st.plays, sends: st.sends.length, violations: st.violations, origin: window.origin,
-    synth: synth && { playing: synth.playing, loop: synth.loop, loopEnd: synth.loopEnd, maxTick: synth.maxTick, tick2Time: synth.tick2Time, state: synth.getAudioContext().state, time: synth.getAudioContext().currentTime },
+    synth: synth && { playing: synth.playing, startTime: synth.getPlayStatus().startTime, loop: synth.loop, loopEnd: synth.loopEnd, maxTick: synth.maxTick, tick2Time: synth.tick2Time, state: synth.getAudioContext().state, time: synth.getAudioContext().currentTime },
   };
 });
 
@@ -319,13 +321,15 @@ async function checkDataPage() {
     "art re-created with a distinct, equivalent URL (data:image/svg+xml;r=1;base64,...)");
   const lag = restart ? restart.at - play.at - play.delay * 1000 : NaN;
   check(lag > -5 && lag < 100, `art restarted ${restart ? (restart.at - play.at).toFixed(1) : "?"} ms after playMIDI; ` +
-    `scheduling offset ${(1000 * (play.playTime - play.currentTime)).toFixed(1)} ms + outputLatency ${(1000 * (play.outputLatency || 0)).toFixed(1)} ms = ${(1000 * play.delay).toFixed(1)} ms (lag ${lag.toFixed(1)} ms)`);
+    `startTime - currentTime ${(1000 * (play.startTime - play.currentTime)).toFixed(1)} ms + outputLatency ${(1000 * (play.outputLatency || 0)).toFixed(1)} ms = ${(1000 * play.delay).toFixed(1)} ms (lag ${lag.toFixed(1)} ms)`);
 
-  // After ▶: the bar follows time since the restart, not since the page loaded.
+  // After ▶: the bar follows time since the latest restart (passes restart it too), not since the
+  // page loaded.
   await page.waitForTimeout(1200);
   const t1 = await page.evaluate(() => performance.now());
   const after = await barX(page);
-  const sinceRestart = (t1 - restart.at) / 1000;
+  const latest = (await state(page)).imgs.filter((/** @type {any} */ i) => i.at <= t1).at(-1);
+  const sinceRestart = (t1 - latest.at) / 1000;
   const sinceLoad1 = (t1 - st.imgs[0].at) / 1000;
   check(Math.abs(after - (390 * sinceRestart) / SWEEP_SECONDS) < 20 && after < (390 * sinceLoad1) / SWEEP_SECONDS - 100,
     `after ▶: bar at x = ${after}, ${sinceRestart.toFixed(2)} s after the restart (expected ~${Math.round((390 * sinceRestart) / SWEEP_SECONDS)}; ~${Math.round((390 * sinceLoad1) / SWEEP_SECONDS)} had it not restarted)`);
@@ -335,29 +339,37 @@ async function checkDataPage() {
   await page.waitForTimeout(200);
   check((await state(page)).synth.time > time, "AudioContext clock advancing");
   const starts = await passStarts(page, c.midi_loop_seconds);
-  check(Math.abs(starts[0] - play.playTime) < 1e-9, `first note at playTime (${play.playTime.toFixed(4)} s)`);
+  check(Math.abs(starts[0] - play.startTime) < 1e-9, `first note (tick 0) at startTime (${play.startTime.toFixed(4)} s)`);
   await checkLoop(page, c);
 
-  await page.evaluate(() => { /** @type {any} */ (window).__vols = /** @type {any} */ (window).__check.synth.chvol.slice(); });
+  // Every pass restarts the art at its tick 0 as heard, as ▶ does: the pass's start (its first lead
+  // note, at tick 0) plus the output latency, mapped to page time from playMIDI's clock sample.
+  st = await state(page);
+  const heard = (await passStarts(page, c.midi_loop_seconds)).filter((t) => t + (play.outputLatency || 0) < st.synth.time - 0.1);
+  const passLags = heard.slice(1).map((t, k) => {
+    const img = st.imgs[k + 2];
+    return img && img.src.includes(`;r=${k + 2};base64,`) ? img.at - (play.at + (t + (play.outputLatency || 0) - play.currentTime) * 1000) : NaN;
+  });
+  check(passLags.length >= 2 && passLags.every((l) => l > -5 && l < 100),
+    `the art restarted at each of the ${passLags.length} passes heard since ▶, at the pass's tick 0 as heard (lags ${passLags.map((l) => l.toFixed(1)).join(", ")} ms)`);
+
   await page.click("#play");
   st = await state(page);
   const sends = st.sends;
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(Math.ceil((c.midi_loop_seconds + 0.3) * 1000));
   const stopped = await state(page);
-  check(st.label === "Play" && stopped.synth.playing === 0 && stopped.sends === sends, "■ stops: nothing scheduled after it");
-  check(await page.evaluate(() => {
-    const w = /** @type {any} */ (window);
-    return w.__check.synth.chvol.every((/** @type {any} */ n, /** @type {number} */ i) => n !== w.__vols[i]);
-  }), "■ replaced every channel's volume node, cutting off drum voices and notes scheduled ahead");
+  check(st.label === "Play" && stopped.synth.playing === 0 && stopped.synth.startTime === null && stopped.sends === sends, "■ stops: the engine stopped (startTime null), nothing scheduled after it");
+  check(stopped.imgs.length === st.imgs.length, "■: no art restart after it, for a whole pass");
 
+  const before2 = stopped.imgs.length;
   await startPlayback(page, 2);
-  await page.waitForFunction(() => /** @type {any} */ (window).__check.imgs.length >= 3, null, { timeout: 3000 }).catch(() => {});
+  await page.waitForFunction((/** @type {number} */ n) => /** @type {any} */ (window).__check.imgs.length > n, before2, { timeout: 3000 }).catch(() => {});
   st = await state(page);
   const again = st.plays[1];
-  const restartStarts = (await passStarts(page, c.midi_loop_seconds)).filter((t) => t >= again.playTime - 1e-9);
-  check(st.constructed === 1 && st.label === "Stop" && Math.abs(restartStarts[0] - again.playTime) < 1e-9,
-    "▶ again: same synth, playback from tick 0 at playTime");
-  check(st.imgs.length === 3 && st.imgs[2].src.includes(";r=2;base64,"), "▶ again: art restarted again (r=2)");
+  const restartStarts = (await passStarts(page, c.midi_loop_seconds)).filter((t) => t >= again.startTime - 1e-9);
+  check(st.constructed === 1 && st.label === "Stop" && Math.abs(restartStarts[0] - again.startTime) < 1e-9,
+    "▶ again: same synth, playback from tick 0 at startTime");
+  check(st.imgs.length > before2 && st.imgs[before2].src.includes(`;r=${before2};base64,`), `▶ again: art restarted again (r=${before2})`);
   const errors = await logged();
   check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   check(blocked.length === 0, `no network requests${blocked.length ? ": " + blocked.join(" ") : ""}`);
@@ -537,7 +549,7 @@ async function checkTouch() {
   let st = await state(page);
   check(st.constructed === 1 && st.synth?.state === "running" && st.sends > 0 && st.label === "Stop",
     `tap ▶: AudioContext ${st.synth?.state}, ${st.sends} MIDI messages scheduled, ▶ became ■`);
-  check(st.imgs.length === 2 && st.imgs[1].src.includes(";r=1;base64,"), "tap ▶: art restarted (r=1)");
+  check(st.imgs.length >= 2 && st.imgs[1].src.includes(";r=1;base64,"), "tap ▶: art restarted (r=1)");
   await page.tap("#play");
   st = await state(page);
   check(st.synth?.playing === 0 && st.label === "Play", "tap ■: stopped");
