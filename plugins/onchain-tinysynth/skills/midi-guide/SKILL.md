@@ -46,7 +46,7 @@ Rows trace to the README's MIDI contract and to [`scripts/engine_contract.test.m
 | Reverb, master volume and voices are `SynthSettings.reverb`, `master_vol` and `voices`. CC91, CC93, GM Master Volume, GM System On and GS Reset do nothing. | Balance with CC7, CC11 and velocity. Stay within `voices` notes at once. | Onchain control. |
 | Bank select (CC0, CC32) is ignored: 128 programs. | Do not rely on banks or GS variations. | Engine: TinySynth has one bank. Those 128 programs and drums 35–81 are also the only slots `SynthSettings` can replace. |
 | The song always loops. A pass ends at `maxTick`, the latest End-of-Track of any track, not at the last note. | Put the latest End-of-Track exactly on the loop point, such as the last bar line. | Looping with the art: the page repeats the music while the art runs, and the End-of-Track sets the pass length exactly. |
-| At each loop point the tempo returns to 120 BPM; a tempo event at tick 0 applies at once. Programs, controllers, bend, RPNs and tuning carry over, and held notes keep sounding. Each ▶ resets the channels and plays from tick 0. | Set every state the song changes at tick 0. Release every note by End-of-Track. | Engine: its loop restarts only the tempo map. |
+| At each loop point the tempo returns to 120 BPM; a tempo event at tick 0 applies at once. Programs, controllers, bend, RPNs and tuning carry over, and held notes keep sounding. Each ▶ resets the channels and plays from tick 0, which sounds 0.1 s after playback starts; a rest before the first event is kept, on the first pass as on every later one. | Set every state the song changes at tick 0. Release every note by End-of-Track. A leading rest is fine: the first note sounds at its own tick. | Engine: its loop restarts only the tempo map, and it times every pass from tick 0. |
 | A track that ends early sends nothing more until the next pass, but its held notes keep sounding. | Release notes before a track's End-of-Track. | Engine: it merges all tracks into one event list. |
 | Parsing is strict: files many players accept are rejected (running status after a meta or SysEx event, F7 events, a missing or misplaced End-of-Track, trailing bytes, a tempo event that is not 3 bytes, text over 4,096 bytes, SMPTE timing, format 2, a pass under 50 ms). | Run `check-midi`. The rules and fixes are in [references/checkmidi-rules.md](references/checkmidi-rules.md). | Verifiability: the page must read the file exactly as the pinned TinySynth parser does, and fail closed with a visible error instead of misplaying. |
 | Bend range full scale is (MSB × 128 + LSB) × 100 / 127 cents, so the default MSB 2 gives about ±201.6 cents. | For exactly ±s semitones, send RPN 0 with MSB × 128 + LSB = 127 × s (±2: MSB 1, LSB 126). | Pinned engine, documented rather than patched. |
@@ -56,6 +56,7 @@ Rows trace to the README's MIDI contract and to [`scripts/engine_contract.test.m
 | The voice limit cuts a note when the new note is scheduled, up to about 0.2 s before it sounds. A drum hit takes no voice but applies the limit, so with `voices` 1 every hit cuts the melody. | Leave headroom under `voices`. | Pinned engine: it schedules about 0.2 s ahead. |
 | CC120 and CC123–127 cut the channel's melodic notes when scheduled (up to about 0.2 s early), not drums. CC121 leaves notes held by sustain sounding. | Prefer note-offs. Avoid CC121. | Pinned engine. |
 | CC1 is one 5 Hz LFO shared by all channels, ±(value × 100 / 127) cents. Loudness follows velocity squared; FM depth ignores velocity. Aftertouch, channel pressure, portamento, sostenuto and soft pedal are ignored. | Write vibrato and dynamics with that in mind. | Pinned engine. |
+| Tuning far up can stall the song on a deep FM timbre. With a timbre at the interim engine limits whose operators form one long FM chain, note 127 overflows when coarse tuning +63, GS key-shift +63 and GS master tune at its maximum come together (about +190 semitones), or with one GS master tune message whose data nibbles are bytes above `0x0F` (about +556 semitones). The note throws and nothing after it plays. `check-midi` accepts both. | Keep GS master tune data nibbles within `0x00`–`0x0F`, keep the total upward tuning moderate on deep FM timbres, and audition the score with the contract's settings in `preview`. | Pinned engine: it has no guard for non-finite values yet; documented in the README's [Engine limits on operator values](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#engine-limits-on-operator-values) until the guard lands. |
 | Nothing plays until the viewer taps ▶. | Do not count on autoplay or on the first beat landing at page load. | Browser rule: audio starts only from a user gesture. |
 | Every byte costs gas: `midi_segment` base64-encodes the MIDI at call time, once alone and twice inside the page fragment. About 14M L2 gas per 1,000 bytes ([README](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#midi_segment-by-midi-and-settings-size)). | Strip text, marker, lyric and name events (the player ignores them). Use running status, with note-on velocity 0 as note-off. | Gas: the contract pays per byte on every `token_uri` call. |
 
@@ -65,13 +66,13 @@ The full list of honoured and ignored messages is in the README: [Messages TinyS
 
 - Set tempo, programs, CC7, CC10 and any controller or tuning the song changes at tick 0, so every pass and every ▶ starts the same way.
 - End-of-Track at the loop point; give no track a later End-of-Track.
-- A pass length that is a whole multiple of the art's loop (next section).
+- A pass length that is a whole multiple of every visible art loop (next section): the art restarts at every loop point.
 - Note-off before note-on at the same tick and pitch.
 - Read the `check-midi` report: loop length, `maxTick`, each track's End-of-Track, and drum notes flagged silent.
 
 ## Syncing with the art
 
-The player restarts the art only on ▶, timed to when tick 0 is heard. It does not restart the art at loop points: after ▶, music and art stay in step only if the music's timing matches the art's animation periods. If they do not match, they drift visibly. That is a period mismatch, not clock drift.
+The player restarts the art when tick 0 is heard: on ▶, and again at every pass. When the pass is a whole multiple of every period of the art's animation, the art is back at its start at each loop point anyway, so the restart does not show, and music and art stay in step for the whole session. When it is not, the art jumps back to its start at every loop point, and an animation longer than the pass never finishes. Within a pass, the music's beat and the art's frames line up only if their periods match.
 
 1. **Measure the art's periods:** GIF frame delays (in 10 ms units), SMIL `dur` (one repeat of the animation's `values`), and CSS animation durations (one iteration; with `alternate` or `alternate-reverse` the art repeats every two iterations). From the checkout, `node plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs art.svg` prints them. Ignore animations that change nothing visible.
 2. **Choose the tempo:** make the beat, or a subdivision of it, a whole number of frames.
@@ -89,7 +90,7 @@ A beat of `b` ms (tempo in µs per quarter / 1000) lines up with an art loop of 
 
 Retuning the music is usually better than retuning the art: GIF delays come in 10 ms steps, so matching an arbitrary beat needs uneven frames, and the change hits every token's art. Wrapper SVG durations are cheap to set to the music's grid. The Beast worked example, with measured numbers, is in [references/art-sync.md](references/art-sync.md).
 
-Why the art restarts only on ▶: it keeps the player simple and the art independent of the audio. Restarting at every loop would make a visible jump whenever the periods do not match.
+Why the art restarts at every pass: the art runs on the page's clock and the sound on the audio clock, and the two drift apart (headless Firefox's image clock runs about 160 ppm fast, and real sound cards are commonly tens of ppm off). A restart at every pass bounds that drift to one pass; with periods that match, it costs nothing visible.
 
 ## Reference files
 
