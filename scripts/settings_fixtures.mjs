@@ -162,6 +162,15 @@ const MAX_FIELDS = settings({
   }],
 });
 
+/**
+ * The deepest FM chain, each operator modulating the one before (routes 0..7), with the five bounded
+ * fields at their bounds (`key_scale` at +8.0): the case the interim engine limits were measured
+ * against, since `ratio` and the gains compound once per level.
+ */
+const MAX_CHAIN = settings({
+  timbres: [{ drum: false, slot: 0, operators: Array.from({ length: 8 }, (_, route) => op({ route, ...BOUNDS })) }],
+});
+
 /** Every field at its minimum (`key_scale` at its bound, -8.0). */
 const MIN_FIELDS = settings({
   quality: 0, reverb: 0, master_vol: 0, voices: 1,
@@ -211,6 +220,7 @@ export const VALID = [
   },
   { name: "six_timbres", settings: settings({ reverb: 0, timbres: [BEAST_LEAD, BEAST_KICK, BEAST_SNARE, HAT_CLOSED, HAT_OPEN, BASS] }) },
   { name: "max_fields", settings: MAX_FIELDS },
+  { name: "max_chain", settings: MAX_CHAIN },
   { name: "min_fields", settings: MIN_FIELDS },
   { name: "slot_edges", settings: SLOT_EDGES },
   { name: "all_builtin_waves", settings: ALL_WAVES },

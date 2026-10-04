@@ -416,7 +416,7 @@ The goal is to let composers use everything the engine can do, with no limit for
   - A chain of operators, each FM-modulating the one before, throws from 7 operators with `ratio` at its type's maximum. With `ratio`, `pitch_ratio` and `volume` all at theirs, it throws from 6.
   - With `key_scale` at its type's maximum, the failing note was re-sent 51 times in 3 seconds, and the next note never played.
   - With the other four at their bounds, `sustain` at its type's maximum throws on that chain once the MIDI raises the pitch (coarse tuning +63 semitones, note 127).
-  - At the bounds above, an 8-operator chain plays at notes 0 and 127 with no error. CI plays the `max_fields` and `min_fields` fixtures at these bounds (`checkExtremes` in `npm run page-check`).
+  - At the bounds above, an 8-operator chain plays at notes 0 and 127 with no error. CI plays that chain (the `max_chain` fixture) and the `max_fields` and `min_fields` fixtures at these bounds, at velocity 127 (`checkExtremes` in `npm run page-check`).
 - **Known residual: MIDI tuning.** The class cannot bound what the MIDI does, and checking the MIDI for it would limit composers. On the 8-operator chain at all five bounds, at notes 0 and 127, each of these alone plays with no error:
   - the full bend range (RPN 0 at its maximum, about ±129 semitones), bent fully up or down;
   - coarse tuning ±63 (RPN 2), and fine tuning at its extremes (RPN 1);
@@ -883,7 +883,7 @@ Issue #11's automatable checks, on Playwright's Chromium 153, Firefox 155 and We
 | No network requests; offline from `data:` and `file://` | every load (requests blocked and listed; for the gzip tag's `data:` URI, see [CI](#ci)); `checkDataPage`, `checkFile` |
 | Sandboxed iframe, strict CSP, marketplace-style frames | `checkIframe`, `checkCsp` with `checkCspControl`, `checkEmbeds` (a `srcdoc` frame; the page re-served from another origin) |
 | Offline renders of the reference timbres | [`render_check.mjs`](scripts/render_check.mjs) |
-| Settings at their extremes play without an error | `checkExtremes`: notes 0 and 127 on every custom timbre of the `max_fields` and `min_fields` cases, at the engine limits; any error fails it, a non-finite `AudioParam` value included (see [Engine limits on operator values](#engine-limits-on-operator-values)) |
+| Settings at their extremes play without an error | `checkExtremes`: notes 0 and 127 at velocity 127 on every custom timbre of the `max_fields`, `min_fields` and `max_chain` settings fixtures, at the engine limits; any error fails it, a non-finite `AudioParam` value included (see [Engine limits on operator values](#engine-limits-on-operator-values)) |
 | Which marketplaces render `data:` HTML; iOS Safari and Android Chrome; indexers, wallets and RPC providers on a full-size `token_uri` | manual |
 
 Every check that CI runs passes on all three engines. The 10-minute drift check passes on WebKit and fails on Firefox and Chromium. Runs of the drift check at `9fb9a3b`, on `tinysynth-4b29ff1+page.6` (`page.7` has the same engine and changes only the settings parser), one engine at a time, on a shared 32-core Linux machine, the `beast_140bpm` page with a probe art that sweeps once per pass, a checkpoint every 10 s:

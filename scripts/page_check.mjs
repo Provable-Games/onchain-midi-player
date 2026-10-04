@@ -30,8 +30,9 @@
 // the engine) must keep the art visible, keep ▶ disabled, show the exact error and construct no
 // synth. So must the failures ▶ can meet: no Web Audio at all, or an AudioContext whose resume()
 // rejects. Range checks are Cairo's: settings that only break a range rule must still play. The
-// fixtures with fields at their extremes play the lowest and highest notes on every custom timbre
-// with no error: the engine throws on a non-finite AudioParam value, which only playing shows.
+// settings fixtures with fields at their extremes (and the deepest FM chain at the engine limits)
+// play the lowest and highest notes on every custom timbre with no error: the engine throws on a
+// non-finite AudioParam value, which only playing shows.
 //
 // Playwright is not a dependency of this repository; point the script at an existing install, and
 // pick the engine (scripts/browsers.mjs; Firefox plays audio only with an output device, which a
@@ -45,7 +46,7 @@
 // Exits 0 when every check passes, 1 when one fails, 2 when PLAYWRIGHT_CORE is not set or
 // PLAYWRIGHT_BROWSER names no supported engine.
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -683,18 +684,19 @@ async function checkRangeOnly() {
  * notes shows it: the page parses and enables ▶ either way.
  */
 async function checkExtremes() {
-  for (const name of ["max_fields", "min_fields"]) {
-    const c = CASES[name];
+  const settingsFixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/settings.json", import.meta.url), "utf8"));
+  for (const name of ["max_fields", "min_fields", "max_chain"]) {
+    const c = { settings: settingsFixtures.valid.find((/** @type {any} */ f) => f.name === name).settings, svg: CASES.max_fields.svg };
     /** @type {number[][]} */
     const ev = [[0, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20]];
     /** @type {Array<[number, number]>} the note-ons to expect: [status, note] */
     const notes = [];
     for (const t of c.settings.timbres) {
       if (t.drum) {
-        ev.push([0, 0x99, t.slot, 100], [48, 0x89, t.slot, 0]);
+        ev.push([0, 0x99, t.slot, 127], [48, 0x89, t.slot, 0]);
         notes.push([0x99, t.slot]);
       } else {
-        ev.push([0, 0xc0, t.slot], [0, 0x90, 0, 100], [0, 0x90, 127, 100], [48, 0x80, 0, 0], [0, 0x80, 127, 0]);
+        ev.push([0, 0xc0, t.slot], [0, 0x90, 0, 127], [0, 0x90, 127, 127], [48, 0x80, 0, 0], [0, 0x80, 127, 0]);
         notes.push([0x90, 0], [0x90, 127]);
       }
     }
