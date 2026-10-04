@@ -29,9 +29,13 @@ Get the tools: Node 22 or later, and a clone whose `grep 'pub const VERSION' src
 
 `midi_segment` reverts on exactly the checks in the table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/settings.cairo), in the checkout whose `VERSION` matches your class. Trust that table and `preview`, which runs the same checks; do not rely on remembered ranges, because they differ between class versions:
 
-- Validation covers what the format and the engine require: counts, slots, routes, the wave index and the gates for issues #2 and #3. Every other number takes any value of its integer type.
+From `page.7`:
+
+- Validation covers what the format and the engine require: `quality` is 0 or 1, `voices` at least 1, the counts, the slots, the routes, the wave index and the gates for issues #2 and #3. Every other number takes any value of its integer type, except the five operator fields below.
 - There is no `SETTINGS` length cap: the network prices the cost ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-size-of-settings-no-byte-cap), [Network and node limits](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#network-and-node-limits)).
 - Five operator fields have interim engine bounds: `ratio`, `pitch_ratio`, `volume`, `sustain` and `key_scale`. The pinned engine computes non-finite values past them and throws, and the throwing note stalls the whole song. They are removed once the engine's guard lands (release gate, issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). README: [Engine limits on operator values](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#engine-limits-on-operator-values).
+
+The `page.6` class (the Sepolia class in the README's [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments)) predates these rules: it range-checks `reverb`, `master_vol`, `voices` and every operator value, and caps the `SETTINGS` length (`'TS: settings too long'`). Design for the class you will call.
 
 The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`; wave lengths are in the check table). Read them from your checkout.
 
@@ -68,7 +72,7 @@ The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MA
 ## Wire format, size and gas
 
 - The class validates the settings, then writes them into the page as `SETTINGS`: a flat list of canonical decimal integers (only `0-9`, `-` and `,`), fields in declaration order, a length before every list, enums as their variant index, `bool` as 0/1, `Option` as 0 or 1 followed by the value. Format version 1. README: [The `SETTINGS` format](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-settings-format); grammar in [`src/settings.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/settings.cairo).
-- Size: `1,1,30,40,64,0,0` with the defaults, plus about 6 bytes per timbre and 50 per operator. `preview` prints the size. Whether the class caps the length depends on its version (above); either way the gas grows with it.
+- Size: `1,1,30,40,64,0,0` with the defaults, plus about 6 bytes per timbre and 50 per operator. `preview` prints the size. From `page.7` the class does not cap the length; the `page.6` class does (above). Either way the gas grows with it.
 - Gas: `SETTINGS` is base64-encoded at call time with the MIDI, about 14M L2 gas per 1,000 bytes ([README](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#gas-and-limits)).
 
 ## `'TS: …'` errors
