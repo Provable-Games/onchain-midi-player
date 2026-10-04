@@ -37,11 +37,11 @@ pub const PAGE_SHA256: u256 = 0xae67ecdde5d1d961eb040b14f07e9a9fc6f3fca15b8d1267
 /// SHA-256 of `animation_url_segment()`, 53140 bytes.
 pub const SEGMENT_SHA256: u256 = 0xdd43fe713cc857bdb8e0363ef87f274023810aa5eed54953001759f07451ca29;
 
-/// SHA-256 of `license()`, 8389 bytes.
-pub const LICENSE_SHA256: u256 = 0xf02ce7c1c0eff2f6cff3405e455673feb1abebeefa30481a99cf6eb378d66783;
-pub const LICENSE_LEN: u32 = 8389;
+/// SHA-256 of `license()`, 8783 bytes.
+pub const LICENSE_SHA256: u256 = 0x000e09c7f5b2144d8e426c35818be0698ce6bbbd75f9a9c9faca5531ec273002;
+pub const LICENSE_LEN: u32 = 8783;
 
-/// SHA-256 of the engine (the pinned fork build, commit 197772d).
+/// SHA-256 of the engine (the pinned fork build, commit 3d965d1).
 pub const ENGINE_SHA256: u256 = 0x95d8947a460a2e3ca410a285822668c76b65493b88094b9c83a0207311206c31;
 
 /// SHA-256 of the engine's gzip payload in PAGE, 13994 bytes.
@@ -69,7 +69,7 @@ fn page_data_license_version_and_engine_hashes_match_the_build() {
     let license = page_data::license();
     assert_eq!(license.len(), LICENSE_LEN);
     assert(sha256(@license) == LICENSE_SHA256, 'license sha256');
-    assert(page_data::VERSION == 'tinysynth-197772d+page.9', 'version');
+    assert(page_data::VERSION == 'tinysynth-3d965d1+page.9', 'version');
     assert(page_data::ENGINE_SHA256 == ENGINE_SHA256, 'engine sha256');
     assert(page_data::GZIP_SHA256 == GZIP_SHA256, 'gzip sha256');
     assert_eq!(page_data::GZIP_LEN, GZIP_LEN);

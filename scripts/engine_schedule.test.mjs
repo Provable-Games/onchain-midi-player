@@ -7,11 +7,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import vm from "node:vm";
-import { createSynth, decodeSettings, installSettings } from "../player/settings.js";
+import { createSynth, decodeSettings, installSettings, toTinySynthOps } from "../player/settings.js";
 import { engineSource } from "./engine.mjs";
 import { webAudioMock } from "./webaudio_mock.mjs";
 import { encodeSettings } from "../player/encode.js";
-import { BEAST_SETTINGS, VALID } from "./settings_fixtures.mjs";
+import { BEAST_SETTINGS, VALID, longLfsr, structuralMax } from "./settings_fixtures.mjs";
 
 /** Loads the engine into a fresh context with a recording WebAudio mock. */
 function loadEngine() {
@@ -163,6 +163,28 @@ describe("custom waves in the real engine (issue #2)", () => {
     assert.ok(src, "program 0 plays the stepped triangle again");
     // 64 samples at 8 kHz: k = 1, home pitch 8000 / 64 = 125 Hz.
     assert.equal(nodes[src[0]].playbackRate.value, 440 / 125);
+  });
+
+  test("every valid settings fixture installs in the real engine, as converted: T5's setTimbre rejects none", () => {
+    // The engine (fork T5) validates every timbre before installing it and throws on an unknown wave,
+    // a bad route or a non-finite value; it stores a copy. Whatever settings::validate accepts must
+    // install unchanged: every fixture, the long LFSR, the largest input without custom waves, and
+    // every operator field at its type's extremes (validation bypassed: the engine's setTimbre takes
+    // the whole type; only playing past the interim limits fails).
+    const u = 4294967295;
+    const fields = (/** @type {number} */ i32) => [u, u, i32, u, u, u, u, u, u, u, i32].join(",");
+    const extremes = `1,1,255,255,255,0,2,0,0,1,0,2,${fields(2147483647)},0,1,35,1,0,4,${fields(-2147483648)},0`;
+    const cases = [...VALID.map((f) => [f.name, encodeSettings(f.settings)]), ["long_lfsr", encodeSettings(longLfsr())],
+      ["structural_max", encodeSettings(structuralMax())], ["type extremes", extremes]];
+    for (const [name, text] of cases) {
+      const { Synth } = loadEngine();
+      const s = decodeSettings(text);
+      const synth = createSynth(Synth, s);
+      for (const t of s.timbres) {
+        const installed = (t.drum ? synth.drummap[t.slot - 35] : synth.program[t.slot]).p;
+        assert.equal(JSON.stringify(installed), JSON.stringify(toTinySynthOps(t, s.waves)), `${name}: ${t.drum ? "drum" : "program"} ${t.slot}`);
+      }
+    }
   });
 
   test("256 waves, long tables and an all-zero harmonic wave register; the last wave plays", () => {
