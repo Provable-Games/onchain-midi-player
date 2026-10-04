@@ -2,9 +2,10 @@
 //!
 //! `crate::settings::validate` checks only what the format or the engine requires: `quality`
 //! is 0 or 1, `voices` at least 1, the counts, slots and routes, and the gates below. Every
-//! other numeric field takes any value of its integer type, except four operator fields with
-//! interim engine limits (`volume`, `ratio`, `pitch_ratio`, `key_scale`): the pinned engine
-//! computes non-finite values past them and stalls (README, "Engine limits on operator values").
+//! other numeric field takes any value of its integer type, except five operator fields with
+//! interim engine limits (`volume`, `ratio`, `pitch_ratio`, `sustain`, `key_scale`): the pinned
+//! engine computes non-finite values past them and stalls (README, "Engine limits on operator
+//! values").
 //! Custom waveforms (issue #2) and filters (issue #3) are part of the types and of the
 //! `SETTINGS` grammar already, but are rejected until those issues land. `midi_segment` reverts
 //! with a descriptive error when a check fails; the exact checks, their order and their
@@ -119,7 +120,7 @@ pub struct Operator {
     pub hold: u32,
     /// [`d`] Decay time constant in seconds, fixed-point. No limit.
     pub decay: u32,
-    /// [`s`] Sustain level as a multiple of `volume`, fixed-point. No limit.
+    /// [`s`] Sustain level as a multiple of `volume`, fixed-point. Interim engine limit: 0..=100.0.
     pub sustain: u32,
     /// [`r`] Release time constant in seconds, fixed-point. TinySynth cuts the voice at
     /// 3.5 times this. No limit.

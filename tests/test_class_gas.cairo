@@ -6,7 +6,7 @@
 //!   serializing the arguments and the result, which a consumer pays too.
 //! - `gas_ms_*`: `midi_segment` across MIDI sizes (no MIDI, then the synthetic scores of 816 to
 //!   3,716 bytes, the sizes of the production Beast scores) and `SETTINGS` sizes (16, 334, 504 and
-//!   9,836 bytes, and the largest valid input, 160,689 bytes, with no MIDI and with the largest
+//!   9,836 bytes, and the largest valid input, 156,489 bytes, with no MIDI and with the largest
 //!   score only), called directly. Per cell, `build` only builds the inputs (the baseline), `d`
 //!   builds `D` (validation, `SETTINGS`, `b64(midi)` and the appends), and `full` is the whole
 //!   `midi_segment`; `full - d` is the two outer base64 passes. `gas_b64_midi_*` is `b64(midi)`

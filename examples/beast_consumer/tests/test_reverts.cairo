@@ -59,7 +59,7 @@ fn valid_settings_do_not_revert() {
 }
 
 // Only what the format or the engine requires is checked: reverb, master volume and the upper end
-// of voices take any value of their type, and the four operator fields that multiply into the
+// of voices take any value of their type, and the five operator fields that multiply into the
 // engine's gains and frequencies take any value up to their interim engine limits.
 #[test]
 #[feature("safe_dispatcher")]
@@ -76,6 +76,7 @@ fn type_extremes_and_engine_limits_do_not_revert() {
     op.volume = 1_000_000;
     op.ratio = 640_000;
     op.pitch_ratio = 160_000;
+    op.sustain = 1_000_000;
     op.key_scale = -80_000;
     kick.operators = [op].span();
     s.timbres = [*s.timbres.at(0), kick].span();
@@ -91,6 +92,7 @@ fn with_kick_op(edit: u32) -> SynthSettings {
         0 => op.volume = 1_000_001,
         1 => op.ratio = 640_001,
         2 => op.pitch_ratio = 160_001,
+        5 => op.sustain = 1_000_001,
         3 => op.key_scale = 80_001,
         _ => op.key_scale = -80_001,
     }
@@ -113,6 +115,11 @@ fn ratio_past_engine_limit_reverts() {
 #[test]
 fn pitch_ratio_past_engine_limit_reverts() {
     assert_midi_segment_reverts(with_kick_op(2), ['TS: pitch_ratio out of range', 1, 0].span());
+}
+
+#[test]
+fn sustain_past_engine_limit_reverts() {
+    assert_midi_segment_reverts(with_kick_op(5), ['TS: sustain out of range', 1, 0].span());
 }
 
 #[test]

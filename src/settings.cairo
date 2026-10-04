@@ -66,8 +66,9 @@
 //! | 17 | interim, engine limit: `volume <= 1_000_000` | `TS: volume out of range` |
 //! | 18 | interim, engine limit: `ratio <= 640_000` | `TS: ratio out of range` |
 //! | 19 | interim, engine limit: `pitch_ratio <= 160_000` | `TS: pitch_ratio out of range` |
-//! | 20 | interim, engine limit: `-80_000 <= key_scale <= 80_000` | `TS: key_scale out of range` |
-//! | 21 | until #3: `filter` is `None` | `TS: filter unsupported` |
+//! | 20 | interim, engine limit: `sustain <= 1_000_000` | `TS: sustain out of range` |
+//! | 21 | interim, engine limit: `-80_000 <= key_scale <= 80_000` | `TS: key_scale out of range` |
+//! | 22 | until #3: `filter` is `None` | `TS: filter unsupported` |
 //!
 //! Only what the format or the engine requires is checked, never a limit for gas or size: the
 //! network prices those. The other numeric fields (`reverb`, `master_vol`, the upper end of
@@ -75,7 +76,7 @@
 //! them (`setMasterVol`, `setReverbLev` and `setVoices` assign them, and Web Audio clamps
 //! frequencies).
 //!
-//! Checks 17-20 exist only because the pinned engine fails beyond them. These four fields multiply
+//! Checks 17-21 exist only because the pinned engine fails beyond them. These five fields multiply
 //! into the gains and frequencies the engine passes to Web Audio, which requires finite values:
 //! past the bounds an overflowing product throws, and the throwing note stalls the whole scheduler.
 //! They are interim, to be removed once the pinned engine guards non-finite values (fork issue
@@ -118,12 +119,13 @@ pub const MAX_DRUM_SLOT: u32 = 81;
 pub const MAX_PROGRAM_SLOT: u32 = 127;
 /// Fewest `voices`: with none, every note would be cut.
 pub const MIN_VOICES: u32 = 1;
-/// Interim engine limits (checks 17-20), in fixed point: the largest values of the fields that
+/// Interim engine limits (checks 17-21), in fixed point: the largest values of the fields that
 /// multiply into the engine's gains and frequencies that the pinned engine plays without computing
 /// a non-finite value. To be removed once it guards them (fork #13, T5).
 pub const MAX_VOLUME: u32 = 1_000_000;
 pub const MAX_RATIO: u32 = 640_000;
 pub const MAX_PITCH_RATIO: u32 = 160_000;
+pub const MAX_SUSTAIN: u32 = 1_000_000;
 pub const MAX_KEY_SCALE: i32 = 80_000;
 
 /// Default engine settings: quality 1, reverb 30 %, master volume 40 %, 64 voices, no custom
@@ -276,6 +278,9 @@ fn validate_operator(op: @Operator, t: u32, o: u32, n_waves: u32, custom_waves: 
     }
     if *op.pitch_ratio > MAX_PITCH_RATIO {
         fail_at_op('TS: pitch_ratio out of range', t, o);
+    }
+    if *op.sustain > MAX_SUSTAIN {
+        fail_at_op('TS: sustain out of range', t, o);
     }
     if *op.key_scale < -MAX_KEY_SCALE || *op.key_scale > MAX_KEY_SCALE {
         fail_at_op('TS: key_scale out of range', t, o);

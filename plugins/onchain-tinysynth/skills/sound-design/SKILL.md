@@ -31,7 +31,7 @@ Get the tools: Node 22 or later, and a clone whose `grep 'pub const VERSION' src
 
 - Validation covers what the format and the engine require: counts, slots, routes, the wave index and the gates for issues #2 and #3. Every other number takes any value of its integer type.
 - There is no `SETTINGS` length cap: the network prices the cost ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-size-of-settings-no-byte-cap), [Network and node limits](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#network-and-node-limits)).
-- Four operator fields have interim engine bounds: `ratio`, `pitch_ratio`, `volume` and `key_scale`. The pinned engine computes non-finite values past them and throws, and the throwing note stalls the whole song. They are removed once the engine's guard lands (release gate, issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). README: [Engine limits on operator values](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#engine-limits-on-operator-values).
+- Five operator fields have interim engine bounds: `ratio`, `pitch_ratio`, `volume`, `sustain` and `key_scale`. The pinned engine computes non-finite values past them and throws, and the throwing note stalls the whole song. They are removed once the engine's guard lands (release gate, issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). README: [Engine limits on operator values](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#engine-limits-on-operator-values).
 
 The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`; wave lengths are in the check table). Read them from your checkout.
 

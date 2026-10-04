@@ -12,7 +12,7 @@
 | `attack` | `a` | `u32` | 0 | Seconds; 0 jumps straight to full level. |
 | `hold` | `h` | `u32` | 100 | Seconds. |
 | `decay` | `d` | `u32` | 100 | Time constant in seconds. On a drum's first operator, × 3.5 is the hit's length. |
-| `sustain` | `s` | `u32` | 0 | Level as a multiple of `volume`. |
+| `sustain` | `s` | `u32` | 0 | Level as a multiple of `volume`. *Engine limit.* |
 | `release` | `r` | `u32` | 500 | Time constant in seconds. The voice is cut at 3.5 × this. |
 | `pitch_ratio` | `p` | `u32` | 10,000 | Pitch envelope target as a multiple of the start frequency. Below 1 drops the pitch (kicks, toms). *Engine limit.* |
 | `pitch_time` | `q` | `u32` | 10,000 | Pitch envelope time constant in seconds. |
