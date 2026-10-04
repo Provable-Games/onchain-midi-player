@@ -72,9 +72,9 @@
 //!
 //! Only what the format or the engine requires is checked, never a limit for gas or size: the
 //! network prices those. The other numeric fields (`reverb`, `master_vol`, the upper end of
-//! `voices`, and the other operator values) take any value of their integer type: the engine takes
-//! them (`setMasterVol`, `setReverbLev` and `setVoices` assign them, and Web Audio clamps
-//! frequencies).
+//! `voices`, the other operator values, and a filter's cutoff and Q above 0) take any value of
+//! their integer type: the engine takes them (`setMasterVol`, `setReverbLev` and `setVoices`
+//! assign them, Web Audio clamps frequencies, and the engine clamps a filter's cutoff).
 //!
 //! Checks 15-19 exist only because the pinned engine fails beyond them. These five fields multiply
 //! into the gains and frequencies the engine passes to Web Audio, which requires finite values:

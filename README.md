@@ -398,7 +398,7 @@ Declared in [`src/types.cairo`](src/types.cairo). The consumer passes a typed `S
 - **Selecting sounds.** A MIDI file selects a custom sound the ordinary way: a program change to its slot, or the drum note on channel 10. Only programs 0–127 and drum notes 35–81 are reachable from MIDI.
 - **Consistency.** For a given class hash, the same settings and MIDI always produce the same sound. To keep a token's sound fixed, pass constants, or values derived only from permanent traits.
 - **Size.** `SETTINGS` is base64-encoded at call time along with the MIDI.
-  - It is 16 bytes with the defaults (`1,1,30,40,64,0,0`), plus about 6 bytes per timbre, 50 bytes per operator, 15 to 26 more per filter, and 2 to 6 bytes per wave sample or harmonic (about 4.5 per sample at full scale).
+  - It is 16 bytes with the defaults (`1,1,30,40,64,0,0`), plus about 6 bytes per timbre, 50 bytes per operator, 8 to 26 more per filter (a typical one 15 to 18), and 2 to 6 bytes per wave sample or harmonic (about 4.5 per sample at full scale).
   - The three Beast reference sounds (a 2-operator lead, kick and snare) come to 334 bytes.
   - There is no byte cap. Each 1,000 bytes add about 14M L2 gas to `midi_segment` (see [The size of `SETTINGS`](#the-size-of-settings-no-byte-cap)).
 - **Engine dependencies.** Custom waves use the fork's waveform registry, [webaudio-tinysynth#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26) (`setSampleWave` and `setHarmonicWave`), and deterministic noise and reverb come from [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7); the interim pin `3d965d1` has both. `Filter` uses [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27)'s fixed operator filters (`fl`, `ff`, `fq`, `fk`), which the pin also has. All must be in a tagged fork release before the class is declared.
@@ -496,7 +496,7 @@ Issue #3, from `page.10`. An audio-output operator (`route` 0) can carry a fixed
 | The same hats unfiltered, for scale | 8.6, 8.5 dB | 8.6, 8.5 dB | 9.8, 9.6 dB |
 
 - **Bit for bit without filters.** The unfiltered fixtures encode to the same `SETTINGS` and convert to the same TinySynth operators as with `page.9`, with none of the filter keys, and the engine creates no filter node for them (`scripts/engine_schedule.test.mjs`); the render check's other results are unchanged.
-- **Cost.** A filter is 15 to 26 bytes of `SETTINGS`:
+- **Cost.** A filter adds 8 to 26 bytes of `SETTINGS` (`1,kind,cutoff,key_track,q` in place of `0`; a typical one 15 to 18):
 
 | Settings (fixtures in [`scripts/settings_fixtures.mjs`](scripts/settings_fixtures.mjs)) | `SETTINGS` bytes | `validate` | `encode` | `midi_segment` through the library call, with the largest Beast score |
 | --- | --- | --- | --- | --- |

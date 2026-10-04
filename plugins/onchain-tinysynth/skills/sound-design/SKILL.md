@@ -105,7 +105,7 @@ From `page.10` (issue [#3](https://github.com/Provable-Games/onchain-tinysynth/i
 - **Chip hi-hats are now possible:** `MetallicNoise` at `ratio` 0 and `offset_hz` 390 Hz through a 3 kHz high-pass (`cutoff` 30,000,000, `q` 7,071), as the closed and open hats of the `filters` entry in [`tests/fixtures/settings.json`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/tests/fixtures/settings.json). They measure at least 24 dB less energy below 1 kHz than above 4 kHz (about 34 to 36 dB, against about 9 dB unfiltered).
 - **Filtered leads and basses:** a sawtooth or square through a key-tracked low-pass, for example `cutoff` 40,000 (4× the note); a band-pass on `WhiteNoise` gives breath and formant textures.
 - **Porting from TinySynth:** `fl`, `ff`, `fq` and `fk` become `kind` (`lowpass` is `LowPass`, and so on), `cutoff` = `ff` × 10,000, `q` = `fq` × 10,000 (TinySynth's default `fq` is 0.7071) and `key_track` = `fk` == 1.
-- **Cost:** a filter adds 15 to 26 bytes of `SETTINGS`. Six filtered voices take `midi_segment` with a full-size score to 62.4M, against 60.7M for the three reference sounds.
+- **Cost:** a filter adds 8 to 26 bytes of `SETTINGS` (a typical one 15 to 18). Six filtered voices take `midi_segment` with a full-size score to 62.4M, against 60.7M for the three reference sounds.
 - **Without a filter** an operator plays exactly as before: the player passes no filter fields, and the engine builds no filter node.
 
 ```cairo
