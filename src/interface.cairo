@@ -27,8 +27,9 @@
 //!   its attribute.
 //! - `SETTINGS`: the ASCII encoding of a `SynthSettings` value (see `types.cairo`), format
 //!   version 1, as specified in `settings.cairo` (issue #1): comma-separated canonical
-//!   decimal integers, at most 8,192 bytes. It contains only digits, `-` and `,`, so it can
-//!   never close its block. Example (default settings): `1,1,30,40,64,0,0`.
+//!   decimal integers, with no length cap: its cost grows with it (see the README). It
+//!   contains only digits, `-` and `,`, so it can never close its block. Example (default
+//!   settings): `1,1,30,40,64,0,0`.
 //! - `D`: the per-token HTML fragment
 //!   `SETTINGS '</script><script type="text/plain" id="midi">' b64(midi) <pad>
 //!   '</script><script type="text/plain" id="art">'`.
@@ -111,7 +112,7 @@ pub trait IOnchainTinySynth<T> {
     ///
     /// Cost: a constant, stored in the class at build time (a string literal). Nothing is
     /// base64-encoded at call time. Materializing it costs about 0.3M L2 gas; through a library
-    /// call about 6.4M, most of it returning the 43,940-byte result.
+    /// call about 6.4M, most of it returning the 43,988-byte result.
     fn animation_url_segment(self: @T) -> ByteArray;
 
     /// Returns the per-token settings and MIDI piece, encoded at both layers, to follow
@@ -122,11 +123,11 @@ pub trait IOnchainTinySynth<T> {
     ///   are embedded verbatim (as base64 text); this function does not parse or validate
     ///   them.
     /// - `settings`: engine settings and optional custom sounds (see `types.cairo`).
-    ///   Every field is range-checked by `settings::validate`; out-of-range values revert
-    ///   with a `'TS: ...'` short string followed by the 0-based indices of the offending
-    ///   wave, timbre or operator, so an invalid setting can never reach the page. The
-    ///   checks, their order and their messages are listed in `settings.cairo`. They are
-    ///   enforced only here: the page parses `SETTINGS` strictly and trusts these ranges.
+    ///   `settings::validate` checks what the format and the engine require; a failed check
+    ///   reverts with a `'TS: ...'` short string followed by the 0-based indices of the
+    ///   offending wave, timbre or operator, so an invalid setting can never reach the page.
+    ///   The checks, their order and their messages are listed in `settings.cairo`. They are
+    ///   enforced only here: the page parses `SETTINGS` strictly and trusts them.
     ///
     /// Output (bytes, ASCII base64 text):
     ///
@@ -149,10 +150,11 @@ pub trait IOnchainTinySynth<T> {
     /// (about `len(SETTINGS) + 4 * len(midi) / 3 + 89` bytes) twice; independent of engine size.
     /// `SETTINGS` is 16 bytes with defaults, plus about 6 bytes per timbre and 50 per operator
     /// (the 3 Beast reference sounds: 334 bytes). Validating and encoding 6 timbres costs about
-    /// 3.3M L2 gas; the largest valid `SETTINGS` (8,192 bytes) about 51M, and 32 timbres of 8
-    /// operators about 56M. Base64 is the rest. Through a library call, the whole call costs about
+    /// 3.2M L2 gas, and the largest valid `SETTINGS` in v1 (175 timbres of 8 operators, 156,489
+    /// bytes) about 0.95B. Base64 is the rest. Through a library call, the whole call costs about
     /// 61M for a score the size of the largest Beast score (3,716 bytes) with the reference sounds,
-    /// and about 178M with 8,192 bytes of `SETTINGS` (measurements in the README).
+    /// about 14M more per 1,000 bytes of `SETTINGS`, and about 2.3B with the largest v1 `SETTINGS`
+    /// (measurements in the README). There is no byte cap: the gas limit of the call decides.
     fn midi_segment(self: @T, midi: ByteArray, settings: SynthSettings) -> ByteArray;
 
     // ------------------------------------------------------------------------------------

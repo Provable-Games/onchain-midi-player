@@ -66,7 +66,7 @@ const withBlocks = ({ settings, midi }) => {
 };
 const failures = [
   ['settings that fail parsing (non-canonical token)', { settings: '1,01,30,40,64,0,0' }, 'settings: malformed: token 1'],
-  ['settings with a bad count', { settings: '   1,1,30,40,64,17' }, 'settings: TS: too many waves'],
+  ['settings with a bad count', { settings: '   1,1,30,40,64,257' }, 'settings: TS: too many waves'],
   ['MIDI that is not base64', { midi: '!!!not base64!!!' }, 'midi: not base64'],
   ['MIDI truncated after its header', { midi: MIDI.subarray(0, 14).toString('base64') }, 'midi: truncated (byte 14)'],
 ];

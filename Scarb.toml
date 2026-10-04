@@ -30,6 +30,13 @@ test = "snforge test"
 [tool.scarb]
 allow-prebuilt-plugins = ["snforge_std"]
 
+# Above snforge's default step limit: the largest valid SETTINGS in v1 (175 timbres of 8 operators,
+# every field at its widest valid value: 156,489 bytes) takes about 18M steps through
+# `midi_segment`, and 25M with its SHA-256 check; `case_every_slot`'s digest test takes about 14M. SETTINGS has no byte cap:
+# the network prices it.
+[tool.snforge]
+max_n_steps = 100000000
+
 # Visit https://foundry-rs.github.io/starknet-foundry/appendix/scarb-toml.html for more information
 
 # [tool.snforge]

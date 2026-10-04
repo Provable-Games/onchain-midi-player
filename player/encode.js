@@ -4,14 +4,9 @@
  * `src/settings.cairo` byte for byte: the full v1 grammar, including custom waves and filters,
  * which `validateSettings` (player/validate.js) rejects until issues #2 and #3. Checks that every
  * value fits its Cairo type (what the Cairo type system guarantees) but not the ranges; call
- * `validateSettings` first. Throws `SettingsError('TS: settings too long')` past `MAX_SETTINGS_LEN` bytes.
+ * `validateSettings` first. Like Cairo's, it has no length limit.
  */
-import {
-  FILTER_KINDS, OPERATOR_FIELDS, SETTINGS_FORMAT_VERSION, SettingsError, TYPE_BOUNDS, WAVEFORMS,
-} from "./settings.js";
-
-/** Maximum length of SETTINGS, in bytes (check 31 of src/settings.cairo). */
-export const MAX_SETTINGS_LEN = 8192;
+import { FILTER_KINDS, OPERATOR_FIELDS, SETTINGS_FORMAT_VERSION, TYPE_BOUNDS, WAVEFORMS } from "./settings.js";
 
 /**
  * @param {unknown} v
@@ -37,10 +32,9 @@ function bool(v, what) {
 
 /**
  * @param {import("./settings.js").SynthSettings} s
- * @param {{limit?: number}} [options] `limit` overrides the length cap (tooling only)
  * @returns {string}
  */
-export function encodeSettings(s, { limit = MAX_SETTINGS_LEN } = {}) {
+export function encodeSettings(s) {
   /** @type {string[]} */
   const out = [String(SETTINGS_FORMAT_VERSION)];
   out.push(int(s.quality, "u8", "quality"), int(s.reverb, "u8", "reverb"),
@@ -48,9 +42,11 @@ export function encodeSettings(s, { limit = MAX_SETTINGS_LEN } = {}) {
   out.push(int(s.waves.length, "u32", "waves.length"));
   s.waves.forEach((w, i) => {
     if ("Harmonics" in w) {
-      out.push("0", String(w.Harmonics.length), ...w.Harmonics.map((x) => int(x, "u16", `waves[${i}]`)));
+      out.push("0", String(w.Harmonics.length));
+      for (const x of w.Harmonics) out.push(int(x, "u16", `waves[${i}]`)); // no spread: tables have no length bound
     } else if ("Samples" in w) {
-      out.push("1", String(w.Samples.length), ...w.Samples.map((x) => int(x, "i8", `waves[${i}]`)));
+      out.push("1", String(w.Samples.length));
+      for (const x of w.Samples) out.push(int(x, "i8", `waves[${i}]`));
     } else throw new TypeError(`waves[${i}] must be {Harmonics} or {Samples}`);
   });
   out.push(int(s.timbres.length, "u32", "timbres.length"));
@@ -75,7 +71,5 @@ export function encodeSettings(s, { limit = MAX_SETTINGS_LEN } = {}) {
       }
     });
   });
-  const text = out.join(",");
-  if (text.length > limit) throw new SettingsError("TS: settings too long");
-  return text;
+  return out.join(",");
 }

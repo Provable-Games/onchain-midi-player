@@ -351,7 +351,7 @@ describe("the page's player script, fake engine", () => {
     ["settings of another format version", edited(base, { settings: "2,1,30,40,64,0,0" }), "settings: malformed: token 1"],
     ["truncated settings", edited(base, { settings: "1,1,30,40,64,0" }), "settings: malformed: token 6"],
     ["settings with a trailing token", edited(base, { settings: "1,1,30,40,64,0,0,0" }), "settings: malformed: token 7"],
-    ["settings with a count over its cap", edited(base, { settings: "1,1,30,40,64,0,33" }), "settings: TS: too many timbres"],
+    ["settings with a count over its bound", edited(base, { settings: "1,1,30,40,64,0,176" }), "settings: TS: too many timbres"],
     ["settings with an unknown wave tag",
       edited(base, { settings: "1,1,30,40,64,0,1,0,0,1,0,7,5000,10000,0,0,100,100,0,500,10000,10000,0,0" }),
       "settings: malformed: token 12"],

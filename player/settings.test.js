@@ -52,13 +52,10 @@ describe("shared fixtures", () => {
       assert.deepEqual(errorOf(() => encodeSettings(validateSettings(f.settings))), f.error);
       // The text path rejects it too, with the same panic data for single-violation fixtures.
       // Counts are bounded while decoding, so with several violations a bad count can be reported
-      // first (the order_* fixtures); the length cap is the encoder's alone.
-      if (f.error[0] !== "TS: settings too long") {
-        const text = encodeSettings(f.settings, { limit: Infinity });
-        const got = errorOf(() => decodeAndValidate(text));
-        if (f.name.startsWith("order_")) assert.ok(got);
-        else assert.deepEqual(got, f.error);
-      }
+      // first (the order_* fixtures).
+      const got = errorOf(() => decodeAndValidate(encodeSettings(f.settings)));
+      if (f.name.startsWith("order_")) assert.ok(got);
+      else assert.deepEqual(got, f.error);
     });
   }
 });
@@ -117,18 +114,70 @@ describe("decoder strictness", () => {
     malformed("1,1,30,40,64,1,2,1,0,0");
   });
   test("bounds counts before reading their items", () => {
-    assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,0,33")), ["TS: too many timbres"]);
-    assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,17")), ["TS: too many waves"]);
+    assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,0,176")), ["TS: too many timbres"]);
+    assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,0,4294967295")), ["TS: too many timbres"]);
+    assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,257")), ["TS: too many waves"]);
+    assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,4294967295")), ["TS: too many waves"]);
     assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,1,0,0")), ["TS: harmonics length", 0]);
-    assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,1,0,65")), ["TS: harmonics length", 0]);
-    assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,2,1,2,0,0,1,1")), ["TS: samples length", 1]);
-    assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,1,1,257")), ["TS: samples length", 0]);
+    assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,2,1,2,0,0,1,0")), ["TS: samples length", 1]);
     assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,0,1,0,0,9")), ["TS: too many operators", 0]);
     assert.deepEqual(errorOf(() => decodeSettings("1,1,30,40,64,0,1,0,0,4294967295")), ["TS: too many operators", 0]);
+  });
+  test("accepts every count at its bound: 175 timbres, 256 waves; wave lengths have none", () => {
+    const timbre = (/** @type {number} */ i) => `0,${i},1,0,0,5000,10000,0,0,100,100,0,500,10000,10000,0,0`;
+    // The parser does not check slots (Cairo does): 175 entries are within its bound whatever they hold.
+    const timbres = Array.from({ length: 175 }, (_, i) => timbre(i % 128)).join(",");
+    assert.equal(decodeSettings(`1,1,30,40,64,0,175,${timbres}`).timbres.length, 175);
+    malformed(`1,1,30,40,64,0,175,${timbres},${timbre(0)}`);
+    assert.deepEqual(errorOf(() => decodeSettings(`1,1,30,40,64,0,176,${timbres},${timbre(0)}`)), ["TS: too many timbres"]);
+    // TinyChip's 32,767-step noise table, and a long harmonic series.
+    const noise = Array.from({ length: 32767 }, (_, i) => (i % 3 ? 127 : -128));
+    const waves = [
+      ...Array(253).fill("1,1,0"),
+      `0,1000,${Array(1000).fill(65535).join(",")}`,
+      `1,32767,${noise.join(",")}`,
+      "0,1,1",
+    ].join(",");
+    const s = decodeSettings(`1,1,30,40,64,256,${waves},0`);
+    assert.equal(s.waves.length, 256);
+    assert.deepEqual(s.waves[0], { Samples: [0] });
+    assert.deepEqual(s.waves[253], { Harmonics: Array(1000).fill(65535) });
+    assert.deepEqual(s.waves[254], { Samples: noise });
+    // A count one short leaves a token over.
+    malformed(`1,1,30,40,64,255,${waves},0`);
+  });
+  test("encodes and decodes a wave table of a million samples (no argument-limit spread)", () => {
+    const samples = Array.from({ length: 1000000 }, (_, i) => (i % 2 ? 127 : -128));
+    const s = { quality: 1, reverb: 30, master_vol: 40, voices: 64, waves: [{ Samples: samples }, { Harmonics: samples.map((x) => x + 128) }], timbres: [] };
+    const text = encodeSettings(s);
+    assert.ok(text.startsWith("1,1,30,40,64,2,1,1000000,-128,127,") && text.length > 7000000);
+    const back = decodeSettings(text);
+    assert.equal(/** @type {{Samples: number[]}} */ (back.waves[0]).Samples.length, 1000000);
+    assert.deepEqual(back, s);
+  });
+  test("a count larger than the tokens left fails at once, before reading or allocating its items", () => {
+    // Wave lengths have no bound, so only the input bounds them. The error names the token after
+    // the count: no item was read.
+    /** @type {Array<[string, number]>} */
+    const cases = [
+      ["1,1,30,40,64,1,0,4294967295,1", 8],
+      ["1,1,30,40,64,1,1,4294967295,0", 8],
+      ["1,1,30,40,64,1,1,3,0,0", 8],
+      [`1,1,30,40,64,1,1,100000,${Array(99999).fill(0).join(",")}`, 8],
+      ["1,1,30,40,64,256,0,1,1", 6],
+      ["1,1,30,40,64,0,175,0,0,1", 7],
+      ["1,1,30,40,64,0,1,0,0,8,0,0,5000", 10],
+    ];
+    for (const [text, token] of cases) {
+      assert.throws(() => decodeSettings(text), { name: "SettingsError", code: "malformed", message: `settings: malformed: token ${token}` });
+    }
+    // The check is against the tokens left, so a count that fits still parses.
+    assert.deepEqual(decodeSettings("1,1,30,40,64,1,1,3,0,0,0,0").waves, [{ Samples: [0, 0, 0] }]);
   });
 });
 
 describe("installer", () => {
+  const malformedText = (/** @type {string} */ text) => assert.deepEqual(errorOf(() => decodeSettings(text)), ["malformed"]);
   const beast = fixtures.valid.find((/** @type {any} */ f) => f.name === "beast_reference").settings;
 
   /** A stand-in for TinySynth that records the calls the installer makes. */
@@ -177,6 +226,35 @@ describe("installer", () => {
     assert.equal(click.w, "n0");
     assert.equal(click.f, 440);
     assert.equal(toTinySynthOps({ drum: false, slot: 0, operators: [{ ...lead.operators[0], key_scale: -12000, offset_hz: -20000 }] })[0].k, -1.2);
+  });
+
+  test("handles every field at its type's extremes: u32 max, i32 min and max", () => {
+    // The class checks no range on these fields, so the parser and the conversion must take their
+    // whole type. (Whether the engine plays such values is the engine's: see the fixtures' note.)
+    const u = 4294967295;
+    const fields = (/** @type {number} */ i32) => [u, u, i32, u, u, u, u, u, u, u, i32].join(",");
+    const text = `1,1,255,255,255,0,2,0,0,1,0,2,${fields(2147483647)},0,1,35,1,0,4,${fields(-2147483648)},0`;
+    const s = decodeSettings(text);
+    assert.equal(encodeSettings(s), text);
+    const [hi] = toTinySynthOps(s.timbres[0]);
+    assert.deepEqual(hi, {
+      g: 0, w: "sawtooth", v: 429496.7295, t: 429496.7295, f: 214748.3647, a: 429496.7295, h: 429496.7295,
+      d: 429496.7295, s: 429496.7295, r: 429496.7295, p: 429496.7295, q: 429496.7295, k: 214748.3647,
+    });
+    const [lo] = toTinySynthOps(s.timbres[1]);
+    assert.equal(lo.f, -214748.3648);
+    assert.equal(lo.k, -214748.3648);
+    for (const o of [hi, lo]) for (const v of Object.values(o)) if (typeof v === "number") assert.ok(Number.isFinite(v));
+    const synth = createSynth(FakeSynth, s);
+    assert.deepEqual(synth.calls.slice(0, 5), [
+      ["new", { quality: 1, useReverb: 1, voices: 255 }],
+      ["setQuality", 1], ["setMasterVol", 2.55], ["setReverbLev", 2.55], ["setVoices", 255],
+    ]);
+    // One past each type's extreme is malformed, not accepted.
+    malformedText(text.replace("4294967295", "4294967296"));
+    malformedText(text.replace("2147483647", "2147483648"));
+    malformedText(text.replace("-2147483648", "-2147483649"));
+    malformedText(text.replace(/^1,1,255/, "1,1,256"));
   });
 
   test("is idempotent and passes fresh operator objects every time", () => {

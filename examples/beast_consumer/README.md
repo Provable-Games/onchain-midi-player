@@ -73,16 +73,16 @@ examples/beast_consumer/
 - The consumer's pieces (`'{' members ',' <pad>`, `S`, the comma and the image key) are padded with spaces between JSON tokens to multiples of 3 bytes.
 - The class pads `PAGE` and `D` to multiples of 9, because they are spliced at both layers.
 - `S = svg_b64 '"' <pad>` is encoded once and appended twice. The first copy is the `image` value; the second, at the HTML layer, is the SVG that closes the art block, and its `"` closes the `animation_url` string.
-- **Word alignment.** The consumer adds 3 spaces at a time between JSON tokens, so that its two largest appends start on a 31-byte `ByteArray` word: the first `b64(S)` and the segment. Each group is the constant `'ICAg'` (`b64('   ')`), and the image key and the comma are constants too: `b64(' "image":"data:image/svg+xml;base64,')` and `'LCAg'` (`b64(',  ')`). So no alignment space is base64-encoded at call time. For token 4 this saves 14.2M L2 gas of appends (16.1M instead of 30.4M). The root [README](../../README.md#integration-guide) explains it.
+- **Word alignment.** The consumer adds 3 spaces at a time between JSON tokens, so that its two largest appends start on a 31-byte `ByteArray` word: the first `b64(S)` and the segment. Each group is the constant `'ICAg'` (`b64('   ')`), and the image key and the comma are constants too: `b64(' "image":"data:image/svg+xml;base64,')` and `'LCAg'` (`b64(',  ')`). So no alignment space is base64-encoded at call time. For token 4 this saves 14.6M L2 gas of appends (15.8M instead of 30.4M). The root [README](../../README.md#integration-guide) explains it.
 
 The tokens:
 
 | token | name | head spaces | comma piece | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 48,881 |
-| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 48,889 |
-| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 48,885 |
-| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 134,821 |
+| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 48,929 |
+| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 48,937 |
+| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 48,933 |
+| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 134,869 |
 
 Tokens 1-3 cover every pad length: `len('{' members ',')` and `len(S)` take every remainder mod 3, and `D` three different pads. Only `reverb` varies between them (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding. The head spaces include the alignment groups.
 
@@ -114,7 +114,7 @@ snforge test matches_js --gas-report   # token_uri gas, per contract and selecto
 snforge test gas_                      # token 4 piece by piece (see Gas)
 ```
 
-The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~36 KB token JSON byte by byte, and the token 4 test computes the SHA-256 of its 134,821-character `token_uri` in Cairo, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
+The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~36 KB token JSON byte by byte, and the token 4 test computes the SHA-256 of its 134,869-character `token_uri` in Cairo, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
 
 To decode the actual contract output rather than the JS reference:
 
@@ -184,9 +184,9 @@ L2 gas, with the class's optimized encoder; the root [README](../../README.md#ga
 
 | Call | Tokens 1-3 (1 KB SVG, 112-byte MIDI) | Token 4 (a full-size Beast) |
 | --- | --- | --- |
-| `BeastLikeNft.token_uri` | 30.4M-30.6M | 286.5M |
+| `BeastLikeNft.token_uri` | 30.4M-30.5M | 286.2M |
 | of which `animation_url_segment` (the class's side) | 2.5M | 2.5M |
-| of which `midi_segment` (the class's side) | 5.8M | 59.0M |
+| of which `midi_segment` (the class's side) | 5.8M | 58.9M |
 | of which 4 `base64` calls (the class's side): SVG, `S`, the head, `'}'` | 9.9M-10.0M | 184.9M |
 
 Token 4 piece by piece, in the consumer's context, each net of its inputs (`snforge test gas_`, [`tests/test_gas.cairo`](tests/test_gas.cairo)):
@@ -197,8 +197,8 @@ Token 4 piece by piece, in the consumer's context, each net of its inputs (`snfo
 | `midi_segment()` through the library call | 60.1M |
 | `b64(svg)`, 22,733 bytes: through the class's `base64` / with the same encoder compiled in | 82.6M / 75.2M |
 | `b64(S)`, 30,315 bytes, through the class's `base64` | 110.2M |
-| Every append, in the word-aligned layout / without the alignment spaces | 16.1M / 30.4M |
+| Every append, in the word-aligned layout / without the alignment spaces | 15.8M / 30.4M |
 
 Base64 is 84% of token 4's `token_uri`, and the two passes over the SVG alone are 67%. That is 0.29B, well under the 1B target. With the byte-wise stand-in encoder the class used before, token 4 cost 1.41B (tokens 1-3: 90.2M-90.6M), and the projection for the optimized encoder was about 0.57B.
 
-Before this example called the real class, its mock gave 113.1M-113.5M for tokens 1-3. Three changes brought that down to 90.2M-90.6M with the stand-in encoder: the segment became a string literal, the comma piece became a constant, and the layout was aligned. The optimized encoder then brought it to 30.1M-30.2M, and the `4b29ff1` engine's 1,296-byte longer segment adds about 0.3M (30.4M-30.6M).
+Before this example called the real class, its mock gave 113.1M-113.5M for tokens 1-3. Three changes brought that down to 90.2M-90.6M with the stand-in encoder: the segment became a string literal, the comma piece became a constant, and the layout was aligned. The optimized encoder then brought it to 30.1M-30.2M, and the `4b29ff1` engine's 1,296-byte longer segment added about 0.3M (30.4M-30.6M). With `page.7` (a segment 48 bytes longer, and `SETTINGS` validation that checks less) they cost 30.4M-30.5M.

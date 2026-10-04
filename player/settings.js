@@ -4,9 +4,10 @@
  * the page.
  *
  * `SETTINGS` (format version 1) is the ASCII encoding of the Cairo `SynthSettings` value that the
- * class writes into the page, after `settings::validate` has checked every value. The page parses
- * it strictly (the grammar, canonical integers, Cairo type bounds, count caps, known tags, every
- * token consumed) and installs it; it does not repeat Cairo's range and semantic checks. The JS
+ * class writes into the page, after `settings::validate` has checked it (counts, slots, routes and
+ * the gates; every other field may take any value of its type). The page parses it strictly (the
+ * grammar, canonical integers, Cairo type bounds, count bounds, known tags, every token consumed)
+ * and installs it; it does not repeat Cairo's checks. The JS
  * reference of those checks, for tooling and the parity tests, is `player/validate.js`; the
  * reference encoder is `player/encode.js`. Shared fixtures (`tests/fixtures/settings.json`) keep
  * them byte-for-byte identical to `src/settings.cairo`.
@@ -15,16 +16,24 @@
  * Dependency-free plain JavaScript; runs in browsers and in Node.
  */
 
-// Limits, as in src/settings.cairo.
 /** Denominator of every fixed-point field: a stored value `x` means `x / 10000`. */
 const FIXED_POINT_SCALE = 10000;
 export const SETTINGS_FORMAT_VERSION = 1;
-export const MAX_WAVES = 16;
-export const MAX_TIMBRES = 32;
-export const MAX_OPERATORS = 8;
-export const MAX_HARMONICS = 64;
-export const MIN_SAMPLES = 2;
-export const MAX_SAMPLES = 256;
+
+// Parse bounds: the most the parser accepts of each count, read and checked before its items. They
+// are the limits of the format: every slot reachable from MIDI once, every wave `Waveform::Custom(u8)`
+// can index, and 8 operators. A wave's length has none: the engine's custom-wave API takes any
+// non-empty table (fork #26, decision D-028 in docs/improvements/decisions.md of
+// Provable-Games/webaudio-tinysynth), and every count is also checked against the tokens left, so
+// a corrupt one fails at once. Cairo's caps (`settings::validate`, and its JS reference
+// player/validate.js) equal these bounds today but are separate constants: a Cairo cap can change
+// within them without changing the page.
+/** Timbres: 128 programs and 47 drum notes, once each. */
+export const PARSE_MAX_TIMBRES = 175;
+/** Waves: all that `Waveform::Custom(u8)` can index. */
+export const PARSE_MAX_WAVES = 256;
+/** Operators per timbre (issue #1, D5). */
+export const PARSE_MAX_OPERATORS = 8;
 
 /** `Waveform` variants in declaration order: the index is the wire tag. Tag 6 is `Custom`. */
 export const WAVEFORMS = ["Sine", "Square", "Sawtooth", "Triangle", "WhiteNoise", "MetallicNoise"];
@@ -97,15 +106,16 @@ const CANONICAL = /^(0|-?[1-9][0-9]*)$/;
 
 /**
  * Decodes SETTINGS text into a `SynthSettings` object, following the grammar strictly: format
- * version 1, canonical integers only, every value within its Cairo type, counts read and
- * bounds-checked before their items (so a corrupt count can never make the page loop long), known
- * tags only, every token consumed. Leading and trailing spaces (U+0020 only) are ignored: the
- * page's alignment padding falls inside the settings block, before SETTINGS. Throws a
+ * version 1, canonical integers only, every value within its Cairo type, counts read and checked
+ * against the parse bounds and the tokens left before their items (so a corrupt count can never
+ * make the page loop or allocate past the input), known tags only, every token consumed. Leading
+ * and trailing spaces (U+0020 only) are ignored: the page's alignment padding falls inside the
+ * settings block, before SETTINGS. Throws a
  * `SettingsError` on any violation; the page then fails closed (no audio, visible error).
  *
- * It does not apply Cairo's range and semantic checks (`settings::validate`, whose JS reference is
- * `validateSettings` in player/validate.js): the class validates every value before writing it.
- * A count out of bounds is reported with the same message as the Cairo check.
+ * It does not apply Cairo's checks (`settings::validate`, whose JS reference is `validateSettings`
+ * in player/validate.js): the class validates the settings before writing them.
+ * A count beyond its parse bound is reported with the message of the Cairo check, which fails too.
  * @param {string} text
  * @returns {SynthSettings}
  */
@@ -125,7 +135,8 @@ export function decodeSettings(text) {
     return v;
   };
   /**
-   * Reads a count and checks it before reading the items.
+   * Reads a count and checks it before reading the items: against its bounds, then against the
+   * tokens left, since every item takes at least one.
    * @param {number} max
    * @param {string} code
    * @param {number[]} [indices]
@@ -134,6 +145,7 @@ export function decodeSettings(text) {
   const count = (max, code, indices = [], min = 0) => {
     const n = read("u32");
     if (n < min || n > max) throw new SettingsError(code, indices);
+    if (n > tokens.length - pos) throw malformed();
     return n;
   };
 
@@ -147,26 +159,26 @@ export function decodeSettings(text) {
     waves: [],
     timbres: [],
   };
-  const nWaves = count(MAX_WAVES, "TS: too many waves");
+  const nWaves = count(PARSE_MAX_WAVES, "TS: too many waves");
   for (let w = 0; w < nWaves; w++) {
     const tag = read("u32");
     if (tag === 0) {
-      const n = count(MAX_HARMONICS, "TS: harmonics length", [w], 1);
+      const n = count(Infinity, "TS: harmonics length", [w], 1);
       const h = [];
       for (let i = 0; i < n; i++) h.push(read("u16"));
       s.waves.push({ Harmonics: h });
     } else if (tag === 1) {
-      const n = count(MAX_SAMPLES, "TS: samples length", [w], MIN_SAMPLES);
+      const n = count(Infinity, "TS: samples length", [w], 1);
       const x = [];
       for (let i = 0; i < n; i++) x.push(read("i8"));
       s.waves.push({ Samples: x });
     } else throw malformed();
   }
-  const nTimbres = count(MAX_TIMBRES, "TS: too many timbres");
+  const nTimbres = count(PARSE_MAX_TIMBRES, "TS: too many timbres");
   for (let t = 0; t < nTimbres; t++) {
     const drum = read("bool") === 1;
     const slot = read("u8");
-    const nOps = count(MAX_OPERATORS, "TS: too many operators", [t]);
+    const nOps = count(PARSE_MAX_OPERATORS, "TS: too many operators", [t]);
     /** @type {Operator[]} */
     const operators = [];
     for (let o = 0; o < nOps; o++) {

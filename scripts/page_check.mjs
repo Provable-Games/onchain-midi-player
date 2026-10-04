@@ -29,7 +29,10 @@
 // (unparsable settings, invalid MIDI; a corrupt, truncated or missing gzip payload, or one without
 // the engine) must keep the art visible, keep ▶ disabled, show the exact error and construct no
 // synth. So must the failures ▶ can meet: no Web Audio at all, or an AudioContext whose resume()
-// rejects. Range checks are Cairo's: settings that only break a range rule must still play.
+// rejects. Range checks are Cairo's: settings that only break a range rule must still play. The
+// settings fixtures with fields at their extremes (and the deepest FM chain at the engine limits)
+// play the lowest and highest notes on every custom timbre with no error: the engine throws on a
+// non-finite AudioParam value, which only playing shows.
 //
 // Playwright is not a dependency of this repository; point the script at an existing install, and
 // pick the engine (scripts/browsers.mjs; Firefox plays audio only with an output device, which a
@@ -43,7 +46,7 @@
 // Exits 0 when every check passes, 1 when one fails, 2 when PLAYWRIGHT_CORE is not set or
 // PLAYWRIGHT_BROWSER names no supported engine.
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -51,7 +54,7 @@ import { gzipSync } from "node:zlib";
 import { collectErrors, dataRequestLog, launchBrowser } from "./browsers.mjs";
 import { ENGINE_SHA256 } from "./engine.mjs";
 import { FIXTURES, tokenPage } from "./fixture_pages.mjs";
-import { ART_OPEN, MIDI_OPEN, pageHtml, sha256, withGzipPayload } from "./page.mjs";
+import { ART_OPEN, MIDI_OPEN, dFragment, pageHtml, sha256, withGzipPayload } from "./page.mjs";
 import { decodePng } from "./png.mjs";
 import { smf } from "./page_fixtures.mjs";
 import { ENGINE_MISSING } from "../player/player.js";
@@ -553,7 +556,7 @@ async function checkFailures() {
   /** @type {Array<[string, string, string]>} */
   const variants = [
     ["truncated settings", withSettings(" 1,1,30,40,64,0"), "settings: malformed: token 6"],
-    ["settings with a count over its cap", withSettings("1,1,30,40,64,0,33"), "settings: TS: too many timbres"],
+    ["settings with a count over its bound", withSettings("1,1,30,40,64,0,176"), "settings: TS: too many timbres"],
     ["MIDI that is not base64", withMidi("@@not base64@@"), "midi: not base64"],
     ["MIDI cut after 4 bytes", withMidi("TVRoZA=="), "midi: truncated (byte 4)"],
     ["MIDI without End-of-Track", withMidi(noEot), "midi: truncated (byte 30)"],
@@ -674,6 +677,47 @@ async function checkRangeOnly() {
   await context.close();
 }
 
+/**
+ * The fixtures with fields at their extremes play without an error. Every custom timbre sounds
+ * notes 0 and 127 (a drum timbre, its own note), where key scaling and the frequency products are
+ * largest. The engine throws on a non-finite AudioParam value while it plays, so only playing the
+ * notes shows it: the page parses and enables ▶ either way.
+ */
+async function checkExtremes() {
+  const settingsFixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/settings.json", import.meta.url), "utf8"));
+  for (const name of ["max_fields", "min_fields", "max_chain"]) {
+    const c = { settings: settingsFixtures.valid.find((/** @type {any} */ f) => f.name === name).settings, svg: CASES.max_fields.svg };
+    /** @type {number[][]} */
+    const ev = [[0, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20]];
+    /** @type {Array<[number, number]>} the note-ons to expect: [status, note] */
+    const notes = [];
+    for (const t of c.settings.timbres) {
+      if (t.drum) {
+        ev.push([0, 0x99, t.slot, 127], [48, 0x89, t.slot, 0]);
+        notes.push([0x99, t.slot]);
+      } else {
+        ev.push([0, 0xc0, t.slot], [0, 0x90, 0, 127], [0, 0x90, 127, 127], [48, 0x80, 0, 0], [0, 0x80, 127, 0]);
+        notes.push([0x90, 0], [0x90, 127]);
+      }
+    }
+    ev.push([48, 0xff, 0x2f, 0x00]);
+    const midi = smf({ ppq: 96, tracks: [ev] });
+    console.log(`extreme values (${name}): notes 0 and 127 on every custom timbre (data: URI, offline)`);
+    const { context, page, logged } = await open({ offline: true });
+    await page.goto(dataUrl(PAGE + dFragment(midi, c.settings).d + c.svg));
+    await ready(page);
+    await startPlayback(page);
+    await page.waitForTimeout(1000);
+    const st = await state(page);
+    const sends = await page.evaluate(() => /** @type {any} */ (window).__check.sends);
+    const played = notes.every(([status, note]) => sends.some((/** @type {number[]} */ m) => m[0] === status && m[1] === note && m[2] > 0));
+    check(st.synth?.state === "running" && played, `▶ plays every note (${notes.map(([s, n]) => (s === 0x99 ? "drum " : "") + n).join(", ")})`);
+    const errors = await logged();
+    check(errors.length === 0, `no errors, including non-finite AudioParam values${errors.length ? `: ${errors.length}, ${[...new Set(errors)].join(" | ")}` : ""}`);
+    await context.close();
+  }
+}
+
 try {
   await checkDataPage();
   await checkIframe();
@@ -686,6 +730,7 @@ try {
   await checkEngineFailures();
   await checkAudioFailures();
   await checkRangeOnly();
+  await checkExtremes();
 } catch (e) {
   failures++;
   console.log(`  FAIL ${/** @type {Error} */ (e).stack || e}`);
