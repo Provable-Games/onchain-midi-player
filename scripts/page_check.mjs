@@ -32,8 +32,9 @@
 // synth. So must the failures ▶ can meet: no Web Audio at all, or an AudioContext whose resume()
 // rejects. Range checks are Cairo's: settings that only break a range rule must still play. The
 // settings fixtures with fields at their extremes (and the deepest FM chain at the engine limits)
-// play the lowest and highest notes on every custom timbre with no error: the engine throws on a
-// non-finite AudioParam value, which only playing shows.
+// and the custom-wave fixtures (256 waves; the long-mode LFSR, 32,767 samples) play the lowest and
+// highest notes on every custom timbre with no error: the engine throws on a non-finite AudioParam
+// value, or on a wave it cannot register, which only playing shows.
 //
 // Playwright is not a dependency of this repository; point the script at an existing install, and
 // pick the engine (scripts/browsers.mjs; Firefox plays audio only with an output device, which a
@@ -58,6 +59,7 @@ import { FIXTURES, tokenPage } from "./fixture_pages.mjs";
 import { ART_OPEN, MIDI_OPEN, dFragment, pageHtml, sha256, withGzipPayload } from "./page.mjs";
 import { decodePng } from "./png.mjs";
 import { smf } from "./page_fixtures.mjs";
+import { longLfsr } from "./settings_fixtures.mjs";
 import { ENGINE_MISSING } from "../player/player.js";
 
 const shotDir = process.argv[2];
@@ -697,8 +699,12 @@ async function checkRangeOnly() {
  */
 async function checkExtremes() {
   const settingsFixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/settings.json", import.meta.url), "utf8"));
-  for (const name of ["max_fields", "min_fields", "max_chain"]) {
-    const c = { settings: settingsFixtures.valid.find((/** @type {any} */ f) => f.name === name).settings, svg: CASES.max_fields.svg };
+  /** @type {Array<[string, any]>} */
+  const cases = ["max_fields", "min_fields", "max_chain", "custom_waves", "reference_waves", "waves_256"]
+    .map((name) => [name, settingsFixtures.valid.find((/** @type {any} */ f) => f.name === name).settings]);
+  cases.push(["long_lfsr", longLfsr()]);
+  for (const [name, settings] of cases) {
+    const c = { settings, svg: CASES.max_fields.svg };
     /** @type {number[][]} */
     const ev = [[0, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20]];
     /** @type {Array<[number, number]>} the note-ons to expect: [status, note] */

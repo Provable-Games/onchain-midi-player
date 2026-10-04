@@ -79,10 +79,10 @@ The tokens:
 
 | token | name | head spaces | comma piece | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 57,521 |
-| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 57,529 |
-| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 57,525 |
-| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 143,461 |
+| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 58,033 |
+| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 58,041 |
+| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 58,037 |
+| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 143,973 |
 
 Tokens 1-3 cover every pad length: `len('{' members ',')` and `len(S)` take every remainder mod 3, and `D` three different pads. Only `reverb` varies between them (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding. The head spaces include the alignment groups.
 
@@ -92,7 +92,7 @@ Today, Beasts renders the SVG, base64-encodes it for `image`, builds the whole J
 
 ## What is real
 
-Everything the NFT calls is the real class: the page (the gzipped engine, the gunzip shim and the player, from the crate's generated `page_data`), `animation_url_segment`, `script_sha256`, `version`, `license`, `midi_segment` with the real validation and `SETTINGS`, and `base64`. Custom waves and filters revert (`'TS: custom wave unsupported'`, `'TS: filter unsupported'`) until issues #2 and #3. Two things differ from a production Beasts deployment:
+Everything the NFT calls is the real class: the page (the gzipped engine, the gunzip shim and the player, from the crate's generated `page_data`), `animation_url_segment`, `script_sha256`, `version`, `license`, `midi_segment` with the real validation and `SETTINGS`, and `base64`. Custom waves (issue #2) are accepted; filters revert (`'TS: filter unsupported'`) until issue #3. Two things differ from a production Beasts deployment:
 
 | | This example | Production |
 | --- | --- | --- |

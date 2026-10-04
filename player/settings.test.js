@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { encodeSettings } from "./encode.js";
-import { SettingsError, createSynth, decodeSettings, installSettings, toTinySynthOps } from "./settings.js";
+import { SettingsError, createSynth, decodeSettings, installSettings, registerWaves, toTinySynthOps, waveName } from "./settings.js";
 import { validateSettings } from "./validate.js";
 
 /** Cairo's validate then the page's decoder, as text: the reference's full check of SETTINGS. */
@@ -39,7 +39,7 @@ describe("shared fixtures", () => {
     });
   }
   for (const f of fixtures.reserved) {
-    test(`reserved ${f.name}: encodes, rejected in v1`, () => {
+    test(`reserved ${f.name}: encodes, rejected until issue #3`, () => {
       assert.equal(encodeSettings(f.settings), f.settings_text);
       assert.deepEqual(decodeSettings(f.settings_text), f.settings);
       assert.deepEqual(errorOf(() => validateSettings(f.settings)), f.error);
@@ -195,6 +195,10 @@ describe("installer", () => {
     setReverbLev(v) { this.calls.push(["setReverbLev", v]); }
     /** @param {number} v */
     setVoices(v) { this.calls.push(["setVoices", v]); }
+    /** @param {string} name @param {number[]} samples */
+    setSampleWave(name, samples) { this.calls.push(["setSampleWave", name, samples]); }
+    /** @param {string} name @param {number[]} real @param {number[]} imag */
+    setHarmonicWave(name, real, imag) { this.calls.push(["setHarmonicWave", name, real, imag]); }
     /** @param {number} m @param {number} n @param {any[]} p */
     setTimbre(m, n, p) {
       this.calls.push(["setTimbre", m, n, p]);
@@ -255,6 +259,46 @@ describe("installer", () => {
     malformedText(text.replace("2147483647", "2147483648"));
     malformedText(text.replace("-2147483648", "-2147483649"));
     malformedText(text.replace(/^1,1,255/, "1,1,256"));
+  });
+
+  test("custom waves: each registered under its index's name, before the quality and the timbres; Custom(i) names it", () => {
+    const s = fixtures.valid.find((/** @type {any} */ f) => f.name === "custom_waves").settings;
+    const synth = createSynth(FakeSynth, s);
+    const harmonics = [100, 0, 55, 0, 32, 0, 18, 0, 10, 0, 6];
+    const samples = [-128, -96, -64, -32, 0, 32, 64, 96, 127, 96, 64, 32, 0, -32, -64, -96];
+    assert.deepEqual(synth.calls.slice(1, 6), [
+      ["setHarmonicWave", "wH0", Array(12).fill(0), [0, ...harmonics]],
+      ["setSampleWave", "nS1", samples.map((v) => v / 128)],
+      ["setHarmonicWave", "wH2", [0, 0], [0, 65535]],
+      ["setSampleWave", "nS3", [0.9921875, -1]],
+      ["setQuality", 1],
+    ]);
+    const timbre = synth.calls.find((/** @type {any[]} */ c) => c[0] === "setTimbre");
+    assert.deepEqual([timbre[1], timbre[2], timbre[3].map((/** @type {any} */ o) => [o.g, o.w])], [0, 80, [[0, "nS1"], [1, "wH0"]]]);
+    // i8 / 128, exactly: -128 is -1, 0 is 0, 127 is 0.9921875.
+    assert.deepEqual(synth.calls[2][2].slice(0, 5), [-1, -0.75, -0.5, -0.25, 0]);
+    assert.equal(synth.calls[2][2][8], 127 / 128);
+  });
+
+  test("custom wave names follow the engine's grammar for every index, sample and harmonic", () => {
+    // Fork #26 (D-006, D-028): n (sample) or w (harmonic), a letter or _, then up to 30 more; a digit
+    // second is reserved for built-ins (n0, n1, w9999).
+    for (let i = 0; i < 256; i++) {
+      for (const [w, prefix] of /** @type {Array<[any, string]>} */ ([[{ Samples: [0] }, "n"], [{ Harmonics: [1] }, "w"]])) {
+        const name = waveName(w, i);
+        assert.match(name, /^[wn][A-Za-z_][A-Za-z0-9_]{0,30}$/);
+        assert.equal(name[0], prefix);
+      }
+    }
+    assert.deepEqual([waveName({ Samples: [0] }, 255), waveName({ Harmonics: [1] }, 0)], ["nS255", "wH0"]);
+  });
+
+  test("registerWaves: long tables and all-zero harmonics are passed as they are", () => {
+    const synth = new FakeSynth({});
+    const long = Array.from({ length: 40000 }, (_, i) => (i % 2 ? 127 : -128));
+    registerWaves(synth, [{ Samples: long }, { Harmonics: [0, 0, 0] }]);
+    assert.equal(synth.calls[1][2].length, 40000);
+    assert.deepEqual(synth.calls[2], ["setHarmonicWave", "wH1", [0, 0, 0, 0], [0, 0, 0, 0]]);
   });
 
   test("is idempotent and passes fresh operator objects every time", () => {

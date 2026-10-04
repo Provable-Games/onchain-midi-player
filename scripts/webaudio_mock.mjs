@@ -45,7 +45,8 @@ export function webAudioMock() {
     }
     /** @param {string} t */
     set type(t) { log.push([this.name, "type", t]); }
-    setPeriodicWave() {}
+    /** @param {any} w */
+    setPeriodicWave(w) { log.push([this.name, "periodicWave", w]); }
   }
   class Src extends Node {
     constructor() {
@@ -68,11 +69,12 @@ export function webAudioMock() {
     createOscillator() { return new Osc(); }
     createBufferSource() { return new Src(); }
     /** @param {number} ch @param {number} len */
-    createBuffer(ch, len) { const d = Array.from({ length: ch }, () => new Float32Array(len)); return { getChannelData: (/** @type {number} */ i) => d[i] }; }
+    createBuffer(ch, len) { const d = Array.from({ length: ch }, () => new Float32Array(len)); return { length: len, getChannelData: (/** @type {number} */ i) => d[i] }; }
     createStereoPanner() { const n = new Node("pan"); return Object.assign(n, { pan: new Param(n.name + ".pan", 0) }); }
     createDynamicsCompressor() { return new Node("comp"); }
     createConvolver() { return new Node("conv"); }
-    createPeriodicWave() { return {}; }
+    /** @param {ArrayLike<number>} real @param {ArrayLike<number>} imag */
+    createPeriodicWave(real, imag) { const w = { real: Array.from(real), imag: Array.from(imag) }; log.push(["ctx", "createPeriodicWave", w]); return w; }
   }
   return { AudioContext: Ctx, log, nodes, contexts };
 }

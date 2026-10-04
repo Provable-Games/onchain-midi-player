@@ -7,6 +7,8 @@
 // player/settings.js: waves as {Harmonics: [...]} / {Samples: [...]}, wave as a variant name or
 // {Custom: i}, filter as null or {kind, cutoff, key_track, q}.
 
+import { REFERENCE_WAVES, lfsr, triangle4 } from "./reference_waves.mjs";
+
 /** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
 /** @typedef {import("../player/settings.js").Operator} Operator */
 /** @typedef {import("../player/settings.js").Timbre} Timbre */
@@ -103,7 +105,7 @@ const I32_MIN = -2147483648;
 const I32_MAX = 2147483647;
 
 /**
- * The interim engine limits (checks 17-21 of src/settings.cairo): the fields that multiply into the
+ * The interim engine limits (checks 15-19 of src/settings.cairo): the fields that multiply into the
  * engine's gains and frequencies at their bounds, 100.0, 64.0, 16.0, 100.0 and +-8.0. Past them the
  * pinned engine computes non-finite AudioParam values and throws while playing
  * (scripts/page_check.mjs plays the fixtures at these values).
@@ -199,6 +201,79 @@ const ALL_WAVES = settings({
 });
 
 // ------------------------------------------------------------------------------------------
+// Custom waves (issue #2), from the reference waves (scripts/reference_waves.mjs).
+// ------------------------------------------------------------------------------------------
+
+/** The Beast lead (above) on the 64-step 4-bit stepped triangle, custom wave 0, with its vibrato. */
+export const CHIP_LEAD = {
+  drum: false,
+  slot: 0,
+  operators: [op({ ...BEAST_LEAD.operators[0], wave: { Custom: 0 } }), BEAST_LEAD.operators[1]],
+};
+
+/** One custom wave: the stepped triangle, for the chip lead. */
+const ONE_WAVE = settings({ reverb: 0, waves: [{ Samples: triangle4() }], timbres: [CHIP_LEAD] });
+
+/** A melodic chip voice on custom wave `w`: full sustain, 3 ms attack, 10 ms release. */
+const chipVoice = (/** @type {number} */ slot, /** @type {number} */ w, /** @type {Partial<Operator>} */ fields = {}) => ({
+  drum: false, slot,
+  operators: [op({ wave: { Custom: w }, volume: 3000, attack: 30, hold: 0, sustain: 10000, release: 100, ...fields })],
+});
+
+/**
+ * Every reference wave, each on a timbre: programs 0-4 play the stepped triangle, the three pulses
+ * and the saw (no vibrato, so pitch and pulse width can be measured), and a chip kit on drums 36,
+ * 38 and 42: a stepped-triangle kick falling 160 -> 45 Hz, a short-LFSR snare with a square body,
+ * and a short-LFSR hat. A noise table steps `n` times per cycle, so a noise operator is set by its
+ * step rate: `offset_hz` = steps per second / `n` (here 93 steps at 20 and 40 kHz), with `ratio` 0.
+ */
+export const REFERENCE_WAVES_SETTINGS = settings({
+  waves: REFERENCE_WAVES.map(([, samples]) => ({ Samples: samples })),
+  timbres: [
+    chipVoice(0, 0),
+    chipVoice(1, 1),
+    chipVoice(2, 2),
+    chipVoice(3, 3),
+    chipVoice(4, 4, { ratio: 5000 }),
+    {
+      drum: true, slot: 36,
+      operators: [op({
+        wave: { Custom: 0 }, volume: 4000, ratio: 0, offset_hz: 1600000, attack: 30, hold: 370, decay: 500,
+        release: 500, pitch_ratio: 2813, pitch_time: 300,
+      })],
+    },
+    {
+      drum: true, slot: 38,
+      operators: [
+        op({ wave: { Custom: 5 }, volume: 3500, ratio: 0, offset_hz: 2150538, attack: 30, hold: 0, decay: 500, release: 500 }),
+        op({
+          wave: { Custom: 3 }, volume: 700, ratio: 0, offset_hz: 2000000, attack: 30, hold: 0, decay: 200,
+          release: 500, pitch_ratio: 5500, pitch_time: 170,
+        }),
+      ],
+    },
+    {
+      drum: true, slot: 42,
+      operators: [op({ wave: { Custom: 5 }, volume: 2000, ratio: 0, offset_hz: 4301075, hold: 0, decay: 150, release: 500 })],
+    },
+  ],
+});
+
+/**
+ * The long-mode LFSR (32,767 steps) as one custom wave, on a snare (drum 38) stepping at 48 kHz:
+ * `offset_hz` 48,000 / 32,767 = 1.4649 Hz. About 147 KB of SETTINGS, so tests/settings_fixtures.cairo
+ * builds it in a loop (`long_lfsr()`) and the generator pins only its length and SHA-256.
+ * @returns {SynthSettings}
+ */
+export const longLfsr = () => settings({
+  waves: [{ Samples: lfsr("long") }],
+  timbres: [{ drum: true, slot: 38, operators: [LONG_LFSR_SNARE] }],
+});
+
+/** The operator of `longLfsr()`'s snare. */
+export const LONG_LFSR_SNARE = op({ wave: { Custom: 0 }, volume: 3000, ratio: 0, offset_hz: 14649, hold: 0, decay: 500, release: 500 });
+
+// ------------------------------------------------------------------------------------------
 // Fixture lists.
 // ------------------------------------------------------------------------------------------
 
@@ -225,15 +300,12 @@ export const VALID = [
   { name: "slot_edges", settings: SLOT_EDGES },
   { name: "all_builtin_waves", settings: ALL_WAVES },
   { name: "every_slot", settings: EVERY_SLOT },
-];
-
-/**
- * Encodable settings that v1 validation rejects (issues #2 and #3): pins the encoding of the
- * reserved shapes and the v1 rejection.
- * @type {Array<{name: string, settings: SynthSettings, error: [string, ...number[]]}>}
- */
-export const RESERVED = [
+  // Custom waves (issue #2).
+  { name: "one_wave", settings: ONE_WAVE },
+  { name: "reference_waves", settings: REFERENCE_WAVES_SETTINGS },
   {
+    // Both kinds, shared: two operators on one timbre, a harmonic wave at the u16 maximum and the
+    // shortest sample wave; one wave unused.
     name: "custom_waves",
     settings: settings({
       waves: [
@@ -244,13 +316,27 @@ export const RESERVED = [
       ],
       timbres: [{ drum: false, slot: 80, operators: [op({ wave: { Custom: 1 } }), op({ route: 1, wave: { Custom: 0 } })] }],
     }),
-    error: ["TS: custom wave unsupported"],
   },
   {
-    name: "custom_wave_without_table",
-    settings: settings({ timbres: [{ drum: false, slot: 0, operators: [op({ wave: { Custom: 255 } })] }] }),
-    error: ["TS: custom wave unsupported", 0, 0],
+    // 256 waves (all that Custom(u8) can index), the shortest and some long ones: wave lengths have no
+    // upper bound. The last operator uses the last wave; an all-zero harmonic wave is silent.
+    name: "waves_256",
+    settings: settings({
+      waves: [
+        ...Array(252).fill({ Harmonics: [1] }), { Harmonics: [0, 0] }, { Samples: [-128] },
+        { Harmonics: Array(300).fill(65535) }, { Samples: Array(2000).fill(-1) },
+      ],
+      timbres: [{ drum: false, slot: 0, operators: [op({ wave: { Custom: 252 } }), op({ wave: { Custom: 255 } })] }],
+    }),
   },
+];
+
+/**
+ * Encodable settings that validation rejects until issue #3 (filters): pins the encoding of the
+ * reserved shape and its rejection.
+ * @type {Array<{name: string, settings: SynthSettings, error: [string, ...number[]]}>}
+ */
+export const RESERVED = [
   {
     name: "filters",
     settings: settings({
@@ -278,28 +364,19 @@ const routeAt = (/** @type {number} */ pos, /** @type {number} */ route) => sett
  * @type {Array<{name: string, settings: SynthSettings, error: [string, ...number[]]}>}
  */
 export const INVALID = [
-  // Settings-level checks (1-6).
+  // Settings-level checks (1-5).
   { name: "quality_2", settings: settings({ quality: 2 }), error: ["TS: quality out of range"] },
   { name: "voices_0", settings: settings({ voices: 0 }), error: ["TS: voices out of range"] },
   { name: "waves_257", settings: settings({ waves: Array(257).fill({ Harmonics: [1] }) }), error: ["TS: too many waves"] },
   { name: "harmonics_0", settings: settings({ waves: [{ Harmonics: [1] }, { Harmonics: [] }] }), error: ["TS: harmonics length", 1] },
   { name: "samples_0", settings: settings({ waves: [{ Samples: [0] }, { Harmonics: [1] }, { Samples: [] }] }), error: ["TS: samples length", 2] },
   {
-    // 256 waves, the shortest and some long ones (wave lengths have no upper bound): only the v1
-    // gate rejects it.
-    name: "waves_256_valid",
-    settings: settings({
-      waves: [...Array(253).fill({ Harmonics: [1] }), { Samples: [-128] }, { Harmonics: Array(300).fill(65535) }, { Samples: Array(2000).fill(-1) }],
-    }),
-    error: ["TS: custom wave unsupported"],
-  },
-  {
     // One more timbre than there are slots, so a duplicate is unavoidable: the count fails first.
     name: "timbres_176",
     settings: settings({ timbres: [...EVERY_SLOT.timbres, { drum: false, slot: 0, operators: [op({})] }] }),
     error: ["TS: too many timbres"],
   },
-  // Timbre checks (7-11).
+  // Timbre checks (6-10).
   { name: "program_slot_128", settings: onTimbre({ slot: 128 }), error: ["TS: program slot out of range", 0] },
   { name: "drum_slot_34", settings: onTimbre({ drum: true, slot: 34 }), error: ["TS: drum slot out of range", 0] },
   { name: "drum_slot_82", settings: onTimbre({ drum: true, slot: 82 }), error: ["TS: drum slot out of range", 0] },
@@ -312,7 +389,7 @@ export const INVALID = [
   { name: "duplicate_drum", settings: settings({ timbres: [BEAST_KICK, BEAST_SNARE, BEAST_KICK] }), error: ["TS: duplicate timbre slot", 2] },
   { name: "no_operators", settings: settings({ timbres: [BEAST_LEAD, { drum: false, slot: 1, operators: [] }] }), error: ["TS: no operators", 1] },
   { name: "operators_9", settings: onTimbre({ operators: Array(9).fill(op({})) }), error: ["TS: too many operators", 0] },
-  // Routing (12-14).
+  // Routing (11-13).
   { name: "route_19", settings: routeAt(8, 19), error: ["TS: route out of range", 0, 7] },
   { name: "route_255", settings: routeAt(1, 255), error: ["TS: route out of range", 0, 0] },
   { name: "fm_on_first_operator", settings: routeAt(1, 1), error: ["TS: FM target not earlier", 0, 0] },
@@ -321,9 +398,25 @@ export const INVALID = [
   { name: "am_on_first_operator", settings: routeAt(1, 11), error: ["TS: AM target not earlier", 0, 0] },
   { name: "am_on_itself", settings: routeAt(2, 12), error: ["TS: AM target not earlier", 0, 1] },
   { name: "am_route_18_at_8", settings: routeAt(8, 18), error: ["TS: AM target not earlier", 0, 7] },
-  // Custom wave (15).
-  { name: "custom_wave", settings: one({ wave: { Custom: 0 } }), error: ["TS: custom wave unsupported", 0, 0] },
-  // Interim engine limits (17-21): one past each bound.
+  // Wave index (14).
+  { name: "custom_wave", settings: one({ wave: { Custom: 0 } }), error: ["TS: wave index out of range", 0, 0] },
+  {
+    name: "custom_wave_255_without_table",
+    settings: settings({ timbres: [{ drum: false, slot: 0, operators: [op({ wave: { Custom: 255 } })] }] }),
+    error: ["TS: wave index out of range", 0, 0],
+  },
+  {
+    name: "custom_wave_past_table",
+    settings: settings({
+      waves: [{ Samples: triangle4() }, { Harmonics: [1, 0, 1] }],
+      timbres: [
+        CHIP_LEAD,
+        { drum: true, slot: 81, operators: [op({ wave: { Custom: 1 } }), op({ route: 1, wave: { Custom: 0 } }), op({ wave: { Custom: 2 } })] },
+      ],
+    }),
+    error: ["TS: wave index out of range", 1, 2],
+  },
+  // Interim engine limits (15-19): one past each bound.
   { name: "volume_max_plus_1", settings: one({ volume: 1000001 }), error: ["TS: volume out of range", 0, 0] },
   { name: "ratio_max_plus_1", settings: one({ ratio: 640001 }), error: ["TS: ratio out of range", 0, 0] },
   { name: "pitch_ratio_max_plus_1", settings: one({ pitch_ratio: 160001 }), error: ["TS: pitch_ratio out of range", 0, 0] },
@@ -332,16 +425,20 @@ export const INVALID = [
   { name: "key_scale_min_minus_1", settings: one({ key_scale: -80001 }), error: ["TS: key_scale out of range", 0, 0] },
   { name: "u32_max_ratio", settings: one({ ratio: U32_MAX }), error: ["TS: ratio out of range", 0, 0] },
   { name: "i32_max_key_scale", settings: one({ key_scale: I32_MAX }), error: ["TS: key_scale out of range", 0, 0] },
-  // Filter (22).
+  // Filter (20).
   { name: "filter", settings: one({ filter: { kind: "LowPass", cutoff: 10000000, key_track: false, q: 7071 } }), error: ["TS: filter unsupported", 0, 0] },
   // Check order: the first failing check wins.
   { name: "order_quality_before_voices", settings: settings({ quality: 2, voices: 0 }), error: ["TS: quality out of range"] },
   { name: "order_voices_before_waves", settings: settings({ voices: 0, waves: [{ Harmonics: [] }] }), error: ["TS: voices out of range"] },
-  { name: "order_wave_length_before_v1_gate", settings: settings({ waves: [{ Harmonics: [1] }, { Samples: [] }] }), error: ["TS: samples length", 1] },
   {
-    name: "order_v1_wave_gate_before_timbres",
-    settings: settings({ waves: [{ Harmonics: [1] }], timbres: [{ drum: false, slot: 200, operators: [] }] }),
-    error: ["TS: custom wave unsupported"],
+    name: "order_wave_count_before_timbres",
+    settings: settings({ waves: Array(257).fill({ Samples: [0] }), timbres: [{ drum: false, slot: 200, operators: [] }] }),
+    error: ["TS: too many waves"],
+  },
+  {
+    name: "order_wave_length_before_timbres",
+    settings: settings({ waves: [{ Harmonics: [1] }, { Samples: [] }], timbres: [{ drum: false, slot: 200, operators: [] }] }),
+    error: ["TS: samples length", 1],
   },
   {
     name: "order_timbre_count_before_slot",
@@ -369,7 +466,7 @@ export const INVALID = [
     error: ["TS: route out of range", 0, 0],
   },
   { name: "order_route_before_wave", settings: one({ route: 1, wave: { Custom: 0 } }), error: ["TS: FM target not earlier", 0, 0] },
-  { name: "order_custom_before_volume", settings: one({ wave: { Custom: 0 }, volume: 1000001 }), error: ["TS: custom wave unsupported", 0, 0] },
+  { name: "order_wave_index_before_volume", settings: one({ wave: { Custom: 0 }, volume: 1000001 }), error: ["TS: wave index out of range", 0, 0] },
   { name: "order_volume_before_ratio", settings: one({ volume: 1000001, ratio: 640001 }), error: ["TS: volume out of range", 0, 0] },
   { name: "order_ratio_before_pitch_ratio", settings: one({ ratio: 640001, pitch_ratio: 160001 }), error: ["TS: ratio out of range", 0, 0] },
   { name: "order_pitch_ratio_before_sustain", settings: one({ pitch_ratio: 160001, sustain: 1000001 }), error: ["TS: pitch_ratio out of range", 0, 0] },
@@ -380,8 +477,8 @@ export const INVALID = [
     error: ["TS: key_scale out of range", 0, 0],
   },
   {
-    name: "order_custom_before_filter",
+    name: "order_wave_index_before_filter",
     settings: one({ wave: { Custom: 0 }, filter: { kind: "LowPass", cutoff: 1, key_track: false, q: 1 } }),
-    error: ["TS: custom wave unsupported", 0, 0],
+    error: ["TS: wave index out of range", 0, 0],
   },
 ];

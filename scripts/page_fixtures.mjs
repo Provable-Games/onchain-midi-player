@@ -176,6 +176,14 @@ export const CASES = [
     members: '"name":"Waves","description":"Every built-in waveform"',
   },
   {
+    name: "chip_waves",
+    dPad: 0,
+    settings: settingsNamed("reference_waves"),
+    midi: (label) => riff({ ppq: 96, us: 500000, program: 0, label }),
+    svg: cardSvg("Chip"),
+    members: '"name":"Chip waves","description":"Custom waves"',
+  },
+  {
     name: "every_slot",
     dPad: 8,
     settings: settingsNamed("every_slot"),

@@ -13,9 +13,25 @@
 //   snare      noise burst: zero-crossing rate above 2 kHz in the first 20 ms; RMS falls at least
 //              3x by 100-150 ms; silent after 200 ms
 //
-// The noise buffers are random until fork #7, so the checks use tolerances. Playwright is not a
-// dependency of this repository; point the script at an existing install, and pick the engine
-// (scripts/browsers.mjs):
+// and the custom waves of issue #2 (the reference waves, scripts/reference_waves.mjs, in the
+// `reference_waves` settings fixture), registered by the player:
+//
+//   stepped triangle (A4, 64 steps, 4-bit)   mean pitch within 1 cent of 440 Hz; its stepped
+//              character: harmonics 31 and 33 (the 4-bit steps) within 6 dB of the table's own
+//              spectrum, where TinySynth's built-in, smooth triangle (the control) is 15 dB or more
+//              below that
+//   pulses (A4)   12.5%, 25% and 50%: the fraction of each cycle above the midpoint within 0.01
+//   determinism   across two page loads: the buffers the engine generates (the seeded noise and
+//              reverb impulse of fork #7, and the custom waves' tables) are identical, sample for
+//              sample, and the same notes (custom voices, the custom chip kit, built-in drums on the
+//              seeded noise, reverb 30) render to the same audio within 1e-6 (-120 dB). Not bit for
+//              bit: when overlapping voices end, Chromium can mix the rest in another order, which
+//              moves a sample by a float32 rounding step (about 6e-8).
+//
+// The engine's noise and reverb are seeded (fork #7), so they are the same on every load at a given
+// sample rate; across browser engines the PCM differs, so the measurements use tolerances.
+// Playwright is not a dependency of this repository; point the script at an existing install, and
+// pick the engine (scripts/browsers.mjs):
 //
 //   PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core \
 //   PLAYWRIGHT_BROWSER=chromium|firefox|webkit \
@@ -29,12 +45,81 @@ import { readFileSync } from "node:fs";
 import { launchBrowser } from "./browsers.mjs";
 import { engineSource } from "./engine.mjs";
 import { GZIP_CLOSE, GZIP_OPEN, pageHtml, pageScripts } from "./page.mjs";
+import { encodeSettings } from "../player/encode.js";
+import { triangle4 } from "./reference_waves.mjs";
+import { REFERENCE_WAVES_SETTINGS } from "./settings_fixtures.mjs";
 
 const fixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/settings.json", import.meta.url), "utf8"));
-const beastText = fixtures.valid.find((/** @type {any} */ f) => f.name === "beast_reference").settings_text;
+const textOf = (/** @type {string} */ name) => fixtures.valid.find((/** @type {any} */ f) => f.name === name).settings_text;
+const beastText = textOf("beast_reference");
+const wavesText = textOf("reference_waves");
+// The measurements are made without reverb.
+const dryText = encodeSettings({ ...REFERENCE_WAVES_SETTINGS, reverb: 0 });
+// The control for the stepped triangle: the same voice on TinySynth's built-in (smooth) triangle.
+const controlText = encodeSettings({
+  ...REFERENCE_WAVES_SETTINGS,
+  reverb: 0,
+  timbres: [{ ...REFERENCE_WAVES_SETTINGS.timbres[0], operators: [{ ...REFERENCE_WAVES_SETTINGS.timbres[0].operators[0], wave: "Triangle" }] }],
+});
 // The player module, loaded as an inline module script that publishes its API for the test.
 const playerModule = readFileSync(new URL("../player/settings.js", import.meta.url), "utf8") +
   "\nwindow.__player = { decodeSettings, createSynth };\n";
+const SR = 48000;
+/**
+ * Renders notes through the player (decodeSettings and createSynth, so the custom waves are
+ * registered as on the page) into an OfflineAudioContext at 48 kHz. `notes`: [channel, program,
+ * note, on, off] (off 0: no note-off), times in seconds. Runs in the page.
+ */
+const RENDER = `window.__render = async (text, notes, dur) => {
+  const Offline = window.OfflineAudioContext;
+  window.AudioContext = function () { return Object.assign(new Offline(1, ${SR} * dur, ${SR}), { resume: () => Promise.resolve() }); };
+  const synth = window.__player.createSynth(window.WebAudioTinySynth, window.__player.decodeSettings("   " + text));
+  for (const [ch, program, note, on, off] of notes) {
+    if (ch !== 9) synth.setProgram(ch, program);
+    synth.noteOn(ch, note, 127, on);
+    if (off) synth.noteOff(ch, note, off);
+  }
+  // The generated buffers: the seeded noise and reverb impulse (fork #7), and the custom waves.
+  const data = (b) => [...Array(b.numberOfChannels)].flatMap((_, c) => Array.from(b.getChannelData(c)));
+  const buffers = { conv: data(synth.convBuf), ...Object.fromEntries(Object.entries(synth.noiseBuf).map(([k, b]) => [k, data(b)])) };
+  return { pcm: Array.from((await synth.actx.startRendering()).getChannelData(0)), buffers };
+};`;
+
+/** Mean pitch in cents from A4, from interpolated rising zero crossings between two times (s). */
+function centsFromA4(/** @type {number[]} */ x, /** @type {number} */ a, /** @type {number} */ b) {
+  const cross = [];
+  for (let i = Math.round(a * SR) + 1; i < b * SR; i++) if (x[i - 1] <= 0 && x[i] > 0) cross.push(i - 1 + -x[i - 1] / (x[i] - x[i - 1]));
+  return 1200 * Math.log2(SR / ((cross[cross.length - 1] - cross[0]) / (cross.length - 1)) / 440);
+}
+/** Amplitude of the frequency `f` over `n` samples from time `a`, Hann-windowed (a Goertzel sum). */
+function amplitude(/** @type {number[]} */ x, /** @type {number} */ f, /** @type {number} */ a, /** @type {number} */ n) {
+  let re = 0, im = 0;
+  for (let i = 0; i < n; i++) {
+    const v = x[Math.round(a * SR) + i] * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / n));
+    re += v * Math.cos((2 * Math.PI * f * i) / SR);
+    im -= v * Math.sin((2 * Math.PI * f * i) / SR);
+  }
+  return Math.hypot(re, im);
+}
+/** Harmonic `h` relative to the fundamental of an A4 note, in dB, over 0.5 s (220 cycles) from `a`. */
+const harmonicDb = (/** @type {number[]} */ x, /** @type {number} */ h, /** @type {number} */ a) =>
+  20 * Math.log10(amplitude(x, 440 * h, a, SR / 2) / amplitude(x, 440, a, SR / 2));
+/** The same for the table itself, played sample-and-hold: its DFT, times the hold's sinc. */
+function tableHarmonicDb(/** @type {number[]} */ t, /** @type {number} */ h) {
+  const c = (/** @type {number} */ n) => {
+    let re = 0, im = 0;
+    t.forEach((v, i) => { re += v * Math.cos((2 * Math.PI * n * i) / t.length); im -= v * Math.sin((2 * Math.PI * n * i) / t.length); });
+    const k = (Math.PI * n) / t.length;
+    return Math.hypot(re, im) * Math.abs(Math.sin(k) / k);
+  };
+  return 20 * Math.log10(c(h) / c(1));
+}
+/** The fraction of the samples between two times above the midpoint of their range: a pulse's width. */
+function duty(/** @type {number[]} */ x, /** @type {number} */ a, /** @type {number} */ b) {
+  const w = x.slice(Math.round(a * SR), Math.round(b * SR));
+  const mid = (Math.max(...w) + Math.min(...w)) / 2;
+  return w.filter((v) => v > mid).length / w.length;
+}
 
 const { browser } = await launchBrowser();
 let failed = 0;
@@ -112,6 +197,38 @@ try {
     };
   }, beastText);
 
+  // Custom waves (issue #2): the reference waves, registered by the player.
+  await page.addScriptTag({ content: RENDER });
+  /** @type {(text: string, notes: number[][], dur: number, on?: any) => Promise<{pcm: number[], buffers: Record<string, number[]>}>} */
+  const render = (text, notes, dur, on = page) => on.evaluate(([t, n, d]) => /** @type {any} */ (window).__render(t, n, d), /** @type {const} */ ([text, notes, dur]));
+  const tri = (await render(dryText, [[0, 0, 69, 0.05, 0]], 1)).pcm;
+  const smooth = (await render(controlText, [[0, 0, 69, 0.05, 0]], 1)).pcm;
+  const pulses = [];
+  for (const program of [1, 2, 3]) pulses.push((await render(dryText, [[0, program, 69, 0.05, 0]], 1)).pcm);
+  const table = triangle4();
+  const stepped = [31, 33].map((h) => [h, harmonicDb(tri, h, 0.45), tableHarmonicDb(table, h), harmonicDb(smooth, h, 0.45)]);
+  // Determinism: the custom voices, the custom chip kit, and built-in drums (seeded noise), with
+  // reverb 30 (the seeded impulse), rendered in this page and again in a second page load.
+  /** @type {number[][]} */
+  const song = [[0, 0, 69, 0.05, 0.6], [1, 4, 45, 0.1, 0.7], [2, 1, 76, 0.15, 0.5], [9, 0, 36, 0.2, 0], [9, 0, 38, 0.35, 0],
+    [9, 0, 42, 0.5, 0], [9, 0, 40, 0.6, 0], [9, 0, 46, 0.7, 0], [9, 0, 49, 0.8, 0], [9, 0, 39, 0.9, 0]];
+  const first = await render(wavesText, song, 1.5);
+  const again = await browser.newPage();
+  again.on("pageerror", (/** @type {unknown} */ e) => errors.push(String(e)));
+  await again.setContent(`<!doctype html><title>render check</title>${tag}<script>${pageScripts(PAGE).shim}</script>`);
+  await again.addScriptTag({ type: "module", content: playerModule });
+  await again.waitForFunction(() => "__player" in window);
+  await again.addScriptTag({ content: RENDER });
+  const second = await render(wavesText, song, 1.5, again);
+  /** @param {number[]} a @param {number[]} b */
+  const sameSamples = (a, b) => a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
+  const names = Object.keys(first.buffers);
+  const buffersDiffer = names.filter((k) => !sameSamples(first.buffers[k], second.buffers[k])).length +
+    Math.abs(names.length - Object.keys(second.buffers).length);
+  const pcmDiff = first.pcm.length === second.pcm.length ? Math.max(...first.pcm.map((v, i) => Math.abs(v - second.pcm[i]))) : Infinity;
+  const pcmDiffering = first.pcm.filter((v, i) => !Object.is(v, second.pcm[i])).length;
+  const songRms = Math.sqrt(first.pcm.reduce((a, v) => a + v * v, 0) / first.pcm.length);
+
   /** @type {Array<[string, number, (v: number) => boolean, string]>} */
   const checks = [
     ["lead mean pitch (cents from A4)", m.leadMeanCents, (v) => Math.abs(v) <= 3, "|x| <= 3"],
@@ -123,11 +240,22 @@ try {
     ["snare zero crossings/s, first 20 ms", m.snareZcRateFirst20ms, (v) => v > 2000, "> 2000"],
     ["snare RMS drop by 100-150 ms (x)", m.snareRmsDrop, (v) => v >= 3, ">= 3"],
     ["snare RMS after 200 ms", m.snareRmsAfter200ms, (v) => v < 1e-4, "< 1e-4"],
+    ["stepped triangle pitch (cents from A4)", centsFromA4(tri, 0.3, 0.95), (v) => Math.abs(v) <= 1, "|x| <= 1"],
+    ...stepped.flatMap(([h, got, want, control]) => /** @type {Array<[string, number, (v: number) => boolean, string]>} */ ([
+      [`stepped triangle harmonic ${h} (dB)`, got, (v) => Math.abs(v - want) <= 6, `${want.toFixed(1)} +- 6`],
+      [`smooth triangle harmonic ${h} (dB, control)`, control, (v) => v <= got - 15, `<= ${(got - 15).toFixed(1)}`],
+    ])),
+    ...[0.125, 0.25, 0.5].map((want, i) => /** @type {[string, number, (v: number) => boolean, string]} */ (
+      [`${want * 100}% pulse width`, duty(pulses[i], 0.3, 0.95), (v) => Math.abs(v - want) <= 0.01, `${want} +- 0.01`])),
+    [`two loads: generated buffers that differ (of ${names.length}: ${names.join(", ")})`, buffersDiffer, (v) => v === 0, "0"],
+    [`two loads: largest sample difference (${pcmDiffering} of ${first.pcm.length} differ)`, pcmDiff, (v) => v <= 1e-6, "<= 1e-6"],
+    ["two loads: the render is not silent (RMS)", songRms, (v) => v > 0.01, "> 0.01"],
   ];
   for (const [name, value, ok, want] of checks) {
     const pass = ok(value);
     if (!pass) failed++;
-    console.log(`${pass ? "PASS" : "FAIL"}  ${name.padEnd(38)} ${value.toFixed(4).padStart(12)}   want ${want}`);
+    const shown = value && Math.abs(value) < 1e-3 ? value.toExponential(2) : value.toFixed(4);
+    console.log(`${pass ? "PASS" : "FAIL"}  ${name.padEnd(38)} ${shown.padStart(12)}   want ${want}`);
   }
   if (errors.length) {
     failed++;

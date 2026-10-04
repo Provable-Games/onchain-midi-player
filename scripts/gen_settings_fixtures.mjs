@@ -5,11 +5,12 @@
 //   tests/fixtures/settings.json   every fixture: settings (JSON), expected SETTINGS text or
 //                                  expected error, as computed by the JS reference
 //                                  (player/encode.js, player/settings.js); for the largest valid
-//                                  input (`structuralMax`), only its length and SHA-256
+//                                  input (`structuralMax`) and the long-LFSR wave (`longLfsr`),
+//                                  only their length and SHA-256
 //   tests/settings_fixtures.cairo  the same fixtures as Cairo (Serde felts) plus one snforge
 //                                  test per fixture asserting that src/settings.cairo produces
-//                                  the same bytes or the same panic data; `structural_max()`,
-//                                  built in a loop, with its length and SHA-256
+//                                  the same bytes or the same panic data; `structural_max()` and
+//                                  `long_lfsr()`, built in loops, with their length and SHA-256
 //
 // Output is deterministic and already in `scarb fmt` style.
 //
@@ -24,7 +25,8 @@ import { fileURLToPath } from "node:url";
 import { encodeSettings } from "../player/encode.js";
 import { FILTER_KINDS, OPERATOR_FIELDS, SettingsError, WAVEFORMS, decodeSettings } from "../player/settings.js";
 import { validateSettings } from "../player/validate.js";
-import { ALL_SLOTS, INVALID, RESERVED, VALID, structuralMax, widestOperator } from "./settings_fixtures.mjs";
+import { lfsr } from "./reference_waves.mjs";
+import { ALL_SLOTS, INVALID, LONG_LFSR_SNARE, RESERVED, VALID, longLfsr, structuralMax, widestOperator } from "./settings_fixtures.mjs";
 
 /** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
 /** @typedef {import("../player/settings.js").Operator} Operator */
@@ -128,7 +130,16 @@ export function buildFixtures() {
   const maxText = encodeSettings(max);
   check(JSON.stringify(decodeSettings(maxText)) === JSON.stringify(max), "structural_max: decode(encode(x)) != x");
   const structural_max = { bytes: maxText.length, sha256: createHash("sha256").update(maxText).digest("hex") };
-  return { valid, reserved, invalid, structural_max };
+  // The long-LFSR wave, which tests/settings_fixtures.cairo builds in a loop: one drum timbre with
+  // LONG_LFSR_SNARE, on the default settings.
+  const long = longLfsr();
+  check(jsError(long) === null, `long_lfsr rejected: ${jsError(long)}`);
+  check(JSON.stringify(long.waves) === JSON.stringify([{ Samples: lfsr("long") }]) && lfsr("long").length === 32767, "long_lfsr: wave");
+  check(JSON.stringify(long.timbres) === JSON.stringify([{ drum: true, slot: 38, operators: [LONG_LFSR_SNARE] }]), "long_lfsr: timbre");
+  const longText = encodeSettings(long);
+  check(JSON.stringify(decodeSettings(longText)) === JSON.stringify(long), "long_lfsr: decode(encode(x)) != x");
+  const long_lfsr = { bytes: longText.length, sha256: createHash("sha256").update(longText).digest("hex") };
+  return { valid, reserved, invalid, structural_max, long_lfsr };
 }
 
 // ------------------------------------------------------------------------------------------
@@ -182,6 +193,15 @@ function fillItems(items, indent) {
   return lines;
 }
 
+/**
+ * `let mut felts = array![...]` at indentation 4, on one line if it fits, as scarb fmt lays it out.
+ * @param {string[]} items
+ */
+function feltsArray(items) {
+  const inline = `    let mut felts = array![${items.join(", ")}]`;
+  return inline.length <= WIDTH ? [inline] : ["    let mut felts = array![", ...fillItems(items, 8), "    ]"];
+}
+
 /** @param {[string, ...number[]]} error */
 function expectedAttr(error) {
   const [msg, ...indices] = error;
@@ -219,7 +239,7 @@ export function cairoSource(fx) {
     "",
     "use core::sha256::compute_sha256_byte_array;",
     "use onchain_tinysynth::settings::{encode, validate};",
-    "use onchain_tinysynth::types::{Operator, SynthSettings, Timbre};",
+    "use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, WaveDef};",
     "",
     "fn deserialize(felts: Array<felt252>) -> SynthSettings {",
     "    let mut span = felts.span();",
@@ -278,6 +298,53 @@ export function cairoSource(fx) {
     "    assert_eq!(text.len(), STRUCTURAL_MAX_LEN);",
     "    assert(sha256(@text) == STRUCTURAL_MAX_SHA256, 'structural_max sha256');",
     "}",
+    "",
+    "/// Length of `encode(@long_lfsr())`.",
+    `pub const LONG_LFSR_LEN: u32 = ${fx.long_lfsr.bytes};`,
+    "",
+    "/// Its SHA-256, as the JS reference computes it.",
+    "pub const LONG_LFSR_SHA256: u256 =",
+    `    0x${fx.long_lfsr.sha256};`,
+    "",
+    "/// One custom wave, a long-mode 15-bit LFSR (`lfsr(\"long\")` in scripts/reference_waves.mjs):",
+    "/// from state 1, each step outputs bit 0 (1 is -128, 0 is 127), shifts right and feeds back bit 0",
+    "/// XOR bit 1, for 32,767 steps. On a snare (`longLfsr` in scripts/settings_fixtures.mjs). Built in",
+    "/// a loop: too large for a literal.",
+    "pub fn long_lfsr() -> SynthSettings {",
+    "    let mut samples: Array<i8> = array![];",
+    "    let mut r: u32 = 1;",
+    "    loop {",
+    "        samples.append(if r & 1 == 1 {",
+    "            -128",
+    "        } else {",
+    "            127",
+    "        });",
+    "        r = r / 2 + ((r ^ (r / 2)) & 1) * 0x4000;",
+    "        if r == 1 {",
+    "            break;",
+    "        }",
+    "    }",
+    ...feltsArray(operatorsSerde([LONG_LFSR_SNARE]).map(String)),
+    "        .span();",
+    "    let operators: Span<Operator> = Serde::deserialize(ref felts).expect('fixture: bad Serde');",
+    "    SynthSettings {",
+    `        quality: ${longLfsr().quality},`,
+    `        reverb: ${longLfsr().reverb},`,
+    `        master_vol: ${longLfsr().master_vol},`,
+    `        voices: ${longLfsr().voices},`,
+    "        waves: [WaveDef::Samples(samples.span())].span(),",
+    "        timbres: [Timbre { drum: true, slot: 38, operators }].span(),",
+    "    }",
+    "}",
+    "",
+    "#[test]",
+    "fn test_valid_long_lfsr() {",
+    "    let settings = long_lfsr();",
+    "    validate(@settings);",
+    "    let text = encode(@settings);",
+    "    assert_eq!(text.len(), LONG_LFSR_LEN);",
+    "    assert(sha256(@text) == LONG_LFSR_SHA256, 'long_lfsr sha256');",
+    "}",
   ];
   for (const f of fx.valid) {
     out.push("", settingsFn(`valid_${f.name}`, `Valid: ${f.bytes} bytes of SETTINGS.`, f.settings));
@@ -293,7 +360,7 @@ export function cairoSource(fx) {
     );
   }
   for (const f of fx.reserved) {
-    out.push("", settingsFn(`reserved_${f.name}`, `Encodable, rejected in v1: ${f.bytes} bytes of SETTINGS.`, f.settings));
+    out.push("", settingsFn(`reserved_${f.name}`, `Encodable, rejected until issue #3: ${f.bytes} bytes of SETTINGS.`, f.settings));
     out.push("", textFn(`reserved_${f.name}_text`, f.settings_text));
     out.push(
       "",
@@ -305,7 +372,7 @@ export function cairoSource(fx) {
       "",
       "#[test]",
       expectedAttr(f.error),
-      `fn test_reserved_${f.name}_rejected_in_v1() {`,
+      `fn test_reserved_${f.name}_rejected() {`,
       `    validate(@reserved_${f.name}());`,
       "}",
     );
@@ -362,4 +429,5 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   console.log(`${fx.valid.length} valid, ${fx.reserved.length} reserved, ${fx.invalid.length} invalid fixtures`);
   for (const f of [...fx.valid, ...fx.reserved]) console.log(`  ${f.name.padEnd(28)} ${String(f.bytes).padStart(6)} bytes`);
   console.log(`  ${"structural_max".padEnd(28)} ${String(fx.structural_max.bytes).padStart(6)} bytes (length and SHA-256 only)`);
+  console.log(`  ${"long_lfsr".padEnd(28)} ${String(fx.long_lfsr.bytes).padStart(6)} bytes (length and SHA-256 only)`);
 }

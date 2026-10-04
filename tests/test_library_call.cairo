@@ -39,7 +39,7 @@ fn constants() {
     let synth = class();
     assert(synth.script_sha256() == ENGINE_SHA256, 'script_sha256');
     assert(synth.script_sha256() == page_data::ENGINE_SHA256, 'script_sha256 (page_data)');
-    assert(synth.version() == 'tinysynth-197772d+page.8', 'version');
+    assert(synth.version() == 'tinysynth-197772d+page.9', 'version');
     assert(synth.version() == page_data::VERSION, 'version (page_data)');
     let license = synth.license();
     assert_eq!(license.len(), LICENSE_LEN);

@@ -27,9 +27,9 @@ export const MIN_SAMPLES = 1;
 /** Fewest voices: with none, every note would be cut. */
 export const MIN_VOICES = 1;
 /**
- * Interim engine limits (checks 17-21), in fixed point: the pinned engine computes non-finite
+ * Interim engine limits (checks 15-19), in fixed point: the pinned engine computes non-finite
  * AudioParam values past them and throws while playing. To be removed once it guards them (fork
- * #13, T5).
+ * #13, task T5.2).
  */
 export const MAX_VOLUME = 1000000;
 export const MAX_RATIO = 640000;
@@ -40,14 +40,13 @@ const MAX_ROUTE = 10 + MAX_OPERATORS;
 
 /**
  * Applies the checks of `src/settings.cairo`, in the same order and with the same messages and
- * indices, and throws a `SettingsError` on the first failure. `customWaves` lifts the issue #2 gate
- * (checks 5 and 15); it is false in v1. The other numeric fields take any value of their type,
- * except the interim engine limits (checks 17-21).
+ * indices, and throws a `SettingsError` on the first failure. The other numeric fields, and every
+ * wave sample and harmonic, take any value of their type, except the interim engine limits
+ * (checks 15-19).
  * @param {SynthSettings} s
- * @param {{customWaves?: boolean}} [options]
  * @returns {SynthSettings} `s`
  */
-export function validateSettings(s, { customWaves = false } = {}) {
+export function validateSettings(s) {
   /** @param {boolean} ok @param {string} code @param {number[]} [indices] */
   const check = (ok, code, indices = []) => {
     if (!ok) throw new SettingsError(code, indices);
@@ -66,7 +65,6 @@ export function validateSettings(s, { customWaves = false } = {}) {
       check(n >= MIN_SAMPLES, "TS: samples length", [w]);
     }
   });
-  check(customWaves || s.waves.length === 0, "TS: custom wave unsupported");
   check(s.timbres.length <= MAX_TIMBRES, "TS: too many timbres");
   const used = new Set();
   s.timbres.forEach((timbre, t) => {
@@ -85,10 +83,7 @@ export function validateSettings(s, { customWaves = false } = {}) {
       check(r <= MAX_ROUTE, range("route"), at);
       check(!(r >= 1 && r <= 10 && r >= pos), "TS: FM target not earlier", at);
       check(!(r >= 11 && r - 10 >= pos), "TS: AM target not earlier", at);
-      if (typeof op.wave === "object") {
-        check(customWaves, "TS: custom wave unsupported", at);
-        check(op.wave.Custom < s.waves.length, range("wave index"), at);
-      }
+      if (typeof op.wave === "object") check(op.wave.Custom < s.waves.length, range("wave index"), at);
       check(op.volume <= MAX_VOLUME, range("volume"), at);
       check(op.ratio <= MAX_RATIO, range("ratio"), at);
       check(op.pitch_ratio <= MAX_PITCH_RATIO, range("pitch_ratio"), at);

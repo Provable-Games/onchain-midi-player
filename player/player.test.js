@@ -736,6 +736,23 @@ describe("the page's player script, real engine", () => {
     assert.equal(synth.useReverb, 0, "reverb 0: no convolver");
   });
 
+  test("custom waves are registered before the timbres that name them, and play (issue #2)", async () => {
+    const h = runPage(htmlOf(CASES.chip_waves), { engine: "real" });
+    h.ready();
+    h.click();
+    await h.flush();
+    const synth = h.synths[0];
+    assert.deepEqual(Array.from(synth.program.slice(0, 5), (/** @type {any} */ p) => p.p[0].w), ["nS0", "nS1", "nS2", "nS3", "nS4"]);
+    assert.deepEqual(Array.from(synth.drummap[38 - 35].p, (/** @type {any} */ o) => o.w), ["nS5", "nS3"]);
+    // Each a looped buffer of its table, each sample held k frames (the mock runs at 8 kHz: k = 1).
+    const tri = synth.noiseBuf.nS0;
+    assert.equal(tri.length, 65, "64 samples and the guard frame");
+    assert.equal(tri.getChannelData(0)[0], 127 / 128);
+    h.advance(1);
+    assert.ok(synth.sent.some((/** @type {any} */ [m]) => m[0] === 0x99 && m[1] === 38 && m[2] > 0), "the custom snare is played");
+    assert.deepEqual(h.consoleErrors, []);
+  });
+
   test("a song with no events other than tempo: ▶ plays nothing and shows no error, the art restarts at once, ■ and ▶ still work", async () => {
     // checkMidi accepts it (a valid file with a loop of at least 50 ms). The engine (fork #9) leaves
     // such a song stopped: startTime is null, so there is no tick 0 to time the art restart to, and

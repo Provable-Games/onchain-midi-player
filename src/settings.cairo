@@ -51,24 +51,22 @@
 //! | 3 | `waves.len() <= 256` | `TS: too many waves` |
 //! | 4 | per wave: Harmonics has at least 1 entry | `TS: harmonics length` |
 //! | 4 | per wave: Samples has at least 1 entry | `TS: samples length` |
-//! | 5 | v1, until #2: `waves` is empty | `TS: custom wave unsupported` |
-//! | 6 | `timbres.len() <= 175` | `TS: too many timbres` |
-//! | 7 | program `slot <= 127` | `TS: program slot out of range` |
-//! | 8 | drum `35 <= slot <= 81` | `TS: drum slot out of range` |
-//! | 9 | `(drum, slot)` unique | `TS: duplicate timbre slot` |
-//! | 10 | at least 1 operator | `TS: no operators` |
-//! | 11 | at most 8 operators | `TS: too many operators` |
-//! | 12 | `route <= 18` | `TS: route out of range` |
-//! | 13 | FM (`1..=10`): target is an earlier operator | `TS: FM target not earlier` |
-//! | 14 | AM (`11..`): target `route - 10` is an earlier operator | `TS: AM target not earlier` |
-//! | 15 | v1, until #2: `wave` is not `Custom` | `TS: custom wave unsupported` |
-//! | 16 | `Custom(i)`: `i < waves.len()` | `TS: wave index out of range` |
-//! | 17 | interim, engine limit: `volume <= 1_000_000` | `TS: volume out of range` |
-//! | 18 | interim, engine limit: `ratio <= 640_000` | `TS: ratio out of range` |
-//! | 19 | interim, engine limit: `pitch_ratio <= 160_000` | `TS: pitch_ratio out of range` |
-//! | 20 | interim, engine limit: `sustain <= 1_000_000` | `TS: sustain out of range` |
-//! | 21 | interim, engine limit: `-80_000 <= key_scale <= 80_000` | `TS: key_scale out of range` |
-//! | 22 | until #3: `filter` is `None` | `TS: filter unsupported` |
+//! | 5 | `timbres.len() <= 175` | `TS: too many timbres` |
+//! | 6 | program `slot <= 127` | `TS: program slot out of range` |
+//! | 7 | drum `35 <= slot <= 81` | `TS: drum slot out of range` |
+//! | 8 | `(drum, slot)` unique | `TS: duplicate timbre slot` |
+//! | 9 | at least 1 operator | `TS: no operators` |
+//! | 10 | at most 8 operators | `TS: too many operators` |
+//! | 11 | `route <= 18` | `TS: route out of range` |
+//! | 12 | FM (`1..=10`): target is an earlier operator | `TS: FM target not earlier` |
+//! | 13 | AM (`11..`): target `route - 10` is an earlier operator | `TS: AM target not earlier` |
+//! | 14 | `Custom(i)`: `i < waves.len()` | `TS: wave index out of range` |
+//! | 15 | interim, engine limit: `volume <= 1_000_000` | `TS: volume out of range` |
+//! | 16 | interim, engine limit: `ratio <= 640_000` | `TS: ratio out of range` |
+//! | 17 | interim, engine limit: `pitch_ratio <= 160_000` | `TS: pitch_ratio out of range` |
+//! | 18 | interim, engine limit: `sustain <= 1_000_000` | `TS: sustain out of range` |
+//! | 19 | interim, engine limit: `-80_000 <= key_scale <= 80_000` | `TS: key_scale out of range` |
+//! | 20 | until #3: `filter` is `None` | `TS: filter unsupported` |
 //!
 //! Only what the format or the engine requires is checked, never a limit for gas or size: the
 //! network prices those. The other numeric fields (`reverb`, `master_vol`, the upper end of
@@ -76,13 +74,17 @@
 //! them (`setMasterVol`, `setReverbLev` and `setVoices` assign them, and Web Audio clamps
 //! frequencies).
 //!
-//! Checks 17-21 exist only because the pinned engine fails beyond them. These five fields multiply
+//! Checks 15-19 exist only because the pinned engine fails beyond them. These five fields multiply
 //! into the gains and frequencies the engine passes to Web Audio, which requires finite values:
 //! past the bounds an overflowing product throws, and the throwing note stalls the whole scheduler.
-//! They are interim, to be removed once the pinned engine guards non-finite values (fork issue
-//! #13, task T5). README, "Engine limits on operator values".
+//! They are interim, to be removed once the pinned engine guards non-finite computed values (fork
+//! issue #13, task T5.2; T5 checks the values `setTimbre` receives, not what they multiply into).
+//! README, "Engine limits on operator values".
 //!
-//! Check 16 cannot be reached while check 15 is in force; issue #2 removes checks 5 and 15
+//! Custom waves (issue #2) need no check beyond the counts, lengths and index above: the player
+//! registers each wave with the engine's `setSampleWave` or `setHarmonicWave` (fork #26), which
+//! take any table of at least one sample or harmonic, every `i8` sample and every `u16` harmonic.
+//! An all-zero wave is silent. Issue #2 removed v1's two `'TS: custom wave unsupported'` checks
 //! without changing the grammar or the format version.
 
 use core::num::traits::Pow;
@@ -100,7 +102,7 @@ pub const SETTINGS_FORMAT_VERSION: u32 = 1;
 /// Maximum entries in `SynthSettings::waves`: all that `Waveform::Custom(u8)` can index.
 pub const MAX_WAVES: u32 = 256;
 /// Maximum entries in `SynthSettings::timbres`: every slot reachable from MIDI, 128 programs
-/// (0..=127) plus 47 drum notes (35..=81). Each `(drum, slot)` pair may appear once (check 9), so
+/// (0..=127) plus 47 drum notes (35..=81). Each `(drum, slot)` pair may appear once (check 8), so
 /// no valid input has more; checking the count first bounds the loop before any per-timbre work.
 pub const MAX_TIMBRES: u32 = 175;
 /// Maximum operators per timbre.
@@ -119,9 +121,9 @@ pub const MAX_DRUM_SLOT: u32 = 81;
 pub const MAX_PROGRAM_SLOT: u32 = 127;
 /// Fewest `voices`: with none, every note would be cut.
 pub const MIN_VOICES: u32 = 1;
-/// Interim engine limits (checks 17-21), in fixed point: the largest values of the fields that
+/// Interim engine limits (checks 15-19), in fixed point: the largest values of the fields that
 /// multiply into the engine's gains and frequencies that the pinned engine plays without computing
-/// a non-finite value. To be removed once it guards them (fork #13, T5).
+/// a non-finite value. To be removed once it guards them (fork #13, task T5.2).
 pub const MAX_VOLUME: u32 = 1_000_000;
 pub const MAX_RATIO: u32 = 640_000;
 pub const MAX_PITCH_RATIO: u32 = 160_000;
@@ -159,17 +161,6 @@ pub fn default_operator() -> Operator {
 
 /// Applies the checks above to `settings`, in order, and reverts on the first failure.
 pub fn validate(settings: @SynthSettings) {
-    validate_with(settings, false)
-}
-
-/// Validates, then encodes. This is what `midi_segment` writes into the page.
-pub fn validate_and_encode(settings: @SynthSettings) -> ByteArray {
-    validate(settings);
-    encode(settings)
-}
-
-/// `validate` with the issue #2 gate selectable, so the post-#2 rules are tested now.
-pub(crate) fn validate_with(settings: @SynthSettings, custom_waves: bool) {
     assert((*settings.quality).into() <= 1_u32, 'TS: quality out of range');
     assert((*settings.voices).into() >= MIN_VOICES, 'TS: voices out of range');
 
@@ -194,7 +185,6 @@ pub(crate) fn validate_with(settings: @SynthSettings, custom_waves: bool) {
         }
         w += 1;
     }
-    assert(custom_waves || n_waves == 0, 'TS: custom wave unsupported');
 
     let timbres = *settings.timbres;
     assert(timbres.len() <= MAX_TIMBRES, 'TS: too many timbres');
@@ -202,18 +192,19 @@ pub(crate) fn validate_with(settings: @SynthSettings, custom_waves: bool) {
     let mut used_drums: u64 = 0;
     let mut t: u32 = 0;
     for timbre in timbres {
-        validate_timbre(timbre, t, n_waves, custom_waves, ref used_programs, ref used_drums);
+        validate_timbre(timbre, t, n_waves, ref used_programs, ref used_drums);
         t += 1;
     }
 }
 
+/// Validates, then encodes. This is what `midi_segment` writes into the page.
+pub fn validate_and_encode(settings: @SynthSettings) -> ByteArray {
+    validate(settings);
+    encode(settings)
+}
+
 fn validate_timbre(
-    timbre: @Timbre,
-    t: u32,
-    n_waves: u32,
-    custom_waves: bool,
-    ref used_programs: u128,
-    ref used_drums: u64,
+    timbre: @Timbre, t: u32, n_waves: u32, ref used_programs: u128, ref used_drums: u64,
 ) {
     let slot: u32 = (*timbre.slot).into();
     if *timbre.drum {
@@ -244,12 +235,12 @@ fn validate_timbre(
     }
     let mut o: u32 = 0;
     for op in ops {
-        validate_operator(op, t, o, n_waves, custom_waves);
+        validate_operator(op, t, o, n_waves);
         o += 1;
     }
 }
 
-fn validate_operator(op: @Operator, t: u32, o: u32, n_waves: u32, custom_waves: bool) {
+fn validate_operator(op: @Operator, t: u32, o: u32, n_waves: u32) {
     // 1-based position of this operator, as TinySynth's `g` counts.
     let pos = o + 1;
     let route: u32 = (*op.route).into();
@@ -263,9 +254,6 @@ fn validate_operator(op: @Operator, t: u32, o: u32, n_waves: u32, custom_waves: 
         fail_at_op('TS: AM target not earlier', t, o);
     }
     if let Waveform::Custom(i) = *op.wave {
-        if !custom_waves {
-            fail_at_op('TS: custom wave unsupported', t, o);
-        }
         if i.into() >= n_waves {
             fail_at_op('TS: wave index out of range', t, o);
         }
@@ -299,8 +287,8 @@ fn fail_at_op(msg: felt252, t: u32, o: u32) -> core::never {
 }
 
 /// Encodes `settings` as `SETTINGS` (the grammar above), covering every variant, including
-/// custom waves and filters, which `validate` rejects in v1. Does not range-check fields
-/// (call `validate` first).
+/// filters, which `validate` rejects until issue #3. Does not range-check fields (call `validate`
+/// first).
 pub fn encode(settings: @SynthSettings) -> ByteArray {
     let mut out: ByteArray = "";
     put_u(ref out, SETTINGS_FORMAT_VERSION);
@@ -478,7 +466,7 @@ pub(crate) fn put_i(ref out: ByteArray, v: i32) {
 #[cfg(test)]
 mod tests {
     use crate::types::{Timbre, WaveDef, Waveform};
-    use super::{default_operator, default_settings, encode, put_i, put_u, validate_with};
+    use super::{default_operator, default_settings, encode, put_i, put_u, validate};
 
     fn dec_u(v: u32) -> ByteArray {
         let mut out = "";
@@ -528,23 +516,22 @@ mod tests {
         super::SynthSettings { waves, timbres: [timbre].span(), ..default_settings() }
     }
 
-    // Check 16 is unreachable through `validate` until issue #2 removes checks 5 and 15.
     #[test]
-    fn custom_wave_index_in_range_after_issue_2() {
+    fn custom_wave_index_in_range() {
         let waves = [WaveDef::Harmonics([1, 1].span()), WaveDef::Samples([1, -1].span())].span();
-        validate_with(@with_custom(1, waves), true);
+        validate(@with_custom(1, waves));
     }
 
     #[test]
     #[should_panic(expected: ('TS: wave index out of range', 0, 0))]
-    fn custom_wave_index_out_of_range_after_issue_2() {
+    fn custom_wave_index_out_of_range() {
         let waves = [WaveDef::Harmonics([1].span()), WaveDef::Samples([1, -1].span())].span();
-        validate_with(@with_custom(2, waves), true);
+        validate(@with_custom(2, waves));
     }
 
     #[test]
     #[should_panic(expected: ('TS: wave index out of range', 0, 0))]
-    fn custom_wave_without_table_after_issue_2() {
-        validate_with(@with_custom(0, [].span()), true);
+    fn custom_wave_without_table() {
+        validate(@with_custom(0, [].span()));
     }
 }
