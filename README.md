@@ -348,7 +348,7 @@ The full Beast `token_uri` above, token 4 of the example, with `SETTINGS` of eac
 - **How these were measured.** With snforge, through the example's NFT (`--gas-report`, the `token_uri` call itself). The calldata is the `SynthSettings` and the score.
   - Every size runs. The 1.5 MB input takes 174M Cairo steps through `token_uri`, and the 5.4 MB input takes 73 s through `midi_segment`.
   - The library call moves the calldata in and the result out. It costs 1,468M more than calling `midi_segment` directly at 1.5 MB (284,309 felts in and 86,382 out), and 101M at the 156,489-byte input.
-  - The repository's tests go up to the largest v1 input (`structural_max()` in [`tests/settings_fixtures.cairo`](tests/settings_fixtures.cairo), built in a loop and checked against the JS reference's length and SHA-256). It takes about 18M steps through `midi_segment`, so [`Scarb.toml`](Scarb.toml) raises snforge's step limit to 100M. The larger sizes were measured once, outside CI.
+  - The repository's tests go up to the largest v1 input (`structural_max()` in [`tests/settings_fixtures.cairo`](tests/settings_fixtures.cairo), built in a loop and checked against the JS reference's length and SHA-256). With every operator filtered (191,664 bytes) it takes about 21M steps through `midi_segment`, so [`Scarb.toml`](Scarb.toml) raises snforge's step limit to 100M. The larger sizes were measured once, outside CI.
 
 ### Network and node limits
 
@@ -372,11 +372,11 @@ A consumer's `token_uri` is a view call (`starknet_call`), so what limits it is 
 | Hosted providers | Undocumented. The issue #11 probe found PublicNode capping below about 286M | |
 
 - **Against the table above:**
-  - A full Beast with the reference sounds (288.5M) already needs more than Juno's default.
-  - The largest v1 input (2.61B) fits Pathfinder's and Madara's 10B. So does TinyChip's long noise (2.44B).
+  - A full Beast with the reference sounds (286.4M) already needs more than Juno's default.
+  - The largest input before filters (156,489 bytes, 2.61B) fits Pathfinder's and Madara's 10B. Filtering every operator (191,664 bytes) adds about 0.48B through `midi_segment` (2,785.8M against 2,303.7M), still well inside. So does TinyChip's long noise (2.44B).
   - With custom waves, 10B is reached at about 670 KB of `SETTINGS`.
   - The responses pass jsonrpsee's 10 MiB at about 4.85 MB of `token_uri`, about 2.7 MB of `SETTINGS`.
-- **Hazard for integrators.** If any class in the call chain is Cairo 0 or Sierra before 1.7 (a proxy pointing at an old class, for example), that frame and everything below it switches to Cairo-steps accounting. It is then capped at 10M steps (Juno: 4M), about 1B gas. `midi_segment` alone takes about 18M steps with the largest v1 `SETTINGS`. Keep every class in the chain at Sierra 1.7 or later.
+- **Hazard for integrators.** If any class in the call chain is Cairo 0 or Sierra before 1.7 (a proxy pointing at an old class, for example), that frame and everything below it switches to Cairo-steps accounting. It is then capped at 10M steps (Juno: 4M), about 1B gas. `midi_segment` alone takes about 21M steps with the largest `SETTINGS` without custom waves. Keep every class in the chain at Sierra 1.7 or later.
 
 ## Sound settings and custom sounds
 
