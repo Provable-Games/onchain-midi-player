@@ -9,7 +9,7 @@ compatibility: Needs Node 22 or later and a clone of https://github.com/Provable
 
 The contract passes a `SynthSettings` value to `midi_segment` on every `token_uri` call. It sets the built-in sound set, reverb, master volume, voices, custom waves and custom timbres. The source of truth is the README's [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds) and [`src/types.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/types.cairo).
 
-Boundary: the [midi-guide](../midi-guide/SKILL.md) skill covers what goes in the `.mid` (notes, program changes, controllers). This skill covers what the contract passes in `SynthSettings`. Wiring it into `token_uri` is the [integrator-guide](../integrator-guide/SKILL.md) skill.
+Boundary: the [midi-guide](../midi-guide/SKILL.md) skill covers what goes in the `.mid` (notes, program changes, controllers). This skill covers what the contract passes in `SynthSettings`, including a composer's contract that serves it with the MIDI ([Settings from a sound provider](#settings-from-a-sound-provider)). Wiring it into `token_uri` is the [integrator-guide](../integrator-guide/SKILL.md) skill.
 
 ## Workflow
 
@@ -130,6 +130,16 @@ fn token_settings() -> SynthSettings {
 ```
 
 Fixed or live: for a given class hash, the same settings and MIDI always give the same sound. Pass constants or values from permanent traits and a token sounds the same forever; derive them from state that changes and the sound follows it (emit an ERC-4906 metadata update when it does; see the [integrator-guide](../integrator-guide/SKILL.md)). The example derives only `reverb` from the token's tier ([`examples/beast_consumer/src/sound.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/examples/beast_consumer/src/sound.cairo)).
+
+## Settings from a sound provider
+
+A composer's contract that implements the sound provider interface (`onchain_tinysynth::provider`; README [Sound provider interface](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-provider-interface)) returns each token's `SynthSettings` with its MIDI, in `get_sound(token_id) -> TokenSound { midi, settings }`. A MIDI file can select an instrument but not define one, so the definitions travel in the settings, and they must pass `settings::validate` in the class version the NFT calls.
+
+- **Return a per-token subset:** only the timbres for the programs and drum notes this token's MIDI plays, and only the waves those timbres select. A Beast's subset is about 0.9–1.4 KB of `SETTINGS`, against about 3.9 KB for a full chip bank, and `SETTINGS` costs about 14.5M L2 gas per 1,000 bytes through `midi_segment`, on every `token_uri` call.
+- **Renumber the waves in a subset.** `Waveform::Custom(index)` points into the `waves` you return, not into your bank: when you drop unused waves, remap each operator's index to the wave's new position.
+- **Hold the bank as constants in the provider's code** (functions returning literal values, as in [Building settings in Cairo](#building-settings-in-cairo)), not in storage: a storage read costs about 24K L2 gas per felt.
+- **Long sample tables cost what their size costs,** in the provider and again through `midi_segment`: the long LFSR adds about 2.1B (above, Custom waves). Prefer short tables, or `WhiteNoise`.
+- **Test the subset per token:** run `midi_segment` on the provider's output for a spread of tokens in snforge, and preview a few offline.
 
 ## Example timbres
 

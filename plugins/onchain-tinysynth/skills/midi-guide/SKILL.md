@@ -9,7 +9,7 @@ compatibility: Needs Node 22 or later and a clone of https://github.com/Provable
 
 This guide is for experienced MIDI authors. It lists only what differs from standard MIDI players and upstream TinySynth. The source of truth is the README's [MIDI contract](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#midi-contract); read it when a detail matters.
 
-Boundaries: this skill covers what goes in the `.mid` (notes, program changes, controllers, tempo, loop point). The contract's `SynthSettings` (which sounds the programs and drums play, reverb, volume, voices) is the [sound-design](../sound-design/SKILL.md) skill. Wiring the player into a contract is the [integrator-guide](../integrator-guide/SKILL.md) skill.
+Boundaries: this skill covers what goes in the `.mid` (notes, program changes, controllers, tempo, loop point), and how a composer's contract serves it ([Serving the score from a contract](#serving-the-score-from-a-contract)). The contract's `SynthSettings` (which sounds the programs and drums play, reverb, volume, voices) is the [sound-design](../sound-design/SKILL.md) skill. Wiring the player into a contract is the [integrator-guide](../integrator-guide/SKILL.md) skill.
 
 ## Start offchain
 
@@ -26,7 +26,7 @@ Open the printed URL and press ▶. If it plays right there, it plays the same f
 
 ### Get the tools
 
-- Node 22 or later. `check-midi` and `preview` need no `npm ci`. While the repository is private, cloning it needs GitHub access.
+- Node 22 or later. `check-midi` and `preview` need no `npm ci`.
 - Use a clone whose `PAGE` is your class's: `grep 'pub const VERSION' src/page_data.cairo` must print the class's `version()` (`preview` prints it too). The same `VERSION` always means the same `PAGE` bytes, so the newest commit with it has both the tools and the right page: `main` while its `VERSION` matches, otherwise the last commit before `VERSION` changed (`git log --oneline -- src/page_data.cairo`). A class's "Built from" commit in [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments) can predate the tools. Details: README [Agent skills](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#agent-skills).
 
 ## What the offline check guarantees
@@ -91,6 +91,31 @@ A beat of `b` ms (tempo in µs per quarter / 1000) lines up with an art loop of 
 Retuning the music is usually better than retuning the art: GIF delays come in 10 ms steps, so matching an arbitrary beat needs uneven frames, and the change hits every token's art. Wrapper SVG durations are cheap to set to the music's grid. The Beast worked example, with measured numbers, is in [references/art-sync.md](references/art-sync.md).
 
 Why the art restarts at every pass: the art runs on the page's clock and the sound on the audio clock, and the two drift apart (headless Firefox's image clock runs about 160 ppm fast, and real sound cards are commonly tens of ppm off). A restart at every pass bounds that drift to one pass; with periods that match, it costs nothing visible.
+
+## Serving the score from a contract
+
+A composer whose contract writes the scores onchain implements the sound provider interface, `onchain_tinysynth::provider`, so any NFT that uses the player can call it. A MIDI file can select an instrument but not define one, so `get_sound` returns the score together with the instrument definitions it plays:
+
+```cairo
+use onchain_tinysynth::provider::{ISoundProvider, TokenSound};
+
+// In the composer's contract:
+#[abi(embed_v0)]
+impl SoundProviderImpl of ISoundProvider<ContractState> {
+    fn get_sound(self: @ContractState, token_id: u256) -> TokenSound {
+        TokenSound { midi: compose(token_id), settings: instruments_for(token_id) }
+    }
+}
+```
+
+`IMidiProvider::get_midi(token_id) -> ByteArray`, the same bytes as `get_sound(token_id).midi`, is optional, for tools and MIDI-only consumers. The provider contract, from the README's [Sound provider interface](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-provider-interface), which has the details:
+
+- **Token IDs as minted:** accept the whole `u256` the NFT minted, decode only the bits you use, and ignore the rest (Beasts' newer IDs are 180 bits).
+- **A raw Standard MIDI File** (not base64) that passes `check-midi`. In your CI, check the scores the contract produces for a spread of tokens, read with `get_midi` or written out by snforge tests.
+- **Valid settings:** `settings` passes `settings::validate` in the class version the NFT calls. Return only the timbres and waves this token's score uses, and keep the bank as constants in code (see [sound-design](../sound-design/SKILL.md)).
+- **Deterministic:** the same token and live state always give the same bytes, whoever calls.
+- **View-only:** no storage writes.
+- **Revert only for an unknown token.**
 
 ## Reference files
 

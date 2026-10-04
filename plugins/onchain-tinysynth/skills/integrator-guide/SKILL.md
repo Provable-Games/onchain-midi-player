@@ -10,10 +10,9 @@ compatibility: Needs the Scarb and Starknet Foundry versions in the repository's
 The class is declared on Starknet but never deployed. Your contract reaches it with `library_call` and gets back the pieces of a `token_uri` whose `animation_url` is an offline HTML page: the TinySynth engine gzipped, the player, then the token's settings, MIDI and SVG art.
 
 - **Supported today:** `token_uri`s that are base64 JSON data URIs (`data:application/json;base64,…`). Plain-JSON `token_uri`s are issue [#29](https://github.com/Provable-Games/onchain-tinysynth/issues/29).
-- **Access:** while the repository is private, the crate dependency, the clone and the plugin install all need GitHub access to it.
 - **Source of truth:** the README's [Integration guide](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#integration-guide) and [Consumer `token_uri` layout](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#consumer-token_uri-layout). The interface and its byte formats: [`src/interface.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/interface.cairo).
 - **Reference implementation:** [`examples/beast_consumer/src/beast_like_nft.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/examples/beast_consumer/src/beast_like_nft.cairo), commented step by step, with golden tests.
-- **Related skills:** the MIDI comes from the [midi-guide](../midi-guide/SKILL.md), the `SynthSettings` from [sound-design](../sound-design/SKILL.md), and checking a deployed token is the [token-uri-inspector](../token-uri-inspector/SKILL.md).
+- **Related skills:** the MIDI comes from the [midi-guide](../midi-guide/SKILL.md), the `SynthSettings` from [sound-design](../sound-design/SKILL.md) (both often from a composer's contract through the sound provider interface, step 5), and checking a deployed token is the [token-uri-inspector](../token-uri-inspector/SKILL.md).
 
 ## 1. Depend on the crate
 
@@ -96,6 +95,11 @@ Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is 
 
 ## 5. MIDI and `SynthSettings`
 
+- **Where they come from:** constants in your NFT or renderer (the reference implementation), or a composer's contract that implements the sound provider interface, `onchain_tinysynth::provider`. A MIDI file can select an instrument but not define one, so the composer's contract returns both: `ISoundProvider::get_sound(token_id) -> TokenSound { midi, settings }`. README: [Sound provider interface](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-provider-interface), with the contract a provider must honour.
+  - Call it with `try_get_sound(provider, token_id)`, which returns `None` instead of reverting (step 6), and pass `sound.midi` and `sound.settings` straight to `midi_segment`.
+  - Let your renderer call the provider itself, rather than the NFT fetching the sound and passing it on: that saves a calldata hop for the MIDI and the settings.
+  - Pass token IDs exactly as minted; the provider ignores the bits it does not use.
+  - Store the provider address with a setter that calls `get_sound` once (an undeployed address reverts uncatchably), and let zero turn sound off: `try_get_sound` makes no call for it.
 - **MIDI:** the bytes of a Standard MIDI File. The class embeds it without parsing it, so a bad file never reverts: the page shows an error instead. Check every score with `check-midi` in your CI ([Checking MIDI files](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#checking-midi-files) has a CI snippet). See the [midi-guide](../midi-guide/SKILL.md).
 - **`SynthSettings`:** checked by `midi_segment`; an invalid value reverts the call. See [sound-design](../sound-design/SKILL.md).
 - **Fixed or live sound.** For a given class hash, the same MIDI and settings always give the same sound. Fixed: pass constants or values from permanent traits, and a token sounds the same forever. Live: derive the MIDI and settings from state that changes (a level, a season, an onchain composer), and the sound follows it. When state changes what `token_uri` returns, emit an ERC-4906 `MetadataUpdate` (or `BatchMetadataUpdate`) so marketplaces refetch; the same applies when you switch the class hash or the renderer.
@@ -104,7 +108,8 @@ Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is 
 
 Decide what `token_uri` returns when the sound path fails: usually the token without sound.
 
-- **What can be caught.** Since Starknet 0.13.4 a callee's panic, a missing entry point, and malformed or oversized return data come back to the caller as an error instead of reverting it. Call through a raw `call_contract_syscall` (or `library_call_syscall`), check the reply's length before decoding, and fall back on any error. A generated safe dispatcher panics in your frame on malformed return data.
+- **What can be caught.** Since Starknet 0.13.4 a callee's panic, a missing entry point, and malformed or oversized return data come back to the caller as an error instead of reverting it. Call through a raw `call_contract_syscall` (or `library_call_syscall`), check the reply before using it (`Serde::deserialize` returns `None` on a truncated or malformed reply; reject trailing felts too), and fall back on any error. A generated safe dispatcher panics in your frame on malformed return data.
+- **A sound provider:** `try_get_sound` does all of this. It returns `None` for a zero address (without calling), a provider that panics or has no `get_sound`, and a reply that is not exactly one `TokenSound`. It does not validate the settings, which `midi_segment` does: to fall back on invalid settings too, test the provider's output against the class in CI, or call `midi_segment` through `library_call_syscall` and treat an error as no sound.
 - **What cannot.** An undeployed address, an undeclared class and running out of gas still revert the whole call. Probe them in your setters (step 4) and keep a kill switch, such as a zero value that turns sound off.
 - **snforge 0.64.0 bug:** catching a panic from a safe *library* call leaves the caller's class hash replaced for the rest of the test, so later calls fail with `ENTRYPOINT_NOT_FOUND`. Test the failure paths with `call_contract` into mock contracts.
 
@@ -131,7 +136,7 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 - **The measurement method changes the number about 2.5×.** Measured on the example's full-size token (`snforge test gas_t4_token_uri`): about 301M with `--tracked-resource sierra-gas`, about 765M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M: that account's class is Sierra 1.6, which forces cairo-steps (VM) accounting for the whole transaction.
   - Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
   - Treat devnet estimates through the predeployed accounts as inflated by about 2.0–2.6×.
-- **Keep every class in the `token_uri` call chain at Sierra 1.7 or later:** the NFT, any proxy, the renderer, the MIDI provider and this class. A Cairo 0 or older-Sierra frame switches itself and every call below it to Cairo-steps accounting, which is sticky downward and has its own step cap.
+- **Keep every class in the `token_uri` call chain at Sierra 1.7 or later:** the NFT, any proxy, the renderer, the sound provider and this class. A Cairo 0 or older-Sierra frame switches itself and every call below it to Cairo-steps accounting, which is sticky downward and has its own step cap.
 - **Providers' call caps decide who can read a full token, not the protocol.** Node software caps `starknet_call` differently, and hosted providers do not document their caps (README [Network and node limits](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#network-and-node-limits)). On Sepolia, one public provider reverted `Out of gas` on the example's full-size token while others served it (README [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments), issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)). Call your worst token through the providers your marketplaces and indexers use; the token-uri-inspector shows how.
 
 ## 9. Choose the class hash
@@ -146,6 +151,7 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 - [ ] Your pieces padded to multiples of 3; class pieces appended untouched; `animation_url` last.
 - [ ] The art is an SVG (raster art wrapped in `<image>`) that never contains `</script`; tested on real renderer output.
 - [ ] Class hash placement chosen (NFT or renderer), with setters that probe the new value.
+- [ ] MIDI and settings from constants or from a sound provider through `try_get_sound`, called by the renderer with the token ID as minted.
 - [ ] Failures fall back to the token without sound; uncatchable cases probed in setters; a kill switch.
 - [ ] Every score passes `check-midi` in CI; fixed or live sound chosen, with metadata-update events for live changes.
 - [ ] Golden test against the JS reference; the decoded page equals `npm run preview` for the same inputs.
