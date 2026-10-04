@@ -79,10 +79,10 @@ The tokens:
 
 | token | name | head spaces | comma piece | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 54,625 |
-| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 54,633 |
-| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 54,629 |
-| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 140,565 |
+| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 54,657 |
+| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 54,665 |
+| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 54,661 |
+| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 140,597 |
 
 Tokens 1-3 cover every pad length: `len('{' members ',')` and `len(S)` take every remainder mod 3, and `D` three different pads. Only `reverb` varies between them (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding. The head spaces include the alignment groups.
 
@@ -184,7 +184,7 @@ L2 gas, with the class's optimized encoder; the root [README](../../README.md#ga
 
 | Call | Tokens 1-3 (1 KB SVG, 112-byte MIDI) | Token 4 (a full-size Beast) |
 | --- | --- | --- |
-| `BeastLikeNft.token_uri` | 31.8M-32.0M | 287.9M |
+| `BeastLikeNft.token_uri` | 31.7M-31.9M | 287.9M |
 | of which `animation_url_segment` (the class's side) | 2.8M | 2.8M |
 | of which `midi_segment` (the class's side) | 5.8M | 58.9M |
 | of which 4 `base64` calls (the class's side): SVG, `S`, the head, `'}'` | 9.9M-10.0M | 184.9M |
@@ -201,4 +201,4 @@ Token 4 piece by piece, in the consumer's context, each net of its inputs (`snfo
 
 Base64 is 83% of token 4's `token_uri`, and the two passes over the SVG alone are 67%. That is 0.29B, well under the 1B target. With the byte-wise stand-in encoder the class used before, token 4 cost 1.41B (tokens 1-3: 90.2M-90.6M), and the projection for the optimized encoder was about 0.57B.
 
-Before this example called the real class, its mock gave 113.1M-113.5M for tokens 1-3. Three changes brought that down to 90.2M-90.6M with the stand-in encoder: the segment became a string literal, the comma piece became a constant, and the layout was aligned. The optimized encoder then brought it to 30.1M-30.2M, and the `4b29ff1` engine's 1,296-byte longer segment added about 0.3M (30.4M-30.6M). With `page.7` (a segment 48 bytes longer, and `SETTINGS` validation that checks less) they cost 30.4M-30.5M. The `b198d6c` engine of `page.8` makes the segment 5,696 bytes longer, which adds about 1.4M to tokens 1-3 (31.8M-32.0M) and 1.7M to token 4 (286.2M to 287.9M).
+Before this example called the real class, its mock gave 113.1M-113.5M for tokens 1-3. Three changes brought that down to 90.2M-90.6M with the stand-in encoder: the segment became a string literal, the comma piece became a constant, and the layout was aligned. The optimized encoder then brought it to 30.1M-30.2M, and the `4b29ff1` engine's 1,296-byte longer segment added about 0.3M (30.4M-30.6M). With `page.7` (a segment 48 bytes longer, and `SETTINGS` validation that checks less) they cost 30.4M-30.5M. The `b198d6c` engine of `page.8` makes the segment 5,728 bytes longer, which adds about 1.3M-1.4M to tokens 1-3 (31.7M-31.9M) and 1.7M to token 4 (286.2M to 287.9M).
