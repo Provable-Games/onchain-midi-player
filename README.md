@@ -546,7 +546,9 @@ Shared fixtures keep Cairo and JavaScript byte-for-byte identical:
 1. **Design the sound** in TinySynth's `soundedit.html` (in the fork) or by hand, as a TinySynth timbre: a list of operators `{g, w, t, f, v, a, h, d, s, r, p, q, k}`.
 2. **Convert each operator:**
    - `g` becomes `route`;
-   - `w` becomes `wave`: `sine`, `square`, `sawtooth`, `triangle`, `n0`, `n1` map to `Sine` … `MetallicNoise`; a wave registered with `setSampleWave` or `setHarmonicWave` becomes an entry of `waves` and `Custom(index)` (see [Custom waves](#custom-waves));
+   - `w` becomes `wave`: `sine`, `square`, `sawtooth`, `triangle`, `n0`, `n1` map to `Sine` … `MetallicNoise`. A wave registered with `setSampleWave` or `setHarmonicWave` becomes an entry of `waves` and `Custom(index)` (see [Custom waves](#custom-waves)), converted to what the format holds:
+     - `setSampleWave` samples `x` (−1 to 1) become `i8` samples `clamp(round(x × 128), −128, 127)`; the player plays `s / 128`;
+     - of `setHarmonicWave(name, real, imag)`, only non-negative sine amplitudes `imag[1..]` carry over, scaled to `u16` (the browser normalizes the peak, so only the ratios matter). Cosine (`real`) terms, the DC term and negative amplitudes have no `Harmonics` form: such a wave needs a `Samples` table of one cycle instead;
    - multiply every other value by 10,000 and round to an integer: `v` (`volume`), `t` (`ratio`), `f` (`offset_hz`), `a` (`attack`), `h` (`hold`), `d` (`decay`), `s` (`sustain`), `r` (`release`), `p` (`pitch_ratio`), `q` (`pitch_time`), `k` (`key_scale`).
 
    Fields TinySynth leaves out take its defaults (`default_operator()`).
