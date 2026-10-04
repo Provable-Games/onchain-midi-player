@@ -351,7 +351,8 @@ def cmd_prompt(args):
               f"Title: {title}", "Body:", body,
               f"END_UNTRUSTED_PR_METADATA_{nonce}", "",
               "Apply the shared review policy and its output contract to this pull request now. Start your "
-              "response with `lgtm` or with `### [`, and write nothing before, between or after the findings."]
+              "response with `lgtm` or with `### [`, end it with the `" + lib.SKILLS_HEADING + "` section, and "
+              "write nothing else before, between or after them."]
     (out / "prompt.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     write_outputs({"prompt_file": str((out / "prompt.txt").resolve()), "context_dir": str(context.resolve())})
 

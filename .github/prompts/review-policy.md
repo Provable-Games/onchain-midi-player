@@ -36,14 +36,16 @@ pin, the lockfile and the provenance.
 
 ## Output contract
 
-If the review completed and there are no actionable findings, output exactly:
+If the review completed and there are no actionable findings, the verdict is
+exactly:
 
 lgtm
 
 Your entire response is read by a program. Start it with `lgtm` or with the
-first finding's `### [`, and write nothing before, between or after the
-findings: no introduction such as "I've finished reading the files", no
-summary, praise, verdict, closing remark or empty section.
+first finding's `### [`, and end it with the Skill opportunities section (see
+Agent skill suggestions). Write nothing else before, between or after them: no
+introduction such as "I've finished reading the files", no summary, praise,
+verdict, closing remark or other section.
 
 Otherwise output only findings, ordered by severity. Write each finding in
 exactly this form, choosing one severity and giving a repository-relative path
@@ -64,8 +66,9 @@ for material defects with bounded impact; LOW for smaller actionable defects.
 Assign severity from the supported impact. HIGH and CRITICAL block merging;
 MEDIUM and LOW are advisory. The workflow parses these headings and fields to
 enforce that gate, so keep the heading on one line, include all three fields,
-and use no other headings. Code blocks and lists inside a field are allowed;
-indent any further paragraph of a field by two spaces.
+and use no other headings except the Skill opportunities heading. Code blocks
+and lists inside a field are allowed; indent any further paragraph of a field
+by two spaces.
 
 For a design issue without a runtime reproduction, start Evidence/trigger with
 `Design evidence:` and name the concrete affected caller or maintenance
@@ -77,3 +80,28 @@ merge base is unavailable, the diff or a changed file is too large to read or
 cannot be read, or truncated output left part of the change unread. A build,
 test, tool or dependency fetch that cannot run is not such a reason (see Static
 review). Never claim that tests or reproductions ran unless they did.
+
+## Agent skill suggestions
+
+End every completed review, after `lgtm` or the last finding and a blank line,
+with this section. It is the only text allowed after `lgtm` or the findings:
+
+```text
+## Skill opportunities
+
+- **Refine `<skill>`** (`path/to/SKILL.md:12`): what to add or change, and why. Evidence: `path/to/file.js:34`.
+- **New skill `<name>`:** the recurring workflow or hard-won knowledge it would capture. Evidence: `path/to/file.js:56`.
+```
+
+Use at most three bullets, and only when this pull request shows that an agent
+skill named in the reviewer role should be refined (an unclear step, a gotcha
+the change revealed, a better example) or that a new skill would capture a
+recurring workflow or hard-won knowledge. Each bullet names the skill or the
+proposed skill, says concretely what to add or change, and cites its evidence
+in this pull request. When nothing applies, the section is the heading and the
+single line `none`; do not invent work. These are suggestions, not findings:
+they carry no severity, never raise a finding's severity, and never block
+merging. A skill that this pull request makes wrong, or that now misses what a
+change requires, is a finding (see the reviewer role), not a suggestion. Put
+no heading, finding or `lgtm` inside the section, and omit it after
+`Review incomplete`.

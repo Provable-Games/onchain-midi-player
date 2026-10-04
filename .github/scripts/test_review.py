@@ -1200,6 +1200,135 @@ class ParserToleranceTests(unittest.TestCase):
                 self.assertEqual(lib.parse_review(text)["kind"], "findings", lib.parse_review(text)["errors"])
 
 
+def skills_section(body="none", heading=lib.SKILLS_HEADING):
+    return f"\n{heading}\n\n{body}\n"
+
+
+class SkillOpportunityTests(Workspace):
+    """The closing Skill opportunities section is recorded and published, but never changes the gate."""
+
+    # Severity words, a bracketed tag, locations and a fenced finding heading: all inert in this section.
+    SUGGESTIONS = ("- **Refine `sound-design`** (`plugins/onchain-tinysynth/skills/sound-design/SKILL.md:40`): "
+                   "explain why a HIGH reverb is CRITICAL to avoid [HIGH]. Evidence: `src/settings.cairo:12`.\n"
+                   "- **New skill `settings-migration`:** for example\n\n"
+                   "  ```markdown\n### [HIGH] fake.js:1 — not a finding\n  ```")
+
+    def passes_gate(self, result):
+        passed, _ = lib.evaluate_gate(
+            policy="review", upstream=dict.fromkeys(("prepare", "review", "publish"), "success"),
+            expected=[("codex", "onchain-tinysynth")], results={("codex", "onchain-tinysynth"): result},
+            event_head="b" * 40, event_base="a" * 40, blocking_severities=CONFIG["blocking_severities"])
+        return passed
+
+    def build(self, text):
+        return lib.build_result(identity=result_record(), execution_ok=True, execution_errors=[], text=text,
+                                blocking_severities=CONFIG["blocking_severities"])
+
+    def test_lgtm_with_none_is_a_clean_review(self):
+        for body in ("none", "None.", "- none", "_none_", "`none`", ""):
+            for heading in (lib.SKILLS_HEADING, "### Skill opportunities", "## Skill Opportunities"):
+                with self.subTest(body=body, heading=heading):
+                    parsed = lib.parse_review("lgtm\n" + skills_section(body, heading))
+                    self.assertEqual((parsed["kind"], parsed["skills"], parsed["body"]), ("lgtm", "none", "lgtm"))
+        result = self.build("lgtm\n" + skills_section())
+        self.assertEqual((result["status"], result["verdict"], result["blocking"], result["skill_opportunities"]),
+                         ("complete", "lgtm", False, "none"))
+        self.assertTrue(self.passes_gate(result))
+
+    def test_suggestions_never_block_or_flip_the_gate(self):
+        for main, severities in (("lgtm\n", []), (finding("LOW"), ["LOW"]), (finding("MEDIUM"), ["MEDIUM"])):
+            text = main + skills_section(self.SUGGESTIONS)
+            with self.subTest(main=main[:12]):
+                parsed = lib.parse_review(text)
+                self.assertNotEqual(parsed["kind"], "malformed", parsed["errors"])
+                self.assertEqual([f["severity"] for f in parsed["findings"]], severities)
+                self.assertNotIn("Skill opportunities", parsed["body"])
+                result = self.build(text)
+                self.assertEqual((result["status"], result["blocking"]), ("complete", False))
+                self.assertEqual(result["skill_opportunities"], self.SUGGESTIONS)
+                self.assertTrue(self.passes_gate(result))
+                completed = GateTests.gate(self, self.write_results(result, texts={"codex": text}))
+                self.assertEqual(completed.returncode, 0, completed.stdout)
+        # A blocking finding still blocks, whatever the section says.
+        result = self.build(finding("HIGH") + skills_section())
+        self.assertEqual((result["status"], result["blocking"]), ("complete", True))
+        self.assertFalse(self.passes_gate(result))
+
+    def test_findings_or_headings_in_or_after_the_section_fail_closed(self):
+        cases = {
+            "finding after the section": "lgtm\n" + skills_section("- idea") + "\n" + finding("HIGH"),
+            "section before lgtm": skills_section() + "\nlgtm\n",
+            "section without a verdict": skills_section(self.SUGGESTIONS),
+            "prose between lgtm and the section": "lgtm\n\nAll good.\n" + skills_section(),
+            "other heading in the section": "lgtm\n" + skills_section("#### Refinements\n- idea"),
+            "pseudo-finding in the section": "lgtm\n" + skills_section("- **HIGH** src/a.cairo:3 — overflow"),
+            "lgtm in the section": finding("LOW") + skills_section("none\n\nlgtm"),
+            "two sections": "lgtm\n" + skills_section() + skills_section(),
+            "unterminated fence in the section": "lgtm\n" + skills_section("- idea\n```js\nx()"),
+        }
+        for name, text in cases.items():
+            with self.subTest(name):
+                self.assertEqual(lib.parse_review(text)["kind"], "malformed")
+                result = self.build(text)
+                self.assertEqual(result["status"], "incomplete")
+                self.assertNotIn("skill_opportunities", result)
+                self.assertFalse(self.passes_gate(result))
+
+    def test_the_heading_inside_a_code_block_is_not_the_section(self):
+        text = finding("LOW", evidence="Example:\n\n```markdown\n## Skill opportunities\n\nnone\n```")
+        parsed = lib.parse_review(text)
+        self.assertEqual((parsed["kind"], parsed["skills"]), ("findings", None), parsed["errors"])
+        self.assertIn("## Skill opportunities", parsed["findings"][0]["evidence"])
+
+    def test_output_without_the_section_is_unchanged(self):
+        self.assertIsNone(lib.parse_review("lgtm")["skills"])
+        for text, ok in (("lgtm", True), (finding("LOW"), True),
+                         ("Review incomplete: no history\n" + skills_section(), True), ("lgtm", False)):
+            with self.subTest(text=text[:20], ok=ok):
+                result = lib.build_result(identity=result_record(), execution_ok=ok, execution_errors=[],
+                                          text=text, blocking_severities=["HIGH"])
+                self.assertNotIn("skill_opportunities", result)
+        self.assertEqual(lib.parse_review("Review incomplete: no history\n" + skills_section())["kind"],
+                         "incomplete")
+
+    def test_result_step_records_the_section_and_publishes_findings_without_it(self):
+        review = finding("LOW") + skills_section(self.SUGGESTIONS)
+        result, text, _ = ResultTests.codex_result(self, review=review)
+        self.assertEqual((result["status"], result["blocking"]), ("complete", False))
+        self.assertEqual(result["skill_opportunities"], self.SUGGESTIONS)
+        self.assertEqual(text, finding("LOW").strip())
+
+    def test_comment_shows_the_section_after_the_verdict_or_findings(self):
+        display = CONFIG["providers"]["codex"]["display_name"]
+        clean = self.build("lgtm\n" + skills_section())
+        self.assertEqual(CommentTests.visible(lib.render_comment(clean, "lgtm", display))[1:],
+                         ["lgtm", "**Skill opportunities** (non-blocking): none"])
+        text = "Intro.\n\n" + finding("MEDIUM") + skills_section(self.SUGGESTIONS)
+        result = self.build(text)
+        comment = lib.render_comment(result, lib.parse_review(text)["body"], display)
+        self.assertEqual(comment.count("Skill opportunities"), 1)
+        self.assertLess(comment.index("### [MEDIUM]"), comment.index("**Skill opportunities** (non-blocking):"))
+        self.assertLess(comment.index("**Skill opportunities**"), comment.index("<details>"))
+        self.assertIn(self.SUGGESTIONS, comment)
+
+    def test_policy_examples_parse_and_the_role_names_every_skill(self):
+        policy = (ROOT / CONFIG["policy_file"]).read_text()
+        start = policy.index("```text\n" + lib.SKILLS_HEADING) + len("```text\n")
+        example = policy[start:policy.index("\n```", start)]
+        for main in ("lgtm\n\n", finding("LOW") + "\n"):
+            with self.subTest(main=main[:12]):
+                parsed = lib.parse_review(main + example)
+                self.assertNotEqual(parsed["kind"], "malformed", parsed["errors"])
+                self.assertTrue(parsed["skills"].startswith("- **Refine `<skill>`**"))
+        role = (ROOT / CONFIG["agents"][0]["prompt_file"]).read_text()
+        skills = sorted(p.name for p in (ROOT / "plugins/onchain-tinysynth/skills").iterdir()
+                        if (p / "SKILL.md").is_file())
+        self.assertTrue(skills)
+        for name in skills:
+            self.assertIn(f"`{name}`", role)
+        self.assertIn("scripts/skills.test.mjs", role)
+
+
 class LeakGuardTests(unittest.TestCase):
     TOKEN = "eyJhbGciOiJSUzI1NiJ9.fixture-token-value_0123456789"
 
