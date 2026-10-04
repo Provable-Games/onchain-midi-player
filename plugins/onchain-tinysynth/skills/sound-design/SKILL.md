@@ -29,8 +29,9 @@ Get the tools: Node 22 or later, and a clone whose `grep 'pub const VERSION' src
 
 `midi_segment` reverts on exactly the checks in the table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/settings.cairo), in the checkout whose `VERSION` matches your class. Trust that table and `preview`, which runs the same checks; do not rely on remembered ranges, because they differ between class versions:
 
-- The `page.6` class (the Sepolia classes in the README's [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments)) range-checks `reverb`, `master_vol`, `voices` and every operator value, and caps the `SETTINGS` length (`'TS: settings too long'`).
-- PR [#28](https://github.com/Provable-Games/onchain-tinysynth/pull/28) narrows the checks to what the format and the engine require, and drops the length cap, for the next class version (`page.7`). The network then prices what the values cost.
+- Validation covers what the format and the engine require: counts, slots, routes, the wave index and the gates for issues #2 and #3. Every other number takes any value of its integer type.
+- There is no `SETTINGS` length cap: the network prices the cost ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-size-of-settings-no-byte-cap), [Network and node limits](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#network-and-node-limits)).
+- Four operator fields have interim engine bounds: `ratio`, `pitch_ratio`, `volume` and `key_scale`. The pinned engine computes non-finite values past them and throws, and the throwing note stalls the whole song. They are removed once the engine's guard lands (release gate, issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). README: [Engine limits on operator values](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#engine-limits-on-operator-values).
 
 The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`; wave lengths are in the check table). Read them from your checkout.
 
