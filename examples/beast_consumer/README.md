@@ -184,8 +184,8 @@ L2 gas, with the class's optimized encoder; the root [README](../../README.md#ga
 
 | Call | Tokens 1-3 (1 KB SVG, 112-byte MIDI) | Token 4 (a full-size Beast) |
 | --- | --- | --- |
-| `BeastLikeNft.token_uri` | 31.8M-32.0M | 287.7M |
-| of which `animation_url_segment` (the class's side) | 2.8M | 2.8M |
+| `BeastLikeNft.token_uri` | 32.7M-32.8M | 288.5M |
+| of which `animation_url_segment` (the class's side) | 3.0M | 3.0M |
 | of which `midi_segment` (the class's side) | 5.8M | 58.9M |
 | of which 4 `base64` calls (the class's side): SVG, `S`, the head, `'}'` | 9.9M-10.0M | 184.9M |
 
@@ -193,12 +193,12 @@ Token 4 piece by piece, in the consumer's context, each net of its inputs (`snfo
 
 | Piece | L2 gas |
 | --- | --- |
-| `animation_url_segment()` through the library call, reading the result included | 7.3M |
+| `animation_url_segment()` through the library call, reading the result included | 7.8M |
 | `midi_segment()` through the library call | 60.1M |
 | `b64(svg)`, 22,733 bytes: through the class's `base64` / with the same encoder compiled in | 82.6M / 75.2M |
 | `b64(S)`, 30,315 bytes, through the class's `base64` | 110.2M |
-| Every append, in the word-aligned layout / without the alignment spaces | 16.2M / 31.7M |
+| Every append, in the word-aligned layout / without the alignment spaces | 16.3M / 32.4M |
 
 Base64 is 83% of token 4's `token_uri`, and the two passes over the SVG alone are 67%. That is 0.29B, well under the 1B target. With the byte-wise stand-in encoder the class used before, token 4 cost 1.41B (tokens 1-3: 90.2M-90.6M), and the projection for the optimized encoder was about 0.57B.
 
-Before this example called the real class, its mock gave 113.1M-113.5M for tokens 1-3. Three changes brought that down to 90.2M-90.6M with the stand-in encoder: the segment became a string literal, the comma piece became a constant, and the layout was aligned. The optimized encoder then brought it to 30.1M-30.2M, and the `4b29ff1` engine's 1,296-byte longer segment added about 0.3M (30.4M-30.6M). With `page.7` (a segment 48 bytes longer, and `SETTINGS` validation that checks less) they cost 30.4M-30.5M. The `b198d6c` engine of `page.8` makes the segment 5,776 bytes longer, which adds about 1.4M-1.5M to tokens 1-3 (31.8M-32.0M) and 1.5M to token 4 (286.2M to 287.7M).
+Before this example called the real class, its mock gave 113.1M-113.5M for tokens 1-3. Three changes brought that down to 90.2M-90.6M with the stand-in encoder: the segment became a string literal, the comma piece became a constant, and the layout was aligned. The optimized encoder then brought it to 30.1M-30.2M, and the `4b29ff1` engine's 1,296-byte longer segment added about 0.3M (30.4M-30.6M). With `page.7` (a segment 48 bytes longer, and `SETTINGS` validation that checks less) they cost 30.4M-30.5M. The `b198d6c` engine of `page.8` makes the segment 5,776 bytes longer, which adds about 1.4M-1.5M to tokens 1-3 (31.8M-32.0M) and 1.5M to token 4 (286.2M to 287.7M). `page.9` (the `3d965d1` engine and the custom-wave player) makes it 3,376 bytes longer again: tokens 1-3 cost 32.7M-32.8M and token 4 288.5M.

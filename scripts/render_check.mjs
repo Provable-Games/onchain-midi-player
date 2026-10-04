@@ -24,9 +24,9 @@
 //   determinism   across two page loads: the buffers the engine generates (the seeded noise and
 //              reverb impulse of fork #7, and the custom waves' tables) are identical, sample for
 //              sample, and the same notes (custom voices, the custom chip kit, built-in drums on the
-//              seeded noise, reverb 30) render to the same audio within 1e-6 (-120 dB). Not bit for
-//              bit: when overlapping voices end, Chromium can mix the rest in another order, which
-//              moves a sample by a float32 rounding step (about 6e-8).
+//              seeded noise, reverb 30) render to the same audio within 1e-6 (-120 dB). Firefox
+//              renders it bit for bit; in Chromium and WebKit, samples where drum hits overlap can
+//              differ by a float32 rounding step (about 6e-8), a browser mixing effect.
 //
 // The engine's noise and reverb are seeded (fork #7), so they are the same on every load at a given
 // sample rate; across browser engines the PCM differs, so the measurements use tolerances.
