@@ -31,22 +31,22 @@ fn be128(x: u32, y: u32, z: u32, w: u32) -> u128 {
     ((x.into() * base + y.into()) * base + z.into()) * base + w.into()
 }
 
-/// SHA-256 of PAGE (tests/fixtures/page.html), 27963 bytes.
-pub const PAGE_SHA256: u256 = 0x90eec68ab36f225c457bc27bed919dc9a990d71f7496ea5d73aec2796e4f3763;
+/// SHA-256 of PAGE (tests/fixtures/page.html), 29862 bytes.
+pub const PAGE_SHA256: u256 = 0xae67ecdde5d1d961eb040b14f07e9a9fc6f3fca15b8d126701c0d4697068a275;
 
-/// SHA-256 of `animation_url_segment()`, 49764 bytes.
-pub const SEGMENT_SHA256: u256 = 0x21073a7cf58fc1b49582a36d845cfca8fb0e8da6a47e83c16b96a9b644da83cf;
+/// SHA-256 of `animation_url_segment()`, 53140 bytes.
+pub const SEGMENT_SHA256: u256 = 0xdd43fe713cc857bdb8e0363ef87f274023810aa5eed54953001759f07451ca29;
 
-/// SHA-256 of `license()`, 7324 bytes.
-pub const LICENSE_SHA256: u256 = 0x4d7ee9ff0f79d5119f282fb49284abe45d4658100fd914b0289fe06b7ac1c55f;
-pub const LICENSE_LEN: u32 = 7324;
+/// SHA-256 of `license()`, 8783 bytes.
+pub const LICENSE_SHA256: u256 = 0x000e09c7f5b2144d8e426c35818be0698ce6bbbd75f9a9c9faca5531ec273002;
+pub const LICENSE_LEN: u32 = 8783;
 
-/// SHA-256 of the engine (the pinned fork build, commit b198d6c).
-pub const ENGINE_SHA256: u256 = 0x59dfcfcd9f6d76014d77f98495b7e7c0106821357ff4aa12c4ed94095a4ee921;
+/// SHA-256 of the engine (the pinned fork build, commit 3d965d1).
+pub const ENGINE_SHA256: u256 = 0x95d8947a460a2e3ca410a285822668c76b65493b88094b9c83a0207311206c31;
 
-/// SHA-256 of the engine's gzip payload in PAGE, 12803 bytes.
-pub const GZIP_SHA256: u256 = 0x3560697643dedbde3b05398c3f88a6b8b40bfba38c73bf0ebfa5c9b05da3126d;
-pub const GZIP_LEN: u32 = 12803;
+/// SHA-256 of the engine's gzip payload in PAGE, 13994 bytes.
+pub const GZIP_SHA256: u256 = 0x3087c4a65f8d7fc24ca73621d5812855bed3b4877e4f6c153e5dca2792ac57de;
+pub const GZIP_LEN: u32 = 13994;
 
 #[test]
 fn page_data_segment_matches_the_build() {
@@ -69,7 +69,7 @@ fn page_data_license_version_and_engine_hashes_match_the_build() {
     let license = page_data::license();
     assert_eq!(license.len(), LICENSE_LEN);
     assert(sha256(@license) == LICENSE_SHA256, 'license sha256');
-    assert(page_data::VERSION == 'tinysynth-b198d6c+page.8', 'version');
+    assert(page_data::VERSION == 'tinysynth-3d965d1+page.9', 'version');
     assert(page_data::ENGINE_SHA256 == ENGINE_SHA256, 'engine sha256');
     assert(page_data::GZIP_SHA256 == GZIP_SHA256, 'gzip sha256');
     assert_eq!(page_data::GZIP_LEN, GZIP_LEN);
@@ -163,14 +163,14 @@ const CASE_DEFAULT_120BPM_MIDI_SEGMENT: [felt252; 20] = [
     0x5a454d3564324a48526e426961556c6e595664524f556c74526e6c6b51306b, 0x72, 1,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 28714 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 30613 bytes.
 pub fn case_default_120bpm_animation_html_digest() -> (u32, u256) {
-    (28714, 0xe08e334b953feb25c4baadd75b85fda4ae294c0d61dd30f43b7f599f4deefa6e)
+    (30613, 0x6f355ed753dbb6d1a967826842de649f7a087815f956bb6635fa7da87295c2f6)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_default_120bpm_token_uri_digest() -> (u32, u256) {
-    (52025, 0x7e976fc864a8fba4fd866039be81b314ba6050e1bf3b320fe6b37c03d25208af)
+    (55401, 0x2b058df7f7682507e81d4f842c3d9c8bc05f211dcfb084ccb9e1702f506bfef9)
 }
 
 /// SETTINGS for this case's settings.
@@ -322,14 +322,14 @@ const CASE_BEAST_140BPM_MIDI_SEGMENT: [felt252; 38] = [
     0x59305a454d3564324a48526e426961556c6e595664524f556c74526e6c6b51, 0x306b72, 3,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 28830 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 30729 bytes.
 pub fn case_beast_140bpm_animation_html_digest() -> (u32, u256) {
-    (28830, 0x108e1122c8062ee54e86790cda9da74d11a21a8c9234ad34be6868fb1727e293)
+    (30729, 0xd9a6ad98241ae721077511f90706fcec7390e45a586342962e2e6fbc985767fd)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_beast_140bpm_token_uri_digest() -> (u32, u256) {
-    (51925, 0x4480daf4324bd1d52bd631607e5fe8da13a57e3289c3892ea27a0a57e3ff7000)
+    (55301, 0xe7e3402a0a01e669784e1f041f49c7779db4650387500784d2665c2d323fc7c4)
 }
 
 /// SETTINGS for this case's settings.
@@ -502,14 +502,14 @@ const CASE_SIX_TIMBRES_FORMAT1_MIDI_SEGMENT: [felt252; 49] = [
     0x4d3564324a48526e426961556c6e595664524f556c74526e6c6b51306b72, 30,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 29240 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 31139 bytes.
 pub fn case_six_timbres_format1_animation_html_digest() -> (u32, u256) {
-    (29240, 0x1e6289f9da10d005941bc53a5e32ea3cb2edc10a58a2a785527e1a0c1d1c2891)
+    (31139, 0x38e081d628764d15b2145c7584d7311963c8aff1b2364d7038a92da14679a144)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_six_timbres_format1_token_uri_digest() -> (u32, u256) {
-    (53029, 0x4ae9aec558ed7fd468e69f37ca07e998f57075ee44dd465e9be402a673a87167)
+    (56405, 0xc3c01aebe392591bb8be47027fe7d9da781822d1efa576341a1fba6de5821a42)
 }
 
 /// SETTINGS for this case's settings.
@@ -658,14 +658,14 @@ const CASE_UNICODE_ART_MIDI_SEGMENT: [felt252; 39] = [
     0x3159305a454d3564324a48526e426961556c6e595664524f556c74526e6c6b, 0x51306b72, 4,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 28803 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 30702 bytes.
 pub fn case_unicode_art_animation_html_digest() -> (u32, u256) {
-    (28803, 0x4b00ba408d446a38846a3304e1d662b565a0b979cbe044c1a36aedf7447cef4d)
+    (30702, 0xf7af841030cb645a2fa8227eef6d67f0448540a3ed72ebafba5eda4af4af0230)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_unicode_art_token_uri_digest() -> (u32, u256) {
-    (51749, 0x952ab1203bfd91a41bb0b925245d71569065a2115faffb32992da5585b5c6c89)
+    (55125, 0x5205ae7e393f4bd5f15f365af41817e2fc96c8306b39e13d1d73307942d77185)
 }
 
 /// SETTINGS for this case's settings.
@@ -803,14 +803,14 @@ const CASE_MIN_FIELDS_MIDI_SEGMENT: [felt252; 23] = [
     0x61556c6e595664524f556c74526e6c6b51306b72, 20,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 28773 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 30672 bytes.
 pub fn case_min_fields_animation_html_digest() -> (u32, u256) {
-    (28773, 0xdd3dfc1d812ae2fb8d9e61dcdb141fc194e236f6cad299cdcbaec092397d6d2a)
+    (30672, 0xdba7cfadd6d3a485450a04019d66897735744a2f9923642c5c57f66a6220a041)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_min_fields_token_uri_digest() -> (u32, u256) {
-    (52125, 0xe333047ffc896a621fabfe91b0626ab87e5377521908fb7cb172af697a97e6a8)
+    (55501, 0x433c9e1e1df725d5130c85ae784f4c89ece7f930810f3599cd222b82b4b79586)
 }
 
 /// SETTINGS for this case's settings.
@@ -1006,14 +1006,14 @@ const CASE_MAX_FIELDS_MIDI_SEGMENT: [felt252; 71] = [
     0x3159305a454d3564324a48526e426961556c6e595664524f556c74526e6c6b, 0x51306b72, 4,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 29601 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 31500 bytes.
 pub fn case_max_fields_animation_html_digest() -> (u32, u256) {
-    (29601, 0xe8137304930598fbc0a4992c5883bc0b78eab3308188aa48a93f3bf1fcc45e01)
+    (31500, 0xe57b7a98002d91a94ca584902d7ac570852df9ce78112fe2fae7d0d730f2e10e)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_max_fields_token_uri_digest() -> (u32, u256) {
-    (53597, 0xec7cb132a957662146f32da6fb0ce641818353e83b62a471ecb948f79e778cd7)
+    (56973, 0x2be7a153112ded44440a9f3c376dfadccb1f68e9674ca954e2dc0cb8ffe5e9c3)
 }
 
 /// SETTINGS for this case's settings.
@@ -1173,14 +1173,14 @@ const CASE_SLOT_EDGES_MIDI_SEGMENT: [felt252; 39] = [
     0x61556c6e595664524f556c74526e6c6b51306b72, 20,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 29054 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 30953 bytes.
 pub fn case_slot_edges_animation_html_digest() -> (u32, u256) {
-    (29054, 0x614a2807cbdecedc70b33942b5960cd6023301386eee6f2c988c6c49b726cc2f)
+    (30953, 0x23b39659087303eec137f2ba0ce50b94d4726a8e11fa8734796447cb612febe8)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_slot_edges_token_uri_digest() -> (u32, u256) {
-    (52641, 0x1ad784ee2b0d09e9659100ba96557f5c7584bd2e18cb77cb25991b68c0c34e72)
+    (56017, 0xa4dec44963e65d41c5a4736c3ebb4d1b3f06d23efcf085c52853e7cf71038b7e)
 }
 
 /// SETTINGS for this case's settings.
@@ -1339,14 +1339,14 @@ const CASE_ALL_BUILTIN_WAVES_MIDI_SEGMENT: [felt252; 38] = [
     0x59305a454d3564324a48526e426961556c6e595664524f556c74526e6c6b51, 0x306b72, 3,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 29027 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 30926 bytes.
 pub fn case_all_builtin_waves_animation_html_digest() -> (u32, u256) {
-    (29027, 0x19f70daf821fb6af4cc772ee09d65a96c96232f5627e064710b3c2b6e55c48b7)
+    (30926, 0x2e6bd93846835ef5a7c547f736c37ca0a78d1904f6b7d1d12e12892df95ec3c8)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_all_builtin_waves_token_uri_digest() -> (u32, u256) {
-    (52629, 0x128cd8bda4eaed9b31988e9f0016723a0cd682b842276c52bc432d404a5185f1)
+    (56005, 0x0514925a8dc958cd304e6ece41dce2443f616062eaf53e3859e8a1a004408106)
 }
 
 /// SETTINGS for this case's settings.
@@ -1388,6 +1388,245 @@ fn case_all_builtin_waves_html_and_token_uri_match_the_digests() {
     let uri = beasts_token_uri(@case_all_builtin_waves_members(), @svg, midi, @settings);
     let uri_digest = (uri.len(), sha256(@uri));
     assert(uri_digest == case_all_builtin_waves_token_uri_digest(), 'token_uri != digest');
+}
+
+// chip_waves: D pad 0, head pad 2, S pad 1; 136 bytes of MIDI, 1356 of SETTINGS.
+
+pub fn case_chip_waves_midi() -> ByteArray {
+    let mut felts = CASE_CHIP_WAVES_MIDI.span();
+    let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
+    assert(felts.len() == 0, 'fixture: trailing felts');
+    value
+}
+
+const CASE_CHIP_WAVES_MIDI: [felt252; 7] = [
+    4, 0x4d546864000000060000000100604d54726b0000007200ff510307a12000ff,
+    0x58040402180800ff01146669787475726520636869705f77617665732e2e00,
+    0xc00000b0076400b9075a00904860009924641824003090480018904c600099,
+    0x266418260030904c0018904f600099246418240030904f0018905460009926, 0x641826003090540018ff2f00,
+    12,
+];
+
+pub fn case_chip_waves_settings() -> SynthSettings {
+    let mut felts = CASE_CHIP_WAVES_SETTINGS.span();
+    let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
+    assert(felts.len() == 0, 'fixture: trailing felts');
+    value
+}
+
+const CASE_CHIP_WAVES_SETTINGS: [felt252; 374] = [
+    1, 30, 40, 64, 6, 1, 64, 127, 127, 110, 110, 93, 93, 76, 76, 59, 59, 42, 42, 25, 25, 8, 8, -9,
+    -9, -26, -26, -43, -43, -60, -60, -77, -77, -94, -94, -111, -111, -128, -128, -128, -128, -111,
+    -111, -94, -94, -77, -77, -60, -60, -43, -43, -26, -26, -9, -9, 8, 8, 25, 25, 42, 42, 59, 59,
+    76, 76, 93, 93, 110, 110, 127, 127, 1, 8, 127, -128, -128, -128, -128, -128, -128, -128, 1, 8,
+    127, 127, -128, -128, -128, -128, -128, -128, 1, 8, 127, 127, 127, 127, -128, -128, -128, -128,
+    1, 16, -128, -111, -94, -77, -60, -43, -26, -9, 8, 25, 42, 59, 76, 93, 110, 127, 1, 93, -128,
+    127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, -128, 127, 127, 127, 127,
+    127, 127, 127, 127, -128, 127, 127, 127, 127, 127, -128, 127, 127, -128, 127, 127, 127, 127,
+    127, 127, 127, 127, -128, 127, 127, -128, 127, 127, -128, 127, 127, -128, 127, 127, -128, 127,
+    127, 127, 127, 127, 127, 127, 127, 127, 127, 127, -128, 127, 127, -128, 127, 127, 127, 127, 127,
+    -128, 127, 127, -128, 127, 127, -128, 127, 127, 127, 127, 127, -128, 127, 127, 127, 127, 127, 8,
+    0, 0, 1, 0, 6, 0, 3000, 10000, 0, 30, 0, 100, 10000, 100, 10000, 10000, 0, 1, 0, 1, 1, 0, 6, 1,
+    3000, 10000, 0, 30, 0, 100, 10000, 100, 10000, 10000, 0, 1, 0, 2, 1, 0, 6, 2, 3000, 10000, 0,
+    30, 0, 100, 10000, 100, 10000, 10000, 0, 1, 0, 3, 1, 0, 6, 3, 3000, 10000, 0, 30, 0, 100, 10000,
+    100, 10000, 10000, 0, 1, 0, 4, 1, 0, 6, 4, 3000, 5000, 0, 30, 0, 100, 10000, 100, 10000, 10000,
+    0, 1, 1, 36, 1, 0, 6, 0, 4000, 0, 1600000, 30, 370, 500, 0, 500, 2813, 300, 0, 1, 1, 38, 2, 0,
+    6, 5, 3500, 0, 2150538, 30, 0, 500, 0, 500, 10000, 10000, 0, 1, 0, 6, 3, 700, 0, 2000000, 30, 0,
+    200, 0, 500, 5500, 170, 0, 1, 1, 42, 1, 0, 6, 5, 2000, 0, 4301075, 0, 0, 150, 0, 500, 10000,
+    10000, 0, 1,
+];
+
+pub fn case_chip_waves_svg() -> ByteArray {
+    let mut felts = CASE_CHIP_WAVES_SVG.span();
+    let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
+    assert(felts.len() == 0, 'fixture: trailing felts');
+    value
+}
+
+const CASE_CHIP_WAVES_SVG: [felt252; 17] = [
+    14, 0x3c73766720786d6c6e733d27687474703a2f2f7777772e77332e6f72672f32,
+    0x3030302f737667272077696474683d2732353027206865696768743d273335,
+    0x30272076696577426f783d273020302032353020333530273e3c7265637420,
+    0x77696474683d2732353027206865696768743d27333530272072783d273132,
+    0x272066696c6c3d2723316531653232272f3e3c7265637420783d27342e3527,
+    0x20793d27342e35272077696474683d2732343127206865696768743d273334,
+    0x31272072783d2739272066696c6c3d276e6f6e6527207374726f6b653d2723,
+    0x62373961356527207374726f6b652d77696474683d2734273e3c616e696d61,
+    0x7465206174747269627574654e616d653d277374726f6b652d6f7061636974,
+    0x79272076616c7565733d27313b302e343b3127206475723d27327327207265,
+    0x70656174436f756e743d27696e646566696e697465272f3e3c2f726563743e,
+    0x3c7465787420783d273132352720793d2734322720746578742d616e63686f,
+    0x723d276d6964646c65272066696c6c3d27236666662720666f6e742d66616d,
+    0x696c793d276d6f6e6f73706163652720666f6e742d73697a653d273230273e,
+    0x436869703c2f746578743e3c2f7376673e, 17,
+];
+
+pub fn case_chip_waves_members() -> ByteArray {
+    let mut felts = CASE_CHIP_WAVES_MEMBERS.span();
+    let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
+    assert(felts.len() == 0, 'fixture: trailing felts');
+    value
+}
+
+const CASE_CHIP_WAVES_MEMBERS: [felt252; 4] = [
+    1, 0x226e616d65223a2243686970207761766573222c226465736372697074696f,
+    0x6e223a22437573746f6d20776176657322, 17,
+];
+
+/// Expected midi_segment(midi, settings) for this case: b64(b64(D)), 2896 bytes.
+pub fn case_chip_waves_midi_segment() -> ByteArray {
+    let mut felts = CASE_CHIP_WAVES_MIDI_SEGMENT.span();
+    let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
+    assert(felts.len() == 0, 'fixture: trailing felts');
+    value
+}
+
+const CASE_CHIP_WAVES_MIDI_SEGMENT: [felt252; 96] = [
+    93, 0x54564e33654578455458644d524646335445525a4d45784557584e4e553363,
+    0x79546b4e336545317159334e4e56456b7a54455246654531446433684e5645,
+    0x467a5431524e6330395554584e4f656c6c7a546e705a6330355561334e4f56,
+    0x47747a546b524a6330354553584e4e616c567a5457705663303944647a524d,
+    0x517a413154454d774e5578444d486c4f615864305457705a63307855555870,
+    0x4d517a417754586c336445357151584e4d56466c3354454d774d3035356433,
+    0x524f656d4e7a544652724d4578444d44564f5133643054565246654578444d,
+    0x48684e5645567a54465246655539446433524e56456b3054454d7765453171,
+    0x5a334e4d5645563554304e33644531555258684d517a423454565246633078,
+    0x55617a424d517a4131546b4e336445353659334e4d56474d7a54454d774d6b,
+    0x31446433524f616b467a54465252656b78444d44424e655864305457705a63,
+    0x30785553544a4d517a413154454d774e5578455a334e5051336435546c4e33,
+    0x65553554647a424e6158637754576c334d553954647a46505533637a546d6c,
+    0x334d303570647a564e6558633154586c336545315551584e4e564556335445,
+    0x5246655535356433684e616d4e7a54564e334e45784552586c4f6558643054,
+    0x56524a4e4578444d48684e616d647a54465246655539446433524e56456b30,
+    0x54454d77654531715a334e4d5645563554304e33644531555354524d524556,
+    0x7a54304e336545317159334e4e56456b7a54454d77654531715a334e4d5645,
+    0x563554304e33644531555354524d517a42345457706e6330785552586c5051,
+    0x3364305456524a4e45784552584e50513364345457706a6330315553544e4d,
+    0x52455635546e6c336545317159334e4d5645563554304e3364453155535452,
+    0x4d517a42345457706e6330785552586c5051336434544552464d6b78444d48,
+    0x684e616d647a5446524665453154643352505646467a5446526a4d3078444d,
+    0x444a4e51336430546b524e6330785553544a4d517a41315445526e63303171,
+    0x56584e4f52456c7a546c52726330353657584e505645317a54565246643078,
+    0x4552586c4f6558643454455272656b78444d48684e616d647a5456524a4d30,
+    0x784552586c4f655864345457706a6330315553544e4d52455635546e6c3365,
+    0x45317159334e4e56456b7a54455246655535356433684e616d4e7a5456524a,
+    0x4d30784552586c4f655864345457706a6330315553544e4d52455635546e6c,
+    0x33644531555354524d52455635546e6c336545317159334e4e56456b7a5445,
+    0x5246655535356433684e616d4e7a5456524a4d30784552586c4f6558643454,
+    0x57706a6330785552586c50513364345457706a6330315553544e4d52455635,
+    0x546e6c336545317159334e4e56456b7a54454d77654531715a334e4e56456b,
+    0x7a54455246655535356433524e56456b3054455246655535356433684e616d,
+    0x4e7a5456524a4d30784552586c4f655864345457706a6330315553544e4d52,
+    0x455635546e6c336545317159334e4d5645563554304e336545317159334e4e,
+    0x56456b7a54454d77654531715a334e4e56456b7a5445524665553535643352,
+    0x4e56456b3054455246655535356433684e616d4e7a54465246655539446433,
+    0x684e616d4e7a5456524a4d3078444d48684e616d647a5456524a4d30784552,
+    0x586c4f655864345457706a6330315553544e4d52455635546e6c3365453171,
+    0x59334e4e56456b7a54455246655535356433684e616d4e7a5456524a4d3078,
+    0x4552586c4f655864305456524a4e45784552586c4f655864345457706a6330,
+    0x785552586c50513364345457706a6330315553544e4d52455635546e6c3365,
+    0x45317159334e4e56456b7a54454d77654531715a334e4e56456b7a54455246,
+    0x655535356433524e56456b3054455246655535356433684e616d4e7a544652,
+    0x46655539446433684e616d4e7a5456524a4d30784552586c4f655864345457,
+    0x706a6330315553544e4d517a42345457706e6330315553544e4d5245563554,
+    0x6e6c336545317159334e4e56456b7a5445524665553535647a524d5245467a,
+    0x54554e336545784551584e4f615864335445524e6430314551584e4e564546,
+    0x3354555242633031446433704e5133643354455246643031446433684e5245,
+    0x463354554e336545314551584e4e5645463354555242633031555158644e52,
+    0x45467a54554e336430784551584e4e5533643454455242633035706433684d,
+    0x5245313354555242633031555158644e5245467a54554e33656b3144643364,
+    0x4d5245563354554e33654531455158644e5133643454555242633031555158,
+    0x644e5245467a545652426430314551584e4e51336433544552426330317064,
+    0x33684d5245467a546d6c33655578455458644e5245467a5456524264303145,
+    0x51584e4e5133643654554e33643078455258644e5133643454555242643031,
+    0x446433684e5245467a545652426430314551584e4e56454633545552426330,
+    0x31446433644d5245467a54586c336545784551584e4f615864365445524e64,
+    0x30314551584e4e5645463354555242633031446433704e5133643354455246,
+    0x643031446433684e5245463354554e336545314551584e4e56454633545552,
+    0x42633031555158644e5245467a54554e336430784551584e4f513364345445,
+    0x524263303570647a424d5245313354555242633035555158644e5133643354,
+    0x45524e6430784551584e4e5645463354455246643031455158644d52455633,
+    0x54554e33654531455158644e5133643454555242643031446433644d524546,
+    0x7a54564e33656b35706433684d5245467a546d6c33643078455558644e5245,
+    0x467a54554e33654535715158644e524546335445524e6430784554544e4e51,
+    0x3363785455524263303144647a464e5245467a5457706e654531356433704e,
+    0x5245467a54554e336430784552584e4e656d647a54576c336430784557584e,
+    0x4f55336436546c52426430784551584e4e616b557854555256656b39446433,
+    0x704e5133643354455256643031446433644d5246563354554e336545314551,
+    0x58644e5133643454555242643031446433644d5245467a54554e334d6b7845,
+    0x54584e4f656b463354455242633031715158644e5245463354554e33656b31,
+    0x446433644d52456c3354554e33643078455658644e51336378546c52426430,
+    0x784552544e4e513364335445524263303154647a424e615864345445524263,
+    0x303570647a464d52456c335455524263303144647a424e656b46345455526a,
+    0x4d55784551584e4e51336434546c524263303144647a464e5245467a545652,
+    0x426430314551584e4e56454633545552426330314464336451517a6c365754,
+    0x4e4b63474e4955537451534535715932317364325244516a426c57454a7355,
+    0x464e4b4d4670596144424d4d304a7a5756647364556c70516e426152444270,
+    0x596c64736132465453537457526c7054596a4677516c4656526b4a52566d78,
+    0x4355565647516c4672526b6852617a56585530567765564656526b4a525630,
+    0x3575556b4d35566c56564d556c694d55354355564d3465466f77566b4e5256,
+    0x5778615554424752557777526c4e566254466f5630646e6431704761457469,
+    0x525778495647303561466446536d3161524570485457787757565259566b31,
+    0x614d464a43555656475247517753586c565655597856566453614646566345,
+    0x4e54566d78435554467753314978526c705461305a435a444a30526c6f7752,
+    0x6b68546130704f563156475246647263485256566d784c576a42474d324577,
+    0x566a4e525657524c55577843576c4656546d46546132525356315677516c46,
+    0x595a484a5356476843556a427751315a5762454a524d58424c596c5a47576c,
+    0x4e745a454a6b4d6e5248565656475346564561444a52565555355546523364,
+    0x6d4d79546e6c685745497755477034656c6b7a536e426a5346466e5a456873,
+    0x643170554d476c6b523159305a454d3564324a48526e426961556c6e595664, 0x524f556c74526e6c6b51306b72,
+    13,
+];
+
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 31942 bytes.
+pub fn case_chip_waves_animation_html_digest() -> (u32, u256) {
+    (31942, 0x111db9b8073abcdf1466c64c88fef59bbc26d87eee270f07ee95ccc6a095bad7)
+}
+
+/// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
+pub fn case_chip_waves_token_uri_digest() -> (u32, u256) {
+    (57805, 0x7ca3166993a40fd633d3708e1f0febdc92f849719499bfcc1340a3db2123fcc9)
+}
+
+/// SETTINGS for this case's settings.
+pub fn case_chip_waves_settings_text() -> ByteArray {
+    "1,1,30,40,64,6,1,64,127,127,110,110,93,93,76,76,59,59,42,42,25,25,8,8,-9,-9,-26,-26,-43,-43,-60,-60,-77,-77,-94,-94,-111,-111,-128,-128,-128,-128,-111,-111,-94,-94,-77,-77,-60,-60,-43,-43,-26,-26,-9,-9,8,8,25,25,42,42,59,59,76,76,93,93,110,110,127,127,1,8,127,-128,-128,-128,-128,-128,-128,-128,1,8,127,127,-128,-128,-128,-128,-128,-128,1,8,127,127,127,127,-128,-128,-128,-128,1,16,-128,-111,-94,-77,-60,-43,-26,-9,8,25,42,59,76,93,110,127,1,93,-128,127,127,127,127,127,127,127,127,127,127,127,127,127,127,-128,127,127,127,127,127,127,127,127,-128,127,127,127,127,127,-128,127,127,-128,127,127,127,127,127,127,127,127,-128,127,127,-128,127,127,-128,127,127,-128,127,127,-128,127,127,127,127,127,127,127,127,127,127,127,-128,127,127,-128,127,127,127,127,127,-128,127,127,-128,127,127,-128,127,127,127,127,127,-128,127,127,127,127,127,8,0,0,1,0,6,0,3000,10000,0,30,0,100,10000,100,10000,10000,0,0,0,1,1,0,6,1,3000,10000,0,30,0,100,10000,100,10000,10000,0,0,0,2,1,0,6,2,3000,10000,0,30,0,100,10000,100,10000,10000,0,0,0,3,1,0,6,3,3000,10000,0,30,0,100,10000,100,10000,10000,0,0,0,4,1,0,6,4,3000,5000,0,30,0,100,10000,100,10000,10000,0,0,1,36,1,0,6,0,4000,0,1600000,30,370,500,0,500,2813,300,0,0,1,38,2,0,6,5,3500,0,2150538,30,0,500,0,500,10000,10000,0,0,0,6,3,700,0,2000000,30,0,200,0,500,5500,170,0,0,1,42,1,0,6,5,2000,0,4301075,0,0,150,0,500,10000,10000,0,0"
+}
+
+#[test]
+fn case_chip_waves_settings_encode_as_in_the_fixture() {
+    let settings = case_chip_waves_settings();
+    validate(@settings);
+    assert_eq!(encode(@settings), case_chip_waves_settings_text());
+}
+
+#[test]
+fn case_chip_waves_midi_segment_matches_the_fixture() {
+    let settings = case_chip_waves_settings();
+    let got = segment::midi_segment(case_chip_waves_midi(), @settings);
+    assert(got == case_chip_waves_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_chip_waves_library_call_matches_the_fixture() {
+    let settings = case_chip_waves_settings();
+    let got = class().midi_segment(case_chip_waves_midi(), settings);
+    assert(got == case_chip_waves_midi_segment(), 'midi_segment != fixture');
+}
+
+#[test]
+fn case_chip_waves_html_and_token_uri_match_the_digests() {
+    let midi = case_chip_waves_midi();
+    let settings = case_chip_waves_settings();
+    let svg = case_chip_waves_svg();
+    let mut html = class_fixtures::page();
+    html.append(@segment::d_fragment(midi.clone(), @settings));
+    html.append(@svg);
+    let html_digest = (html.len(), sha256(@html));
+    assert(html_digest == case_chip_waves_animation_html_digest(), 'html != digest');
+    let uri = beasts_token_uri(@case_chip_waves_members(), @svg, midi, @settings);
+    let uri_digest = (uri.len(), sha256(@uri));
+    assert(uri_digest == case_chip_waves_token_uri_digest(), 'token_uri != digest');
 }
 
 // every_slot: D pad 8, head pad 1, S pad 1; 142 bytes of MIDI, 9836 of SETTINGS.
@@ -2180,14 +2419,14 @@ const CASE_EVERY_SLOT_MIDI_SEGMENT: [felt252; 583] = [
     0x61556c6e595664524f556c74526e6c6b51306b72, 20,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 38539 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 40438 bytes.
 pub fn case_every_slot_animation_html_digest() -> (u32, u256) {
-    (38539, 0x726029d9c6e10d38c4989e3d96fa42b8b320553b7fc26c927a2095f48536703f)
+    (40438, 0x0efa043ac18b6aa1329db01faa9bdf49fdf70eed63264810719545bb6168b2db)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_every_slot_token_uri_digest() -> (u32, u256) {
-    (69501, 0x0a378fbfbd05f42db201a829c1816d4a5814e39989e64b92636eb22dfb03b021)
+    (72877, 0x9c425a14e088dc481f9f28ff14e00345e5850f37c3ab82535d767fa642266899)
 }
 
 /// SETTINGS for this case's settings.
@@ -2386,7 +2625,7 @@ fn invalid_duplicate_drum_library_call_reverts_with_the_panic_data() {
     }
 }
 
-/// midi_segment must revert with ['TS: custom wave unsupported',0,0].
+/// midi_segment must revert with ['TS: wave index out of range',0,0].
 pub fn invalid_custom_wave_settings() -> SynthSettings {
     let mut felts = INVALID_CUSTOM_WAVE_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
@@ -2401,11 +2640,11 @@ const INVALID_CUSTOM_WAVE_SETTINGS: [felt252; 24] = [
 
 /// The panic data midi_segment must revert with.
 pub fn invalid_custom_wave_error() -> Array<felt252> {
-    array!['TS: custom wave unsupported', 0, 0]
+    array!['TS: wave index out of range', 0, 0]
 }
 
 #[test]
-#[should_panic(expected: ('TS: custom wave unsupported', 0, 0))]
+#[should_panic(expected: ('TS: wave index out of range', 0, 0))]
 fn invalid_custom_wave_settings_revert() {
     let settings = invalid_custom_wave_settings();
     validate(@settings);
@@ -2413,7 +2652,7 @@ fn invalid_custom_wave_settings_revert() {
 }
 
 #[test]
-#[should_panic(expected: ('TS: custom wave unsupported', 0, 0))]
+#[should_panic(expected: ('TS: wave index out of range', 0, 0))]
 fn invalid_custom_wave_midi_segment_reverts() {
     let _segment = segment::midi_segment(invalid_midi(), @invalid_custom_wave_settings());
 }

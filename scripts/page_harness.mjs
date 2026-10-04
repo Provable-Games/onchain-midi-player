@@ -209,6 +209,8 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
       },
     },
     setTimeout: (/** @type {() => void} */ fn, /** @type {number} */ delay) => {
+      // Browsers fire a longer delay than 2^31 - 1 ms at once: the player must never ask for one.
+      if (!(delay >= 0 && delay <= 2147483647)) throw new Error(`setTimeout delay out of range: ${delay}`);
       timers.set(++timerId, { fn, delay, at: synths.length ? synths[0].getAudioContext().currentTime : 0 });
       return timerId;
     },

@@ -229,21 +229,27 @@ describe("the pinned engine behaves as the README's MIDI contract says", () => {
   test("pitch bend retunes only the oscillators of sounding melodic notes; every new note starts bent", () => {
     const e = engine();
     e.synth.setTimbre(0, 5, [{ w: "n0", v: 0.5, d: 1, s: 1 }]); // program 5: a noise-only melodic timbre
+    e.synth.setSampleWave("nS0", [1, -1]); // a custom sample wave (issue #2), as the player registers it
+    e.synth.setTimbre(0, 6, [{ w: "nS0", v: 0.5, d: 1, s: 1 }]); // program 6: on that wave
     e.synth.send([0xc1, 5], 1);
+    e.synth.send([0xc2, 6], 1);
     e.synth.send([0x90, 60, 100], 1); // channel 1, program 0: two oscillators
     e.synth.send([0x91, 60, 100], 1); // channel 2, program 5: one noise operator
     e.synth.send([0x99, 38, 100], 1); // channel 10, the snare: oscillators and a noise operator
-    const [osc, noise, drum] = e.notes;
+    e.synth.send([0x92, 60, 100], 1); // channel 3, program 6: one sample-wave operator
+    const [osc, noise, drum, sample] = e.notes;
     assert.ok(osc.oscs.length === 2 && !osc.srcs.length && noise.srcs.length === 1 && !noise.oscs.length && drum.oscs.length && drum.srcs.length);
+    assert.ok(sample.srcs.length === 1 && !sample.oscs.length, "a sample wave plays from a buffer, as noise does");
     const full = (8191 * 256 * 100) / 127 / 8192; // full scale up at the default range: about +201.55 cents
     const from = e.log.length;
-    for (const ch of [0, 1, 9]) e.synth.send([0xe0 | ch, 0x7f, 0x7f], 1.01);
+    for (const ch of [0, 1, 2, 9]) e.synth.send([0xe0 | ch, 0x7f, 0x7f], 1.01);
     const bent = (/** @type {string} */ name) => e.log.slice(from).some((c) => c[0] === `${name}.detune` && c[1] === "set" && near(c[2], full));
     assert.ok(osc.oscs.every(bent), "a held melodic note's oscillators follow the bend");
     assert.ok(!noise.srcs.some(bent), "a held melodic noise operator keeps the bend it started with");
+    assert.ok(!sample.srcs.some(bent), "a held sample-wave operator keeps the bend it started with");
     assert.ok(![...drum.oscs, ...drum.srcs].some(bent), "a sounding drum hit keeps the bend it started with");
-    for (const m of [[0x90, 62, 100], [0x91, 62, 100], [0x99, 38, 100]]) e.synth.send(m, 1.02);
-    for (const n of e.notes.slice(3)) {
+    for (const m of [[0x90, 62, 100], [0x91, 62, 100], [0x99, 38, 100], [0x92, 62, 100]]) e.synth.send(m, 1.02);
+    for (const n of e.notes.slice(4)) {
       for (const name of [...n.oscs, ...n.srcs]) assert.ok(near(e.nodes[name].detune.value, full), `new note on channel ${n.ch + 1}: ${name} starts bent`);
     }
   });

@@ -1,13 +1,13 @@
 ---
 name: sound-design
-description: Design the sound of an NFT that uses the onchain TinySynth player (Provable-Games/onchain-tinysynth) through the SynthSettings value its contract passes to midi_segment - quality, reverb, master volume, voices, and custom FM or chip timbres that replace General MIDI programs or drum notes. Use when choosing or tuning instruments and drums, converting a TinySynth soundedit timbre to Cairo fixed point, fixing a settings revert from midi_segment (the TS errors), or previewing settings offline before deploying.
+description: Design the sound of an NFT that uses the onchain TinySynth player (Provable-Games/onchain-tinysynth) through the SynthSettings value its contract passes to midi_segment - quality, reverb, master volume, voices, custom waveforms (single-cycle sample tables and harmonic waves) and custom FM or chip timbres that replace General MIDI programs or drum notes. Use when choosing or tuning instruments and drums, defining chip waves such as stepped triangles, pulses or LFSR noise, converting a TinySynth soundedit timbre to Cairo fixed point, fixing a settings revert from midi_segment (the TS errors), or previewing settings offline before deploying.
 license: Apache-2.0
 compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-tinysynth whose VERSION in src/page_data.cairo equals the class's version(); Cairo steps need the Scarb version in its .tool-versions.
 ---
 
 # Sound design with `SynthSettings`
 
-The contract passes a `SynthSettings` value to `midi_segment` on every `token_uri` call. It sets the built-in sound set, reverb, master volume, voices, and custom timbres. The source of truth is the README's [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds) and [`src/types.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/types.cairo).
+The contract passes a `SynthSettings` value to `midi_segment` on every `token_uri` call. It sets the built-in sound set, reverb, master volume, voices, custom waves and custom timbres. The source of truth is the README's [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds) and [`src/types.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/types.cairo).
 
 Boundary: the [midi-guide](../midi-guide/SKILL.md) skill covers what goes in the `.mid` (notes, program changes, controllers). This skill covers what the contract passes in `SynthSettings`. Wiring it into `token_uri` is the [integrator-guide](../integrator-guide/SKILL.md) skill.
 
@@ -31,9 +31,10 @@ Get the tools: Node 22 or later, and a clone whose `grep 'pub const VERSION' src
 
 From `page.7`:
 
-- Validation covers what the format and the engine require: `quality` is 0 or 1, `voices` at least 1, the counts, the slots, the routes, the wave index and the gates for issues #2 and #3. Every other number takes any value of its integer type, except the five operator fields below.
+- Validation covers what the format and the engine require: `quality` is 0 or 1, `voices` at least 1, the counts, the slots, the routes, the wave index and the gate for issue #3 (filters). Every other number takes any value of its integer type, every wave sample and harmonic included, except the five operator fields below.
+- From `page.9` custom waves are accepted (issue #2, below). A `page.7` or `page.8` class reverts them with `'TS: custom wave unsupported'`.
 - There is no `SETTINGS` length cap: the network prices the cost ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-size-of-settings-no-byte-cap), [Network and node limits](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#network-and-node-limits)).
-- Five operator fields have interim engine bounds: `ratio`, `pitch_ratio`, `volume`, `sustain` and `key_scale`. The pinned engine computes non-finite values past them and throws, and the throwing note stalls the whole song. They are removed once the engine's guard lands (release gate, issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). README: [Engine limits on operator values](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#engine-limits-on-operator-values).
+- Five operator fields have interim engine bounds: `ratio`, `pitch_ratio`, `volume`, `sustain` and `key_scale`. The pinned engine computes non-finite values past them and throws, and the throwing note stalls the whole song. The `page.9` engine validates the values `setTimbre` receives but not what they multiply into, so the bounds stay. They are removed once the engine's guard for computed values lands (the fork's task T5.2; release gate, issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). README: [Engine limits on operator values](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#engine-limits-on-operator-values).
 
 The `page.6` class (the Sepolia class in the README's [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments)) predates these rules: it range-checks `reverb`, `master_vol`, `voices` and every operator value, and caps the `SETTINGS` length (`'TS: settings too long'`). Design for the class you will call.
 
@@ -47,7 +48,7 @@ The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MA
 | `reverb` | 30 | Reverb level in percent; 0 turns reverb off. Engine-wide: MIDI CC91 does nothing. |
 | `master_vol` | 40 | Master volume in percent of full scale. The default is below TinySynth's 50, because dense passages clipped at 50 in quality 1. |
 | `voices` | 64 | Melodic notes at once across all channels. |
-| `waves` | empty | Custom waves revert `'TS: custom wave unsupported'` until issue #2. |
+| `waves` | empty | Custom waveforms shared by every timbre, up to `MAX_WAVES` (below). |
 | `timbres` | empty | Custom sounds (below), up to `MAX_TIMBRES`. |
 
 ## Custom timbres
@@ -63,17 +64,43 @@ The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MA
 - Every field, its TinySynth key, type, default and meaning: [references/operator-fields.md](references/operator-fields.md). Preview unusual values: extreme ones can make the engine misbehave while playing.
 - From TinySynth's `soundedit.html` (in the fork): `g` becomes `route`; `w` becomes `wave` (`sine`, `square`, `sawtooth`, `triangle`, `n0`, `n1` map to `Sine` … `MetallicNoise`); multiply every other value by 10,000 and round. Fields TinySynth leaves out take `default_operator()`. README: [Designing a custom sound](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#designing-a-custom-sound).
 
-## Not accepted in v1
+## Custom waves
 
-- Custom waves (a non-empty `waves`, or `Waveform::Custom`): `'TS: custom wave unsupported'` until issue [#2](https://github.com/Provable-Games/onchain-tinysynth/issues/2), which needs fork issue [#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26). The interim engine pin already has that API (README: [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds)); the class and the player use it once issue #2 lands.
-- Filters (`filter: Some(...)`): `'TS: filter unsupported'` until issue [#3](https://github.com/Provable-Games/onchain-tinysynth/issues/3), which needs fork issue [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27). The interim engine pin already has its fixed operator filters (README: [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds)); the class and the player use them once issue #3 lands.
-- Their encoding is already in the format, so lifting these checks changes neither the grammar nor the format version.
-- `WhiteNoise` and `MetallicNoise` are accepted, but their buffers vary slightly per page load until fork issue [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7).
+From `page.9` (issue [#2](https://github.com/Provable-Games/onchain-tinysynth/issues/2)). README: [Custom waves](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#custom-waves), the source of truth for this section.
+
+- **Define each wave once** in `SynthSettings.waves`, shared by every timbre, and select it in an operator with `wave: Waveform::Custom(index)`, 0-based. An index past the table reverts `'TS: wave index out of range'`. Up to `MAX_WAVES` entries; unused and repeated entries are allowed.
+- **`WaveDef::Samples(Span<i8>)`** is one cycle of a chip wave, played sample-and-hold: sample `s` is `s / 128` (−128 is −1.0, 127 is 0.9921875). The note sets the cycle rate, whatever the table's length, so a melodic wave keeps the usual `ratio` and `offset_hz`. The engine holds each sample for the same number of frames, so steps stay sharp.
+- **`WaveDef::Harmonics(Span<u16>)`** is a band-limited wave: element `i` is the amplitude of harmonic `i + 1`, as a sine term. The browser normalizes the peak, so only the ratios matter; all zeros is silent.
+- **Porting a TinySynth wave** (soundedit, or a page that calls the engine directly): `setSampleWave` floats `x` become `i8` samples `clamp(round(x × 128), −128, 127)`. From `setHarmonicWave(name, real, imag)` only non-negative sine amplitudes `imag[1..]` carry over, scaled to `u16`; cosine (`real`) terms, DC and negative amplitudes have no `Harmonics` form, so sample one cycle of such a wave into a `Samples` table instead. Nothing fails if you get this wrong: the wave just sounds different, so preview it. README: [Designing a custom sound](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#designing-a-custom-sound).
+- **The player** registers entry `i` with the engine as `nS<i>` (samples) or `wH<i>` (harmonics), before installing any timbre. A held note on a `Samples` wave keeps the pitch bend it started with, as noise does; see the midi-guide.
+- **Reference shapes**, generated from their definitions in [`scripts/reference_waves.mjs`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/scripts/reference_waves.mjs) (generic chip shapes, not any collection's presets): a 64-sample 4-bit stepped triangle (`triangle4()`), 12.5%, 25% and 50% pulses of eight samples (`pulse(1)`, `pulse(2)`, `pulse(4)`), a 16-step 4-bit saw (`saw4()`), and 15-bit LFSR noise, short (93 steps) and long (32,767 steps) (`lfsr("short")`, `lfsr("long")`). The `reference_waves` entry of `tests/fixtures/settings.json` puts each on a timbre; preview it as the example timbres below.
+- **Noise tables are set by their step rate:** a table of `N` samples steps `N` times per cycle, so use `ratio` 0 and `offset_hz` = steps per second / `N` (the short LFSR at 20 kHz: 215.0538 Hz, stored as 2,150,538).
+- **Retune rule.** A noise table written straight into the engine's `noiseBuf`, as TinyChip does, plays one sample per frame at `playbackRate = f / 440`, so its step rate depends on the sample rate `R` it was tuned at. Registered as a `Samples` wave it steps at `f × N` on every device. Keep the sound with `f_new = f_old × R / (440 × N)`.
+- **Cost.** Each sample or harmonic is 2 to 6 bytes of `SETTINGS` (about 4.5 at full scale), and `SETTINGS` costs about 14M L2 gas per 1,000 bytes through `midi_segment`. Short chip waves are cheap: the six short reference waves on eight timbres take `midi_segment` with a full-size score to 77.3M, against 60.7M for the three reference sounds. The long LFSR (147,532 bytes) adds about 2.1B, which needs a node with a large call budget (README [Network and node limits](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#network-and-node-limits)); deterministic `WhiteNoise` is the cheap alternative.
+- **Same on every load.** The waves' tables, and the engine's noise and reverb (seeded, fork issue [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7)), are the same on every load at a given sample rate. Browsers differ slightly, so audition in more than one.
+
+```cairo
+use onchain_tinysynth::settings::default_operator;
+use onchain_tinysynth::types::{Operator, WaveDef, Waveform};
+
+// A 12.5% pulse (one high sample of eight) and a harmonic organ (harmonics 1, 3 and 5).
+let waves = [
+    WaveDef::Samples([127, -128, -128, -128, -128, -128, -128, -128].span()),
+    WaveDef::Harmonics([100, 0, 50, 0, 25].span()),
+]
+    .span();
+let pulse_carrier = Operator { wave: Waveform::Custom(0), ..default_operator() };
+```
+
+## Not accepted yet
+
+- Filters (`filter: Some(...)`): `'TS: filter unsupported'` until issue [#3](https://github.com/Provable-Games/onchain-tinysynth/issues/3) (Tier 3), which needs fork issue [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27). The interim engine pin already has its fixed operator filters (README: [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds)); the class and the player use them once issue #3 lands. Their encoding is already in the format, so lifting the check changes neither the grammar nor the format version.
+- `WhiteNoise` and `MetallicNoise` are accepted and seeded from `page.9`; with an earlier class their buffers vary slightly per page load.
 
 ## Wire format, size and gas
 
 - The class validates the settings, then writes them into the page as `SETTINGS`: a flat list of canonical decimal integers (only `0-9`, `-` and `,`), fields in declaration order, a length before every list, enums as their variant index, `bool` as 0/1, `Option` as 0 or 1 followed by the value. Format version 1. README: [The `SETTINGS` format](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-settings-format); grammar in [`src/settings.cairo`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/src/settings.cairo).
-- Size: `1,1,30,40,64,0,0` with the defaults, plus about 6 bytes per timbre and 50 per operator. `preview` prints the size. From `page.7` the class does not cap the length; the `page.6` class does (above). Either way the gas grows with it.
+- Size: `1,1,30,40,64,0,0` with the defaults, plus about 6 bytes per timbre, 50 per operator and 2 to 6 per wave sample or harmonic. `preview` prints the size. From `page.7` the class does not cap the length; the `page.6` class does (above). Either way the gas grows with it.
 - Gas: `SETTINGS` is base64-encoded at call time with the MIDI, about 14M L2 gas per 1,000 bytes ([README](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#gas-and-limits)).
 
 ## `'TS: …'` errors
@@ -113,4 +140,4 @@ node -e 'const j = require("./tests/fixtures/settings.json"); console.log(JSON.s
 npm run preview -- song.mid --settings example.json --serve
 ```
 
-`npm run render-check` renders the three in a headless browser and measures them (optional; needs Playwright, see the README).
+`npm run render-check` renders the three in a headless browser and measures them, and the reference waves too: the stepped triangle's pitch and steps, the pulse widths, and that two page loads sound the same (optional; needs Playwright, see the README).

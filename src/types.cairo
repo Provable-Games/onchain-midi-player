@@ -1,13 +1,13 @@
 //! Consumer-supplied sound settings for `midi_segment`.
 //!
 //! `crate::settings::validate` checks only what the format or the engine requires: `quality`
-//! is 0 or 1, `voices` at least 1, the counts, slots and routes, and the gates below. Every
-//! other numeric field takes any value of its integer type, except five operator fields with
-//! interim engine limits (`volume`, `ratio`, `pitch_ratio`, `sustain`, `key_scale`): the pinned
-//! engine computes non-finite values past them and stalls (README, "Engine limits on operator
-//! values").
-//! Custom waveforms (issue #2) and filters (issue #3) are part of the types and of the
-//! `SETTINGS` grammar already, but are rejected until those issues land. `midi_segment` reverts
+//! is 0 or 1, `voices` at least 1, the counts, slots, routes and wave indices, and the filter gate
+//! below. Every other numeric field takes any value of its integer type, except five operator
+//! fields with interim engine limits (`volume`, `ratio`, `pitch_ratio`, `sustain`, `key_scale`):
+//! the pinned engine computes non-finite values past them and stalls (README, "Engine limits on
+//! operator values"). Every wave sample and harmonic takes any value of its type.
+//! Filters (issue #3) are part of the types and of the `SETTINGS` grammar already, but are
+//! rejected until that issue lands. `midi_segment` reverts
 //! with a descriptive error when a check fails; the exact checks, their order and their
 //! messages are listed in `crate::settings`. This is the only place they are enforced: the
 //! player page parses `SETTINGS` strictly but does not repeat them.
@@ -22,7 +22,7 @@
 //!
 //! The class writes the settings into the page next to the MIDI, as an inert block of
 //! ASCII digits, `-` and `,` (the `SETTINGS` format, specified in `crate::settings`). The
-//! player reads that block, configures TinySynth, registers the custom waves, then installs
+//! player reads that block, registers the custom waves, configures TinySynth, then installs
 //! each `Timbre` with `setTimbre`. Values are treated as data only, never evaluated. Custom
 //! timbres are installed after construction and after the quality mode is applied, because
 //! TinySynth's `setQuality()` resets every program and drum to the built-ins.
@@ -58,11 +58,12 @@ pub struct SynthSettings {
     pub master_vol: u8,
     /// Maximum simultaneous notes; the oldest note is cut beyond this. At least 1, any `u8`.
     pub voices: u8,
-    /// Custom waveforms shared by every timbre in this call; operators select one with
+    /// Custom waveforms shared by every timbre in this call (issue #2); operators select one with
     /// `Waveform::Custom(index)`, 0-based. 0..=256 entries, all that `Custom(u8)` can index;
-    /// unused and repeated entries are allowed; each is registered once, in order, before any
-    /// timbre is installed.
-    /// Must be empty until issue #2 lands (`'TS: custom wave unsupported'`).
+    /// unused and repeated entries are allowed. The player registers each with the engine, in
+    /// order, before any timbre is installed, under a name made from its index (`nS<index>` for
+    /// `Samples`, `wH<index>` for `Harmonics`). Each sample or harmonic adds 2 to 6 bytes to the
+    /// encoded `SETTINGS`, and gas with it (see the README).
     pub waves: Span<WaveDef>,
     /// Custom sounds replacing built-in programs or drum notes. Empty means built-ins only.
     /// At most 175 timbres per call: each `(drum, slot)` pair may appear once, and there are 128
@@ -146,12 +147,13 @@ pub enum Waveform {
     Square,
     Sawtooth,
     Triangle,
-    /// White noise (TinySynth `n0`). Deterministic once fork issue #7 lands.
+    /// White noise (TinySynth `n0`), generated from a fixed seed (fork issue #7): the same on every
+    /// load at a given sample rate.
     WhiteNoise,
-    /// Metallic noise (TinySynth `n1`). Deterministic once fork issue #7 lands.
+    /// Metallic noise (TinySynth `n1`), generated from a fixed seed (fork issue #7).
     MetallicNoise,
-    /// Entry `index` (0-based) of `SynthSettings::waves` (issue #2). Rejected until #2 lands
-    /// (`'TS: custom wave unsupported'`).
+    /// Entry `index` (0-based) of `SynthSettings::waves` (issue #2). `index` must be below
+    /// `waves.len()` (`'TS: wave index out of range'`).
     Custom: u8,
 }
 
@@ -159,13 +161,19 @@ pub enum Waveform {
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub enum WaveDef {
     /// Band-limited wave from harmonic amplitudes: element `i` is the relative amplitude of
-    /// harmonic `i + 1`. At least 1 element, with no upper bound: the engine takes any length
-    /// (fork issue #26, decision D-028).
+    /// harmonic `i + 1`, as a sine term (the player passes `imag = [0, h...]` and `real` all zeros
+    /// to the engine's `setHarmonicWave`). The browser normalizes the wave's peak to full scale, so
+    /// only the ratios matter: `[2, 1]` sounds like `[65_535, 32_767]`. All zeros is silent. At
+    /// least 1 element, with no upper bound: the engine takes any length (fork issue #26, decision
+    /// D-028).
     Harmonics: Span<u16>,
-    /// Single-cycle wave from samples, played sample-and-hold at the note's pitch, giving
-    /// exact chip waveforms such as a 4-bit stepped triangle or a 12.5% pulse. Each sample
-    /// maps -128..=127 to -1.0..=1.0. At least 1 sample, with no upper bound: the engine takes any
-    /// length (fork issue #26, decision D-028).
+    /// One cycle of a wave as samples, played sample-and-hold at the note's pitch, giving exact
+    /// chip waveforms such as a 4-bit stepped triangle or a 12.5% pulse. Each sample `s` is
+    /// `s / 128` (-128 is -1.0, 0 is 0, 127 is 0.9921875), passed to the engine's `setSampleWave`,
+    /// which holds each sample for the same number of frames, so the table plays at the note's
+    /// frequency with sharp steps (fork decision D-027). At least 1 sample, with no upper bound:
+    /// the engine takes any length (fork issue #26, decision D-028). The note's frequency is the
+    /// cycle rate: a table of `n` samples steps at `n` times it.
     Samples: Span<i8>,
 }
 

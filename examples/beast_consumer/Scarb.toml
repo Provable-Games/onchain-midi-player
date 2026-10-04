@@ -26,8 +26,8 @@ test = "snforge test"
 allow-prebuilt-plugins = ["snforge_std"]
 
 # Two kinds of test go beyond snforge's default step limit, neither because of the class's encoder:
-# the naive-nesting tests (`*_equals_naive_nesting`) base64-encode the whole ~41 KB token JSON with
+# the naive-nesting tests (`*_equals_naive_nesting`) base64-encode the whole ~44 KB token JSON with
 # their own byte-at-a-time encoder, and `token_uri_4_matches_js_digest` computes the SHA-256 of
-# token 4's 140,645-byte token_uri in Cairo.
+# token 4's 144,021-byte token_uri in Cairo.
 [tool.snforge]
 max_n_steps = 100000000

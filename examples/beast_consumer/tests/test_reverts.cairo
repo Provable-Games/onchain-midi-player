@@ -160,19 +160,31 @@ fn operator_error_reports_timbre_and_operator() {
     assert_midi_segment_reverts(s, ['TS: FM target not earlier', 1, 0].span());
 }
 
-// Custom waves are rejected until issue #2 lands.
+// A custom wave (issue #2) must be an entry of `waves`.
 #[test]
-fn custom_wave_reverts_until_issue_2() {
+fn custom_wave_without_table_reverts() {
     let mut s = sound::settings_for(1);
     s.timbres = one_op_timbre(false, 80, Waveform::Custom(0));
-    assert_midi_segment_reverts(s, ['TS: custom wave unsupported', 0, 0].span());
+    assert_midi_segment_reverts(s, ['TS: wave index out of range', 0, 0].span());
 }
 
 #[test]
-fn custom_wave_table_reverts_until_issue_2() {
+fn custom_wave_past_table_reverts() {
     let mut s = sound::settings_for(1);
     s.waves = [WaveDef::Harmonics([100_u16, 50].span())].span();
-    assert_midi_segment_reverts(s, ['TS: custom wave unsupported'].span());
+    s.timbres = one_op_timbre(false, 80, Waveform::Custom(1));
+    assert_midi_segment_reverts(s, ['TS: wave index out of range', 0, 0].span());
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn custom_waves_are_accepted() {
+    let mut s = sound::settings_for(1);
+    s
+        .waves = [WaveDef::Harmonics([100_u16, 50].span()), WaveDef::Samples([127_i8, -128].span())]
+        .span();
+    s.timbres = one_op_timbre(false, 80, Waveform::Custom(1));
+    assert(synth().midi_segment(sound::midi(), s).unwrap().len() > 0, 'midi_segment');
 }
 
 #[test]

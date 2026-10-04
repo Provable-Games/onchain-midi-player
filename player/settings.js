@@ -4,8 +4,8 @@
  * the page.
  *
  * `SETTINGS` (format version 1) is the ASCII encoding of the Cairo `SynthSettings` value that the
- * class writes into the page, after `settings::validate` has checked it (counts, slots, routes and
- * the gates; every other field may take any value of its type). The page parses it strictly (the
+ * class writes into the page, after `settings::validate` has checked it (counts, slots, routes, wave
+ * indices and the filter gate; every other field may take any value of its type). The page parses it strictly (the
  * grammar, canonical integers, Cairo type bounds, count bounds, known tags, every token consumed)
  * and installs it; it does not repeat Cairo's checks. The JS
  * reference of those checks, for tooling and the parity tests, is `player/validate.js`; the
@@ -210,14 +210,46 @@ export function decodeSettings(text) {
 const fx = (x) => x / FIXED_POINT_SCALE; // one IEEE division: the same double in every engine
 
 /**
- * Converts a timbre's operators to TinySynth's `setTimbre` format. Builds fresh objects every
- * time, because `setTimbre` fills in defaults by mutating them.
- * @param {Timbre} timbre
+ * The name custom wave `i` of `SynthSettings.waves` is registered under (issue #2): `nS<i>` for
+ * `Samples`, `wH<i>` for `Harmonics`. The engine's names (fork #26, D-006) start with `n` (a sample
+ * wave) or `w` (a harmonic wave), then a letter or `_`: a digit there is reserved for built-ins such
+ * as `n0` and `w9999`.
+ * @param {WaveDef} wave
+ * @param {number} i
  */
-export function toTinySynthOps(timbre) {
+export const waveName = (wave, i) => ("Samples" in wave ? "nS" : "wH") + i;
+
+/**
+ * Registers every custom wave with the engine, under `waveName`. `Samples`: one cycle, each `i8`
+ * sample `s` as `s / 128` (-128 is -1.0, 127 is 0.9921875), with `setSampleWave`. `Harmonics`: element
+ * `i` is harmonic `i + 1`, as `imag[i + 1]` of `setHarmonicWave` with `imag[0]` (DC) and `real` all
+ * zero; the browser normalizes the peak, so the scale does not matter. Registering a name again
+ * replaces it, and the registry survives `setQuality()`.
+ * @param {any} synth
+ * @param {WaveDef[]} waves
+ */
+export function registerWaves(synth, waves) {
+  waves.forEach((w, i) => {
+    if ("Samples" in w) synth.setSampleWave(waveName(w, i), w.Samples.map((v) => v / 128));
+    else {
+      const imag = [0].concat(w.Harmonics);
+      synth.setHarmonicWave(waveName(w, i), imag.map(() => 0), imag);
+    }
+  });
+}
+
+/**
+ * Converts a timbre's operators to TinySynth's `setTimbre` format: a built-in waveform by its
+ * TinySynth name, `Custom(i)` by the name wave `i` of `waves` is registered under. Builds fresh
+ * objects every time.
+ * @param {Timbre} timbre
+ * @param {WaveDef[]} [waves]
+ */
+export function toTinySynthOps(timbre, waves = []) {
   return timbre.operators.map((o) => {
+    const w = o.wave;
     /** @type {Record<string, any>} */
-    const p = { g: o.route, w: TINYSYNTH_WAVES[WAVEFORMS.indexOf(/** @type {string} */ (o.wave))] };
+    const p = { g: o.route, w: typeof w == "object" ? waveName(waves[w.Custom], w.Custom) : TINYSYNTH_WAVES[WAVEFORMS.indexOf(w)] };
     for (const [name, , key] of OPERATOR_FIELDS) p[key] = fx(/** @type {any} */ (o)[name]);
     return p;
   });
@@ -236,17 +268,19 @@ export function createSynth(WebAudioTinySynth, s) {
 }
 
 /**
- * Applies settings to a constructed TinySynth: quality (which resets programs 0–127 and drums
- * 35–81 to the built-ins), engine settings, then every custom timbre in order. Idempotent; call it
- * again after anything that changes the quality. Custom waves and filters, which v1 validation
- * rejects, get their player side with issues #2 and #3.
+ * Applies settings to a constructed TinySynth: the custom waves (registered before any timbre
+ * names them), quality (which resets programs 0–127 and drums 35–81 to the built-ins, but keeps the
+ * waves), engine settings, then every custom timbre in order. Idempotent; call it again after
+ * anything that changes the quality. Filters, which validation rejects until issue #3, get their
+ * player side with that issue.
  * @param {any} synth
  * @param {SynthSettings} s
  */
 export function installSettings(synth, s) {
+  registerWaves(synth, s.waves);
   synth.setQuality(s.quality);
   synth.setMasterVol(s.master_vol / 100);
   synth.setReverbLev(s.reverb / 100); // convolver gain = reverbLev * 8; no convolver when reverb == 0
   synth.setVoices(s.voices);
-  for (const t of s.timbres) synth.setTimbre(t.drum ? 1 : 0, t.slot, toTinySynthOps(t));
+  for (const t of s.timbres) synth.setTimbre(t.drum ? 1 : 0, t.slot, toTinySynthOps(t, s.waves));
 }

@@ -616,6 +616,34 @@ describe("the page's player script, real engine", () => {
     assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, 2), "pass 2 restarts the art");
   });
 
+  test("a pass longer than setTimeout's limit (2^31 - 1 ms) is timed by a later poll, not at once", async () => {
+    // PPQ 1 at the slowest tempo (16.777215 s a quarter): a note, then End-of-Track at tick 130,000,
+    // a pass of about 25.2 days. setTimeout fires at once for a longer delay than about 24.8 days.
+    const midi = smf({ ppq: 1, tracks: [[[0, 0xff, 0x51, 3, 0xff, 0xff, 0xff], [0, 0x90, 60, 100], [1, 0x80, 60, 0], [129999, 0xff, 0x2f, 0]]] });
+    const pass = (130000 * 16777215) / 1e6;
+    const h = runPage(edited(CASES.default_120bpm, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0 });
+    h.ready();
+    h.click();
+    const synth = h.synths[0];
+    const ctx = synth.getAudioContext();
+    const tick0 = ctx.currentTime + 0.1;
+    await h.flush();
+    h.runTimers(); // the ▶ restart
+    h.loadImages();
+    h.advance(17.5); // the note-off is scheduled: startTime moves to pass 1, about 25.2 days ahead
+    assert.ok(Math.abs(synth.getPlayStatus().startTime - (tick0 + pass)) < 1e-6, "startTime is pass 1's");
+    assert.equal(h.timers.size, 0, "no timer that would fire at once");
+    assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, 1), "the art keeps running");
+    ctx.currentTime = tick0 + pass - 1; // a second before pass 1
+    h.advance(0.06);
+    assert.equal(h.timers.size, 1, "a later poll times pass 1");
+    const [timer] = h.timers.values();
+    assert.ok(Math.abs(ctx.currentTime + timer.delay / 1000 - (tick0 + pass)) < 1e-6, "to its tick 0");
+    h.runTimers();
+    h.loadImages();
+    assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, 2), "pass 1 restarts the art");
+  });
+
   test("restart images that decode out of order: an older one never replaces a newer one", async () => {
     const h = runPage(restLoop(), { engine: "real", outputLatency: 0 });
     h.ready();
@@ -734,6 +762,23 @@ describe("the page's player script, real engine", () => {
     assert.equal(synth.program[0].p[1].f, 6, "lead LFO at 6 Hz");
     assert.equal(synth.drummap[36 - 35].p[0].p, 0.2813, "kick pitch drop");
     assert.equal(synth.useReverb, 0, "reverb 0: no convolver");
+  });
+
+  test("custom waves are registered before the timbres that name them, and play (issue #2)", async () => {
+    const h = runPage(htmlOf(CASES.chip_waves), { engine: "real" });
+    h.ready();
+    h.click();
+    await h.flush();
+    const synth = h.synths[0];
+    assert.deepEqual(Array.from(synth.program.slice(0, 5), (/** @type {any} */ p) => p.p[0].w), ["nS0", "nS1", "nS2", "nS3", "nS4"]);
+    assert.deepEqual(Array.from(synth.drummap[38 - 35].p, (/** @type {any} */ o) => o.w), ["nS5", "nS3"]);
+    // Each a looped buffer of its table, each sample held k frames (the mock runs at 8 kHz: k = 1).
+    const tri = synth.noiseBuf.nS0;
+    assert.equal(tri.length, 65, "64 samples and the guard frame");
+    assert.equal(tri.getChannelData(0)[0], 127 / 128);
+    h.advance(1);
+    assert.ok(synth.sent.some((/** @type {any} */ [m]) => m[0] === 0x99 && m[1] === 38 && m[2] > 0), "the custom snare is played");
+    assert.deepEqual(h.consoleErrors, []);
   });
 
   test("a song with no events other than tempo: ▶ plays nothing and shows no error, the art restarts at once, ■ and ▶ still work", async () => {

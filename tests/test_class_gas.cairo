@@ -23,7 +23,8 @@ use crate::class_fixtures::{
 };
 use crate::helpers::{class, declare_class};
 use crate::settings_fixtures::{
-    structural_max, valid_beast_reference, valid_default, valid_every_slot, valid_six_timbres,
+    long_lfsr, structural_max, valid_beast_reference, valid_default, valid_every_slot,
+    valid_one_wave, valid_reference_waves, valid_six_timbres,
 };
 
 fn midi(i: u32) -> ByteArray {
@@ -76,7 +77,7 @@ fn gas_lc_declare() {
 
 #[test]
 fn gas_lc_animation_url_segment() {
-    assert(class().animation_url_segment().len() == 49764, 'segment');
+    assert(class().animation_url_segment().len() == 53140, 'segment');
 }
 
 #[test]
@@ -89,6 +90,27 @@ fn gas_lc_midi_segment_default_no_midi() {
 fn gas_lc_midi_segment_beast_heaviest() {
     let m = beast_midi_heaviest();
     let s = valid_beast_reference();
+    assert(class().midi_segment(m, s).len() > 0, 'midi_segment');
+}
+
+#[test]
+fn gas_lc_midi_segment_one_wave_heaviest() {
+    let m = beast_midi_heaviest();
+    let s = valid_one_wave();
+    assert(class().midi_segment(m, s).len() > 0, 'midi_segment');
+}
+
+#[test]
+fn gas_lc_midi_segment_reference_waves_heaviest() {
+    let m = beast_midi_heaviest();
+    let s = valid_reference_waves();
+    assert(class().midi_segment(m, s).len() > 0, 'midi_segment');
+}
+
+#[test]
+fn gas_lc_midi_segment_long_lfsr_heaviest() {
+    let m = beast_midi_heaviest();
+    let s = long_lfsr();
     assert(class().midi_segment(m, s).len() > 0, 'midi_segment');
 }
 
@@ -128,7 +150,7 @@ fn gas_lc_version() {
 
 #[test]
 fn gas_lc_license() {
-    assert(class().license().len() == 7324, 'license');
+    assert(class().license().len() == 8783, 'license');
 }
 
 // ------------------------------------------------------------------------------------------------

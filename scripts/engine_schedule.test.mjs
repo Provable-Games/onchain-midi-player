@@ -1,17 +1,17 @@
 // @ts-check
-// Installs the reference timbres into the real TinySynth (the vendored fork build, see
-// scripts/engine.mjs) running on a WebAudio mock that records every scheduling call, and checks
-// what the engine schedules. Deterministic: no audio is rendered, so the random noise buffers
-// (until fork #7) do not matter. scripts/render_check.mjs renders real audio in a browser.
+// Installs the reference timbres and custom waves into the real TinySynth (the vendored fork build,
+// see scripts/engine.mjs) running on a WebAudio mock that records every scheduling call, and checks
+// what the engine schedules. No audio is rendered: scripts/render_check.mjs renders real audio in a
+// browser.
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import vm from "node:vm";
-import { createSynth, decodeSettings, installSettings } from "../player/settings.js";
+import { createSynth, decodeSettings, installSettings, toTinySynthOps } from "../player/settings.js";
 import { engineSource } from "./engine.mjs";
 import { webAudioMock } from "./webaudio_mock.mjs";
 import { encodeSettings } from "../player/encode.js";
-import { BEAST_SETTINGS } from "./settings_fixtures.mjs";
+import { BEAST_SETTINGS, VALID, longLfsr, structuralMax } from "./settings_fixtures.mjs";
 
 /** Loads the engine into a fresh context with a recording WebAudio mock. */
 function loadEngine() {
@@ -121,5 +121,81 @@ describe("reference timbres in the real engine", () => {
     assert.ok(on.log.some((c) => c[0].startsWith("conv")));
     assert.ok(Math.abs(synth.rev.gain.value - 2.4) < 1e-12);
     assert.equal(synth.out.gain.value, 0.4);
+  });
+});
+
+describe("custom waves in the real engine (issue #2)", () => {
+  const named = (/** @type {string} */ name) => decodeSettings(encodeSettings(/** @type {any} */ (VALID.find((f) => f.name === name)).settings));
+
+  test("a sample wave plays as a looped buffer at the note's pitch; a harmonic wave as a PeriodicWave", () => {
+    const { Synth, log, nodes } = loadEngine();
+    const synth = createSynth(Synth, named("custom_waves"));
+    // Harmonic waves: imag = [0, h...], real all zero (after the engine's built-in w9999).
+    const waves = log.filter((c) => c[1] === "createPeriodicWave").map((c) => c[2]).slice(-2);
+    assert.deepEqual(waves[0], { real: Array(12).fill(0), imag: [0, 100, 0, 55, 0, 32, 0, 18, 0, 10, 0, 6] });
+    assert.deepEqual(waves[1], { real: [0, 0], imag: [0, 65535] });
+    synth.send([0xc0, 80]); // program 80: nS1 carrier, FM from wH0
+    const calls = noteOn(synth, log, [0, 69, 127, T]);
+    const src = calls.find((c) => c[0].startsWith("src") && c[1] === "create");
+    assert.ok(src, "the sample wave plays from a buffer");
+    // 16 samples at the mock's 8 kHz: each held k = max(1, round(8000 / (440 x 16))) = 1 frame, home
+    // pitch 8000 / 16 = 500 Hz, so A4 plays at rate 440 / 500, looping the 16 frames before the guard.
+    const node = nodes[src[0]];
+    assert.equal(node.playbackRate.value, 440 / 500);
+    assert.equal(node.loop, true);
+    assert.equal(node.loopEnd, 16 / 8000);
+    assert.equal(node.buffer.length, 17);
+    assert.deepEqual(Array.from(node.buffer.getChannelData(0).slice(0, 4)), [-1, -0.75, -0.5, -0.25]);
+    const osc = calls.find((c) => c[1] === "periodicWave");
+    assert.ok(osc && osc[2] === waves[0], "the modulator plays wH0");
+  });
+
+  test("the waves survive setQuality; installSettings restores the timbres that name them", () => {
+    const { Synth, log, nodes } = loadEngine();
+    const s = named("reference_waves");
+    const synth = createSynth(Synth, s);
+    synth.setQuality(0);
+    assert.notEqual(synth.program[0].p[0].w, "nS0", "setQuality reinstalls the built-in timbres");
+    synth.setQuality(1);
+    installSettings(synth, s);
+    const calls = noteOn(synth, log, [0, 69, 127, T]);
+    const src = calls.find((c) => c[0].startsWith("src") && c[1] === "create");
+    assert.ok(src, "program 0 plays the stepped triangle again");
+    // 64 samples at 8 kHz: k = 1, home pitch 8000 / 64 = 125 Hz.
+    assert.equal(nodes[src[0]].playbackRate.value, 440 / 125);
+  });
+
+  test("every valid settings fixture installs in the real engine, as converted: T5's setTimbre rejects none", () => {
+    // The engine (fork T5) validates every timbre before installing it and throws on an unknown wave,
+    // a bad route or a non-finite value; it stores a copy. Whatever settings::validate accepts must
+    // install unchanged: every fixture, the long LFSR, the largest input without custom waves, and
+    // every operator field at its type's extremes (validation bypassed: the engine's setTimbre takes
+    // the whole type; only playing past the interim limits fails).
+    const u = 4294967295;
+    const fields = (/** @type {number} */ i32) => [u, u, i32, u, u, u, u, u, u, u, i32].join(",");
+    const extremes = `1,1,255,255,255,0,2,0,0,1,0,2,${fields(2147483647)},0,1,35,1,0,4,${fields(-2147483648)},0`;
+    const cases = [...VALID.map((f) => [f.name, encodeSettings(f.settings)]), ["long_lfsr", encodeSettings(longLfsr())],
+      ["structural_max", encodeSettings(structuralMax())], ["type extremes", extremes]];
+    for (const [name, text] of cases) {
+      const { Synth } = loadEngine();
+      const s = decodeSettings(text);
+      const synth = createSynth(Synth, s);
+      for (const t of s.timbres) {
+        const installed = (t.drum ? synth.drummap[t.slot - 35] : synth.program[t.slot]).p;
+        assert.equal(JSON.stringify(installed), JSON.stringify(toTinySynthOps(t, s.waves)), `${name}: ${t.drum ? "drum" : "program"} ${t.slot}`);
+      }
+    }
+  });
+
+  test("256 waves, long tables and an all-zero harmonic wave register; the last wave plays", () => {
+    const builtIn = loadEngine();
+    createSynth(builtIn.Synth, named("default"));
+    const { Synth, log } = loadEngine();
+    const synth = createSynth(Synth, named("waves_256"));
+    const count = (/** @type {any[][]} */ l) => l.filter((c) => c[1] === "createPeriodicWave").length;
+    assert.equal(count(log) - count(builtIn.log), 254, "254 harmonic waves");
+    const calls = noteOn(synth, log, [0, 60, 127, T]);
+    assert.equal(calls.filter((c) => c[0].startsWith("src") && c[1] === "create").length, 1, "nS255");
+    assert.equal(calls.filter((c) => c[1] === "periodicWave").length, 1, "wH252 (all zero: silent)");
   });
 });

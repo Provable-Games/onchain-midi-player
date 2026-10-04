@@ -5,7 +5,7 @@
 | Field | TinySynth key | Type | Default (stored) | Meaning |
 | --- | --- | --- | --- | --- |
 | `route` | `g` | `u8` | 0 | 0 audio output; 1–10 modulates the frequency (FM) of operator `route`; 11–18 the volume (AM) of operator `route` − 10. Targets must be earlier operators. |
-| `wave` | `w` | `Waveform` | `Sine` | `Sine`, `Square`, `Sawtooth`, `Triangle`, `WhiteNoise`, `MetallicNoise`. `Custom(i)` reverts in v1 (issue #2). |
+| `wave` | `w` | `Waveform` | `Sine` | `Sine`, `Square`, `Sawtooth`, `Triangle`, `WhiteNoise`, `MetallicNoise`, or `Custom(i)`: entry `i` of `SynthSettings.waves` (issue #2, from `page.9`; an earlier class reverts it). The player passes it as `w` `nS<i>` or `wH<i>`. |
 | `volume` | `v` | `u32` | 5,000 | Level: loudness for an output, depth for a modulator. *Engine limit.* |
 | `ratio` | `t` | `u32` | 10,000 | Frequency multiple of the note. 0 fixes the frequency at `offset_hz`. *Engine limit.* |
 | `offset_hz` | `f` | `i32` | 0 | Frequency offset in Hz. |
