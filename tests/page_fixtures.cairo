@@ -2292,47 +2292,46 @@ fn invalid_quality_2_library_call_reverts_with_the_panic_data() {
     }
 }
 
-/// midi_segment must revert with ['TS: FM target not earlier',0,1].
-pub fn invalid_fm_on_itself_settings() -> SynthSettings {
-    let mut felts = INVALID_FM_ON_ITSELF_SETTINGS.span();
+/// midi_segment must revert with ['TS: volume out of range',0,0].
+pub fn invalid_volume_max_plus_1_settings() -> SynthSettings {
+    let mut felts = INVALID_VOLUME_MAX_PLUS_1_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
     value
 }
 
-const INVALID_FM_ON_ITSELF_SETTINGS: [felt252; 37] = [
-    1, 30, 40, 64, 0, 1, 0, 0, 2, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000, 0, 1, 2,
-    0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000, 0, 1,
+const INVALID_VOLUME_MAX_PLUS_1_SETTINGS: [felt252; 23] = [
+    1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 1000001, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000, 0, 1,
 ];
 
 
 /// The panic data midi_segment must revert with.
-pub fn invalid_fm_on_itself_error() -> Array<felt252> {
-    array!['TS: FM target not earlier', 0, 1]
+pub fn invalid_volume_max_plus_1_error() -> Array<felt252> {
+    array!['TS: volume out of range', 0, 0]
 }
 
 #[test]
-#[should_panic(expected: ('TS: FM target not earlier', 0, 1))]
-fn invalid_fm_on_itself_settings_revert() {
-    let settings = invalid_fm_on_itself_settings();
+#[should_panic(expected: ('TS: volume out of range', 0, 0))]
+fn invalid_volume_max_plus_1_settings_revert() {
+    let settings = invalid_volume_max_plus_1_settings();
     validate(@settings);
     let _text = encode(@settings);
 }
 
 #[test]
-#[should_panic(expected: ('TS: FM target not earlier', 0, 1))]
-fn invalid_fm_on_itself_midi_segment_reverts() {
-    let _segment = segment::midi_segment(invalid_midi(), @invalid_fm_on_itself_settings());
+#[should_panic(expected: ('TS: volume out of range', 0, 0))]
+fn invalid_volume_max_plus_1_midi_segment_reverts() {
+    let _segment = segment::midi_segment(invalid_midi(), @invalid_volume_max_plus_1_settings());
 }
 
 // Through the library call, the panic data arrives whole, followed by 'ENTRYPOINT_FAILED'.
 #[test]
 #[feature("safe_dispatcher")]
-fn invalid_fm_on_itself_library_call_reverts_with_the_panic_data() {
-    match safe_class().midi_segment(invalid_midi(), invalid_fm_on_itself_settings()) {
+fn invalid_volume_max_plus_1_library_call_reverts_with_the_panic_data() {
+    match safe_class().midi_segment(invalid_midi(), invalid_volume_max_plus_1_settings()) {
         Result::Ok(_) => panic!("midi_segment should revert"),
         Result::Err(panic_data) => {
-            let mut expected = invalid_fm_on_itself_error();
+            let mut expected = invalid_volume_max_plus_1_error();
             expected.append('ENTRYPOINT_FAILED');
             assert_eq!(panic_data, expected);
         },

@@ -25,31 +25,29 @@ fn sha256(data: @ByteArray) -> u256 {
 }
 
 /// Length of the largest valid `SETTINGS` in v1, `encode(@structural_max())`.
-pub const STRUCTURAL_MAX_LEN: u32 = 183089;
+pub const STRUCTURAL_MAX_LEN: u32 = 160689;
 
 /// Its SHA-256, as the JS reference computes it.
 pub const STRUCTURAL_MAX_SHA256: u256 =
-    0x4bb93cd8e8af9c22813689558918f7d03d10d4d67e1d41ee844bc7588191ff6d;
+    0x8336669cc6090f0647e6af40bc80f2e7001c18886ad730c378c66793e5bc41a2;
 
 /// The largest valid `SynthSettings` in v1 (`structuralMax` in scripts/settings_fixtures.mjs), the
 /// most validation and encoding work: every slot (programs 0..=127, then drums 35..=81), each with
 /// the same 8 operators with every field at its widest. Built in a loop: too large for a literal.
 pub fn structural_max() -> SynthSettings {
     let mut felts = array![
-        8, 0, 5, 4294967295, 4294967295, -2147483648, 4294967295, 4294967295, 4294967295,
-        4294967295, 4294967295, 4294967295, 4294967295, -2147483648, 1, 11, 5, 4294967295,
-        4294967295, -2147483648, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295,
-        4294967295, 4294967295, -2147483648, 1, 12, 5, 4294967295, 4294967295, -2147483648,
-        4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295,
-        -2147483648, 1, 13, 5, 4294967295, 4294967295, -2147483648, 4294967295, 4294967295,
-        4294967295, 4294967295, 4294967295, 4294967295, 4294967295, -2147483648, 1, 14, 5,
-        4294967295, 4294967295, -2147483648, 4294967295, 4294967295, 4294967295, 4294967295,
-        4294967295, 4294967295, 4294967295, -2147483648, 1, 15, 5, 4294967295, 4294967295,
-        -2147483648, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295,
-        4294967295, -2147483648, 1, 16, 5, 4294967295, 4294967295, -2147483648, 4294967295,
-        4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, -2147483648, 1, 17,
-        5, 4294967295, 4294967295, -2147483648, 4294967295, 4294967295, 4294967295, 4294967295,
-        4294967295, 4294967295, 4294967295, -2147483648, 1,
+        8, 0, 5, 1000000, 640000, -2147483648, 4294967295, 4294967295, 4294967295, 4294967295,
+        4294967295, 160000, 4294967295, -80000, 1, 11, 5, 1000000, 640000, -2147483648, 4294967295,
+        4294967295, 4294967295, 4294967295, 4294967295, 160000, 4294967295, -80000, 1, 12, 5,
+        1000000, 640000, -2147483648, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295,
+        160000, 4294967295, -80000, 1, 13, 5, 1000000, 640000, -2147483648, 4294967295, 4294967295,
+        4294967295, 4294967295, 4294967295, 160000, 4294967295, -80000, 1, 14, 5, 1000000, 640000,
+        -2147483648, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 160000, 4294967295,
+        -80000, 1, 15, 5, 1000000, 640000, -2147483648, 4294967295, 4294967295, 4294967295,
+        4294967295, 4294967295, 160000, 4294967295, -80000, 1, 16, 5, 1000000, 640000, -2147483648,
+        4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 160000, 4294967295, -80000, 1,
+        17, 5, 1000000, 640000, -2147483648, 4294967295, 4294967295, 4294967295, 4294967295,
+        4294967295, 160000, 4294967295, -80000, 1,
     ]
         .span();
     let operators: Span<Operator> = Serde::deserialize(ref felts).expect('fixture: bad Serde');
@@ -1239,6 +1237,132 @@ fn test_invalid_custom_wave() {
     let _text = encode(@settings);
 }
 
+/// Invalid: TS: volume out of range.
+pub fn invalid_volume_max_plus_1() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 1000001, 10000, 0, 0, 100, 100, 0, 500, 10000,
+            10000, 0, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: volume out of range', 0, 0))]
+fn test_invalid_volume_max_plus_1() {
+    let settings = invalid_volume_max_plus_1();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: ratio out of range.
+pub fn invalid_ratio_max_plus_1() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 640001, 0, 0, 100, 100, 0, 500, 10000, 10000,
+            0, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: ratio out of range', 0, 0))]
+fn test_invalid_ratio_max_plus_1() {
+    let settings = invalid_ratio_max_plus_1();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: pitch_ratio out of range.
+pub fn invalid_pitch_ratio_max_plus_1() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 160001, 10000,
+            0, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: pitch_ratio out of range', 0, 0))]
+fn test_invalid_pitch_ratio_max_plus_1() {
+    let settings = invalid_pitch_ratio_max_plus_1();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: key_scale out of range.
+pub fn invalid_key_scale_max_plus_1() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
+            80001, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: key_scale out of range', 0, 0))]
+fn test_invalid_key_scale_max_plus_1() {
+    let settings = invalid_key_scale_max_plus_1();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: key_scale out of range.
+pub fn invalid_key_scale_min_minus_1() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
+            -80001, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: key_scale out of range', 0, 0))]
+fn test_invalid_key_scale_min_minus_1() {
+    let settings = invalid_key_scale_min_minus_1();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: ratio out of range.
+pub fn invalid_u32_max_ratio() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 4294967295, 0, 0, 100, 100, 0, 500, 10000,
+            10000, 0, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: ratio out of range', 0, 0))]
+fn test_invalid_u32_max_ratio() {
+    let settings = invalid_u32_max_ratio();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: key_scale out of range.
+pub fn invalid_i32_max_key_scale() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
+            2147483647, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: key_scale out of range', 0, 0))]
+fn test_invalid_i32_max_key_scale() {
+    let settings = invalid_i32_max_key_scale();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
 /// Invalid: TS: filter unsupported.
 pub fn invalid_filter() -> SynthSettings {
     deserialize(
@@ -1554,6 +1678,96 @@ pub fn invalid_order_route_before_wave() -> SynthSettings {
 #[should_panic(expected: ('TS: FM target not earlier', 0, 0))]
 fn test_invalid_order_route_before_wave() {
     let settings = invalid_order_route_before_wave();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: custom wave unsupported.
+pub fn invalid_order_custom_before_volume() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 6, 0, 1000001, 10000, 0, 0, 100, 100, 0, 500, 10000,
+            10000, 0, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: custom wave unsupported', 0, 0))]
+fn test_invalid_order_custom_before_volume() {
+    let settings = invalid_order_custom_before_volume();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: volume out of range.
+pub fn invalid_order_volume_before_ratio() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 1000001, 640001, 0, 0, 100, 100, 0, 500, 10000,
+            10000, 0, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: volume out of range', 0, 0))]
+fn test_invalid_order_volume_before_ratio() {
+    let settings = invalid_order_volume_before_ratio();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: ratio out of range.
+pub fn invalid_order_ratio_before_pitch_ratio() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 640001, 0, 0, 100, 100, 0, 500, 160001, 10000,
+            0, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: ratio out of range', 0, 0))]
+fn test_invalid_order_ratio_before_pitch_ratio() {
+    let settings = invalid_order_ratio_before_pitch_ratio();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: pitch_ratio out of range.
+pub fn invalid_order_pitch_ratio_before_key_scale() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 160001, 10000,
+            -80001, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: pitch_ratio out of range', 0, 0))]
+fn test_invalid_order_pitch_ratio_before_key_scale() {
+    let settings = invalid_order_pitch_ratio_before_key_scale();
+    validate(@settings);
+    let _text = encode(@settings);
+}
+
+/// Invalid: TS: key_scale out of range.
+pub fn invalid_order_key_scale_before_filter() -> SynthSettings {
+    deserialize(
+        array![
+            1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
+            80001, 0, 0, 1, 0, 1,
+        ],
+    )
+}
+
+#[test]
+#[should_panic(expected: ('TS: key_scale out of range', 0, 0))]
+fn test_invalid_order_key_scale_before_filter() {
+    let settings = invalid_order_key_scale_before_filter();
     validate(@settings);
     let _text = encode(@settings);
 }

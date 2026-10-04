@@ -4961,7 +4961,7 @@
    ]
   },
   {
-   "name": "fm_on_itself",
+   "name": "volume_max_plus_1",
    "settings": {
     "quality": 1,
     "reverb": 30,
@@ -4976,23 +4976,7 @@
        {
         "route": 0,
         "wave": "Sine",
-        "volume": 5000,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": 0,
-        "filter": null
-       },
-       {
-        "route": 2,
-        "wave": "Sine",
-        "volume": 5000,
+        "volume": 1000001,
         "ratio": 10000,
         "offset_hz": 0,
         "attack": 0,
@@ -5011,9 +4995,9 @@
    },
    "midi_b64": "TVRoZAAAAAYAAAABAGBNVHJrAAAAWgD/UQMHoSAA/1gEBAIYCADAAACwB2QAuQdaAJBIYACZJGQYJAAwkEgAGJBMYACZJmQYJgAwkEwAGJBPYACZJGQYJAAwkE8AGJBUYACZJmQYJgAwkFQAGP8vAA==",
    "error": [
-    "TS: FM target not earlier",
+    "TS: volume out of range",
     0,
-    1
+    0
    ]
   },
   {

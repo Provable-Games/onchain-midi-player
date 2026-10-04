@@ -2,9 +2,9 @@
 //!
 //! `crate::settings::validate` checks only what the format or the engine requires: `quality`
 //! is 0 or 1, `voices` at least 1, the counts, slots and routes, and the gates below. Every
-//! other numeric field takes any value of its integer type. At extremes, `key_scale`, and `ratio`
-//! in long FM chains, make the engine compute non-finite values and throw while playing (README,
-//! "Extreme operator values").
+//! other numeric field takes any value of its integer type, except four operator fields with
+//! interim engine limits (`volume`, `ratio`, `pitch_ratio`, `key_scale`): the pinned engine
+//! computes non-finite values past them and stalls (README, "Engine limits on operator values").
 //! Custom waveforms (issue #2) and filters (issue #3) are part of the types and of the
 //! `SETTINGS` grammar already, but are rejected until those issues land. `midi_segment` reverts
 //! with a descriptive error when a check fails; the exact checks, their order and their
@@ -104,11 +104,11 @@ pub struct Operator {
     /// [`w`] Waveform.
     pub wave: Waveform,
     /// [`v`] Level, fixed-point. For an audio-output operator this is loudness; for a
-    /// modulator it is depth. No limit.
+    /// modulator it is depth. Interim engine limit: 0..=100.0.
     pub volume: u32,
     /// [`t`] Frequency multiple of the note, fixed-point. 0 makes the frequency fixed at
     /// `offset_hz`, which is how LFOs (for example 6 Hz vibrato) are built.
-    /// No limit.
+    /// Interim engine limit: 0..=64.0.
     pub ratio: u32,
     /// [`f`] Frequency offset in Hz, fixed-point. No limit: Web Audio clamps frequencies.
     pub offset_hz: i32,
@@ -125,12 +125,13 @@ pub struct Operator {
     /// 3.5 times this. No limit.
     pub release: u32,
     /// [`p`] Pitch envelope target as a multiple of the starting frequency, fixed-point.
-    /// 1 = no pitch change; below 1 = pitch drop (kicks, toms). No limit.
+    /// 1 = no pitch change; below 1 = pitch drop (kicks, toms). Interim engine limit: 0..=16.0.
     pub pitch_ratio: u32,
     /// [`q`] Pitch envelope time constant in seconds, fixed-point. No limit.
     pub pitch_time: u32,
     /// [`k`] Volume key scaling, fixed-point: level is multiplied by
-    /// `2^((note - 60) / 12 * key_scale)`. Negative values soften high notes. No limit.
+    /// `2^((note - 60) / 12 * key_scale)`. Negative values soften high notes. Interim engine
+    /// limit: -8.0..=8.0.
     pub key_scale: i32,
     /// Optional fixed filter on this operator's output (issue #3). Allowed only when
     /// `route == 0`. Must be `None` until issue #3 lands (`'TS: filter unsupported'`).

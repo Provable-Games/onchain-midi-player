@@ -58,23 +58,67 @@ fn valid_settings_do_not_revert() {
     assert(synth().midi_segment(sound::midi(), sound::settings_for(1)).is_ok(), 'valid settings');
 }
 
-// Only what the format or the engine requires is checked: reverb, master volume, the upper end of
-// voices and the operator values take any value of their type.
+// Only what the format or the engine requires is checked: reverb, master volume and the upper end
+// of voices take any value of their type, and the four operator fields that multiply into the
+// engine's gains and frequencies take any value up to their interim engine limits.
 #[test]
 #[feature("safe_dispatcher")]
-fn type_extremes_do_not_revert() {
+fn type_extremes_and_engine_limits_do_not_revert() {
     let mut s = sound::settings_for(1);
     s.reverb = 255;
     s.master_vol = 255;
     s.voices = 255;
     let mut kick = *s.timbres.at(1);
     let mut op = *kick.operators.at(0);
-    op.volume = 0xffffffff;
     op.offset_hz = -0x80000000;
-    op.key_scale = 0x7fffffff;
+    op.attack = 0xffffffff;
+    op.release = 0xffffffff;
+    op.volume = 1_000_000;
+    op.ratio = 640_000;
+    op.pitch_ratio = 160_000;
+    op.key_scale = -80_000;
     kick.operators = [op].span();
     s.timbres = [*s.timbres.at(0), kick].span();
-    assert(synth().midi_segment(sound::midi(), s).is_ok(), 'type extremes');
+    assert(synth().midi_segment(sound::midi(), s).is_ok(), 'type extremes and limits');
+}
+
+/// The kick of `settings_for(1)` with its first operator changed by `edit`.
+fn with_kick_op(edit: u32) -> SynthSettings {
+    let mut s = sound::settings_for(1);
+    let mut kick = *s.timbres.at(1);
+    let mut op = *kick.operators.at(0);
+    match edit {
+        0 => op.volume = 1_000_001,
+        1 => op.ratio = 640_001,
+        2 => op.pitch_ratio = 160_001,
+        3 => op.key_scale = 80_001,
+        _ => op.key_scale = -80_001,
+    }
+    kick.operators = [op].span();
+    s.timbres = [*s.timbres.at(0), kick].span();
+    s
+}
+
+// One past each interim engine limit reverts: the pinned engine computes non-finite values there.
+#[test]
+fn volume_past_engine_limit_reverts() {
+    assert_midi_segment_reverts(with_kick_op(0), ['TS: volume out of range', 1, 0].span());
+}
+
+#[test]
+fn ratio_past_engine_limit_reverts() {
+    assert_midi_segment_reverts(with_kick_op(1), ['TS: ratio out of range', 1, 0].span());
+}
+
+#[test]
+fn pitch_ratio_past_engine_limit_reverts() {
+    assert_midi_segment_reverts(with_kick_op(2), ['TS: pitch_ratio out of range', 1, 0].span());
+}
+
+#[test]
+fn key_scale_past_engine_limit_reverts() {
+    assert_midi_segment_reverts(with_kick_op(3), ['TS: key_scale out of range', 1, 0].span());
+    assert_midi_segment_reverts(with_kick_op(4), ['TS: key_scale out of range', 1, 0].span());
 }
 
 #[test]

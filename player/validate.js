@@ -26,12 +26,22 @@ export const MIN_HARMONICS = 1;
 export const MIN_SAMPLES = 1;
 /** Fewest voices: with none, every note would be cut. */
 export const MIN_VOICES = 1;
+/**
+ * Interim engine limits (checks 17-20), in fixed point: the pinned engine computes non-finite
+ * AudioParam values past them and throws while playing. To be removed once it guards them (fork
+ * #13, T5).
+ */
+export const MAX_VOLUME = 1000000;
+export const MAX_RATIO = 640000;
+export const MAX_PITCH_RATIO = 160000;
+export const MAX_KEY_SCALE = 80000;
 const MAX_ROUTE = 10 + MAX_OPERATORS;
 
 /**
  * Applies the checks of `src/settings.cairo`, in the same order and with the same messages and
  * indices, and throws a `SettingsError` on the first failure. `customWaves` lifts the issue #2 gate
- * (checks 5 and 15); it is false in v1. The other numeric fields take any value of their type.
+ * (checks 5 and 15); it is false in v1. The other numeric fields take any value of their type,
+ * except the interim engine limits (checks 17-20).
  * @param {SynthSettings} s
  * @param {{customWaves?: boolean}} [options]
  * @returns {SynthSettings} `s`
@@ -78,6 +88,10 @@ export function validateSettings(s, { customWaves = false } = {}) {
         check(customWaves, "TS: custom wave unsupported", at);
         check(op.wave.Custom < s.waves.length, range("wave index"), at);
       }
+      check(op.volume <= MAX_VOLUME, range("volume"), at);
+      check(op.ratio <= MAX_RATIO, range("ratio"), at);
+      check(op.pitch_ratio <= MAX_PITCH_RATIO, range("pitch_ratio"), at);
+      check(op.key_scale >= -MAX_KEY_SCALE && op.key_scale <= MAX_KEY_SCALE, range("key_scale"), at);
       check(op.filter === null, "TS: filter unsupported", at);
     });
   });

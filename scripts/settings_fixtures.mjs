@@ -103,14 +103,23 @@ const I32_MIN = -2147483648;
 const I32_MAX = 2147483647;
 
 /**
- * Widest valid operator at position `o` in v1: every field at its widest value (the type's
- * extreme), and an AM route (two digits) after the first operator.
+ * The interim engine limits (checks 17-20 of src/settings.cairo): the fields that multiply into the
+ * engine's gains and frequencies at their bounds, 100.0, 64.0, 16.0 and +-8.0. Past them the
+ * pinned engine computes non-finite AudioParam values and throws while playing
+ * (scripts/page_check.mjs plays the fixtures at these values).
+ */
+const BOUNDS = { volume: 1000000, ratio: 640000, pitch_ratio: 160000, key_scale: 80000 };
+
+/**
+ * Widest valid operator at position `o` in v1: every field at its widest value (its bound for the
+ * four bounded fields, the type's extreme for the others), and an AM route (two digits) after the
+ * first operator.
  * @param {number} o
  */
 export const widestOperator = (o) => op({
-  route: o === 0 ? 0 : 10 + o, wave: "MetallicNoise", volume: U32_MAX, ratio: U32_MAX, offset_hz: I32_MIN,
-  attack: U32_MAX, hold: U32_MAX, decay: U32_MAX, sustain: U32_MAX, release: U32_MAX, pitch_ratio: U32_MAX,
-  pitch_time: U32_MAX, key_scale: I32_MIN,
+  route: o === 0 ? 0 : 10 + o, wave: "MetallicNoise", volume: BOUNDS.volume, ratio: BOUNDS.ratio, offset_hz: I32_MIN,
+  attack: U32_MAX, hold: U32_MAX, decay: U32_MAX, sustain: U32_MAX, release: U32_MAX, pitch_ratio: BOUNDS.pitch_ratio,
+  pitch_time: U32_MAX, key_scale: -BOUNDS.key_scale,
 });
 
 /** Every timbre slot reachable from MIDI, in order: programs 0..=127, then drum notes 35..=81. */
@@ -139,16 +148,8 @@ export const structuralMax = () => settings({
 // ------------------------------------------------------------------------------------------
 
 /**
- * The fields that multiply into the engine's gains and frequencies (`volume`, `ratio`,
- * `pitch_ratio`, `key_scale`) at the largest values that always play: the old ranges (100.0,
- * 64.0, 16.0, +-8.0). At their type's extremes the engine computes non-finite AudioParam values
- * and throws while playing (scripts/page_check.mjs plays these fixtures).
- */
-const PLAYABLE = { volume: 1000000, ratio: 640000, pitch_ratio: 160000, key_scale: 80000 };
-
-/**
  * Every field at its maximum, with routes at their limits (FM on op 7 from op 8, AM chains): the
- * type's maximum, except the multiplying fields at their largest playable values (`PLAYABLE`).
+ * type's maximum, or the bound for the four bounded fields.
  */
 const MAX_FIELDS = settings({
   quality: 1, reverb: 255, master_vol: 255, voices: 255,
@@ -156,15 +157,15 @@ const MAX_FIELDS = settings({
     drum: false, slot: 127,
     operators: [0, 1, 2, 12, 4, 15, 6, 17].map((route) => op({
       route, wave: "Sawtooth", offset_hz: I32_MAX, attack: U32_MAX, hold: U32_MAX, decay: U32_MAX,
-      sustain: U32_MAX, release: U32_MAX, pitch_time: U32_MAX, ...PLAYABLE,
+      sustain: U32_MAX, release: U32_MAX, pitch_time: U32_MAX, ...BOUNDS,
     })),
   }],
 });
 
-/** Every field at its minimum (`key_scale` at its smallest playable value, -8.0). */
+/** Every field at its minimum (`key_scale` at its bound, -8.0). */
 const MIN_FIELDS = settings({
   quality: 0, reverb: 0, master_vol: 0, voices: 1,
-  timbres: [{ drum: true, slot: 35, operators: [op({ ...NARROW, offset_hz: I32_MIN, key_scale: -PLAYABLE.key_scale })] }],
+  timbres: [{ drum: true, slot: 35, operators: [op({ ...NARROW, offset_hz: I32_MIN, key_scale: -BOUNDS.key_scale })] }],
 });
 
 /** Slot edges, and the same number in both banks (programs and drums are separate). */
@@ -312,7 +313,15 @@ export const INVALID = [
   { name: "am_route_18_at_8", settings: routeAt(8, 18), error: ["TS: AM target not earlier", 0, 7] },
   // Custom wave (15).
   { name: "custom_wave", settings: one({ wave: { Custom: 0 } }), error: ["TS: custom wave unsupported", 0, 0] },
-  // Filter (17).
+  // Interim engine limits (17-20): one past each bound.
+  { name: "volume_max_plus_1", settings: one({ volume: 1000001 }), error: ["TS: volume out of range", 0, 0] },
+  { name: "ratio_max_plus_1", settings: one({ ratio: 640001 }), error: ["TS: ratio out of range", 0, 0] },
+  { name: "pitch_ratio_max_plus_1", settings: one({ pitch_ratio: 160001 }), error: ["TS: pitch_ratio out of range", 0, 0] },
+  { name: "key_scale_max_plus_1", settings: one({ key_scale: 80001 }), error: ["TS: key_scale out of range", 0, 0] },
+  { name: "key_scale_min_minus_1", settings: one({ key_scale: -80001 }), error: ["TS: key_scale out of range", 0, 0] },
+  { name: "u32_max_ratio", settings: one({ ratio: U32_MAX }), error: ["TS: ratio out of range", 0, 0] },
+  { name: "i32_max_key_scale", settings: one({ key_scale: I32_MAX }), error: ["TS: key_scale out of range", 0, 0] },
+  // Filter (21).
   { name: "filter", settings: one({ filter: { kind: "LowPass", cutoff: 10000000, key_track: false, q: 7071 } }), error: ["TS: filter unsupported", 0, 0] },
   // Check order: the first failing check wins.
   { name: "order_quality_before_voices", settings: settings({ quality: 2, voices: 0 }), error: ["TS: quality out of range"] },
@@ -349,6 +358,15 @@ export const INVALID = [
     error: ["TS: route out of range", 0, 0],
   },
   { name: "order_route_before_wave", settings: one({ route: 1, wave: { Custom: 0 } }), error: ["TS: FM target not earlier", 0, 0] },
+  { name: "order_custom_before_volume", settings: one({ wave: { Custom: 0 }, volume: 1000001 }), error: ["TS: custom wave unsupported", 0, 0] },
+  { name: "order_volume_before_ratio", settings: one({ volume: 1000001, ratio: 640001 }), error: ["TS: volume out of range", 0, 0] },
+  { name: "order_ratio_before_pitch_ratio", settings: one({ ratio: 640001, pitch_ratio: 160001 }), error: ["TS: ratio out of range", 0, 0] },
+  { name: "order_pitch_ratio_before_key_scale", settings: one({ pitch_ratio: 160001, key_scale: -80001 }), error: ["TS: pitch_ratio out of range", 0, 0] },
+  {
+    name: "order_key_scale_before_filter",
+    settings: one({ key_scale: 80001, filter: { kind: "LowPass", cutoff: 1, key_track: false, q: 1 } }),
+    error: ["TS: key_scale out of range", 0, 0],
+  },
   {
     name: "order_custom_before_filter",
     settings: one({ wave: { Custom: 0 }, filter: { kind: "LowPass", cutoff: 1, key_track: false, q: 1 } }),
