@@ -45,7 +45,7 @@
 //! layer). Since `len(b64(X)) == 4 * len(X) / 3` for aligned `X`, that is
 //! `len(X) % 9 == 0`. Both `PAGE` and `D` are therefore 9-byte aligned by this class.
 //!
-//! # Consumer `token_uri` layout (the Beasts layout)
+//! # Consumer `token_uri` layout
 //!
 //! ```text
 //! "data:application/json;base64,"
@@ -88,7 +88,7 @@ use crate::types::SynthSettings;
 #[starknet::interface]
 pub trait IOnchainTinySynth<T> {
     // ------------------------------------------------------------------------------------
-    // For contracts that build their own token_uri JSON (the Beasts layout).
+    // For contracts that build their own token_uri JSON (the consumer layout).
     // ------------------------------------------------------------------------------------
 
     /// Returns the fixed `animation_url` member of the token JSON, already encoded at the

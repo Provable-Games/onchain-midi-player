@@ -50,7 +50,7 @@ With aligned segments, only per-token data (MIDI, art, JSON members) is encoded 
 
 During design, the author measured base64-encoding the ~36 KB engine at runtime at about 622M L2 gas per layer. The engine must therefore never be encoded onchain.
 
-### Consumer `token_uri` layout (the Beasts layout)
+### Consumer `token_uri` layout
 
 The consumer builds the JSON itself and pads with spaces between JSON tokens so that each piece starts on a 3-byte boundary:
 
@@ -159,7 +159,7 @@ All base64 in the class goes through one function, `onchain_tinysynth::base64::b
 
 ## Integration guide
 
-How a consumer such as Beasts builds its `token_uri` (the layout above), with the word alignment described below. [`examples/beast_consumer`](examples/beast_consumer) runs exactly this against the class. AI agents can install the [`integrator-guide`](#agent-skills) skill, which walks through it.
+How a consumer builds its `token_uri` (the layout above), with the word alignment described below. [`examples/beast_consumer`](examples/beast_consumer) runs exactly this against the class. AI agents can install the [`integrator-guide`](#agent-skills) skill, which walks through it.
 
 ```cairo
 use onchain_tinysynth::interface::{
@@ -283,7 +283,7 @@ Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`)
 
 The rest is validating and encoding `SETTINGS` (see [Sound settings](#sound-settings-and-custom-sounds)) and assembling `D`. The library call adds the cost of passing the inputs: 2.8M for the score with the reference sounds, 11.2M with 8,192 bytes of `SETTINGS`.
 
-### A full Beasts `token_uri` against the 1B target
+### A full-size example `token_uri` against the 1B target
 
 Token 4 of the example ([`examples/beast_consumer`](examples/beast_consumer/README.md#gas)) is a full-size Beast:
 - **art:** the Beasts renderer's SVG for a shiny, animated Warlock, 22,733 bytes;
@@ -565,7 +565,7 @@ npm run check-midi -- song.mid                        # the same, through npm
 
 ### Previewing a score
 
-[`scripts/preview.mjs`](scripts/preview.mjs) writes the page a token would get, offline: `PAGE ++ D ++ SVG`, byte for byte as the class and a Beasts-layout consumer produce it (built with [`scripts/page.mjs`](scripts/page.mjs)). It needs Node 22 or later and no `npm install`. Run it from a checkout whose `VERSION` (in `src/page_data.cairo`) is your class's `version()` (see [Agent skills](#agent-skills)).
+[`scripts/preview.mjs`](scripts/preview.mjs) writes the page a token would get, offline: `PAGE ++ D ++ SVG`, byte for byte as the class and a consumer produce it (built with [`scripts/page.mjs`](scripts/page.mjs)). It needs Node 22 or later and no `npm install`. Run it from a checkout whose `VERSION` (in `src/page_data.cairo`) is your class's `version()` (see [Agent skills](#agent-skills)).
 
 ```sh
 npm run preview -- song.mid                                        # default settings, placeholder art
@@ -582,7 +582,7 @@ npm run preview -- song.mid --serve                                # also serve 
 
 The consumer's SVG must never contain `</script`, in any letter case.
 
-- **Why.** In the `animation_url` page, the SVG is the raw contents of the final `<script type="text/plain" id="art">` block, which stays open until the end of the document (see [Consumer `token_uri` layout](#consumer-token_uri-layout-the-beasts-layout)). The HTML parser ends that block at the first `</script`. The art is cut short there, the player's `<img>` gets a truncated SVG and shows a broken image, and the rest of the SVG leaks into the page as markup. The `image` member still decodes to the whole SVG, so marketplaces' image views do not show the failure.
+- **Why.** In the `animation_url` page, the SVG is the raw contents of the final `<script type="text/plain" id="art">` block, which stays open until the end of the document (see [Consumer `token_uri` layout](#consumer-token_uri-layout)). The HTML parser ends that block at the first `</script`. The art is cut short there, the player's `<img>` gets a truncated SVG and shows a broken image, and the rest of the SVG leaks into the page as markup. The `image` member still decodes to the whole SVG, so marketplaces' image views do not show the failure.
 - **In practice.** No `<script>` elements in the SVG, and no comments or CDATA sections containing `</script`. Nothing else needs care: SVG is XML, so any `<` in text content is already escaped as `&lt;`. Consumers lose nothing, because scripts inside an SVG never run when it is shown through `<img>`, which is how both this page and marketplaces' `image` views show it.
 - **Evidence.** Art Blocks' onchain generator broke all five of its `custom@na` projects on mainnet this way: each stored HTML document's own `</script>` ended the generator's `<script>` wrapper early, and the rest was parsed as page markup ([`GenArt721GeneratorV0-custom-na-upgrade.md`](https://github.com/ArtBlocks/artblocks-contracts/blob/main/packages/contracts/deployments/generator/GenArt721GeneratorV0-custom-na-upgrade.md) in `ArtBlocks/artblocks-contracts`).
 - **Test it in the consumer.** The class never sees the SVG: it returns the pieces around it, and the consumer splices the art in itself. So the rule belongs in the consumer's own tests, on its renderer's output. [`examples/beast_consumer`](examples/beast_consumer) shows how: `assertArtSafe` in its scripts and `contains_script_end_tag` in its Cairo tests check the rendered SVG; its Node tests and browser check show the truncated art an unsafe SVG produces. A renderer built from fixed, reviewed literals and validated fields meets the rule by construction. In Beasts, for example, names are limited to `A-Z a-z 0-9`, space, `'` and `-`, and art URIs are strict base64.
@@ -618,7 +618,7 @@ What a class hash fixes, and what the consumer supplies:
    gunzip -c engine.js.gz | sha256sum  # the engine: script_sha256()
    ```
 
-   The first `grep` expects the JSON to write `/` unescaped, as the Beasts layout does. The gzip tag is the page's first: `PAGE` comes before all per-token data, so text in the art cannot take its place. Python's standard library parses the JSON properly, and `gzip.decompress` checks the gzip CRC-32 and length:
+   The first `grep` expects the JSON to write `/` unescaped, as the consumer layout does. The gzip tag is the page's first: `PAGE` comes before all per-token data, so text in the art cannot take its place. Python's standard library parses the JSON properly, and `gzip.decompress` checks the gzip CRC-32 and length:
 
    ```sh
    python3 - token_uri.txt <<'EOF'
@@ -740,11 +740,11 @@ The engine tests, the page build and the page checks use the vendored engine (`t
 Computed by the JS reference ([`scripts/page.mjs`](scripts/page.mjs)) from the inputs in [`scripts/page_fixtures.mjs`](scripts/page_fixtures.mjs). Nine valid cases (MIDI, settings, SVG, JSON members) cover every `D` padding length (0-8) and every consumer padding length (0-2 for the head and for `S`); six invalid cases cover settings reverts. Per valid case:
 
 - the expected `midi_segment(midi, settings)` in full, with `SETTINGS`, `D` and its pad;
-- the decoded `animation_url` HTML (`PAGE ++ D ++ SVG`) and the Beasts-layout `token_uri`, as length and SHA-256. They are 25-60 KB each and fully determined by stored pieces, so they are pinned by digest rather than stored. The example's three tokens hold complete `token_uri` goldens.
+- the decoded `animation_url` HTML (`PAGE ++ D ++ SVG`) and the consumer-layout `token_uri`, as length and SHA-256. They are 25-60 KB each and fully determined by stored pieces, so they are pinned by digest rather than stored. The example's three tokens hold complete `token_uri` goldens.
 
 Per invalid case: the settings and the panic data `midi_segment` must revert with. `tests/page_fixtures.cairo` has the same data as Cairo functions, and the tests:
 - `page_data` against the build: lengths, SHA-256 of the segment and the license, version, engine and gzip payload hashes;
-- per valid case: `SETTINGS`; `midi_segment` byte for byte, called directly and through the library dispatcher on the declared class; the decoded HTML (`PAGE ++ D ++ SVG`) and the Beasts-layout `token_uri`, rebuilt in Cairo ([`tests/helpers.cairo`](tests/helpers.cairo)), against their length and SHA-256;
+- per valid case: `SETTINGS`; `midi_segment` byte for byte, called directly and through the library dispatcher on the declared class; the decoded HTML (`PAGE ++ D ++ SVG`) and the consumer-layout `token_uri`, rebuilt in Cairo ([`tests/helpers.cairo`](tests/helpers.cairo)), against their length and SHA-256;
 - per invalid case: the revert with its exact panic data, directly and through the library call.
 
 ### Class size
@@ -845,12 +845,12 @@ Four skills help AI agents working in other repositories, such as an NFT contrac
 
 | Skill | For |
 | --- | --- |
-| [`integrator-guide`](plugins/onchain-tinysynth/skills/integrator-guide/SKILL.md) | Adding the player to a contract's `token_uri`: the library dispatcher, holding the class hash, the Beasts layout, the art rule, snforge tests, gas and RPC caps |
+| [`integrator-guide`](plugins/onchain-tinysynth/skills/integrator-guide/SKILL.md) | Adding the player to a contract's `token_uri`: the library dispatcher, holding the class hash, the `token_uri` layout, the art rule, snforge tests, gas and RPC caps |
 | [`midi-guide`](plugins/onchain-tinysynth/skills/midi-guide/SKILL.md) | Writing MIDI for the player: previewing offline, where it differs from standard MIDI players, every `checkMidi` rule, keeping the music in sync with the art |
 | [`sound-design`](plugins/onchain-tinysynth/skills/sound-design/SKILL.md) | The `SynthSettings` a contract passes: engine settings, custom timbres, `'TS: …'` errors, building settings in Cairo |
 | [`token-uri-inspector`](plugins/onchain-tinysynth/skills/token-uri-inspector/SKILL.md) | Fetching, decoding, verifying, rebuilding and viewing a deployed or local `token_uri`, and checking RPC call caps |
 
-**Install in Claude Code.** The repository is a plugin marketplace ([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)) with one plugin, `onchain-tinysynth`. In the other project:
+**Install in Claude Code.** While this repository is private, installing the plugin and cloning it for the tools need GitHub access to it. The repository is a plugin marketplace ([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)) with one plugin, `onchain-tinysynth`. In the other project:
 
 ```sh
 claude plugin marketplace add Provable-Games/onchain-tinysynth    # or Provable-Games/onchain-tinysynth#<tag> to pin a ref

@@ -25,7 +25,7 @@
 //     are tests/fixtures/settings.json), so an error here is the revert midi_segment would give;
 //   - the art rule: the SVG must never contain `</script`, in any letter case.
 // It then writes PAGE ++ D ++ SVG, the decoded animation_url of a token with these inputs, byte for
-// byte as the class and a Beasts-layout consumer produce it (scripts/page.mjs: pageHtml, dFragment).
+// byte as the class and a consumer produce it (scripts/page.mjs: pageHtml, dFragment).
 // The page is this checkout's PAGE: check out the commit whose VERSION equals the class's version().
 //
 // Exit status: 0 when the page is written, 1 when the MIDI, the settings or the SVG fails its check,

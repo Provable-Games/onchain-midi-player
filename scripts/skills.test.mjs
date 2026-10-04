@@ -15,13 +15,15 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { OPERATOR_FIELDS } from "../player/settings.js";
 import { ENGINE_PIN, engineSource } from "./engine.mjs";
-import { VERSION, byteArrayFelts } from "./page.mjs";
+import { JSON_PREFIX, VERSION, b64, byteArrayFelts, dFragment, decodeTokenUri, decodeTokenUriLayers, pageHtml, segmentFor } from "./page.mjs";
+import { MIDI, renderSvg } from "../examples/beast_consumer/scripts/reference.mjs";
 import { buildPreview, settingsFromText } from "./preview.mjs";
-import { DEFAULT_OPERATOR } from "./settings_fixtures.mjs";
+import { DEFAULT_OPERATOR, DEFAULT_SETTINGS } from "./settings_fixtures.mjs";
 import { artPeriods, cssDurations, gifDelays } from "../plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs";
 import { byteArrayFromFelts, tokenUriFromCall } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/bytearray.mjs";
 import { checkArt, run as splitRun, splitPage } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/split_page.mjs";
@@ -175,6 +177,19 @@ describe("links and paths", () => {
     assert.ok(checked > 50, `${checked} links`);
   });
 
+  test("README anchors: every #link in the README and the example's README resolves", () => {
+    const readme = read("README.md");
+    const own = anchorsOf(readme);
+    for (const link of links(readme).filter((l) => l.startsWith("#"))) assert.ok(own.has(link.slice(1)), `README.md: ${link}`);
+    const example = read("examples/beast_consumer/README.md");
+    for (const link of links(example)) {
+      const m = link.match(/^\.\.\/\.\.\/README\.md#(.+)$/);
+      if (m) assert.ok(own.has(m[1]), `examples/beast_consumer/README.md: ${link}`);
+    }
+    // The layout headings are general, not named after one collection.
+    assert.ok(own.has("consumer-token_uri-layout") && own.has("a-full-size-example-token_uri-against-the-1b-target"));
+  });
+
   test("README links into the plugin resolve", () => {
     const readme = read("README.md");
     const into = links(readme).filter((l) => l.startsWith("plugins/") || l.startsWith(".claude-plugin/"));
@@ -280,6 +295,11 @@ describe("settings limits are not hardcoded", () => {
 describe("the skills' helper scripts", () => {
   const dir = mkdtempSync(join(tmpdir(), "skills-"));
   after(() => rmSync(dir, { recursive: true, force: true }));
+  /** Writes a file and returns its path. */
+  const file = (/** @type {string} */ where, /** @type {string} */ name, /** @type {string} */ data) => {
+    writeFileSync(join(where, name), data);
+    return join(where, name);
+  };
 
   test("art_periods: the full-size Beast's GIF loop and SMIL durations", () => {
     const svg = read("tests/fixtures/beasts/warlock_shiny_animated.svg");
@@ -350,6 +370,33 @@ describe("the skills' helper scripts", () => {
     assert.equal(unsafe.ok, false);
     assert.match(unsafe.lines[0], /contains "<\/script" at byte 13/);
     assert.throws(() => splitPage(Buffer.from("<html></html>")), /not an onchain TinySynth page/);
+  });
+
+  test("an external-image token: the integrator-guide's second layout is valid, and the inspector handles it", () => {
+    // The layout for an image that is not the art: members (with "image") and a comma, then the segment.
+    const svg = renderSvg("Warlock", 1);
+    const { d } = dFragment(MIDI, DEFAULT_SETTINGS);
+    let head = '{"name":"x","image":"https://example.com/1.png",';
+    head += " ".repeat((3 - (Buffer.byteLength(head) % 3)) % 3);
+    let s = b64(svg) + '"';
+    s += " ".repeat((3 - (s.length % 3)) % 3);
+    const uri = JSON_PREFIX + b64(head) + segmentFor(pageHtml()) + b64(b64(d)) + b64(s) + "fQ==";
+    const layers = decodeTokenUriLayers(uri);
+    assert.deepEqual(Object.keys(layers.json), ["name", "image", "animation_url"]);
+    assert.equal(layers.svgBytes, null);
+    assert.equal(layers.htmlBytes.toString("latin1"), pageHtml() + d + svg);
+    assert.throws(() => decodeTokenUri(uri), /image is not a base64 SVG data URI/);
+    // decode.mjs writes no image.svg; split_page needs none; preview rebuilds the page from art.svg.
+    const sub = mkdtempSync(join(dir, "external-"));
+    writeFileSync(join(sub, "image.svg"), "<svg>an earlier token's image</svg>"); // must not survive
+    const decode = spawnSync(process.execPath, [join(ROOT, "examples/beast_consumer/scripts/decode.mjs"), file(sub, "uri.txt", uri), sub], { encoding: "utf8" });
+    assert.equal(decode.status, 0, decode.stderr);
+    assert.match(decode.stdout, /image: "https:\/\/example\.com\/1\.png" \(not a base64 SVG data URI; not written\)/);
+    assert.ok(!existsSync(join(sub, "image.svg")), "no image.svg, not even a stale one");
+    assert.equal(splitRun([join(sub, "animation.html")], () => {}, () => {}), 0);
+    const art = readFileSync(join(sub, "art.svg"));
+    const settings = settingsFromText("settings.txt", readFileSync(join(sub, "settings.txt"), "utf8"));
+    assert.ok(buildPreview({ midiArg: join(sub, "midi.b64"), settings, svg: art }).html.equals(readFileSync(join(sub, "animation.html"))));
   });
 
   test("split_page CLI: refuses to overwrite an input, and reports a differing image", () => {

@@ -1,7 +1,7 @@
 // @ts-check
 // JavaScript reference for everything the class returns around the page, and for the consumer
-// layout that splices it (the Beasts layout in README.md and src/interface.cairo). Node built-ins
-// only: it reads the built PAGE from tests/fixtures/page.html (written by scripts/build_page.mjs)
+// layout that splices it ("Consumer `token_uri` layout" in README.md and src/interface.cairo).
+// Node built-ins only: it reads the built PAGE from tests/fixtures/page.html (written by scripts/build_page.mjs)
 // and needs no `npm install`, so the beast_consumer example and the tests can use it directly.
 //
 //   PAGE                     fixed HTML: head and styles, the engine gzipped in a
@@ -284,7 +284,7 @@ export function dFragment(midi, settings) {
 export const midiSegment = (/** @type {Uint8Array} */ midi, /** @type {SynthSettings} */ settings) => b64(b64(dFragment(midi, settings).d));
 
 // ---------------------------------------------------------------------------------------------
-// The consumer's token_uri (the Beasts layout)
+// The consumer's token_uri (the consumer layout)
 // ---------------------------------------------------------------------------------------------
 
 /** A Cairo ByteArray word: a piece appended at a multiple of 31 bytes is copied word by word. */
@@ -365,22 +365,36 @@ export const naiveTokenUri = (
 ) => JSON_PREFIX + b64(naiveTokenJson(parts, options));
 
 /**
- * Decodes a token_uri exactly as a marketplace would: JSON layer, then the two data URIs. Every
- * layer is returned as raw bytes; the JSON is decoded as strict UTF-8 (invalid UTF-8 throws), and
- * `svg` / `html` are UTF-8 text views for convenience.
+ * Decodes a token_uri's layers whatever its `image` is: the JSON layer, then the `animation_url`
+ * page, and the `image` only when it is a base64 SVG data URI (`svgBytes` is null otherwise, for
+ * an external URL or another format). For consumers whose art block is not their `image`.
  * @param {string} uri
+ * @returns {{jsonBytes: Buffer, jsonText: string, json: any, svgBytes: Buffer | null, htmlBytes: Buffer, html: string}}
  */
-export function decodeTokenUri(uri) {
+export function decodeTokenUriLayers(uri) {
   if (!uri.startsWith(JSON_PREFIX)) throw new Error("not a base64 JSON data URI");
   if (/[^\x21-\x7e]/.test(uri)) throw new Error("token_uri must be printable ASCII");
   const jsonBytes = strictB64Decode(uri.slice(JSON_PREFIX.length));
   const jsonText = new TextDecoder("utf-8", { fatal: true }).decode(jsonBytes);
   const json = JSON.parse(jsonText);
-  if (!json.image.startsWith(SVG_PREFIX)) throw new Error("image is not a base64 SVG data URI");
-  if (!json.animation_url.startsWith(HTML_PREFIX)) throw new Error("animation_url is not base64 HTML");
-  const svgBytes = strictB64Decode(json.image.slice(SVG_PREFIX.length));
+  if (typeof json.animation_url !== "string" || !json.animation_url.startsWith(HTML_PREFIX)) throw new Error("animation_url is not base64 HTML");
+  const svgBytes = typeof json.image === "string" && json.image.startsWith(SVG_PREFIX) ? strictB64Decode(json.image.slice(SVG_PREFIX.length)) : null;
   const htmlBytes = strictB64Decode(json.animation_url.slice(HTML_PREFIX.length));
-  return { jsonBytes, jsonText, json, svgBytes, htmlBytes, svg: svgBytes.toString("utf8"), html: htmlBytes.toString("utf8") };
+  return { jsonBytes, jsonText, json, svgBytes, htmlBytes, html: htmlBytes.toString("utf8") };
+}
+
+/**
+ * Decodes a token_uri exactly as a marketplace would: JSON layer, then the two data URIs. Every
+ * layer is returned as raw bytes; the JSON is decoded as strict UTF-8 (invalid UTF-8 throws), and
+ * `svg` / `html` are UTF-8 text views for convenience. The `image` must be a base64 SVG data URI
+ * (see decodeTokenUriLayers for other images).
+ * @param {string} uri
+ */
+export function decodeTokenUri(uri) {
+  const layers = decodeTokenUriLayers(uri);
+  const { svgBytes } = layers;
+  if (!svgBytes) throw new Error("image is not a base64 SVG data URI");
+  return { ...layers, svgBytes, svg: svgBytes.toString("utf8") };
 }
 
 // ---------------------------------------------------------------------------------------------
