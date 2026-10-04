@@ -1225,8 +1225,8 @@ class SkillOpportunityTests(Workspace):
                                 blocking_severities=CONFIG["blocking_severities"])
 
     def test_lgtm_with_none_is_a_clean_review(self):
-        for body in ("none", "None.", "- none", "_none_", ""):
-            for heading in (lib.SKILLS_HEADING, "### Skill opportunities"):
+        for body in ("none", "None.", "- none", "_none_", "`none`", ""):
+            for heading in (lib.SKILLS_HEADING, "### Skill opportunities", "## Skill Opportunities"):
                 with self.subTest(body=body, heading=heading):
                     parsed = lib.parse_review("lgtm\n" + skills_section(body, heading))
                     self.assertEqual((parsed["kind"], parsed["skills"], parsed["body"]), ("lgtm", "none", "lgtm"))

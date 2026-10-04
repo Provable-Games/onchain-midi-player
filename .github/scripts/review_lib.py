@@ -40,7 +40,7 @@ MAX_PREAMBLE_CHARS = 500
 FIELD_RE = re.compile(r"^- \*\*(" + "|".join(re.escape(f) for f in FINDING_FIELDS) + r"):\*\*(.*)$")
 # The optional closing section of non-blocking agent skill suggestions (review-policy.md).
 SKILLS_HEADING = "## Skill opportunities"
-SKILLS_HEADING_RE = re.compile(r"^#{2,3} Skill opportunities\s*$")
+SKILLS_HEADING_RE = re.compile(r"^#{2,3} Skill opportunities\s*$", re.IGNORECASE)
 
 
 CODEX_AUTH_FAILURE = ("Codex authentication failed: the org secret CODEX_AUTH_DOT_JSON needs to be refreshed "
@@ -270,7 +270,7 @@ def _parse_skills(lines, first_number):
     if fence is not None:
         errors.append("unterminated code block in the Skill opportunities section")
     text = "\n".join(lines).strip()
-    if text.strip("-*_. ").lower() in ("", "none"):
+    if text.strip("-*_.` ").lower() in ("", "none"):
         text = "none"
     return text, errors
 

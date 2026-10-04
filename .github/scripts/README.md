@@ -166,7 +166,7 @@ All jobs run on `ubuntu-24.04-arm`. Both CLIs publish linux-arm64 builds.
 | Output containing a credential value in any detected form | Fails; the output is withheld |
 | Result for a different base or head, or a newer head at publish time | Fails; nothing is published for a stale head |
 | Complete review with only MEDIUM or LOW findings | Passes; the findings stay visible |
-| Skill opportunities (any content, including severity words) | No effect: recorded as `skill_opportunities` and shown in the comment, never read by the gate |
+| Skill opportunities: bullets or `none`, including severity words, locations and fenced examples | No effect: recorded as `skill_opportunities` and shown in the comment, never read by the gate. A finding or heading inside the section makes the review incomplete (see Output contract and parsing) |
 | Complete review with a CRITICAL or HIGH finding | Fails after the comment is published |
 
 ## Output contract and parsing
@@ -227,8 +227,8 @@ lgtm
 - **Refine `midi-guide`** (`plugins/onchain-tinysynth/skills/midi-guide/SKILL.md:40`): … Evidence: `player/player.js:120`.
 ```
 
-`parse_review` splits the output at the first `## Skill opportunities` (or
-`###`) heading outside a code fence and parses the part before it exactly as
+`parse_review` splits the output at the first `## Skill opportunities` heading
+(`###` and any letter case also count) outside a code fence and parses the part before it exactly as
 above. The section is recorded as `skill_opportunities` in `result.json`
 (`"none"` or the Markdown text; the key is absent when the model omitted the
 section, so older output parses as before, and `schema` stays 1) and shown in
