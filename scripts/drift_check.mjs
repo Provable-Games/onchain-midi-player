@@ -269,7 +269,9 @@ try {
   // imgs: the art shown on load, the restart on ▶, then one per pass (each swapped in once decoded).
   const passRestarts = end.imgs - 2;
   Object.assign(summary, { passRestarts, passesSincePlay: heardPasses - 1 });
-  check(passRestarts >= 0.9 * (heardPasses - 1) && passRestarts <= heardPasses - 1,
+  // At most one per pass heard; one more is tolerated, since a restart lands a few ms after its pass
+  // starts and the audio clock read with the images can still be just short of that start.
+  check(passRestarts >= 0.9 * (heardPasses - 1) && passRestarts <= heardPasses,
     `the art restarted at ${passRestarts} of the ${heardPasses - 1} passes heard after the first (at least 90%; a pass seen only after its start is skipped)`);
 
   const lead = leads(end.sends);
