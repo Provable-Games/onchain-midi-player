@@ -79,10 +79,10 @@ The tokens:
 
 | token | name | head spaces | comma piece | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 54,705 |
-| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 54,713 |
-| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 54,709 |
-| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 140,645 |
+| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 57,521 |
+| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 57,529 |
+| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 57,525 |
+| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 143,461 |
 
 Tokens 1-3 cover every pad length: `len('{' members ',')` and `len(S)` take every remainder mod 3, and `D` three different pads. Only `reverb` varies between them (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding. The head spaces include the alignment groups.
 

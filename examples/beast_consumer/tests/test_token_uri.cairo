@@ -71,7 +71,7 @@ fn token_uri_3_matches_js_golden() {
 }
 
 /// Token 4: a real Beast SVG (22,733 bytes), the full-size synthetic score (3,716 bytes) and the
-/// reference sounds. Its 140,645-character token_uri is pinned by length and SHA-256.
+/// reference sounds. Its 143,461-character token_uri is pinned by length and SHA-256.
 #[test]
 fn token_uri_4_matches_js_digest() {
     let (nft, _) = setup();
