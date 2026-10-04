@@ -60,6 +60,11 @@ export const ENGINE_MISSING = "engine: TinySynth did not load";
  * skipped: the art keeps its phase until the next pass rather than restarting late.
  */
 const LATE_SECONDS = 0.05;
+/**
+ * The longest delay setTimeout takes, in ms (2^31 - 1, about 24.8 days); a longer one fires at once.
+ * A pass start further ahead than this is left for a later poll.
+ */
+const MAX_TIMER_MS = 2147483647;
 /** A loop shorter than this would make TinySynth's scheduler spin; such MIDI is rejected. */
 const MIN_LOOP_SECONDS = 0.05;
 /**
@@ -333,7 +338,8 @@ export function startPlayer() {
            * the last one synced, once startTime has reached it. On a short loop startTime can move
            * on by more than one pass between calls, so this walks pass by pass from the last one
            * synced, skipping any whose start is already past, and takes the engine's own value
-           * when it reaches it.
+           * when it reaches it. A pass start more than MAX_TIMER_MS ahead (a pass of weeks) is
+           * left unsynced, so a later poll times it once it is within reach.
            * @param {boolean} [first]
            */
           const sync = (first) => {
@@ -346,8 +352,9 @@ export function startPlayer() {
               while (start < latest - 1e-6 && start + lag < ctx.currentTime) start += pass;
               if (start > latest - 1e-6) start = latest;
             }
-            synced = start;
             const delay = start === null ? 0 : start - ctx.currentTime + lag;
+            if (delay * 1000 > MAX_TIMER_MS) return;
+            synced = start;
             if (!first && (start === null || delay < 0)) return;
             timer = window.setTimeout(() => {
               timer = 0;

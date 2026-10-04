@@ -77,7 +77,7 @@ fn gas_lc_declare() {
 
 #[test]
 fn gas_lc_animation_url_segment() {
-    assert(class().animation_url_segment().len() == 53092, 'segment');
+    assert(class().animation_url_segment().len() == 53140, 'segment');
 }
 
 #[test]
