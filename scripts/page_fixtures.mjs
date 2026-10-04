@@ -184,6 +184,14 @@ export const CASES = [
     members: '"name":"Chip waves","description":"Custom waves"',
   },
   {
+    name: "filtered",
+    dPad: 1,
+    settings: settingsNamed("filters"),
+    midi: (label) => riff({ ppq: 96, us: 500000, program: 3, label }),
+    svg: cardSvg("Filters"),
+    members: '"name":"Filters","description":"Filtered voices and hats"',
+  },
+  {
     name: "every_slot",
     dPad: 8,
     settings: settingsNamed("every_slot"),
@@ -194,7 +202,7 @@ export const CASES = [
 ];
 
 /** Invalid settings: midi_segment must revert with the same panic data as `settings::validate`. */
-export const INVALID_CASES = ["quality_2", "volume_max_plus_1", "duplicate_drum", "custom_wave", "filter", "timbres_176"].map((name) => {
+export const INVALID_CASES = ["quality_2", "volume_max_plus_1", "duplicate_drum", "custom_wave", "filter_on_fm", "filter_q_0", "timbres_176"].map((name) => {
   const f = INVALID.find((v) => v.name === name);
   if (!f) throw new Error(`no invalid settings fixture ${name}`);
   return { name, settings: f.settings, error: f.error };

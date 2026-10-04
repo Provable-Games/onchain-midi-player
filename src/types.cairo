@@ -1,16 +1,14 @@
 //! Consumer-supplied sound settings for `midi_segment`.
 //!
 //! `crate::settings::validate` checks only what the format or the engine requires: `quality`
-//! is 0 or 1, `voices` at least 1, the counts, slots, routes and wave indices, and the filter gate
-//! below. Every other numeric field takes any value of its integer type, except five operator
-//! fields with interim engine limits (`volume`, `ratio`, `pitch_ratio`, `sustain`, `key_scale`):
-//! the pinned engine computes non-finite values past them and stalls (README, "Engine limits on
-//! operator values"). Every wave sample and harmonic takes any value of its type.
-//! Filters (issue #3) are part of the types and of the `SETTINGS` grammar already, but are
-//! rejected until that issue lands. `midi_segment` reverts
-//! with a descriptive error when a check fails; the exact checks, their order and their
-//! messages are listed in `crate::settings`. This is the only place they are enforced: the
-//! player page parses `SETTINGS` strictly but does not repeat them.
+//! is 0 or 1, `voices` at least 1, the counts, slots, routes and wave indices, and that a filter is
+//! on an audio output with a cutoff and a Q above 0. Every other numeric field takes any value of
+//! its integer type, except five operator fields with interim engine limits (`volume`, `ratio`,
+//! `pitch_ratio`, `sustain`, `key_scale`): the pinned engine computes non-finite values past them
+//! and stalls (README, "Engine limits on operator values"). Every wave sample and harmonic takes
+//! any value of its type. `midi_segment` reverts with a descriptive error when a check fails; the
+//! exact checks, their order and their messages are listed in `crate::settings`. This is the only
+//! place they are enforced: the player page parses `SETTINGS` strictly but does not repeat them.
 //!
 //! # Fixed-point numbers
 //!
@@ -135,8 +133,9 @@ pub struct Operator {
     /// `2^((note - 60) / 12 * key_scale)`. Negative values soften high notes. Interim engine
     /// limit: -8.0..=8.0.
     pub key_scale: i32,
-    /// Optional fixed filter on this operator's output (issue #3). Allowed only when
-    /// `route == 0`. Must be `None` until issue #3 lands (`'TS: filter unsupported'`).
+    /// Optional fixed filter on this operator's output (issue #3): TinySynth's `fl`, `ff`, `fq`
+    /// and `fk`. Allowed only when `route == 0` (`'TS: filter on modulator'`): FM and AM paths
+    /// are never filtered.
     pub filter: Option<Filter>,
 }
 
@@ -177,20 +176,30 @@ pub enum WaveDef {
     Samples: Span<i8>,
 }
 
-/// Fixed filter applied to an operator's output (issue #3). It has no envelope.
+/// Fixed filter applied to an audio-output operator (issue #3): a Web Audio biquad between the
+/// operator's envelope and the channel, set once at note-on and released with the voice. It has no
+/// envelope.
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub struct Filter {
+    /// [`fl`] Response: `lowpass`, `highpass` or `bandpass`.
     pub kind: FilterKind,
-    /// Cutoff or centre frequency, fixed-point. In Hz (range 20.0..=20_000.0) when
-    /// `key_track` is false. As a multiple of the note frequency (range 0.25..=16.0) when
-    /// `key_track` is true, so brightness stays even across the keyboard.
+    /// [`ff`] Cutoff (low- and high-pass) or centre (band-pass) frequency, fixed-point. In Hz when
+    /// `key_track` is false. When it is true, a multiple of the note's frequency (with master,
+    /// channel and scale tuning; before `ratio`, `offset_hz`, bend, the pitch envelope and
+    /// modulation), so brightness stays even across the keyboard. Above 0
+    /// (`'TS: filter cutoff out of range'`), with no upper limit: the engine clamps the computed
+    /// cutoff to 0.45 times the sample rate (21,600 Hz at 48 kHz).
     pub cutoff: u32,
+    /// [`fk`] Whether `cutoff` is a multiple of the note frequency (1) or Hz (0).
     pub key_track: bool,
-    /// Resonance (Q), fixed-point. Range: 0.1..=30.0.
+    /// [`fq`] Resonance, as a conventional linear Q, fixed-point: 0.7071 (`7_071`) is flat
+    /// (Butterworth) for low- and high-pass. Above 0 (`'TS: filter q out of range'`), with no upper
+    /// limit. The engine passes `20 * log10(q)` dB to a low- or high-pass and `q` to a band-pass,
+    /// whose bandwidth is the centre frequency / `q`.
     pub q: u32,
 }
 
-/// Filter response.
+/// Filter response. Variant order is the wire tag (0..=2).
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub enum FilterKind {
     LowPass,

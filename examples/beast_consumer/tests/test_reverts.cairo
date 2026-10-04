@@ -7,7 +7,9 @@ use core::panic_with_felt252;
 use onchain_tinysynth::interface::{
     IOnchainTinySynthSafeDispatcherTrait, IOnchainTinySynthSafeLibraryDispatcher,
 };
-use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, WaveDef, Waveform};
+use onchain_tinysynth::types::{
+    Filter, FilterKind, Operator, SynthSettings, Timbre, WaveDef, Waveform,
+};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 
 fn synth() -> IOnchainTinySynthSafeLibraryDispatcher {
@@ -185,6 +187,54 @@ fn custom_waves_are_accepted() {
         .span();
     s.timbres = one_op_timbre(false, 80, Waveform::Custom(1));
     assert(synth().midi_segment(sound::midi(), s).unwrap().len() > 0, 'midi_segment');
+}
+
+/// The kick of `settings_for(1)`, its first operator given `filter` and `route`.
+fn with_kick_filter(route: u8, filter: Filter) -> SynthSettings {
+    let mut s = sound::settings_for(1);
+    let mut kick = *s.timbres.at(1);
+    let first = *kick.operators.at(0);
+    let op = Operator { route, filter: Option::Some(filter), ..first };
+    kick.operators = if route == 0 {
+        [op].span()
+    } else {
+        [first, op].span()
+    };
+    s.timbres = [*s.timbres.at(0), kick].span();
+    s
+}
+
+// Filters (issue #3): on an audio output, with a cutoff and a Q above 0, and nothing else checked.
+#[test]
+#[feature("safe_dispatcher")]
+fn filters_are_accepted() {
+    let hat = Filter { kind: FilterKind::HighPass, cutoff: 30_000_000, key_track: false, q: 7_071 };
+    assert(synth().midi_segment(sound::midi(), with_kick_filter(0, hat)).is_ok(), 'high-pass');
+    let widest = Filter {
+        kind: FilterKind::BandPass, cutoff: 0xffffffff, key_track: true, q: 0xffffffff,
+    };
+    assert(synth().midi_segment(sound::midi(), with_kick_filter(0, widest)).is_ok(), 'u32 max');
+    let narrowest = Filter { kind: FilterKind::LowPass, cutoff: 1, key_track: false, q: 1 };
+    assert(synth().midi_segment(sound::midi(), with_kick_filter(0, narrowest)).is_ok(), 'smallest');
+}
+
+#[test]
+fn filter_on_modulator_reverts() {
+    let f = Filter { kind: FilterKind::LowPass, cutoff: 10_000_000, key_track: false, q: 7_071 };
+    assert_midi_segment_reverts(with_kick_filter(1, f), ['TS: filter on modulator', 1, 1].span());
+    assert_midi_segment_reverts(with_kick_filter(11, f), ['TS: filter on modulator', 1, 1].span());
+}
+
+#[test]
+fn filter_cutoff_or_q_of_zero_reverts() {
+    let no_cutoff = Filter { kind: FilterKind::HighPass, cutoff: 0, key_track: true, q: 7_071 };
+    assert_midi_segment_reverts(
+        with_kick_filter(0, no_cutoff), ['TS: filter cutoff out of range', 1, 0].span(),
+    );
+    let no_q = Filter { kind: FilterKind::BandPass, cutoff: 10_000_000, key_track: false, q: 0 };
+    assert_midi_segment_reverts(
+        with_kick_filter(0, no_q), ['TS: filter q out of range', 1, 0].span(),
+    );
 }
 
 #[test]

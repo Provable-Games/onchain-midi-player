@@ -31,10 +31,12 @@
 // the engine) must keep the art visible, keep ▶ disabled, show the exact error and construct no
 // synth. So must the failures ▶ can meet: no Web Audio at all, or an AudioContext whose resume()
 // rejects. Range checks are Cairo's: settings that only break a range rule must still play. The
-// settings fixtures with fields at their extremes (and the deepest FM chain at the engine limits)
-// and the custom-wave fixtures (256 waves; the long-mode LFSR, 32,767 samples) play the lowest and
-// highest notes on every custom timbre with no error: the engine throws on a non-finite AudioParam
-// value, or on a wave it cannot register, which only playing shows.
+// settings fixtures with fields at their extremes (and the deepest FM chain at the engine limits),
+// the custom-wave fixtures (256 waves; the long-mode LFSR, 32,767 samples) and the filter fixtures
+// (every kind with its cutoff and Q at 0.0001 and the u32 maximum, fixed and key-tracked, at the
+// engine limits) play the lowest and highest notes on every custom timbre with no error: the engine
+// throws on a non-finite AudioParam value, or on a wave it cannot register, which only playing
+// shows.
 //
 // Playwright is not a dependency of this repository; point the script at an existing install, and
 // pick the engine (scripts/browsers.mjs; Firefox plays audio only with an output device, which a
@@ -705,7 +707,7 @@ async function checkRangeOnly() {
 async function checkExtremes() {
   const settingsFixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/settings.json", import.meta.url), "utf8"));
   /** @type {Array<[string, any]>} */
-  const cases = ["max_fields", "min_fields", "max_chain", "custom_waves", "reference_waves", "waves_256"]
+  const cases = ["max_fields", "min_fields", "max_chain", "custom_waves", "reference_waves", "waves_256", "filters", "filter_extremes"]
     .map((name) => [name, settingsFixtures.valid.find((/** @type {any} */ f) => f.name === name).settings]);
   cases.push(["long_lfsr", longLfsr()]);
   for (const [name, settings] of cases) {

@@ -26,7 +26,7 @@ import { encodeSettings } from "../player/encode.js";
 import { FILTER_KINDS, OPERATOR_FIELDS, SettingsError, WAVEFORMS, decodeSettings } from "../player/settings.js";
 import { validateSettings } from "../player/validate.js";
 import { lfsr } from "./reference_waves.mjs";
-import { ALL_SLOTS, INVALID, LONG_LFSR_SNARE, RESERVED, VALID, longLfsr, structuralMax, widestOperator } from "./settings_fixtures.mjs";
+import { ALL_SLOTS, INVALID, LONG_LFSR_SNARE, VALID, longLfsr, structuralMax, widestOperator } from "./settings_fixtures.mjs";
 
 /** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
 /** @typedef {import("../player/settings.js").Operator} Operator */
@@ -111,12 +111,6 @@ export function buildFixtures() {
     check(JSON.stringify(decodeSettings(text)) === JSON.stringify(settings), `${name}: decode(encode(x)) != x`);
     return { name, settings, settings_text: text, bytes: text.length };
   });
-  const reserved = RESERVED.map(({ name, settings, error }) => {
-    const text = encodeSettings(settings);
-    check(JSON.stringify(decodeSettings(text)) === JSON.stringify(settings), `${name}: decode(encode(x)) != x`);
-    check(JSON.stringify(jsError(settings)) === JSON.stringify(error), `${name}: expected ${error}, got ${jsError(settings)}`);
-    return { name, settings, settings_text: text, bytes: text.length, error };
-  });
   const invalid = INVALID.map(({ name, settings, error }) => {
     check(JSON.stringify(jsError(settings)) === JSON.stringify(error), `${name}: expected ${error}, got ${jsError(settings)}`);
     return { name, settings, error };
@@ -139,7 +133,7 @@ export function buildFixtures() {
   const longText = encodeSettings(long);
   check(JSON.stringify(decodeSettings(longText)) === JSON.stringify(long), "long_lfsr: decode(encode(x)) != x");
   const long_lfsr = { bytes: longText.length, sha256: createHash("sha256").update(longText).digest("hex") };
-  return { valid, reserved, invalid, structural_max, long_lfsr };
+  return { valid, invalid, structural_max, long_lfsr };
 }
 
 // ------------------------------------------------------------------------------------------
@@ -359,24 +353,6 @@ export function cairoSource(fx) {
       "}",
     );
   }
-  for (const f of fx.reserved) {
-    out.push("", settingsFn(`reserved_${f.name}`, `Encodable, rejected until issue #3: ${f.bytes} bytes of SETTINGS.`, f.settings));
-    out.push("", textFn(`reserved_${f.name}_text`, f.settings_text));
-    out.push(
-      "",
-      "#[test]",
-      `fn test_reserved_${f.name}_encoding() {`,
-      `    let settings = reserved_${f.name}();`,
-      `    assert_eq!(encode(@settings), reserved_${f.name}_text());`,
-      "}",
-      "",
-      "#[test]",
-      expectedAttr(f.error),
-      `fn test_reserved_${f.name}_rejected() {`,
-      `    validate(@reserved_${f.name}());`,
-      "}",
-    );
-  }
   for (const f of fx.invalid) {
     out.push("", settingsFn(`invalid_${f.name}`, `Invalid: ${f.error[0]}.`, f.settings));
     out.push(
@@ -426,8 +402,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(stale.length ? 1 : 0);
   }
   for (const [path, text] of files) writeFileSync(path, text);
-  console.log(`${fx.valid.length} valid, ${fx.reserved.length} reserved, ${fx.invalid.length} invalid fixtures`);
-  for (const f of [...fx.valid, ...fx.reserved]) console.log(`  ${f.name.padEnd(28)} ${String(f.bytes).padStart(6)} bytes`);
+  console.log(`${fx.valid.length} valid, ${fx.invalid.length} invalid fixtures`);
+  for (const f of fx.valid) console.log(`  ${f.name.padEnd(28)} ${String(f.bytes).padStart(6)} bytes`);
   console.log(`  ${"structural_max".padEnd(28)} ${String(fx.structural_max.bytes).padStart(6)} bytes (length and SHA-256 only)`);
   console.log(`  ${"long_lfsr".padEnd(28)} ${String(fx.long_lfsr.bytes).padStart(6)} bytes (length and SHA-256 only)`);
 }

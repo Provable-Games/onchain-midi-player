@@ -112,16 +112,20 @@ const I32_MAX = 2147483647;
  */
 const BOUNDS = { volume: 1000000, ratio: 640000, pitch_ratio: 160000, sustain: 1000000, key_scale: 80000 };
 
+/** The widest filter (issue #3): cutoff and Q at the `u32` maximum, key-tracked. */
+const WIDEST_FILTER = /** @type {const} */ ({ kind: "BandPass", cutoff: U32_MAX, key_track: true, q: U32_MAX });
+
 /**
- * Widest valid operator at position `o` in v1: every field at its widest value (its bound for the
- * five bounded fields, the type's extreme for the others), and an AM route (two digits) after the
- * first operator.
- * @param {number} o
+ * Widest valid operator in v1, at any position `o`: every field at its widest value (its bound for
+ * the five bounded fields, the type's extreme for the others), and the widest filter, so an audio
+ * output (route 0: only an output may have a filter, and a filter is far wider than a two-digit AM
+ * route).
+ * @param {number} _o
  */
-export const widestOperator = (o) => op({
-  route: o === 0 ? 0 : 10 + o, wave: "MetallicNoise", volume: BOUNDS.volume, ratio: BOUNDS.ratio, offset_hz: I32_MIN,
+export const widestOperator = (_o) => op({
+  route: 0, wave: "MetallicNoise", volume: BOUNDS.volume, ratio: BOUNDS.ratio, offset_hz: I32_MIN,
   attack: U32_MAX, hold: U32_MAX, decay: U32_MAX, sustain: BOUNDS.sustain, release: U32_MAX, pitch_ratio: BOUNDS.pitch_ratio,
-  pitch_time: U32_MAX, key_scale: -BOUNDS.key_scale,
+  pitch_time: U32_MAX, key_scale: -BOUNDS.key_scale, filter: WIDEST_FILTER,
 });
 
 /** Every timbre slot reachable from MIDI, in order: programs 0..=127, then drum notes 35..=81. */
@@ -151,7 +155,8 @@ export const structuralMax = () => settings({
 
 /**
  * Every field at its maximum, with routes at their limits (FM on op 7 from op 8, AM chains): the
- * type's maximum, or the bound for the five bounded fields.
+ * type's maximum, or the bound for the five bounded fields; the audio output (operator 1) has the
+ * widest filter.
  */
 const MAX_FIELDS = settings({
   quality: 1, reverb: 255, master_vol: 255, voices: 255,
@@ -159,7 +164,7 @@ const MAX_FIELDS = settings({
     drum: false, slot: 127,
     operators: [0, 1, 2, 12, 4, 15, 6, 17].map((route) => op({
       route, wave: "Sawtooth", offset_hz: I32_MAX, attack: U32_MAX, hold: U32_MAX, decay: U32_MAX,
-      release: U32_MAX, pitch_time: U32_MAX, ...BOUNDS,
+      release: U32_MAX, pitch_time: U32_MAX, ...BOUNDS, filter: route === 0 ? WIDEST_FILTER : null,
     })),
   }],
 });
@@ -274,6 +279,89 @@ export const longLfsr = () => settings({
 export const LONG_LFSR_SNARE = op({ wave: { Custom: 0 }, volume: 3000, ratio: 0, offset_hz: 14649, hold: 0, decay: 500, release: 500 });
 
 // ------------------------------------------------------------------------------------------
+// Filters (issue #3).
+// ------------------------------------------------------------------------------------------
+
+/**
+ * @param {"LowPass" | "HighPass" | "BandPass"} kind
+ * @param {number} cutoff stored: Hz x 10,000, or the multiple of the note frequency x 10,000 when key-tracked
+ * @param {number} q stored: linear Q x 10,000 (7,071: Butterworth for low- and high-pass)
+ * @param {boolean} [key_track]
+ * @returns {import("../player/settings.js").Filter}
+ */
+export const filter = (kind, cutoff, q, key_track = false) => ({ kind, cutoff, key_track, q });
+
+/** The Beast reference settings with one filter: the lead's carrier through a low-pass at 4x the note frequency. */
+const ONE_FILTER = settings({
+  ...BEAST_SETTINGS,
+  timbres: [
+    { ...BEAST_LEAD, operators: [op({ ...BEAST_LEAD.operators[0], filter: filter("LowPass", 40000, 7071, true) }), BEAST_LEAD.operators[1]] },
+    BEAST_KICK,
+    BEAST_SNARE,
+  ],
+});
+
+/** A melodic sawtooth voice: full sustain, 3 ms attack, 10 ms release, through `f`. */
+const sawVoice = (/** @type {number} */ slot, /** @type {Operator["filter"]} */ f) => ({
+  drum: false, slot,
+  operators: [op({ wave: "Sawtooth", volume: 3000, attack: 30, hold: 0, sustain: 10000, release: 100, filter: f })],
+});
+
+/** A chip hi-hat: metallic noise at playback rate 390 / 440, through a 3 kHz high-pass (issue #3's case). */
+const filteredHat = (/** @type {number} */ slot, /** @type {number} */ decay) => ({
+  drum: true, slot,
+  operators: [op({
+    wave: "MetallicNoise", volume: 2000, ratio: 0, offset_hz: 3900000, hold: 0, decay, release: 500,
+    filter: filter("HighPass", 30000000, 7071),
+  })],
+});
+
+/**
+ * Six filtered operators, one of each use: sawtooth voices through a 1 kHz low-pass, high-pass and
+ * band-pass (Q 4) on programs 0-2, a low-pass at 4x the note frequency on program 3 (a filtered lead
+ * whose brightness follows the note), and closed and open hats high-passed at 3 kHz on drums 42 and
+ * 46. `npm run render-check` measures them.
+ */
+export const FILTER_SETTINGS = settings({
+  reverb: 0,
+  timbres: [
+    sawVoice(0, filter("LowPass", 10000000, 7071)),
+    sawVoice(1, filter("HighPass", 10000000, 7071)),
+    sawVoice(2, filter("BandPass", 10000000, 40000)),
+    sawVoice(3, filter("LowPass", 40000, 7071, true)),
+    filteredHat(42, 150),
+    filteredHat(46, 600),
+  ],
+});
+
+/**
+ * Every filter at its extremes, with the five bounded fields at their bounds: each kind on its own
+ * timbre (programs 100-102) with eight outputs, one per combination of cutoff (0.0001 or the u32
+ * maximum), key tracking and Q (0.0001 or the u32 maximum); the deepest FM chain at the bounds
+ * (`max_chain`) into a filtered output (program 103); and a drum (81) with key-tracked filters at the
+ * u32 maximum. scripts/page_check.mjs plays notes 0 and 127 on each.
+ */
+const FILTER_EXTREMES = settings({
+  timbres: [
+    ...(/** @type {const} */ (["LowPass", "HighPass", "BandPass"])).map((kind, k) => ({
+      drum: false, slot: 100 + k,
+      operators: Array.from({ length: 8 }, (_, o) => op({
+        wave: "Sawtooth", ...BOUNDS, key_scale: o % 2 ? -BOUNDS.key_scale : BOUNDS.key_scale,
+        filter: filter(kind, o & 4 ? U32_MAX : 1, o & 1 ? U32_MAX : 1, Boolean(o & 2)),
+      })),
+    })),
+    {
+      drum: false, slot: 103,
+      operators: Array.from({ length: 8 }, (_, route) => op({ route, ...BOUNDS, filter: route ? null : filter("LowPass", U32_MAX, U32_MAX, true) })),
+    },
+    {
+      drum: true, slot: 81,
+      operators: [op({ ...BOUNDS, filter: filter("HighPass", U32_MAX, 1, true) }), op({ ...BOUNDS, wave: "WhiteNoise", filter: filter("BandPass", U32_MAX, U32_MAX, true) })],
+    },
+  ],
+});
+
+// ------------------------------------------------------------------------------------------
 // Fixture lists.
 // ------------------------------------------------------------------------------------------
 
@@ -329,28 +417,10 @@ export const VALID = [
       timbres: [{ drum: false, slot: 0, operators: [op({ wave: { Custom: 252 } }), op({ wave: { Custom: 255 } })] }],
     }),
   },
-];
-
-/**
- * Encodable settings that validation rejects until issue #3 (filters): pins the encoding of the
- * reserved shape and its rejection.
- * @type {Array<{name: string, settings: SynthSettings, error: [string, ...number[]]}>}
- */
-export const RESERVED = [
-  {
-    name: "filters",
-    settings: settings({
-      timbres: [{
-        drum: true, slot: 42,
-        operators: [
-          op({ wave: "MetallicNoise", filter: { kind: "HighPass", cutoff: 30000000, key_track: false, q: 7071 } }),
-          op({ wave: "Sawtooth", filter: { kind: "LowPass", cutoff: 40000, key_track: true, q: 300000 } }),
-          op({ filter: { kind: "BandPass", cutoff: 200000, key_track: false, q: 1000 } }),
-        ],
-      }],
-    }),
-    error: ["TS: filter unsupported", 0, 0],
-  },
+  // Filters (issue #3).
+  { name: "one_filter", settings: ONE_FILTER },
+  { name: "filters", settings: FILTER_SETTINGS },
+  { name: "filter_extremes", settings: FILTER_EXTREMES },
 ];
 
 const one = (/** @type {Partial<Operator>} */ fields, slot = 0) => settings({ timbres: [{ drum: false, slot, operators: [op(fields)] }] });
@@ -425,8 +495,20 @@ export const INVALID = [
   { name: "key_scale_min_minus_1", settings: one({ key_scale: -80001 }), error: ["TS: key_scale out of range", 0, 0] },
   { name: "u32_max_ratio", settings: one({ ratio: U32_MAX }), error: ["TS: ratio out of range", 0, 0] },
   { name: "i32_max_key_scale", settings: one({ key_scale: I32_MAX }), error: ["TS: key_scale out of range", 0, 0] },
-  // Filter (20).
-  { name: "filter", settings: one({ filter: { kind: "LowPass", cutoff: 10000000, key_track: false, q: 7071 } }), error: ["TS: filter unsupported", 0, 0] },
+  // Filters (20-22).
+  {
+    name: "filter_on_fm",
+    settings: onTimbre({ operators: [op({}), op({ route: 1, filter: filter("LowPass", 10000000, 7071) })] }),
+    error: ["TS: filter on modulator", 0, 1],
+  },
+  {
+    name: "filter_on_am",
+    settings: onTimbre({ operators: [op({}), op({}), op({ route: 12, filter: filter("BandPass", 10000, 10000, true) })] }),
+    error: ["TS: filter on modulator", 0, 2],
+  },
+  { name: "filter_cutoff_0", settings: one({ filter: filter("HighPass", 0, 7071) }), error: ["TS: filter cutoff out of range", 0, 0] },
+  { name: "filter_cutoff_0_key_tracked", settings: one({ filter: filter("LowPass", 0, 7071, true) }), error: ["TS: filter cutoff out of range", 0, 0] },
+  { name: "filter_q_0", settings: one({ filter: filter("BandPass", 10000000, 0) }), error: ["TS: filter q out of range", 0, 0] },
   // Check order: the first failing check wins.
   { name: "order_quality_before_voices", settings: settings({ quality: 2, voices: 0 }), error: ["TS: quality out of range"] },
   { name: "order_voices_before_waves", settings: settings({ voices: 0, waves: [{ Harmonics: [] }] }), error: ["TS: voices out of range"] },
@@ -471,14 +553,17 @@ export const INVALID = [
   { name: "order_ratio_before_pitch_ratio", settings: one({ ratio: 640001, pitch_ratio: 160001 }), error: ["TS: ratio out of range", 0, 0] },
   { name: "order_pitch_ratio_before_sustain", settings: one({ pitch_ratio: 160001, sustain: 1000001 }), error: ["TS: pitch_ratio out of range", 0, 0] },
   { name: "order_sustain_before_key_scale", settings: one({ sustain: 1000001, key_scale: -80001 }), error: ["TS: sustain out of range", 0, 0] },
+  { name: "order_key_scale_before_filter", settings: one({ key_scale: 80001, filter: filter("LowPass", 0, 0) }), error: ["TS: key_scale out of range", 0, 0] },
+  { name: "order_wave_index_before_filter", settings: one({ wave: { Custom: 0 }, filter: filter("LowPass", 0, 0) }), error: ["TS: wave index out of range", 0, 0] },
   {
-    name: "order_key_scale_before_filter",
-    settings: one({ key_scale: 80001, filter: { kind: "LowPass", cutoff: 1, key_track: false, q: 1 } }),
-    error: ["TS: key_scale out of range", 0, 0],
+    name: "order_filter_modulator_before_cutoff",
+    settings: onTimbre({ operators: [op({}), op({ route: 1, filter: filter("LowPass", 0, 0) })] }),
+    error: ["TS: filter on modulator", 0, 1],
   },
+  { name: "order_filter_cutoff_before_q", settings: one({ filter: filter("HighPass", 0, 0, true) }), error: ["TS: filter cutoff out of range", 0, 0] },
   {
-    name: "order_wave_index_before_filter",
-    settings: one({ wave: { Custom: 0 }, filter: { kind: "LowPass", cutoff: 1, key_track: false, q: 1 } }),
-    error: ["TS: wave index out of range", 0, 0],
+    name: "order_operator_0_filter_before_operator_1",
+    settings: onTimbre({ operators: [op({ filter: filter("LowPass", 10000, 0) }), op({ route: 9 })] }),
+    error: ["TS: filter q out of range", 0, 0],
   },
 ];
