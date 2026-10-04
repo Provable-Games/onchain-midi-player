@@ -1,10 +1,9 @@
 // @ts-check
 /**
  * Reference SETTINGS encoder (Node and tooling; not part of the page). Mirrors `encode` in
- * `src/settings.cairo` byte for byte: the full v1 grammar, including filters, which
- * `validateSettings` (player/validate.js) rejects until issue #3. Checks that every
- * value fits its Cairo type (what the Cairo type system guarantees) but not the ranges; call
- * `validateSettings` first. Like Cairo's, it has no length limit.
+ * `src/settings.cairo` byte for byte: the full v1 grammar. Checks that every value fits its Cairo
+ * type (what the Cairo type system guarantees) but not the ranges; call `validateSettings`
+ * (player/validate.js) first. Like Cairo's, it has no length limit.
  */
 import { FILTER_KINDS, OPERATOR_FIELDS, SETTINGS_FORMAT_VERSION, TYPE_BOUNDS, WAVEFORMS } from "./settings.js";
 

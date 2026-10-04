@@ -42,7 +42,7 @@ const MAX_ROUTE = 10 + MAX_OPERATORS;
  * Applies the checks of `src/settings.cairo`, in the same order and with the same messages and
  * indices, and throws a `SettingsError` on the first failure. The other numeric fields, and every
  * wave sample and harmonic, take any value of their type, except the interim engine limits
- * (checks 15-19).
+ * (checks 15-19) and a filter's cutoff and Q, which must be above 0 (checks 21-22).
  * @param {SynthSettings} s
  * @returns {SynthSettings} `s`
  */
@@ -89,7 +89,11 @@ export function validateSettings(s) {
       check(op.pitch_ratio <= MAX_PITCH_RATIO, range("pitch_ratio"), at);
       check(op.sustain <= MAX_SUSTAIN, range("sustain"), at);
       check(op.key_scale >= -MAX_KEY_SCALE && op.key_scale <= MAX_KEY_SCALE, range("key_scale"), at);
-      check(op.filter === null, "TS: filter unsupported", at);
+      if (op.filter !== null) {
+        check(r === 0, "TS: filter on modulator", at);
+        check(op.filter.cutoff > 0, range("filter cutoff"), at);
+        check(op.filter.q > 0, range("filter q"), at);
+      }
     });
   });
   return s;

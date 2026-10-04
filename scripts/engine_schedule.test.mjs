@@ -1,5 +1,5 @@
 // @ts-check
-// Installs the reference timbres and custom waves into the real TinySynth (the vendored fork build,
+// Installs the reference timbres, custom waves and filters into the real TinySynth (the vendored fork build,
 // see scripts/engine.mjs) running on a WebAudio mock that records every scheduling call, and checks
 // what the engine schedules. No audio is rendered: scripts/render_check.mjs renders real audio in a
 // browser.
@@ -11,7 +11,7 @@ import { createSynth, decodeSettings, installSettings, toTinySynthOps } from "..
 import { engineSource } from "./engine.mjs";
 import { webAudioMock } from "./webaudio_mock.mjs";
 import { encodeSettings } from "../player/encode.js";
-import { BEAST_SETTINGS, VALID, longLfsr, structuralMax } from "./settings_fixtures.mjs";
+import { BEAST_SETTINGS, FILTER_SETTINGS, INVALID, VALID, longLfsr, structuralMax } from "./settings_fixtures.mjs";
 
 /** Loads the engine into a fresh context with a recording WebAudio mock. */
 function loadEngine() {
@@ -167,13 +167,14 @@ describe("custom waves in the real engine (issue #2)", () => {
 
   test("every valid settings fixture installs in the real engine, as converted: T5's setTimbre rejects none", () => {
     // The engine (fork T5) validates every timbre before installing it and throws on an unknown wave,
-    // a bad route or a non-finite value; it stores a copy. Whatever settings::validate accepts must
-    // install unchanged: every fixture, the long LFSR, the largest input without custom waves, and
-    // every operator field at its type's extremes (validation bypassed: the engine's setTimbre takes
-    // the whole type; only playing past the interim limits fails).
+    // a bad route, a non-finite value or a filter it does not take; it stores a copy. Whatever
+    // settings::validate accepts must install unchanged: every fixture (the filters at their extremes
+    // included), the long LFSR, the largest input without custom waves, and every operator and filter
+    // field at its type's extremes (validation bypassed: the engine's setTimbre takes the whole type;
+    // only playing past the interim limits fails).
     const u = 4294967295;
     const fields = (/** @type {number} */ i32) => [u, u, i32, u, u, u, u, u, u, u, i32].join(",");
-    const extremes = `1,1,255,255,255,0,2,0,0,1,0,2,${fields(2147483647)},0,1,35,1,0,4,${fields(-2147483648)},0`;
+    const extremes = `1,1,255,255,255,0,2,0,0,1,0,2,${fields(2147483647)},1,2,${u},1,${u},1,35,1,0,4,${fields(-2147483648)},1,0,1,0,1`;
     const cases = [...VALID.map((f) => [f.name, encodeSettings(f.settings)]), ["long_lfsr", encodeSettings(longLfsr())],
       ["structural_max", encodeSettings(structuralMax())], ["type extremes", extremes]];
     for (const [name, text] of cases) {
@@ -197,5 +198,76 @@ describe("custom waves in the real engine (issue #2)", () => {
     const calls = noteOn(synth, log, [0, 60, 127, T]);
     assert.equal(calls.filter((c) => c[0].startsWith("src") && c[1] === "create").length, 1, "nS255");
     assert.equal(calls.filter((c) => c[1] === "periodicWave").length, 1, "wH252 (all zero: silent)");
+  });
+});
+
+describe("filters in the real engine (issue #3)", () => {
+  const filters = decodeSettings(encodeSettings(FILTER_SETTINGS));
+  /** The filter nodes one note creates, as [node, type, frequency, Q], and the calls it makes. */
+  function filtersOf(/** @type {any} */ synth, /** @type {any[][]} */ log, /** @type {Record<string, any>} */ nodes, /** @type {number[]} */ args) {
+    const calls = noteOn(synth, log, args);
+    const made = calls.filter((c) => c[0].startsWith("biquad") && c[1] === "create").map((c) => nodes[c[0]]);
+    return { calls, made: made.map((b) => [b.name, b.kind, b.frequency.value, b.Q.value]) };
+  }
+
+  test("a filtered output plays through a biquad of its kind, cutoff and Q, between its envelope and the channel", () => {
+    const { Synth, log, nodes } = loadEngine();
+    const synth = createSynth(Synth, filters);
+    const dB = (/** @type {number} */ q) => 20 * Math.log10(q);
+    const cases = /** @type {Array<[number, string, number, number]>} */ ([[0, "lowpass", 1000, dB(0.7071)], [1, "highpass", 1000, dB(0.7071)], [2, "bandpass", 1000, 4]]);
+    for (const [program, type, hz, q] of cases) {
+      synth.setProgram(0, program);
+      const { calls, made } = filtersOf(synth, log, nodes, [0, 45, 127, T]);
+      assert.equal(made.length, 1, `program ${program}: one filter`);
+      const [name, kind, f, Q] = made[0];
+      assert.deepEqual([kind, f], [type, hz]);
+      assert.ok(Math.abs(Q - q) < 1e-12, `Q ${Q}: linear for band-pass, 20 log10(q) dB for low- and high-pass`);
+      // oscillator -> gain (the envelope) -> filter -> channel volume
+      const gain = calls.find((c) => c[1] === "connect" && c[2] === name)?.[0];
+      assert.ok(gain?.startsWith("gain"), "the operator's gain feeds the filter");
+      assert.deepEqual(calls.filter((c) => c[0] === name && c[1] === "connect").map((c) => c[2]), [synth.chvol[0].name]);
+    }
+  });
+
+  test("key_track: the cutoff is the multiple times the note's frequency, clamped to 0.45 x the sample rate", () => {
+    const { Synth, log, nodes } = loadEngine();
+    const synth = createSynth(Synth, filters);
+    synth.setProgram(0, 3); // low-pass at 4x the note frequency
+    assert.equal(filtersOf(synth, log, nodes, [0, 45, 127, T]).made[0][2], 4 * 110);
+    assert.equal(filtersOf(synth, log, nodes, [0, 69, 127, T]).made[0][2], 4 * 440);
+    // The mock runs at 8 kHz: 0.45 x 8000 = 3600 Hz, reached from note 75 (4 x 622 Hz).
+    assert.equal(filtersOf(synth, log, nodes, [0, 127, 127, T]).made[0][2], 3600);
+    // A fixed cutoff stays put: the hat's 3 kHz.
+    assert.equal(filtersOf(synth, log, nodes, [9, 42, 127, T]).made[0][2], 3000);
+  });
+
+  test("operators without a filter get no filter node, so the graph is as before; FM and AM paths are never filtered", () => {
+    const { Synth, log, nodes } = loadEngine();
+    const beast = createSynth(Synth, settings);
+    for (const args of [[0, 69, 127, T], [9, 36, 127, T], [9, 38, 127, T]]) assert.deepEqual(filtersOf(beast, log, nodes, args).made, []);
+    const named = /** @type {any} */ (VALID.find((f) => f.name === "one_filter")).settings;
+    const synth = createSynth(Synth, decodeSettings(encodeSettings(named)));
+    const { calls, made } = filtersOf(synth, log, nodes, [0, 69, 127, T]);
+    assert.deepEqual(made.map((m) => [m[1], m[2]]), [["lowpass", 1760]], "the carrier only");
+    const [carrier] = calls.filter((c) => c[1] === "create" && c[0].startsWith("osc")).map((c) => c[0]);
+    assert.ok(calls.some((c) => c[1] === "connect" && c[2] === `${carrier}.frequency`), "the LFO still modulates the carrier directly");
+  });
+
+  test("the engine rejects every filter settings::validate rejects, and the filter is released with the voice", () => {
+    // Validation bypassed: T5's setTimbre throws on a filter on a modulator and on a cutoff or Q of 0,
+    // the shapes checks 20-22 reject (the engine's own rules, mirrored).
+    const rejected = INVALID.filter((f) => f.error[0].startsWith("TS: filter"));
+    assert.ok(rejected.length >= 5);
+    for (const f of rejected) {
+      const { Synth } = loadEngine();
+      assert.throws(() => createSynth(Synth, decodeSettings(encodeSettings(f.settings))), /fl on a modulator|ff: 0|fq: 0/, f.name);
+    }
+    const { Synth, log, nodes } = loadEngine();
+    const synth = createSynth(Synth, filters);
+    const { made } = filtersOf(synth, log, nodes, [0, 69, 127, T]);
+    synth.noteOff(0, 69, T + 0.5);
+    synth.allSoundOff(0);
+    for (const n of Object.values(nodes)) if (n.name.startsWith("osc") || n.name.startsWith("src")) n.onended?.();
+    assert.ok(log.some((c) => c[0] === made[0][0] && c[1] === "disconnect"), "the filter is disconnected once its oscillator ends");
   });
 });

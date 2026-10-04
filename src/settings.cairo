@@ -66,13 +66,15 @@
 //! | 17 | interim, engine limit: `pitch_ratio <= 160_000` | `TS: pitch_ratio out of range` |
 //! | 18 | interim, engine limit: `sustain <= 1_000_000` | `TS: sustain out of range` |
 //! | 19 | interim, engine limit: `-80_000 <= key_scale <= 80_000` | `TS: key_scale out of range` |
-//! | 20 | until #3: `filter` is `None` | `TS: filter unsupported` |
+//! | 20 | `Some(filter)`: `route == 0` (an audio output) | `TS: filter on modulator` |
+//! | 21 | `Some(filter)`: `cutoff > 0` | `TS: filter cutoff out of range` |
+//! | 22 | `Some(filter)`: `q > 0` | `TS: filter q out of range` |
 //!
 //! Only what the format or the engine requires is checked, never a limit for gas or size: the
 //! network prices those. The other numeric fields (`reverb`, `master_vol`, the upper end of
-//! `voices`, and the other operator values) take any value of their integer type: the engine takes
-//! them (`setMasterVol`, `setReverbLev` and `setVoices` assign them, and Web Audio clamps
-//! frequencies).
+//! `voices`, the other operator values, and a filter's cutoff and Q above 0) take any value of
+//! their integer type: the engine takes them (`setMasterVol`, `setReverbLev` and `setVoices`
+//! assign them, Web Audio clamps frequencies, and the engine clamps a filter's cutoff).
 //!
 //! Checks 15-19 exist only because the pinned engine fails beyond them. These five fields multiply
 //! into the gains and frequencies the engine passes to Web Audio, which requires finite values:
@@ -86,6 +88,15 @@
 //! take any table of at least one sample or harmonic, every `i8` sample and every `u16` harmonic.
 //! An all-zero wave is silent. Issue #2 removed v1's two `'TS: custom wave unsupported'` checks
 //! without changing the grammar or the format version.
+//!
+//! Filters (issue #3) need only checks 20-22, the engine's own rules for its fixed operator filter
+//! (fork #27, decisions D-007 and D-028): a filter only on an audio output, since FM and AM paths
+//! are never filtered and the engine rejects filter fields on a modulator; and a cutoff and a Q
+//! above 0, since the engine takes any finite value from 2^-126 and the smallest non-zero value,
+//! 0.0001, is far above that. Any `kind` and `key_track` is valid, and so is any cutoff and Q up
+//! to the `u32` maximum: the engine clamps a computed cutoff to 0.45 times the sample rate. Issue
+//! #3 replaced v1's `'TS: filter unsupported'` check without changing the grammar or the format
+//! version.
 
 use core::num::traits::Pow;
 use crate::types::{Filter, FilterKind, Operator, SynthSettings, Timbre, WaveDef, Waveform};
@@ -273,8 +284,16 @@ fn validate_operator(op: @Operator, t: u32, o: u32, n_waves: u32) {
     if *op.key_scale < -MAX_KEY_SCALE || *op.key_scale > MAX_KEY_SCALE {
         fail_at_op('TS: key_scale out of range', t, o);
     }
-    if op.filter.is_some() {
-        fail_at_op('TS: filter unsupported', t, o);
+    if let Option::Some(filter) = op.filter {
+        if route != 0 {
+            fail_at_op('TS: filter on modulator', t, o);
+        }
+        if *filter.cutoff == 0 {
+            fail_at_op('TS: filter cutoff out of range', t, o);
+        }
+        if *filter.q == 0 {
+            fail_at_op('TS: filter q out of range', t, o);
+        }
     }
 }
 
@@ -286,9 +305,8 @@ fn fail_at_op(msg: felt252, t: u32, o: u32) -> core::never {
     panic(array![msg, t.into(), o.into()])
 }
 
-/// Encodes `settings` as `SETTINGS` (the grammar above), covering every variant, including
-/// filters, which `validate` rejects until issue #3. Does not range-check fields (call `validate`
-/// first).
+/// Encodes `settings` as `SETTINGS` (the grammar above), covering every variant. Does not
+/// range-check fields (call `validate` first).
 pub fn encode(settings: @SynthSettings) -> ByteArray {
     let mut out: ByteArray = "";
     put_u(ref out, SETTINGS_FORMAT_VERSION);

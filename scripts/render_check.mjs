@@ -28,6 +28,21 @@
 //              renders it bit for bit; in Chromium and WebKit, samples where drum hits overlap can
 //              differ by a float32 rounding step (about 6e-8), a browser mixing effect.
 //
+// and the filters of issue #3 (the `filters` settings fixture, FILTER_SETTINGS), installed by the
+// player, each measured against the same voice without its filter (filtered / unfiltered, harmonic
+// by harmonic, is the filter's response; the master volume is low enough that the engine's
+// compressor is linear, which the check confirms):
+//
+//   low-, high- and band-pass (1 kHz; Q 0.7071, 0.7071, 4) on a sawtooth at A2: the response at
+//              every harmonic up to 12 kHz within 1 dB of the Web Audio biquad's (the RBJ formulas;
+//              Q in dB = 20 log10(q) for low- and high-pass), where that is above -30 dB
+//   key_track  a low-pass at 4x the note frequency at A2 and at A4: the same, at 440 and 1,760 Hz,
+//              so harmonic 8 (twice the cutoff) is attenuated alike at both notes (within 0.5 dB)
+//   clamp      a cutoff at the u32 maximum (429,496.7295 Hz), fixed or key-tracked, renders
+//              sample for sample as 21,600 Hz (0.45 x 48 kHz), unlike 20,000 Hz, with no NaN
+//   hi-hats    the high-passed metallic-noise hats (3 kHz): at least 24 dB less energy below
+//              1 kHz than above 4 kHz (issue #3's criterion); the same hats unfiltered, for scale
+//
 // The engine's noise and reverb are seeded (fork #7), so they are the same on every load at a given
 // sample rate; across browser engines the PCM differs, so the measurements use tolerances.
 // Playwright is not a dependency of this repository; point the script at an existing install, and
@@ -47,7 +62,7 @@ import { engineSource } from "./engine.mjs";
 import { GZIP_CLOSE, GZIP_OPEN, pageHtml, pageScripts } from "./page.mjs";
 import { encodeSettings } from "../player/encode.js";
 import { triangle4 } from "./reference_waves.mjs";
-import { REFERENCE_WAVES_SETTINGS } from "./settings_fixtures.mjs";
+import { FILTER_SETTINGS, REFERENCE_WAVES_SETTINGS } from "./settings_fixtures.mjs";
 
 const fixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/settings.json", import.meta.url), "utf8"));
 const textOf = (/** @type {string} */ name) => fixtures.valid.find((/** @type {any} */ f) => f.name === name).settings_text;
@@ -61,6 +76,21 @@ const controlText = encodeSettings({
   reverb: 0,
   timbres: [{ ...REFERENCE_WAVES_SETTINGS.timbres[0], operators: [{ ...REFERENCE_WAVES_SETTINGS.timbres[0].operators[0], wave: "Triangle" }] }],
 });
+// Filters (issue #3): FILTER_SETTINGS at a master volume low enough for the engine's compressor to be
+// linear (FILTER_VOL percent, and twice that to show it), and the same timbres without their filters.
+const FILTER_VOL = 2;
+/** @param {Partial<import("../player/settings.js").SynthSettings>} fields @param {(o: any, t: any) => any} [edit] */
+const filterText = (fields = {}, edit = (o) => o) => encodeSettings({
+  ...FILTER_SETTINGS, master_vol: FILTER_VOL, ...fields,
+  timbres: FILTER_SETTINGS.timbres.map((t) => ({ ...t, operators: t.operators.map((o) => edit(o, t)) })),
+});
+const filteredText = filterText();
+const unfilteredText = filterText({}, (o) => ({ ...o, filter: null }));
+const louderText = filterText({ master_vol: 2 * FILTER_VOL }, (o) => ({ ...o, filter: null }));
+const U32_MAX = 4294967295;
+/** Program 0 (the 1 kHz low-pass) with another cutoff, stored, and key tracking. */
+const cutoffText = (/** @type {number} */ cutoff, key_track = false) =>
+  filterText({}, (o, t) => (t.slot === 0 && !t.drum ? { ...o, filter: { ...o.filter, cutoff, key_track } } : o));
 // The player module, loaded as an inline module script that publishes its API for the test.
 const playerModule = readFileSync(new URL("../player/settings.js", import.meta.url), "utf8") +
   "\nwindow.__player = { decodeSettings, createSynth };\n";
@@ -113,6 +143,60 @@ function tableHarmonicDb(/** @type {number[]} */ t, /** @type {number} */ h) {
     return Math.hypot(re, im) * Math.abs(Math.sin(k) / k);
   };
   return 20 * Math.log10(c(h) / c(1));
+}
+/**
+ * The Web Audio biquad's response in dB at `f` (the spec's RBJ formulas at 48 kHz) for a cutoff or
+ * centre `f0` and the linear Q `q` the player passes: TinySynth gives low- and high-pass
+ * Q = 20 log10(q) dB, whose alpha is sin(w0) / (2 x 10^(Q/20)) = sin(w0) / (2q), and band-pass Q = q.
+ */
+function biquadDb(/** @type {"LowPass" | "HighPass" | "BandPass"} */ kind, /** @type {number} */ f0, /** @type {number} */ q, /** @type {number} */ f) {
+  const w0 = (2 * Math.PI * f0) / SR, c = Math.cos(w0), alpha = Math.sin(w0) / (2 * q);
+  const b = kind === "LowPass" ? [(1 - c) / 2, 1 - c, (1 - c) / 2] : kind === "HighPass" ? [(1 + c) / 2, -(1 + c), (1 + c) / 2] : [alpha, 0, -alpha];
+  const a = [1 + alpha, -2 * c, 1 - alpha];
+  const w = (2 * Math.PI * f) / SR;
+  const mag = (/** @type {number[]} */ k) => Math.hypot(k[0] + k[1] * Math.cos(w) + k[2] * Math.cos(2 * w), k[1] * Math.sin(w) + k[2] * Math.sin(2 * w));
+  return 20 * Math.log10(mag(b) / mag(a));
+}
+/**
+ * A filter's measured response at each harmonic of `f0` up to 12 kHz: filtered / unfiltered, in dB,
+ * over 0.5 s from 0.3 s, with the biquad's expected response; `[harmonic, measured, expected]`.
+ */
+function response(/** @type {number[]} */ filtered, /** @type {number[]} */ unfiltered, /** @type {number} */ f0, /** @type {(f: number) => number} */ expected) {
+  const out = [];
+  for (let h = 1; h * f0 <= 12000; h++) {
+    out.push([h, 20 * Math.log10(amplitude(filtered, h * f0, 0.3, SR / 2) / amplitude(unfiltered, h * f0, 0.3, SR / 2)), expected(h * f0)]);
+  }
+  return out;
+}
+/** The largest |measured - expected| where the expected response is above -30 dB. */
+const worstError = (/** @type {number[][]} */ r) => Math.max(...r.filter(([, , e]) => e > -30).map(([, m, e]) => Math.abs(m - e)));
+/** Energy below `lo` Hz over energy above `hi` Hz, in dB, over 2^14 samples from `a` s (a radix-2 FFT). */
+function bandRatioDb(/** @type {number[]} */ x, /** @type {number} */ a, /** @type {number} */ lo, /** @type {number} */ hi) {
+  const n = 1 << 14, re = new Float64Array(n), im = new Float64Array(n), from = Math.round(a * SR);
+  for (let i = 0; i < n; i++) re[i] = x[from + i] ?? 0;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) [re[i], re[j], im[i], im[j]] = [re[j], re[i], im[j], im[i]];
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len;
+    for (let i = 0; i < n; i += len) {
+      for (let k = 0; k < len / 2; k++) {
+        const wr = Math.cos(ang * k), wi = Math.sin(ang * k), p = i + k, q = p + len / 2;
+        const tr = re[q] * wr - im[q] * wi, ti = re[q] * wi + im[q] * wr;
+        re[q] = re[p] - tr; im[q] = im[p] - ti; re[p] += tr; im[p] += ti;
+      }
+    }
+  }
+  let low = 0, high = 0;
+  for (let k = 0; k <= n / 2; k++) {
+    const f = (k * SR) / n, e = re[k] * re[k] + im[k] * im[k];
+    if (f < lo) low += e;
+    else if (f > hi) high += e;
+  }
+  return 10 * Math.log10(high / low);
 }
 /** The fraction of the samples between two times above the midpoint of their range: a pulse's width. */
 function duty(/** @type {number[]} */ x, /** @type {number} */ a, /** @type {number} */ b) {
@@ -229,6 +313,40 @@ try {
   const pcmDiffering = first.pcm.filter((v, i) => !Object.is(v, second.pcm[i])).length;
   const songRms = Math.sqrt(first.pcm.reduce((a, v) => a + v * v, 0) / first.pcm.length);
 
+  // Filters (issue #3): each filtered voice against itself unfiltered.
+  const pcm = async (/** @type {string} */ text, /** @type {number[]} */ n, dur = 1) => (await render(text, [n], dur)).pcm;
+  /** @type {Record<string, [number[], number[]]>} */
+  const pairs = {};
+  for (const [name, program, note] of /** @type {Array<[string, number, number]>} */ ([["lp", 0, 45], ["hp", 1, 45], ["bp", 2, 45], ["kt45", 3, 45], ["kt69", 3, 69]])) {
+    pairs[name] = [await pcm(filteredText, [0, program, note, 0.05, 0]), await pcm(unfilteredText, [0, program, note, 0.05, 0])];
+  }
+  const louder = await pcm(louderText, [0, 0, 45, 0.05, 0]);
+  const linearDb = 20 * Math.log10(amplitude(louder, 110, 0.3, SR / 2) / amplitude(pairs.lp[1], 110, 0.3, SR / 2));
+  const [lpOp, hpOp, bpOp, ktOp] = FILTER_SETTINGS.timbres.slice(0, 4).map((t) => /** @type {any} */ (t.operators[0].filter));
+  const fx = (/** @type {number} */ v) => v / 10000;
+  const curve = (/** @type {any} */ f, /** @type {number} */ f0) => (/** @type {number} */ hz) => biquadDb(f.kind, f.key_track ? fx(f.cutoff) * f0 : fx(f.cutoff), fx(f.q), hz);
+  const lp = response(...pairs.lp, 110, curve(lpOp, 110));
+  const hp = response(...pairs.hp, 110, curve(hpOp, 110));
+  const bp = response(...pairs.bp, 110, curve(bpOp, 110));
+  const kt45 = response(...pairs.kt45, 110, curve(ktOp, 110));
+  const kt69 = response(...pairs.kt69, 440, curve(ktOp, 440));
+  const at = (/** @type {number[][]} */ r, /** @type {number} */ h) => /** @type {number[]} */ (r.find(([k]) => k === h));
+  // The 0.45 x SR clamp: the cutoff at the u32 maximum, fixed and key-tracked, as 21,600 Hz.
+  const a4 = /** @type {number[]} */ ([0, 0, 69, 0.05, 0]);
+  const clampMax = await pcm(cutoffText(U32_MAX), a4);
+  const clampKey = await pcm(cutoffText(U32_MAX, true), a4);
+  const clamp216 = await pcm(cutoffText(216000000), a4);
+  const clamp200 = await pcm(cutoffText(200000000), a4);
+  const nans = [clampMax, clampKey].reduce((a, x) => a + x.filter((v) => !Number.isFinite(v)).length, 0);
+  // The hats, filtered and not: the hit from note-on.
+  const hats = [];
+  for (const note of [42, 46]) {
+    hats.push([note, bandRatioDb(await pcm(filteredText, [9, 0, note, 0.05, 0], 0.5), 0.05, 1000, 4000),
+      bandRatioDb(await pcm(unfilteredText, [9, 0, note, 0.05, 0], 0.5), 0.05, 1000, 4000)]);
+  }
+  const dbLine = (/** @type {string} */ name, /** @type {number[][]} */ r, /** @type {number} */ h, tol = 1) => /** @type {[string, number, (v: number) => boolean, string]} */ (
+    [name, at(r, h)[1], (v) => Math.abs(v - at(r, h)[2]) <= tol, `${at(r, h)[2].toFixed(1)} +- ${tol}`]);
+
   /** @type {Array<[string, number, (v: number) => boolean, string]>} */
   const checks = [
     ["lead mean pitch (cents from A4)", m.leadMeanCents, (v) => Math.abs(v) <= 3, "|x| <= 3"],
@@ -250,12 +368,34 @@ try {
     [`two loads: generated buffers that differ (of ${names.length}: ${names.join(", ")})`, buffersDiffer, (v) => v === 0, "0"],
     [`two loads: largest sample difference (${pcmDiffering} of ${first.pcm.length} differ)`, pcmDiff, (v) => v <= 1e-6, "<= 1e-6"],
     ["two loads: the render is not silent (RMS)", songRms, (v) => v > 0.01, "> 0.01"],
+    ["filters: compressor linear (2x master vol, dB)", linearDb, (v) => Math.abs(v - 20 * Math.log10(2)) <= 0.05, "6.02 +- 0.05"],
+    ["low-pass 1 kHz: worst error, 110 Hz-12 kHz (dB)", worstError(lp), (v) => v <= 1, "<= 1"],
+    dbLine("low-pass 1 kHz: at 3,960 Hz (dB)", lp, 36),
+    ["high-pass 1 kHz: worst error, 110 Hz-12 kHz (dB)", worstError(hp), (v) => v <= 1, "<= 1"],
+    dbLine("high-pass 1 kHz: at 220 Hz (dB)", hp, 2),
+    ["band-pass 1 kHz Q 4: worst error (dB)", worstError(bp), (v) => v <= 1, "<= 1"],
+    dbLine("band-pass 1 kHz Q 4: at 990 Hz (dB)", bp, 9),
+    dbLine("band-pass 1 kHz Q 4: at 220 Hz (dB)", bp, 2),
+    dbLine("band-pass 1 kHz Q 4: at 3,960 Hz (dB)", bp, 36),
+    ["key-tracked low-pass x4 at A2: worst error (dB)", worstError(kt45), (v) => v <= 1, "<= 1"],
+    ["key-tracked low-pass x4 at A4: worst error (dB)", worstError(kt69), (v) => v <= 1, "<= 1"],
+    dbLine("key-tracked x4: harmonic 8 at A2 (dB)", kt45, 8),
+    ["key-tracked x4: harmonic 8, A4 minus A2 (dB)", at(kt69, 8)[1] - at(kt45, 8)[1], (v) => Math.abs(v) <= 0.5, "0 +- 0.5"],
+    ["clamp: u32 max cutoff = 21,600 Hz (samples that differ)", clampMax.filter((v, i) => !Object.is(v, clamp216[i])).length, (v) => v === 0, "0"],
+    ["clamp: key-tracked u32 max = 21,600 Hz (differ)", clampKey.filter((v, i) => !Object.is(v, clamp216[i])).length, (v) => v === 0, "0"],
+    ["clamp: 20,000 Hz differs (samples that differ)", clamp200.filter((v, i) => !Object.is(v, clamp216[i])).length, (v) => v > 0, "> 0"],
+    ["clamp: non-finite samples", nans, (v) => v === 0, "0"],
+    ["clamp: the render is not silent (RMS)", Math.sqrt(clampMax.reduce((a, v) => a + v * v, 0) / clampMax.length), (v) => v > 1e-4, "> 1e-4"],
+    ...hats.flatMap(([note, got, control]) => /** @type {Array<[string, number, (v: number) => boolean, string]>} */ ([
+      [`hat ${note}, 3 kHz high-pass: >4 kHz over <1 kHz (dB)`, got, (v) => v >= 24, ">= 24"],
+      [`hat ${note} unfiltered (control, dB)`, control, (v) => v < got, `< ${got.toFixed(1)}`],
+    ])),
   ];
   for (const [name, value, ok, want] of checks) {
     const pass = ok(value);
     if (!pass) failed++;
     const shown = value && Math.abs(value) < 1e-3 ? value.toExponential(2) : value.toFixed(4);
-    console.log(`${pass ? "PASS" : "FAIL"}  ${name.padEnd(38)} ${shown.padStart(12)}   want ${want}`);
+    console.log(`${pass ? "PASS" : "FAIL"}  ${name.padEnd(50)} ${shown.padStart(12)}   want ${want}`);
   }
   if (errors.length) {
     failed++;

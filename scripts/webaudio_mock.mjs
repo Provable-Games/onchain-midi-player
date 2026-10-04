@@ -58,6 +58,15 @@ export function webAudioMock() {
   class Gain extends Node {
     constructor() { super("gain"); this.gain = new Param(this.name + ".gain", 1); }
   }
+  class Biquad extends Node {
+    constructor() {
+      super("biquad");
+      this.frequency = new Param(this.name + ".frequency", 350);
+      this.Q = new Param(this.name + ".Q", 1);
+    }
+    /** @param {string} t */
+    set type(t) { log.push([this.name, "type", t]); this.kind = t; }
+  }
   class Ctx {
     constructor() {
       this.sampleRate = 8000; this.currentTime = 0; this.state = "running"; this.outputLatency = 0;
@@ -68,6 +77,7 @@ export function webAudioMock() {
     createGain() { return new Gain(); }
     createOscillator() { return new Osc(); }
     createBufferSource() { return new Src(); }
+    createBiquadFilter() { return new Biquad(); }
     /** @param {number} ch @param {number} len */
     createBuffer(ch, len) { const d = Array.from({ length: ch }, () => new Float32Array(len)); return { length: len, getChannelData: (/** @type {number} */ i) => d[i] }; }
     createStereoPanner() { const n = new Node("pan"); return Object.assign(n, { pan: new Param(n.name + ".pan", 0) }); }
