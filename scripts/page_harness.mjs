@@ -5,7 +5,10 @@
 // at once, as a browser does; the player then runs. Once the inflated engine has defined
 // `WebAudioTinySynth`, it is either replaced by a recording fake (`engine: "fake"`) or kept and
 // recorded (`engine: "real"`, on a WebAudio mock whose 60 ms sequencer interval the test drives by
-// hand with `advance`). If the engine did not load, `WebAudioTinySynth` stays undefined.
+// hand with `advance`). If the engine did not load, `WebAudioTinySynth` stays undefined. Timeouts
+// (the art restarts) run only when a test calls `runTimers`; intervals (the engine's sequencer and
+// the player's polling of `startTime`) run on every 60 ms step of `advance`, in the order they were
+// set, so the engine moves `startTime` before the player reads it.
 
 import vm from "node:vm";
 import { ART_OPEN, MIDI_OPEN, SETTINGS_OPEN } from "./page.mjs";
@@ -171,8 +174,10 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
 
   /** @type {Array<() => void>} */
   let ready = [];
-  /** @type {Map<number, {fn: () => void, delay: number}>} */
+  /** @type {Map<number, {fn: () => void, delay: number, at: number}>} at: the AudioContext time when set */
   const timers = new Map();
+  /** @type {Map<number, {fn: () => void, delay: number}>} the engine's and the page's intervals */
+  const intervals = new Map();
   let timerId = 0;
   /** @type {string[]} */
   const consoleErrors = [];
@@ -180,8 +185,6 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
   const synths = [];
   /** @type {any[][]} */
   const calls = [];
-  /** @type {(() => void) | null} */
-  let interval = null;
   /** @type {El[]} */
   const created = [];
 
@@ -205,8 +208,13 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
         if (type === "DOMContentLoaded") ready.push(fn);
       },
     },
-    setTimeout: (/** @type {() => void} */ fn, /** @type {number} */ delay) => { timers.set(++timerId, { fn, delay }); return timerId; },
+    setTimeout: (/** @type {() => void} */ fn, /** @type {number} */ delay) => {
+      timers.set(++timerId, { fn, delay, at: synths.length ? synths[0].getAudioContext().currentTime : 0 });
+      return timerId;
+    },
     clearTimeout: (/** @type {number} */ id) => { timers.delete(id); },
+    setInterval: (/** @type {() => void} */ fn, /** @type {number} */ delay) => { intervals.set(++timerId, { fn, delay }); return timerId; },
+    clearInterval: (/** @type {number} */ id) => { intervals.delete(id); },
     atob, btoa, TextEncoder, TextDecoder,
     console: { error: (/** @type {any} */ e) => consoleErrors.push(String((e && e.message) || e)), log() {}, warn() {} },
   };
@@ -216,12 +224,7 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
   let audio = null;
   if (engine === "real") {
     audio = webAudioMock();
-    Object.assign(sandbox, {
-      AudioContext: audio.AudioContext,
-      performance: { now: () => 0 },
-      setInterval: (/** @type {() => void} */ fn) => { interval = fn; return 1; },
-      clearInterval() {},
-    });
+    Object.assign(sandbox, { AudioContext: audio.AudioContext, performance: { now: () => 0 } });
   }
   vm.createContext(sandbox);
   // The shim, as the page runs it while parsing <head>: it inflates the engine, which runs at once.
@@ -264,11 +267,6 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
       if (constructError) throw new Error(constructError);
       const ctx = {
         state: "suspended", currentTime: 1.5, ...(outputLatency === null ? {} : { outputLatency }),
-        createGain: () => ({
-          gain: { value: 1 },
-          connect: (/** @type {any} */ to) => calls.push(["connect", to.name]),
-          disconnect: () => calls.push(["disconnect", "chvol (replaced)"]),
-        }),
         resume: () => {
         calls.push(["resume"]);
         if (resumeError) return Promise.reject(new Error(resumeError));
@@ -276,21 +274,17 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
         return Promise.resolve();
       } };
       /** @type {Record<string, any>} */
-      const synth = { opts, ctx, maxTick: 0, playTime: 0, playTick: 0, tick2Time: 0.01, timbres: [] };
-      // Channel nodes, whose pending automation the player cancels on ■.
-      const param = (/** @type {string} */ name, /** @type {number} */ ch) => ({ cancelScheduledValues: (/** @type {number} */ t) => calls.push(["cancel", name, ch, t]) });
-      synth.chvol = Array.from({ length: 16 }, (_, ch) => ({ gain: { value: 1 }, disconnect: () => calls.push(["disconnect", "chvol", ch]) }));
-      synth.out = { name: "out" };
-      synth.chmod = Array.from({ length: 16 }, (_, ch) => ({ gain: param("chmod", ch) }));
-      synth.chpan = Array.from({ length: 16 }, (_, ch) => ({ name: `chpan${ch}`, pan: param("chpan", ch) }));
+      const synth = { opts, ctx, maxTick: 0, play: 0, startTime: /** @type {number | null} */ (null), timbres: [] };
       const record = (/** @type {string} */ name, /** @type {(...a: any[]) => void} */ f = () => {}) => (/** @type {any[]} */ ...args) => { calls.push([name, ...args]); f(...args); };
       Object.assign(synth, {
         getAudioContext: () => ctx,
+        // The engine's public status; startTime as TinySynth sets it: tick 0 sounds 0.1 s after playMIDI().
+        getPlayStatus: () => ({ play: synth.play, maxTick: synth.maxTick, curTick: 0, startTime: synth.play ? synth.startTime : null }),
         setQuality: record("setQuality"), setMasterVol: record("setMasterVol"), setReverbLev: record("setReverbLev"),
         setVoices: record("setVoices"), setTimbre: record("setTimbre"), setLoop: record("setLoop"), setLoopEnd: record("setLoopEnd"),
-        loadMIDI: record("loadMIDI", (/** @type {Uint8Array} */ bytes) => { synth.maxTick = 4242; synth.playTick = 0; synth.midi = bytes; }),
-        playMIDI: record("playMIDI", () => { synth.playTime = ctx.currentTime + 0.1; }),
-        stopMIDI: record("stopMIDI"),
+        loadMIDI: record("loadMIDI", (/** @type {Uint8Array} */ bytes) => { synth.maxTick = 4242; synth.play = 0; synth.midi = bytes; }),
+        playMIDI: record("playMIDI", () => { synth.play = 1; synth.startTime = ctx.currentTime + 0.1; }),
+        stopMIDI: record("stopMIDI", () => { synth.play = 0; }),
       });
       calls.push(["new", { ...opts }]);
       synths.push(synth);
@@ -308,6 +302,7 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     consoleErrors,
     uncaught,
     timers,
+    intervals,
     audio,
     /** Whether the inflated engine defined WebAudioTinySynth. */
     engineLoaded: loaded,
@@ -330,18 +325,67 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
         t.fn();
       }
     },
-    /** Fires the onload handler of every image created so far (images "decode" on demand here). */
-    loadImages() {
-      for (const img of created.splice(0)) if (img.onload) img.onload();
+    /**
+     * Advances the AudioContext clock in `step` increments, running each interval when its own
+     * period has passed (the engine's every 60 ms, the player's poll every 50 ms) and the timeouts
+     * as they fall due (runDue). Returns what runDue returned, in order.
+     */
+    run(/** @type {number} */ seconds, step = 0.005) {
+      const ctx = synths[0].getAudioContext();
+      const end = ctx.currentTime + seconds;
+      /** @type {Array<{due: number, images: string[]}>} */
+      const ran = [];
+      while (ctx.currentTime < end - 1e-9) {
+        ctx.currentTime = Math.round((ctx.currentTime + step) * 1e6) / 1e6;
+        for (const iv of [...intervals.values()]) {
+          const t = /** @type {any} */ (iv);
+          if (t.last === undefined) t.last = ctx.currentTime - step;
+          if (ctx.currentTime - t.last >= iv.delay / 1000 - 1e-9) {
+            t.last = ctx.currentTime;
+            iv.fn();
+          }
+        }
+        ran.push(...this.runDue());
+      }
+      return ran;
+    },
+    /**
+     * Runs the timeouts that are due by the AudioContext clock (the harness runs the page clock with
+     * it), and those they set that are due too. Returns, in order, the time each was due and the
+     * images its callback created (an art restart creates one).
+     */
+    runDue() {
+      const now = synths[0].getAudioContext().currentTime;
+      /** @type {Array<{due: number, images: string[]}>} */
+      const ran = [];
+      for (;;) {
+        const due = [...timers].find(([, t]) => t.at + t.delay / 1000 <= now + 1e-9);
+        if (!due) return ran;
+        timers.delete(due[0]);
+        const from = created.length;
+        due[1].fn();
+        ran.push({ due: due[1].at + due[1].delay / 1000, images: created.slice(from).map((img) => img.src) });
+      }
+    },
+    /**
+     * Fires the onload handler of every image created so far (images "decode" on demand here), in
+     * creation order, or newest first with `reverse`.
+     */
+    loadImages({ reverse = false } = {}) {
+      const imgs = created.splice(0);
+      for (const img of reverse ? imgs.reverse() : imgs) if (img.onload) img.onload();
     },
     /** Lets pending promise callbacks run. */
     flush: () => new Promise((resolve) => setImmediate(resolve)),
-    /** Real engine only: advances the AudioContext clock in 60 ms steps, running the sequencer. */
+    /**
+     * Advances the AudioContext clock in 60 ms steps, running every interval at each step: the real
+     * engine's sequencer, then the player's polling.
+     */
     advance(/** @type {number} */ seconds) {
       const ctx = synths[0].getAudioContext();
       for (let t = 0; t < seconds; t += 0.06) {
         ctx.currentTime += 0.06;
-        if (interval) interval();
+        for (const { fn } of [...intervals.values()]) fn();
       }
     },
   };

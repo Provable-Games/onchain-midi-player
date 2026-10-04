@@ -86,6 +86,57 @@ describe("the pinned engine behaves as the README's MIDI contract says", () => {
     assert.ok(near(e.offs[1] - second.t, 0.5), `note-off ${e.offs[1] - second.t} s after the note`);
   });
 
+  test("leading rest: tick 0 sounds 0.1 s after playMIDI (startTime), the first event at its own tick; startTime moves to the next pass ahead of it", () => {
+    // A note at tick 96 (0.5 s), its note-off at 144, End-of-Track at 192: a 1 s pass with a 0.5 s rest.
+    const midi = smf({ ppq: PPQ, tracks: [[[96, 0x90, 60, 100], [48, 0x80, 60, 0], [48, ...EOT]]] });
+    const e = engine();
+    e.ctx.currentTime = 1;
+    e.play(midi);
+    assert.ok(near(e.synth.getPlayStatus().startTime, 1.1), "startTime: tick 0, 0.1 s after playMIDI");
+    /** @type {Array<[number, number]>} [audio time, startTime] at each change */
+    const moves = [];
+    while (e.ctx.currentTime <= 3.5) {
+      const at = e.ctx.currentTime;
+      e.run(at); // one scheduler step at `at`
+      const st = e.synth.getPlayStatus().startTime;
+      if (!moves.length || !near(moves.at(-1)?.[1] ?? NaN, st)) moves.push([at, st]);
+    }
+    assert.deepEqual(e.notes.slice(0, 3).map((n) => Math.round((n.t - 1.1) * 1e9) / 1e9), [0.5, 1.5, 2.5], "the rest is kept on every pass, the first included");
+    assert.deepEqual(moves.map(([, st]) => Math.round(st * 1e9) / 1e9), [1.1, 2.1, 3.1], "one startTime per pass");
+    for (const [at, st] of moves.slice(1)) assert.ok(st - at > 0 && st - at <= 0.2 + 0.25 + 1e-9, `moved to ${st} at ${at}: ahead, by at most the 0.2 s lookahead plus the trailing rest`);
+    e.synth.stopMIDI();
+    assert.equal(e.synth.getPlayStatus().startTime, null, "null once stopped");
+  });
+
+  test("a song with no events other than tempo stays stopped: no startTime", () => {
+    const e = engine();
+    e.play(smf({ ppq: PPQ, tracks: [[[0, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20], [192, ...EOT]]] }));
+    e.run(1);
+    const { play, startTime } = e.synth.getPlayStatus();
+    assert.deepEqual([play, startTime, e.notes.length], [0, null, 0]);
+  });
+
+  test("■ (stopMIDI): every voice stops at once, drum hits scheduled ahead included; queued volume, pan and modulation changes are cancelled", () => {
+    // PPQ 100 at 120 BPM: tick 0, CC7 100, a held note and a kick; tick 50 (0.25 s), a snare, and
+    // CC7 0, CC10 0 and CC1 127 for channel 1; End-of-Track at 200.
+    const midi = smf({ ppq: 100, tracks: [[[0, 0xb0, 7, 100], [0, 0x90, 60, 100], [0, 0x99, 36, 100], [50, 0x99, 38, 100], [0, 0xb0, 7, 0], [0, 0xb0, 10, 0], [0, 0xb0, 1, 127], [150, ...EOT]]] });
+    const e = engine();
+    e.play(midi);
+    e.run(0.18); // the snare (due at 0.35 s) and the channel changes are scheduled 0.2 s ahead
+    const now = e.ctx.currentTime;
+    assert.ok(e.notes.some((n) => n.ch === 9 && n.n === 38 && n.t > now), "the snare is scheduled ahead");
+    const queued = (/** @type {string} */ param) => e.log.some((c) => c[0] === param && c[1] === "set" && c[3] > now);
+    const params = [`${e.synth.chvol[0].name}.gain`, `${e.synth.chpan[0].name}.pan`, `${e.synth.chmod[0].name}.gain`];
+    assert.ok(params.every(queued), "volume, pan and modulation changes queued");
+    const from = e.log.length;
+    e.synth.stopMIDI();
+    const after = e.log.slice(from);
+    for (const n of e.notes) {
+      for (const name of [...n.oscs, ...n.srcs]) assert.ok(after.some((c) => c[0] === name && c[1] === "stop" && c[2] === undefined), `channel ${n.ch + 1} note ${n.n}: ${name} stopped at once`);
+    }
+    for (const param of params) assert.ok(after.some((c) => c[0] === param && c[1] === "cancel" && c[2] === now), `${param}: cancelled from now`);
+  });
+
   test("a track that ends early sends no more events, but a note it left sounding keeps sounding", () => {
     // Track 1: a note with no note-off, End-of-Track at 96 (0.5 s). Track 2: End-of-Track at 384 (2 s).
     const midi = smf({ format: 1, ppq: PPQ, tracks: [[[0, 0x90, 60, 100], [96, ...EOT]], [[384, ...EOT]]] });

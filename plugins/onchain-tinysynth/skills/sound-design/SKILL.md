@@ -54,7 +54,8 @@ The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MA
 
 - A `Timbre` replaces program `slot` (0–127), or drum note `slot` (35–81) when `drum` is true, for the whole song. The MIDI selects it the ordinary way: a program change, or that note on channel 10. Each `(drum, slot)` pair may appear once.
 - It has 1 to `MAX_OPERATORS` operators, TinySynth's 13-parameter model. Fractional fields are fixed point: stored value / 10,000 (`FIXED_POINT_SCALE`), so `5_000` is 0.5.
-- An operator's frequency is note frequency × `ratio` + `offset_hz`. `ratio` 0 fixes the frequency at `offset_hz`: that is how LFOs and pitched drums are built.
+- A carrier's (`route` 0) frequency is the note frequency × `ratio` + `offset_hz`. `ratio` 0 fixes the frequency at `offset_hz`: that is how LFOs and pitched drums are built.
+- A modulator's frequency is its target's frequency × `ratio` + `offset_hz`, and an FM modulator's depth also scales with its target's frequency. So `ratio` compounds along an FM chain: each operator runs at the note frequency × the product of the ratios from the carrier down to it, so three operators at `ratio` 10 put the last at 1,000 × the note. Deep chains of high ratios are what overflow the engine, which is why `ratio` has an interim engine bound; keep chain ratios small, and preview them at the highest notes the score plays.
 - Rules the engine imposes:
   - Modulators (`route` 1–10 for FM, 11–18 for AM) must come after the operator they target, so operator 1 always has `route` 0.
   - The first operator's `decay` × 3.5 is the length of every drum hit.
@@ -64,8 +65,8 @@ The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MA
 
 ## Not accepted in v1
 
-- Custom waves (a non-empty `waves`, or `Waveform::Custom`): `'TS: custom wave unsupported'` until issue [#2](https://github.com/Provable-Games/onchain-tinysynth/issues/2), which needs fork issue [#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26).
-- Filters (`filter: Some(...)`): `'TS: filter unsupported'` until issue [#3](https://github.com/Provable-Games/onchain-tinysynth/issues/3), which needs fork issue [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27).
+- Custom waves (a non-empty `waves`, or `Waveform::Custom`): `'TS: custom wave unsupported'` until issue [#2](https://github.com/Provable-Games/onchain-tinysynth/issues/2), which needs fork issue [#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26). The interim engine pin already has that API (README: [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds)); the class and the player use it once issue #2 lands.
+- Filters (`filter: Some(...)`): `'TS: filter unsupported'` until issue [#3](https://github.com/Provable-Games/onchain-tinysynth/issues/3), which needs fork issue [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27). The interim engine pin already has its fixed operator filters (README: [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-settings-and-custom-sounds)); the class and the player use them once issue #3 lands.
 - Their encoding is already in the format, so lifting these checks changes neither the grammar nor the format version.
 - `WhiteNoise` and `MetallicNoise` are accepted, but their buffers vary slightly per page load until fork issue [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7).
 

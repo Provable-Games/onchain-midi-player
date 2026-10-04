@@ -248,8 +248,10 @@ describe("the page's player script, fake engine", () => {
     assert.deepEqual(Buffer.from(after[0][1]), Buffer.from(c.midi_b64, "base64"));
     assert.deepEqual(after[1], ["setLoop", 1]);
     assert.deepEqual(after[2], ["setLoopEnd", 4242], "setLoopEnd(synth.maxTick) after loadMIDI");
-    // The art restarts after playTime - currentTime (0.1 s) plus the output latency.
+    // The art restarts after startTime - currentTime (0.1 s) plus the output latency, and the player
+    // polls startTime to restart it at every pass.
     assert.equal(h.timers.size, 1);
+    assert.deepEqual([...h.intervals.values()].map((i) => i.delay), [50]);
     assert.ok(Math.abs([...h.timers.values()][0].delay - 125) < 1e-9);
     const before = h.art();
     h.runTimers();
@@ -270,7 +272,7 @@ describe("the page's player script, fake engine", () => {
     assert.equal("outputLatency" in h.synths[0].getAudioContext(), false);
     await h.flush();
     assert.deepEqual(h.calls.slice(-4).map((x) => x[0]), ["loadMIDI", "setLoop", "setLoopEnd", "playMIDI"]);
-    // playTime - currentTime (0.1 s), plus nothing: not NaN, which setTimeout would treat as 0.
+    // startTime - currentTime (0.1 s), plus nothing: not NaN, which setTimeout would treat as 0.
     assert.equal(h.timers.size, 1);
     assert.ok(Math.abs([...h.timers.values()][0].delay - 100) < 1e-9);
     h.runTimers();
@@ -279,23 +281,19 @@ describe("the page's player script, fake engine", () => {
     assert.deepEqual(h.consoleErrors, []);
   });
 
-  test("toggle: ■ stops and cancels a pending art restart; ▶ again restarts from the top with the same synth", async () => {
+  test("toggle: ■ stops and cancels a pending art restart and the polling; ▶ again restarts from the top with the same synth", async () => {
     const h = runPage(htmlOf(CASES.default_120bpm));
     h.ready();
     h.click();
     await h.flush();
     assert.equal(h.timers.size, 1);
+    assert.equal(h.intervals.size, 1);
     const before = h.calls.length;
     h.click(); // ■
-    const stop = h.calls.slice(before);
-    assert.deepEqual(stop[0], ["stopMIDI"]);
-    for (let ch = 0; ch < 16; ch++) {
-      // A fresh volume node into the channel's panner, the old one (and every voice on it) cut off,
-      // and the pending modulation and pan changes dropped.
-      assert.deepEqual(stop.slice(1 + 4 * ch, 5 + 4 * ch), [["connect", `chpan${ch}`], ["disconnect", "chvol", ch], ["cancel", "chmod", ch, 1.5], ["cancel", "chpan", ch, 1.5]]);
-    }
-    assert.equal(stop.length, 1 + 4 * 16);
+    // Only stopMIDI: the engine cuts every voice and drops the controller changes it had scheduled.
+    assert.deepEqual(h.calls.slice(before), [["stopMIDI"]]);
     assert.equal(h.timers.size, 0, "pending art restart cancelled");
+    assert.equal(h.intervals.size, 0, "polling stopped");
     assert.equal(h.els.icon.attributes.d, PLAY_ICON);
     assert.equal(h.els.play.attributes["aria-label"], "Play");
     const n = h.calls.length;
@@ -499,7 +497,7 @@ describe("the page's player script, real engine", () => {
       assert.equal(synth.maxTick, c.midi_max_tick);
       assert.equal(synth.loopEnd, c.midi_max_tick, "setLoopEnd(maxTick)");
       assert.deepEqual(h.calls.filter((x) => x[0] !== "new").map((x) => x[0]), ["loadMIDI", "setLoop", "setLoopEnd", "playMIDI"]);
-      // Art restart delay: TinySynth's scheduling offset plus the output latency.
+      // Art restart delay: startTime (tick 0, 0.1 s ahead) less currentTime, plus the output latency.
       const delay = [...h.timers.values()][0].delay;
       assert.ok(Math.abs(delay - (0.1 + 0.02) * 1000) < 1e-6, `art restart after ${delay} ms`);
       const start = ctx.currentTime + 0.1;
@@ -508,7 +506,7 @@ describe("the page's player script, real engine", () => {
       const firsts = synth.sent.filter((/** @type {any} */ [m]) => m[0] === 0x90 && m[1] === 72 && m[2] > 0).map((/** @type {any} */ x) => x[1]);
       const passStarts = firsts.filter((/** @type {number} */ t, /** @type {number} */ i) => i === 0 || t - firsts[i - 1] > c.midi_loop_seconds / 2);
       assert.ok(passStarts.length >= 3, `${passStarts.length} passes`);
-      assert.ok(Math.abs(passStarts[0] - start) < 1e-9, "the first pass starts at playTime");
+      assert.ok(Math.abs(passStarts[0] - start) < 1e-9, "the first pass starts at startTime");
       for (let i = 1; i < passStarts.length; i++) {
         const period = passStarts[i] - passStarts[i - 1];
         assert.ok(Math.abs(period - c.midi_loop_seconds) < 1e-9, `pass ${i}: ${period} s, expected ${c.midi_loop_seconds} s`);
@@ -523,7 +521,8 @@ describe("the page's player script, real engine", () => {
   }
 
   test("a leading rest is kept: the first note sounds after it, the art restarts at tick 0", async () => {
-    // PPQ 96, 120 BPM by default: a note at tick 96 (0.5 s) and End-of-Track at tick 192 (1 s).
+    // PPQ 96, 120 BPM by default: a note at tick 96 (0.5 s) and End-of-Track at tick 192 (1 s). The
+    // engine keeps the rest (loopEnd set); the player only times the art to startTime.
     const midi = smf({ ppq: 96, tracks: [[[96, 0x90, 60, 100], [48, 0x80, 60, 0], [48, 0xff, 0x2f, 0]]] });
     const c = CASES.default_120bpm;
     const h = runPage(edited(c, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0 });
@@ -532,6 +531,7 @@ describe("the page's player script, real engine", () => {
     const ctx = h.synths[0].getAudioContext();
     const tick0 = ctx.currentTime + 0.1;
     await h.flush();
+    assert.ok(Math.abs(h.synths[0].getPlayStatus().startTime - tick0) < 1e-9, "startTime is tick 0");
     assert.ok(Math.abs([...h.timers.values()][0].delay - 100) < 1e-6, "art restart at tick 0 (+100 ms)");
     h.advance(2.5);
     const ons = h.synths[0].sent.filter((/** @type {any} */ [m]) => m[0] === 0x90 && m[2] > 0).map((/** @type {any} */ x) => x[1]);
@@ -555,7 +555,143 @@ describe("the page's player script, real engine", () => {
     hits.slice(0, 3).forEach((t, i) => assert.ok(Math.abs(t - 0.5 * (i + 1)) < 1e-9, `hit ${i} at ${t} s, expected ${0.5 * (i + 1)} s`));
   });
 
-  test("■ cuts off drum voices and notes scheduled ahead, and the controller changes TinySynth had scheduled", async () => {
+  /** A 1 s loop with a 0.5 s leading rest: a note at tick 96, End-of-Track at tick 192 (PPQ 96). */
+  const restLoop = () => edited(CASES.default_120bpm, { midi: smf({ ppq: 96, tracks: [[[96, 0x90, 60, 100], [48, 0x80, 60, 0], [48, 0xff, 0x2f, 0]]] }).toString("base64") });
+
+  test("the art restarts at every pass: at the pass's startTime plus the output latency, as on ▶", async () => {
+    const h = runPage(restLoop(), { engine: "real", outputLatency: 0.03 });
+    h.ready();
+    h.click();
+    const synth = h.synths[0];
+    const ctx = synth.getAudioContext();
+    const tick0 = ctx.currentTime + 0.1;
+    await h.flush();
+    /** The pending restart: when it fires, in AudioContext time (the harness's clocks run together). */
+    const due = () => {
+      assert.equal(h.timers.size, 1, "one restart pending");
+      return ctx.currentTime + [...h.timers.values()][0].delay / 1000;
+    };
+    assert.ok(Math.abs(due() - (tick0 + 0.03)) < 1e-9, "▶: tick 0 plus the output latency");
+    h.runTimers();
+    h.loadImages();
+    for (let pass = 1; pass <= 3; pass++) {
+      // startTime moves to the next pass when its last event is scheduled, 0.2 s ahead at most.
+      while (!h.timers.size) h.advance(0.06);
+      const start = synth.getPlayStatus().startTime;
+      assert.ok(Math.abs(start - (tick0 + pass)) < 1e-9, `pass ${pass} starts at tick 0 + ${start - tick0} s`);
+      assert.ok(start > ctx.currentTime, "seen before the pass starts");
+      assert.ok(Math.abs(due() - (start + 0.03)) < 1e-9, `pass ${pass}: the restart is timed to the pass's tick 0, plus the output latency`);
+      h.runTimers();
+      h.loadImages();
+      assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, pass + 1), `pass ${pass}: a new art timeline`);
+    }
+    assert.equal(h.page.body.filter((e) => e.tag === "img").length, 1);
+    h.advance(0.3);
+    assert.equal(h.timers.size, 0, "nothing more until the next pass");
+    h.click(); // ■
+    assert.deepEqual([...h.intervals.values()].map((i) => i.delay), [60], "■: only the engine's sequencer runs");
+    assert.deepEqual(h.consoleErrors, []);
+  });
+
+  test("a pass's restart whose timer fires late (a stalled page) is skipped; the next pass is timed", async () => {
+    const h = runPage(restLoop(), { engine: "real", outputLatency: 0 });
+    h.ready();
+    h.click();
+    const synth = h.synths[0];
+    const ctx = synth.getAudioContext();
+    const tick0 = ctx.currentTime + 0.1;
+    await h.flush();
+    h.runTimers(); // the ▶ restart
+    h.loadImages();
+    while (!h.timers.size) h.advance(0.06); // pass 1's restart is pending, due at tick0 + 1
+    while (ctx.currentTime < tick0 + 1.1) h.advance(0.06); // the page stalls past it
+    const before = h.art();
+    h.runTimers(); // fires 0.1 s late
+    h.loadImages();
+    assert.equal(h.art(), before, "no late restart: the art keeps its phase");
+    while (!h.timers.size) h.advance(0.06);
+    assert.ok(Math.abs(ctx.currentTime + [...h.timers.values()][0].delay / 1000 - (tick0 + 2)) < 1e-9, "pass 2 is timed");
+    h.runTimers();
+    h.loadImages();
+    assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, 2), "pass 2 restarts the art");
+  });
+
+  test("restart images that decode out of order: an older one never replaces a newer one", async () => {
+    const h = runPage(restLoop(), { engine: "real", outputLatency: 0 });
+    h.ready();
+    h.click();
+    await h.flush();
+    h.runTimers(); // the ▶ restart: image r=1 starts decoding
+    while (!h.timers.size) h.advance(0.06);
+    h.runTimers(); // pass 1's restart: image r=2, before r=1 has decoded
+    h.loadImages({ reverse: true }); // r=2 decodes first, then r=1
+    assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, 2), "the newer timeline stays");
+    assert.equal(h.page.body.filter((e) => e.tag === "img").length, 1);
+  });
+
+  test("a pass seen while a restart is pending waits for the next poll; a pass start already past is skipped", async () => {
+    const h = runPage(restLoop(), { engine: "real", outputLatency: 0 });
+    h.ready();
+    h.click();
+    const synth = h.synths[0];
+    const ctx = synth.getAudioContext();
+    const tick0 = ctx.currentTime + 0.1;
+    await h.flush();
+    // The ▶ restart stays pending while startTime moves to pass 1: the poll keeps it and adds none.
+    const first = [...h.timers.keys()][0];
+    while (synth.getPlayStatus().startTime < tick0 + 0.5) h.advance(0.06);
+    assert.deepEqual([...h.timers.keys()], [first], "the ▶ restart is kept, not replaced");
+    h.runTimers(); // the ▶ restart fires, and times the next pass at once: pass 1 is still ahead
+    assert.equal(h.timers.size, 1);
+    assert.ok(Math.abs(ctx.currentTime + [...h.timers.values()][0].delay / 1000 - (tick0 + 1)) < 1e-9, "pass 1 timed to its tick 0");
+    h.runTimers();
+    // A stalled page: no poll until pass 2 has started. Its start is then past: no late restart.
+    const [poll] = [...h.intervals].find(([, i]) => i.delay === 50) || [];
+    const saved = h.intervals.get(/** @type {number} */ (poll));
+    h.intervals.delete(/** @type {number} */ (poll));
+    while (ctx.currentTime < tick0 + 2.05) h.advance(0.06);
+    h.intervals.set(/** @type {number} */ (poll), /** @type {any} */ (saved));
+    h.advance(0.06);
+    assert.ok(Math.abs(synth.getPlayStatus().startTime - (tick0 + 2)) < 1e-9 && ctx.currentTime > tick0 + 2);
+    assert.equal(h.timers.size, 0, "pass 2 is skipped: the art keeps its phase");
+    while (!h.timers.size) h.advance(0.06);
+    assert.ok(Math.abs(ctx.currentTime + [...h.timers.values()][0].delay / 1000 - (tick0 + 3)) < 1e-9, "pass 3 is synced");
+  });
+
+  test("a 100 ms loop: the art restarts at every pass, though startTime moves on by two passes at a time", async () => {
+    // PPQ 100 at 120 BPM: a note at tick 0, its note-off at tick 1, End-of-Track at tick 20 (0.1 s).
+    // The engine schedules 0.2 s ahead, so one 60 ms step can move startTime on by two passes.
+    const midi = smf({ ppq: 100, tracks: [[[0, 0x90, 60, 100], [1, 0x80, 60, 0], [19, 0xff, 0x2f, 0]]] });
+    const h = runPage(edited(CASES.default_120bpm, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0.01 });
+    h.ready();
+    h.click();
+    const synth = h.synths[0];
+    const tick0 = synth.getAudioContext().currentTime + 0.1;
+    await h.flush();
+    /** @type {Array<{due: number, images: string[]}>} */
+    const ran = [];
+    /** @type {number[]} */
+    const seen = [synth.getPlayStatus().startTime];
+    // The clock in 5 ms steps: the engine's sequencer every 60 ms, the poll every 50 ms, and each
+    // timeout within 5 ms of its time, as in a browser that is not stalled.
+    for (let i = 0; i < 480; i++) {
+      ran.push(...h.run(0.005));
+      const st = synth.getPlayStatus().startTime;
+      if (st !== seen.at(-1)) seen.push(st);
+      h.loadImages();
+    }
+    assert.ok(seen.slice(1).some((st, i) => st - seen[i] > 0.15), "startTime moved on by two passes in one step");
+    // Every timeout created exactly one restart image (none skipped as late), for consecutive passes.
+    assert.ok(ran.every((r) => r.images.length === 1), `restart images per timeout: ${ran.map((r) => r.images.length).join(",")}`);
+    const passes = ran.map((r) => Math.round((r.due - 0.01 - tick0) * 1e6) / 1e5);
+    assert.ok(passes.length >= 20, `${passes.length} restarts`);
+    assert.deepEqual(passes, passes.map((_, k) => k), "one restart per pass, each at its tick 0 plus the output latency, none skipped");
+    assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, passes.length), "each restart's image was swapped in");
+    h.click(); // ■
+    assert.equal(h.timers.size, 0);
+  });
+
+  test("■ (the engine's stopMIDI) cuts drum hits scheduled ahead and the controller changes TinySynth had scheduled", async () => {
     // PPQ 100 at 120 BPM: CC7 100, a note and a drum hit at tick 0; a drum hit and CC7 0 at tick
     // 50 (0.25 s); End-of-Track at 200.
     const midi = smf({ ppq: 100, tracks: [[[0, 0xb0, 7, 100], [0, 0x90, 60, 100], [0, 0x99, 36, 100], [50, 0x99, 38, 100], [0, 0xb0, 7, 0], [100, 0x80, 60, 0], [50, 0xff, 0x2f, 0]]] });
@@ -566,24 +702,27 @@ describe("the page's player script, real engine", () => {
     const synth = h.synths[0];
     const log = h.audio.log;
     h.advance(0.18); // the hit at 0.35 s (0.1 s offset) is scheduled 0.2 s ahead, the mute too
-    const old = synth.chvol.map((/** @type {any} */ n) => n.name);
-    const drumGains = log.filter((/** @type {any[]} */ c) => c[1] === "connect" && c[2] === old[9]).map((/** @type {any[]} */ c) => c[0]);
+    const vols = synth.chvol.map((/** @type {any} */ n) => n.name);
+    const drumGains = log.filter((/** @type {any[]} */ c) => c[1] === "connect" && c[2] === vols[9]).map((/** @type {any[]} */ c) => c[0]);
     assert.equal(drumGains.length, 4, "both drum hits (2 operators each) feed channel 10's volume node");
-    const mute = log.find((/** @type {any[]} */ c) => c[0] === `${old[0]}.gain` && c[1] === "set" && c[2] === 0);
+    const sources = log.filter((/** @type {any[]} */ c) => c[1] === "connect" && drumGains.includes(c[2])).map((/** @type {any[]} */ c) => c[0]);
+    assert.equal(sources.length, 4, "a source per drum operator");
+    const mute = log.find((/** @type {any[]} */ c) => c[0] === `${vols[0]}.gain` && c[1] === "set" && c[2] === 0);
     assert.ok(mute && mute[3] > synth.getAudioContext().currentTime, "a future mute is pending");
     const from = log.length;
     h.click(); // ■
+    /** @type {any[][]} */
     const after = log.slice(from);
+    const now = synth.getAudioContext().currentTime;
+    for (const src of sources) assert.ok(after.some((c) => c[0] === src && c[1] === "stop" && c[2] === undefined), `${src}: stopped at once`);
     for (let ch = 0; ch < 16; ch++) {
-      assert.ok(after.some((/** @type {any[]} */ c) => c[0] === old[ch] && c[1] === "disconnect"), `channel ${ch}: old volume node cut off`);
-      assert.notEqual(synth.chvol[ch].name, old[ch]);
-      assert.ok(after.some((/** @type {any[]} */ c) => c[0] === synth.chvol[ch].name && c[1] === "connect" && c[2] === synth.chpan[ch].name), `channel ${ch}: new node to the panner`);
+      for (const param of [`${vols[ch]}.gain`, `${synth.chmod[ch].name}.gain`, `${synth.chpan[ch].name}.pan`]) {
+        assert.ok(after.some((c) => c[0] === param && c[1] === "cancel" && c[2] === now), `channel ${ch}: ${param} automation cancelled`);
+      }
     }
-    // The next ▶ plays through the new nodes.
-    h.click();
-    await h.flush();
-    h.advance(0.2);
-    assert.ok(log.slice(from).some((/** @type {any[]} */ c) => c[1] === "connect" && c[2] === synth.chvol[9].name), "new drum voices use the new node");
+    assert.deepEqual(synth.chvol.map((/** @type {any} */ n) => n.name), vols, "the channel nodes stay");
+    const { play, startTime } = synth.getPlayStatus();
+    assert.deepEqual([play, startTime], [0, null], "stopped: no startTime");
   });
 
   test("the custom timbres are installed in the real engine", async () => {
@@ -597,29 +736,31 @@ describe("the page's player script, real engine", () => {
     assert.equal(synth.useReverb, 0, "reverb 0: no convolver");
   });
 
-  test("a song with no events other than tempo: ▶ plays nothing and shows no error, the art restarts, ■ and ▶ still work", async () => {
+  test("a song with no events other than tempo: ▶ plays nothing and shows no error, the art restarts at once, ■ and ▶ still work", async () => {
     // checkMidi accepts it (a valid file with a loop of at least 50 ms). The engine (fork #9) leaves
-    // such a song stopped: playMIDI returns without setting playTime, so there is no tick 0 to time
-    // the art restart to, and the restart is not delayed (setTimeout takes the NaN delay as 0).
+    // such a song stopped: startTime is null, so there is no tick 0 to time the art restart to, and
+    // the player restarts the art at once.
     const songs = {
       "End-of-Track only": smf({ ppq: 96, tracks: [[[192, 0xff, 0x2f, 0]]] }),
       "tempo only": smf({ ppq: 96, tracks: [[[0, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20], [192, 0xff, 0x2f, 0]]] }),
     };
     for (const [label, midi] of Object.entries(songs)) {
-      const h = runPage(edited(CASES.default_120bpm, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0 });
+      const h = runPage(edited(CASES.default_120bpm, { midi: midi.toString("base64") }), { engine: "real", outputLatency: 0.02 });
       h.ready();
       for (const press of [1, 2]) {
         h.click(); // ▶
         await h.flush();
         const synth = h.synths[0];
-        assert.equal(synth.playing, 0, `${label}, ▶ ${press}: the engine stays stopped`);
+        assert.equal(synth.getPlayStatus().play, 0, `${label}, ▶ ${press}: the engine stays stopped`);
+        assert.equal(synth.getPlayStatus().startTime, null, `${label}, ▶ ${press}: no startTime`);
         assert.equal(h.els.icon.attributes.d, STOP_ICON, `${label}, ▶ ${press}: the toggle shows ■`);
-        assert.equal(h.timers.size, 1, `${label}, ▶ ${press}: an art restart is scheduled`);
+        assert.deepEqual([...h.timers.values()].map((t) => t.delay), [0], `${label}, ▶ ${press}: an art restart, at once`);
         h.runTimers();
         h.loadImages();
         assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, press), `${label}, ▶ ${press}: the art restarted`);
         h.advance(1);
         assert.deepEqual(synth.sent, [], `${label}, ▶ ${press}: nothing scheduled`);
+        assert.equal(h.timers.size, 0, `${label}, ▶ ${press}: no pass, no further restart`);
         h.click(); // ■
         assert.equal(h.els.icon.attributes.d, PLAY_ICON);
       }

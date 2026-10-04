@@ -1,13 +1,13 @@
 # Vendored engine and licenses
 
 The pinned TinySynth engine, from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>,
-at commit `4b29ff10d40989fd97967ed26ee4b2c95dbd8a26` on the fork's `improve/integration` branch:
+at commit `b198d6c54c76579a99da9a494c6e65ba25eb730d` on the fork's `improve/integration` branch:
 
-- `webaudio-tinysynth-4b29ff1.min.js`: the commit's own `webaudio-tinysynth.min.js` (36,960 bytes), byte-identical to
+- `webaudio-tinysynth-b198d6c.min.js`: the commit's own `webaudio-tinysynth.min.js` (43,355 bytes), byte-identical to
   rebuilding that commit's `webaudio-tinysynth.js` with its pinned build (`npm ci && npm run verify`, Terser 5.51.2).
-  SHA-256 `b49e8ceb802b7665cd6f66100dc390874c806a8894be464273d43c532940fc55`.
-- `webaudio-tinysynth-4b29ff1.NOTICE`: the commit's `NOTICE` (the fork's list of modifications), which goes into the
-  class's `license()` text. SHA-256 `56138bfee18a58897cd7bc09e537d40730b6a9f971d129a87dcdc33319be81c4`.
+  SHA-256 `59dfcfcd9f6d76014d77f98495b7e7c0106821357ff4aa12c4ed94095a4ee921`.
+- `webaudio-tinysynth-b198d6c.NOTICE`: the commit's `NOTICE` (the fork's list of modifications), which goes into the
+  class's `license()` text. SHA-256 `987122b008eb0461a7ebd316c43fa09f8aea4469744b83eb0b78a48c6a5dad2f`.
 - License: Apache License 2.0. Copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games (see the fork's NOTICE
   and this repository's [NOTICE](../../NOTICE)).
 
@@ -21,7 +21,7 @@ bytes. The engine tests and the render and page checks run the same file. The pi
 the one line `ENGINE_PIN` in [`scripts/engine.mjs`](../../scripts/engine.mjs), which checks both hashes on every load,
 so a mismatch fails before anything is generated. Nothing needs network access.
 
-To verify: `git -C <fork> show 4b29ff1:webaudio-tinysynth.min.js | sha256sum`.
+To verify: `git -C <fork> show b198d6c:webaudio-tinysynth.min.js | sha256sum`.
 
 ## Re-pinning
 

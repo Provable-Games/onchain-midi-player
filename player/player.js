@@ -21,13 +21,25 @@
  *    enabled.
  * 3. ▶ (a click or tap): the first one constructs TinySynth with the settings (`createSynth`).
  *    Every ▶ resumes the AudioContext inside the gesture, reloads the MIDI (back to tick 0 at the
- *    song's starting tempo), loops at End-of-Track (`setLoop(1)`, `setLoopEnd(maxTick)`), starts
- *    playback (keeping any rest before the first event), and restarts the art when tick 0 is
- *    heard: after TinySynth's scheduling offset (`playTime - currentTime`) plus the context's
- *    output latency.
- * 4. ■ stops playback, cutting off every voice (drums and notes scheduled ahead included), and
- *    cancels a pending art restart and the controller changes TinySynth had already scheduled. The
- *    art keeps running.
+ *    song's starting tempo), loops at End-of-Track (`setLoop(1)`, `setLoopEnd(maxTick)`) and starts
+ *    playback. With `loopEnd` set, the engine keeps any rest before the first event on every pass.
+ * 4. The art restarts when tick 0 is heard: at `getPlayStatus().startTime` (the AudioContext time
+ *    at which tick 0 of the current pass sounds) plus the context's output latency, or at once if
+ *    the engine is not playing (a song with no events but tempo, which it leaves stopped). Then it
+ *    restarts again at every pass: `startTime` moves to the next pass as soon as the current
+ *    pass's last event is scheduled (up to 0.2 s, plus any rest after that event, before the next
+ *    pass starts), and the player, polling it every 50 ms, restarts the art at the new time. That bounds
+ *    any drift between the image's clock and the audio clock to one pass; when the pass is a whole
+ *    multiple of the art's period, the art is already at its start there, so the restart is not
+ *    seen. At most one restart is pending; when it fires, the next is timed at once. On a short
+ *    loop, where startTime can move on by more than one pass between polls, the player walks pass
+ *    by pass (`checkMidi`'s pass length) from the last pass it timed. A pass start already past
+ *    when reached, or a pass's restart timer that fires more than 50 ms late (the page was
+ *    stalled), is skipped, so the art keeps its phase until the next pass rather than restarting
+ *    late. The restart on ▶ is never skipped.
+ * 5. ■ stops playback (TinySynth's `stopMIDI` cuts every voice, drum hits and notes scheduled
+ *    ahead included, and cancels the controller changes it had scheduled), and cancels the pending
+ *    art restart and the polling. The art keeps running.
  *
  * Plain browser JavaScript: no modules in the page, no eval, no network requests, no storage. Works
  * in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles
@@ -43,6 +55,11 @@ export const STOP_ICON = "M6 6h12v12H6z";
 /** The error shown when the engine did not load (it was not inflated, or failed when it ran). */
 export const ENGINE_MISSING = "engine: TinySynth did not load";
 
+/**
+ * A pass's art restart whose timer fires later than this after its time (a stalled page) is
+ * skipped: the art keeps its phase until the next pass rather than restarting late.
+ */
+const LATE_SECONDS = 0.05;
 /** A loop shorter than this would make TinySynth's scheduler spin; such MIDI is rejected. */
 const MIN_LOOP_SECONDS = 0.05;
 /**
@@ -238,21 +255,25 @@ export function startPlayer() {
     } catch (e) {
       console.error(e);
     }
+    let shown = 0; // the restart whose image is shown
     /**
      * Restarts the art: a new <img> with a distinct URL, swapped in once decoded (so the art never
-     * blinks out), unless ▶/■ was pressed again in the meantime.
+     * blinks out), unless ▶/■ was pressed again in the meantime, or a later restart's image is
+     * already shown (restarts at every pass can decode out of order).
      * @param {number} current the press that scheduled it
      */
     const restartArt = (current) => {
       if (!art) return;
+      const n = ++restarts;
       const img = document.createElement("img");
       img.alt = "";
       img.onload = () => {
-        if (current !== run || !art) return;
+        if (current !== run || n < shown || !art) return;
+        shown = n;
         art.replaceWith(img);
         art = img;
       };
-      img.src = artUrl(svg, ++restarts);
+      img.src = artUrl(svg, n);
     };
 
     // 2. The engine, settings and MIDI; on failure ▶ stays disabled and no synth is created.
@@ -260,21 +281,24 @@ export function startPlayer() {
     let settings;
     /** @type {Uint8Array} */
     let midi;
+    let pass = 0; // one pass in seconds, under the MIDI's tempo map: the engine's pass with loopEnd = maxTick
     try {
       // Missing if its gzip payload did not inflate (the shim logged why) or the engine failed.
       if (typeof (/** @type {any} */ (window).WebAudioTinySynth) != "function") throw new Error(ENGINE_MISSING);
       settings = decodeSettings($("settings").textContent || "");
       midi = decodeMidi($("midi").textContent || "");
+      pass = checkMidi(midi).seconds;
     } catch (e) {
       fail(e);
       return;
     }
 
-    // 3-4. The ▶/■ toggle.
+    // 3-5. The ▶/■ toggle, and the art restarts.
     /** @type {any} */
     let synth = null;
     let playing = false;
-    let timer = 0;
+    let timer = 0; // the pending art restart, or 0
+    let poll = 0; // the interval that follows startTime to each pass
     /** @param {boolean} on */
     const setPlaying = (on) => {
       playing = on;
@@ -284,23 +308,11 @@ export function startPlayer() {
     button.onclick = () => {
       const current = ++run;
       window.clearTimeout(timer);
+      window.clearInterval(poll);
+      timer = 0;
       if (playing) {
         setPlaying(false);
         synth.stopMIDI();
-        // stopMIDI leaves drum voices, and notes already scheduled ahead, playing, and TinySynth
-        // schedules controller changes ahead and never cancels them. Every voice reaches the output
-        // through its channel's volume node, so replace those nodes: that cuts off every voice and
-        // the volume changes they carried. Then drop the pending pan and modulation changes.
-        const ctx = synth.getAudioContext();
-        for (let ch = 0; ch < 16; ch++) {
-          const vol = ctx.createGain();
-          vol.gain.value = synth.chvol[ch].gain.value;
-          vol.connect(synth.chpan[ch] || synth.out);
-          synth.chvol[ch].disconnect();
-          synth.chvol[ch] = vol;
-          synth.chmod[ch].gain.cancelScheduledValues(ctx.currentTime);
-          if (synth.chpan[ch]) synth.chpan[ch].pan.cancelScheduledValues(ctx.currentTime);
-        }
         return;
       }
       try {
@@ -311,19 +323,40 @@ export function startPlayer() {
           if (current !== run) return;
           synth.loadMIDI(midi);
           synth.setLoop(1);
-          synth.setLoopEnd(synth.maxTick);
-          // loadMIDI leaves playTick at the first event's tick. Keep it: the original engine's
-          // playMIDI reset it to 0 when that was End-of-Track's tick.
-          const first = synth.playTick;
+          synth.setLoopEnd(synth.getPlayStatus().maxTick);
           synth.playMIDI();
-          // The art restarts with tick 0: TinySynth plays from playTime, plus the output latency.
-          const delay = synth.playTime - ctx.currentTime + (ctx.outputLatency || 0);
-          timer = window.setTimeout(() => restartArt(current), Math.max(0, delay * 1000));
-          // TinySynth plays the first event at playTime whatever its tick, so a leading rest
-          // would be lost on the first pass. Restore it, timed as TinySynth times it on every
-          // later pass (at the starting 120 BPM: no tempo event can precede the first event).
-          synth.playTick = first;
-          synth.playTime += first * synth.tick2Time;
+          /** @type {number | null | undefined} the pass start the art was last timed to (or skipped) */
+          let synced;
+          /**
+           * Times an art restart to tick 0 of a pass, as heard, unless one is pending. On ▶
+           * (`first`): the current pass, at once without a pass start. Afterwards: the pass after
+           * the last one synced, once startTime has reached it. On a short loop startTime can move
+           * on by more than one pass between calls, so this walks pass by pass from the last one
+           * synced, skipping any whose start is already past, and takes the engine's own value
+           * when it reaches it.
+           * @param {boolean} [first]
+           */
+          const sync = (first) => {
+            const latest = synth.getPlayStatus().startTime;
+            const lag = ctx.outputLatency || 0;
+            let start = latest;
+            if (timer || latest === synced) return;
+            if (!first && latest !== null && synced != null) {
+              start = synced + pass;
+              while (start < latest - 1e-6 && start + lag < ctx.currentTime) start += pass;
+              if (start > latest - 1e-6) start = latest;
+            }
+            synced = start;
+            const delay = start === null ? 0 : start - ctx.currentTime + lag;
+            if (!first && (start === null || delay < 0)) return;
+            timer = window.setTimeout(() => {
+              timer = 0;
+              if (first || ctx.currentTime - start - lag < LATE_SECONDS) restartArt(current);
+              sync();
+            }, Math.max(0, delay * 1000));
+          };
+          sync(true);
+          poll = window.setInterval(() => sync(), 50);
         }).catch((/** @type {unknown} */ e) => {
           setPlaying(false);
           fail(e);
