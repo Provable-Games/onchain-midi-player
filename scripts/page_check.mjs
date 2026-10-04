@@ -681,9 +681,14 @@ async function checkAudioFailures() {
 /** Range checks are Cairo's job: SETTINGS that parse but break a range rule (quality 2) still play. */
 async function checkRangeOnly() {
   const c = CASES.default_120bpm;
-  console.log("range-only violation (quality 2): not the page's to reject (data: URI, offline)");
+  // Rules the engine does not enforce: a volume one past the interim engine limit, and program 0 twice
+  // (the second wins). Since fork T5 the engine itself rejects some values the class rejects, such as
+  // quality 2 (its constructor throws, so the page fails closed): those cannot show the page's part.
+  console.log("range-only violations (volume past its interim limit, a duplicate slot): not the page's to reject (data: URI, offline)");
+  const op = (/** @type {number} */ volume) => `0,0,${volume},10000,0,0,100,100,0,500,10000,10000,0,0`;
+  const settings = ` 1,1,30,40,64,0,2,0,0,1,${op(1000001)},0,0,1,${op(5000)}`;
   const { context, page, logged } = await open({ offline: true });
-  await page.goto(dataUrl(htmlOf(c, " 1,2,30,40,64,0,0" + c.d.slice(c.d.indexOf(MIDI_OPEN)))));
+  await page.goto(dataUrl(htmlOf(c, settings + c.d.slice(c.d.indexOf(MIDI_OPEN)))));
   await ready(page);
   check(!(await state(page)).disabled && (await logged()).length === 0, "▶ enabled, no error");
   await startPlayback(page);
@@ -725,7 +730,7 @@ async function checkExtremes() {
     await page.goto(dataUrl(PAGE + dFragment(midi, c.settings).d + c.svg));
     await ready(page);
     await startPlayback(page);
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(1000 + 250 * c.settings.timbres.length); // each timbre's notes last 0.25 s
     const st = await state(page);
     const sends = await page.evaluate(() => /** @type {any} */ (window).__check.sends);
     const played = notes.every(([status, note]) => sends.some((/** @type {number[]} */ m) => m[0] === status && m[1] === note && m[2] > 0));
