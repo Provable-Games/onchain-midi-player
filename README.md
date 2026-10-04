@@ -84,19 +84,19 @@ Alignment. The consumer's own pieces (`'{' ... base64,'`, `S`, `',' <pad>`) must
 - **Settings and MIDI.** It parses `SETTINGS` strictly (`decodeSettings`: the grammar, canonical integers, Cairo type bounds, count bounds, known tags, every token consumed). Range and semantic validation is Cairo's alone: the class runs `settings::validate` before writing `SETTINGS`, and the page does not repeat it (spec Q4, reversed). It decodes the MIDI block (strict base64 after trimming the alignment spaces) and checks it (`checkMidi`). The check guarantees that TinySynth's parser reads the file as written and that looping is safe; its rules and error messages are in the [MIDI contract](#midi-contract).
 - **Fail closed (spec D9).** If the engine did not load (its gzip payload did not inflate, or the engine failed when it ran: `engine: TinySynth did not load`), and on any parse or MIDI error, ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and logged. No synth is created. The art stays: the player that shows it is not compressed, so it never depends on inflation.
 - **▶** (a click or tap) constructs TinySynth on the first press (`createSynth`), resumes the `AudioContext` inside the gesture, reloads the MIDI (back to tick 0 at the song's starting tempo), loops at End-of-Track with `setLoop(1)` and `setLoopEnd(maxTick)`, and starts playback. With `loopEnd` set, TinySynth keeps any rest before the first event, on the first pass as on every later one. The player then restarts the art when tick 0 is heard: at TinySynth's `getPlayStatus().startTime` (the `AudioContext` time at which tick 0 of the current pass sounds, 100 ms after `playMIDI()`) plus `AudioContext.outputLatency`, it re-creates the `<img>` with a distinct but equivalent URL (`data:image/svg+xml;r=<n>;base64,...`), so the browser starts a new animation timeline, and swaps it in once decoded. A song with no events other than tempo, which TinySynth leaves stopped, has no `startTime`: the art restarts at once.
-- **Every pass** restarts the art the same way. `startTime` moves to the next pass up to 0.2 s before that pass starts; the player polls it every 50 ms and times a restart to each new value. That bounds the drift between the image's animation clock and the audio clock to what one pass lets build up (see [Browser validation](#browser-validation)). When the pass is a whole multiple of the art's period, the art is back at its start there anyway, so the restart is not seen; otherwise the art jumps back to its start at every loop point, and an animation longer than the pass never finishes (see [Recommendations](#recommendations-optional)). At most one restart is pending: a pass seen while one is pending waits for the next poll, and a pass start already past when it is seen (a stalled page) is skipped, so the art keeps its phase until the next pass rather than restarting late. Each restart is a distinct `data:` URL, and the replaced `<img>` is removed from the page, so the browser can release it.
+- **Every pass** restarts the art the same way. `startTime` moves to the next pass up to 0.2 s before that pass starts; the player polls it every 50 ms and times a restart to each new value. That bounds the drift between the image's animation clock and the audio clock to what one pass lets build up (see [Browser validation](#browser-validation)). When the pass is a whole multiple of the art's period, the art is back at its start there anyway, so the restart is not seen; otherwise the art jumps back to its start at every loop point, and an animation longer than the pass never finishes (see [Recommendations](#recommendations-optional)). At most one restart is pending; when it fires, the player times the next one at once. On a short loop `startTime` can move on by more than one pass between polls (the engine schedules 0.2 s ahead), so the player walks pass by pass, using the pass length `checkMidi` computes from the MIDI's tempo map, from the last pass it timed. A pass start already past when it is reached (a stalled page) is skipped, so the art keeps its phase until the next pass rather than restarting late. Each restart is a distinct `data:` URL, and the replaced `<img>` is removed from the page, so the browser can release it.
 - **■** stops playback, and cancels a pending art restart and the polling. TinySynth's `stopMIDI` cuts every voice, including drum hits and notes already scheduled ahead, and cancels the volume, pan and modulation changes it had scheduled, so nothing reaches the next playback. The art keeps running.
 - Plain JavaScript (`// @ts-check` and JSDoc), no modules, no `eval`, no network requests, no storage or cookies. It works in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles and `data:` images.
 
-Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) records them), against the uncompressed `page.5` (with the engine at fork commit `b70ba90`) and the previous build, `tinysynth-4b29ff1+page.7`. Now is `tinysynth-4b99a2b+page.8`. The `4b99a2b` engine adds the fork's lifecycle and hard stop (T4), the leading rest and `startTime` (T3.1) and the custom-wave API (T11): it is 42,421 bytes, 5,461 more than `4b29ff1`'s 36,960, and its gzip payload is 12,405 bytes, 1,999 more. The player is 145 bytes shorter: the stop workaround and the leading-rest rewrite are gone, and it follows `startTime` to every pass instead. So `PAGE` is 2,520 bytes and the segment 4,480 bytes longer than `page.7`'s, and `license()`, which holds the fork's NOTICE, 907 bytes longer:
+Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) records them), against the uncompressed `page.5` (with the engine at fork commit `b70ba90`) and the previous build, `tinysynth-4b29ff1+page.7`. Now is `tinysynth-b198d6c+page.8`. The `b198d6c` engine adds the fork's lifecycle and hard stop (T4), the leading rest and `startTime` (T3.1), the custom-wave API (T11) and fixed operator filters (T12): it is 43,355 bytes, 6,395 more than `4b29ff1`'s 36,960, and its gzip payload is 12,803 bytes, 2,397 more. The player is 6 bytes longer: the stop workaround and the leading-rest rewrite are gone, and it follows `startTime` to every pass instead. So `PAGE` is 3,204 bytes and the segment 5,696 bytes longer than `page.7`'s, and `license()`, which holds the fork's NOTICE, 907 bytes longer:
 
 | | `page.5` (bytes) | `4b29ff1+page.7` (bytes) | Now (bytes) |
 | --- | --- | --- | --- |
-| `PAGE` | 44,298 | 24,714 | 27,234 |
-| of which the engine | 37,060 | 13,876: 10,406 bytes of gzip, as base64 | 16,540: 12,405 bytes of gzip, as base64 |
+| `PAGE` | 44,298 | 24,714 | 27,918 |
+| of which the engine | 37,060 | 13,876: 10,406 bytes of gzip, as base64 | 17,072: 12,803 bytes of gzip, as base64 |
 | of which the gunzip shim (minified) | | 3,247 | 3,247 |
-| of which the player (minified) | 6,047 | 6,173 | 6,028 |
-| `animation_url_segment()` | 78,804 | 43,988 | 48,468 |
+| of which the player (minified) | 6,047 | 6,173 | 6,179 |
+| `animation_url_segment()` | 78,804 | 43,988 | 49,684 |
 | `license()` | 2,594 | 6,417 | 7,324 |
 
 The player does not re-check settings ranges: dropping that re-check (and the install path's custom-wave guards, which only repeated Cairo rules) saved 1,512 bytes of the uncompressed `PAGE` (45,810 to 44,298). The build fails if a validation rule reappears in the player.
@@ -124,12 +124,12 @@ The engine was 37,060 of the uncompressed page's 44,298 bytes, and the segment's
 - **What is not compressed:** the player, so the art and its errors never depend on inflation. Compressing the player with the engine would save about 1.7 KB of `PAGE` (about 3 KB of segment, 7%), but needs a second, raw copy of the art and error code to keep D9.
 - **Provenance.** The shim is derived from [fflate](https://github.com/101arrowz/fflate) 0.8.3's `gunzipSync` (MIT, Copyright (c) 2026 Arjun Barrett; the license is [vendored](tests/vendor/fflate-0.8.3.LICENSE) and in `license()`), trimmed to one-shot inflation, with the trailer checks added; [`player/gunzip.js`](player/gunzip.js) lists every change. The build minifies it with the pinned Terser and checks the result against `SHIM_PIN` in [`scripts/page.mjs`](scripts/page.mjs) (SHA-256 `bf6316a818dc7519afafa5af7bf826af5280c9950d208f0a2822f4295ab0d4df`), so the bytes that inflate the engine in every token change only deliberately.
 - **Compression.** The pinned fflate (pure JavaScript, in `package-lock.json` with Terser) compresses at level 9 with no timestamp and no file name, so the payload depends only on the engine bytes, never on the system zlib or the OS.
-- **Cost in the browser:** inflating the payload takes about 2 ms cold (0.4 ms warm) in headless Chromium, and the page is ready (▶ enabled) about 3 ms later than the uncompressed one: a median of 12.1 ms instead of 9.2 ms after navigation, as an offline `data:` URI. These were measured with the `b70ba90` engine's 9,862-byte payload; the `4b29ff1` engine's 10,406-byte one inflated in the same time (1.4 ms cold and 0.2-0.3 ms warm for both, measured side by side). With the current 12,405-byte payload, `npm run page-check` measured the page ready 11.9 ms after navigation in headless Chromium; it prints the figure for its `data:` page.
+- **Cost in the browser:** inflating the payload takes about 2 ms cold (0.4 ms warm) in headless Chromium, and the page is ready (▶ enabled) about 3 ms later than the uncompressed one: a median of 12.1 ms instead of 9.2 ms after navigation, as an offline `data:` URI. These were measured with the `b70ba90` engine's 9,862-byte payload; the `4b29ff1` engine's 10,406-byte one inflated in the same time (1.4 ms cold and 0.2-0.3 ms warm for both, measured side by side). With the current 12,803-byte payload, `npm run page-check` measured the page ready 9.7 ms after navigation in headless Chromium; it prints the figure for its `data:` page.
 
 | Hash (SHA-256) | Of | Where |
 | --- | --- | --- |
-| `8b5600498c365ce1ee2c912f0149c10e8dac156ab1ff0c37d0f7b7d4fb04e490` | the engine, decompressed: the fork's `webaudio-tinysynth.min.js` at `4b99a2b` (42,421 bytes) | `script_sha256()`, `page_data::ENGINE_SHA256` |
-| `c05e7fd8ab9d1c9106f01a6f0f5c4ebeb2d7b5950624b69592777c02b83b7715` | the gzip payload in `PAGE` (12,405 bytes) | `page_data::GZIP_SHA256`, `page_data::GZIP_LEN` |
+| `59dfcfcd9f6d76014d77f98495b7e7c0106821357ff4aa12c4ed94095a4ee921` | the engine, decompressed: the fork's `webaudio-tinysynth.min.js` at `b198d6c` (43,355 bytes) | `script_sha256()`, `page_data::ENGINE_SHA256` |
+| `3560697643dedbde3b05398c3f88a6b8b40bfba38c73bf0ebfa5c9b05da3126d` | the gzip payload in `PAGE` (12,803 bytes) | `page_data::GZIP_SHA256`, `page_data::GZIP_LEN` |
 | `bf6316a818dc7519afafa5af7bf826af5280c9950d208f0a2822f4295ab0d4df` | the minified gunzip shim | `SHIM_PIN` in [`scripts/page.mjs`](scripts/page.mjs) |
 
 ## Interface
@@ -142,7 +142,7 @@ Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`.
 | `midi_segment(midi: ByteArray, settings: SynthSettings) -> ByteArray` | `b64(b64(D))`: the token's settings and MIDI blocks, then opens the art block. Validates `settings` and encodes only per-token data. |
 | `base64(data: ByteArray) -> ByteArray` | Standard RFC 4648 base64 with `=` padding, for consumers encoding their own JSON pieces. The same encoder `midi_segment` uses. |
 | `script_sha256() -> u256` | Constant SHA-256 of the embedded engine JS, decompressed (big-endian). |
-| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-4b99a2b+page.8'`, an interim build (see [Versions](#versions) and [Build pipeline](#build-pipeline)). |
+| `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-b198d6c+page.8'`, an interim build (see [Versions](#versions) and [Build pipeline](#build-pipeline)). |
 | `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice, then the MIT licenses of fflate, from which the page's gunzip shim derives, and of game-components, whose base64 encoder the class embeds. |
 
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
@@ -231,8 +231,8 @@ fn token_uri(
 
 | Append | Word-aligned | Unaligned |
 | --- | --- | --- |
-| The 48,468-byte `animation_url_segment()` ([`tests/test_page_gas.cairo`](tests/test_page_gas.cairo)) | 2.5M | 10.6M |
-| Every append of a full-size Beast's `token_uri`: two 40,420-character `b64(S)`, the segment, `midi_segment`, the small pieces (the example's `gas_t4_appends_*`) | 16.4M | 31.1M |
+| The 49,684-byte `animation_url_segment()` ([`tests/test_page_gas.cairo`](tests/test_page_gas.cairo)) | 2.5M | 10.9M |
+| Every append of a full-size Beast's `token_uri`: two 40,420-character `b64(S)`, the segment, `midi_segment`, the small pieces (the example's `gas_t4_appends_*`) | 16.4M | 31.5M |
 
 The consumer chooses where its large pieces land by adding spaces between JSON tokens, 3 at a time: 3 spaces are one 3-byte group, so they keep every piece a multiple of 3, and they encode to the constant `'ICAg'`, so they are never base64-encoded at call time. It does this in two places:
 
@@ -249,7 +249,7 @@ L2 gas, measured with snforge 0.64.0 and Scarb 2.20.1, with the optimized encode
 
 ### Measuring: Sierra gas, not Cairo steps
 
-Every figure here is Sierra gas, snforge's default. The accounting method changes the number about 2.5×. Measured on the example's full-size Beast (`snforge test gas_t4_token_uri`, the call with its test setup): about 300M with `--tracked-resource sierra-gas` and about 764M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M: that account's class is Sierra 1.6, which forces Cairo-steps (VM) accounting for the whole transaction. The same artifact produced the earlier 1.7–1.86B Beasts figures (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)).
+Every figure here is Sierra gas, snforge's default. The accounting method changes the number about 2.5×. Measured on the example's full-size Beast (`snforge test gas_t4_token_uri`, the call with its test setup): about 301M with `--tracked-resource sierra-gas` and about 765M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M: that account's class is Sierra 1.6, which forces Cairo-steps (VM) accounting for the whole transaction. The same artifact produced the earlier 1.7–1.86B Beasts figures (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)).
 
 - Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
 - Treat devnet estimates through its predeployed accounts as inflated by about 2.0–2.6×.
@@ -261,7 +261,7 @@ Through `IOnchainTinySynthLibraryDispatcher` on the declared class, as a consume
 
 | Entry point | L2 gas | Base64 share |
 | --- | --- | --- |
-| `animation_url_segment()` | 7.1M: 0.3M to materialize the constant, the rest to return its 48,468 bytes | none |
+| `animation_url_segment()` | 7.3M: 0.3M to materialize the constant, the rest to return its 49,684 bytes | none |
 | `midi_segment(midi, settings)` | 1.6M with no MIDI and the default settings; 60.7M with a score the size of the largest Beast score (3,716 bytes) and the 3 reference sounds (324.3M with the stand-in); 2,304.6M with that score and the largest valid `SETTINGS` in v1 (156,489 bytes; table below) | 53-98% |
 | `base64(data)` | 0.2M for 3 bytes, 3.8M for 1,023 bytes, and about 3.6K per input byte for large inputs (20.5M for 1,023 bytes with the stand-in) | nearly all |
 | `script_sha256()` | 0.1M | none |
@@ -292,22 +292,22 @@ Token 4 of the example ([`examples/beast_consumer`](examples/beast_consumer/READ
 - **sounds:** the 3 reference sounds, 334 bytes of `SETTINGS`;
 - **layout:** word-aligned.
 
-Its `token_uri` is 139,349 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
+Its `token_uri` is 140,565 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
 
 | Piece | L2 gas | Of which base64 | With the stand-in encoder |
 | --- | --- | --- | --- |
-| **Whole `BeastLikeNft.token_uri`** | **287.6M** | **239.5M (83%)** | **1,414.6M** |
-| `animation_url_segment()` (library call) | 7.1M | none | 6.2M |
+| **Whole `BeastLikeNft.token_uri`** | **287.9M** | **239.5M (83%)** | **1,414.6M** |
+| `animation_url_segment()` (library call) | 7.3M | none | 6.2M |
 | `midi_segment()` (library call) | 60.1M | 54.6M | 323.7M |
 | The consumer's base64 (4 library calls): `b64(svg)` 82.6M, `b64(S)` 110.2M, the head and `'}'` about 1M | about 194M | 184.9M | about 1,059M |
-| The appends (word-aligned layout; 31.1M unaligned) | 16.4M | none | 16.0M |
+| The appends (word-aligned layout; 31.5M unaligned) | 16.4M | none | 16.0M |
 | The rest: SVG and score constants, members, name check | about 10M | none | about 10M |
 
-The stand-in column was measured with the engine at fork commit `b70ba90`, whose segment is 5,824 bytes shorter; it is not re-measured. With that engine the optimized encoder gave 286.2M for the whole call, 6.2M for the segment and 16.0M (29.9M unaligned) for the appends. The `page.8` segment is 4,480 bytes longer than `page.7`'s: the whole call costs 1.4M more than with `page.7` (286.2M), the segment's library call 0.7M (6.4M) and the appends 0.6M (15.8M, 30.4M unaligned). `midi_segment` and the second `b64(S)`, which follow the segment, now start at the 15th byte of a 31-byte word (the 30th with `page.7`, the 13th with `page.6`).
+The stand-in column was measured with the engine at fork commit `b70ba90`, whose segment is 7,040 bytes shorter; it is not re-measured. With that engine the optimized encoder gave 286.2M for the whole call, 6.2M for the segment and 16.0M (29.9M unaligned) for the appends. The `page.8` segment is 5,696 bytes longer than `page.7`'s: the whole call costs 1.7M more than with `page.7` (286.2M), the segment's library call 0.9M (6.4M) and the appends 0.6M (15.8M, 30.4M unaligned). `midi_segment` and the second `b64(S)`, which follow the segment, now start at the 22nd byte of a 31-byte word (the 30th with `page.7`, the 13th with `page.6`).
 
 - **A full-size Beast costs 0.29B, well under budget:** less than a third of the 1B target, or of Starknet's limit of 1.1×10^9 L2 gas per transaction. With the stand-in encoder it cost 1.41B, over both. The projection from the encoder's lab figures (62% less encoding gas) was about 0.57B; measured, encoding costs about 83% less per byte than with the stand-in.
 - **Most of it is still the SVG.** Base64 is 83% of the total, and the two passes over the SVG are 67%. These are the same two passes Beasts' metadata makes today: it encodes the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 84M (346M with the stand-in).
-- **The sample tokens are cheaper:** a 1 KB SVG and a 112-byte MIDI cost 31.5M to 31.7M (90.2M to 90.6M with the stand-in and the `b70ba90` engine).
+- **The sample tokens are cheaper:** a 1 KB SVG and a 112-byte MIDI cost 31.8M to 32.0M (90.2M to 90.6M with the stand-in and the `b70ba90` engine).
 
 ### The size of `SETTINGS`: no byte cap
 
@@ -326,7 +326,7 @@ The stand-in column was measured with the engine at fork commit `b70ba90`, whose
 - **TinyChip's long noise can be carried exactly.** Its 32,767-step LFSR table, as `i8` samples of ±64, is 114,766 bytes of `SETTINGS` with one drum timbre on it. In token 4 in place of the reference sounds, the `token_uri` costs 2.44B, 2.15B more than with the reference sounds.
 - **Larger art.** Each byte of SVG costs about 9K L2 gas in the full `token_uri`: the consumer's two base64 passes through the library call, plus appending `b64(S)` twice.
 
-The full Beast `token_uri` above, token 4 of the example, with `SETTINGS` of each size in place of the reference sounds. The inputs were built in loops, with the waves' samples at −128. The largest v1 input has every field at its widest valid value. The other rows were measured with every operator field at its type's extreme, before the interim engine limits, with validation lifted; the bounds change only the fields' widths, not the cost per byte. The table was measured with `page.7`. `page.8`'s segment is 4,480 bytes longer, so every `token_uri` is 4,480 characters longer and costs about 1.4M more (measured on the first row: 134,869 to 139,349 characters, 286.2M to 287.6M); the calldata and `midi_segment` columns do not involve the page:
+The full Beast `token_uri` above, token 4 of the example, with `SETTINGS` of each size in place of the reference sounds. The inputs were built in loops, with the waves' samples at −128. The largest v1 input has every field at its widest valid value. The other rows were measured with every operator field at its type's extreme, before the interim engine limits, with validation lifted; the bounds change only the fields' widths, not the cost per byte. The table was measured with `page.7`. `page.8`'s segment is 5,696 bytes longer, so every `token_uri` is 5,696 characters longer and costs about 1.7M more (measured on the first row: 134,869 to 140,565 characters, 286.2M to 287.9M); the calldata and `midi_segment` columns do not involve the page:
 
 | `SETTINGS` | Bytes | Calldata of `midi_segment` (felts) | `midi_segment` through the library call | Whole `token_uri` | `token_uri` length | JSON-RPC response (about 2.16 x) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -368,7 +368,7 @@ A consumer's `token_uri` is a view call (`starknet_call`), so what limits it is 
 | Hosted providers | Undocumented. The issue #11 probe found PublicNode capping below about 286M | |
 
 - **Against the table above:**
-  - A full Beast with the reference sounds (287.6M) already needs more than Juno's default.
+  - A full Beast with the reference sounds (287.9M) already needs more than Juno's default.
   - The largest v1 input (2.61B) fits Pathfinder's and Madara's 10B. So does TinyChip's long noise (2.44B).
   - With custom waves, 10B is reached at about 670 KB of `SETTINGS`.
   - The responses pass jsonrpsee's 10 MiB at about 4.85 MB of `token_uri`, about 2.7 MB of `SETTINGS`.
@@ -397,7 +397,7 @@ Declared in [`src/types.cairo`](src/types.cairo). The consumer passes a typed `S
   - It is 16 bytes with the defaults (`1,1,30,40,64,0,0`), plus about 6 bytes per timbre and 50 bytes per operator.
   - The three Beast reference sounds (a 2-operator lead, kick and snare) come to 334 bytes.
   - There is no byte cap. Each 1,000 bytes add about 14M L2 gas to `midi_segment` (see [The size of `SETTINGS`](#the-size-of-settings-no-byte-cap)).
-- **Engine dependencies.** Custom waves need [webaudio-tinysynth#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26). Its storage question is [decided](https://github.com/Provable-Games/webaudio-tinysynth/issues/26#issuecomment-5965255502): each sample wave is stored as one cycle, with its own home pitch. The interim pin `4b99a2b` already has its API (`setSampleWave` and `setHarmonicWave`), which the player uses once issue #2 lands. `Filter` needs [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27). Deterministic noise needs [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7). All must be in a tagged fork release before the class is declared.
+- **Engine dependencies.** Custom waves need [webaudio-tinysynth#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26). Its storage question is [decided](https://github.com/Provable-Games/webaudio-tinysynth/issues/26#issuecomment-5965255502): each sample wave is stored as one cycle, with its own home pitch. The interim pin `b198d6c` already has its API (`setSampleWave` and `setHarmonicWave`), which the player uses once issue #2 lands. `Filter` needs [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27), whose fixed operator filters (`fl`, `ff`, `fq`, `fk`) the pin also has, for issue #3. Deterministic noise needs [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7). All must be in a tagged fork release before the class is declared.
 
 ### Engine limits on operator values
 
@@ -411,8 +411,8 @@ The goal is to let composers use everything the engine can do, with no limit for
 | `sustain` | ≤ 1,000,000 (100.0) | `TS: sustain out of range` |
 | `key_scale` | −80,000..=80,000 (±8.0) | `TS: key_scale out of range` |
 
-- **Why.** These fields multiply into the gains and frequencies the engine passes to Web Audio, which requires finite `AudioParam` values (a `float`, at most about 3.4e38). With the pinned engine (`4b29ff1`, and unchanged in `4b99a2b`), a note's gain is multiplied by `2^((note - 60) / 12 * key_scale)`, and an FM modulator's frequency and gain by its target's frequency. When a product overflows, or is NaN, the engine throws a `TypeError` for that note. Its scheduler then retries the same event on every tick, so the whole song stalls: nothing after that note plays.
-- **Measured** in Chromium on the page, with `4b29ff1` and again with `4b99a2b`, which gave the same thresholds:
+- **Why.** These fields multiply into the gains and frequencies the engine passes to Web Audio, which requires finite `AudioParam` values (a `float`, at most about 3.4e38). With the pinned engine (`4b29ff1`, and unchanged in `b198d6c`), a note's gain is multiplied by `2^((note - 60) / 12 * key_scale)`, and an FM modulator's frequency and gain by its target's frequency. When a product overflows, or is NaN, the engine throws a `TypeError` for that note. Its scheduler then retries the same event on every tick, so the whole song stalls: nothing after that note plays.
+- **Measured** in Chromium on the page, with `4b29ff1` and again with `b198d6c`, which gave the same thresholds:
   - `key_scale` above about 20-24 at note 127, or below about −25 at note 0, throws, depending on `volume`.
   - A chain of operators, each FM-modulating the one before, throws from 7 operators with `ratio` at its type's maximum. With `ratio`, `pitch_ratio` and `volume` all at theirs, it throws from 6.
   - With `key_scale` at its type's maximum, the failing note was re-sent 51 times in 3 seconds, and the next note never played.
@@ -517,7 +517,7 @@ The kick and snare are in `scripts/settings_fixtures.mjs`. `npm run render-check
 
 What a composer can rely on, and what the page rejects. The `midi` argument of `midi_segment` is a Standard MIDI File passed as a `ByteArray`. The class embeds it as base64 and never parses it, so a file that breaks a rule here does not revert: the page shows the error, ▶ stays disabled, and the art still shows. Check files before they go onchain with [`scripts/check_midi.mjs`](#checking-midi-files), which runs the page's own check.
 
-Every rule below is fixed per class hash: the checks are `checkMidi` and `decodeMidi` in [`player/player.js`](player/player.js), and playback is the pinned TinySynth (`4b99a2b`) driven by that player. A later engine pin can change the playback rules. [`scripts/engine_contract.test.mjs`](scripts/engine_contract.test.mjs) pins the less obvious ones on the pinned engine, so a re-pin that changes one of them fails `npm test`.
+Every rule below is fixed per class hash: the checks are `checkMidi` and `decodeMidi` in [`player/player.js`](player/player.js), and playback is the pinned TinySynth (`b198d6c`) driven by that player. A later engine pin can change the playback rules. [`scripts/engine_contract.test.mjs`](scripts/engine_contract.test.mjs) pins the less obvious ones on the pinned engine, so a re-pin that changes one of them fails `npm test`.
 
 ### Accepted format
 
@@ -685,7 +685,7 @@ The consumer's SVG must never contain `</script`, in any letter case.
 ## Engine provenance and verification
 
 - Engine: TinySynth from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>. The fork removes the GUI and is licensed Apache-2.0, like upstream.
-- The class embeds the fork's own minified build at a pinned commit: currently `4b99a2b` (`4b99a2b94b7699310964a6cfe5372fefbd54f3ca`), SHA-256 `8b5600498c365ce1ee2c912f0149c10e8dac156ab1ff0c37d0f7b7d4fb04e490`, an interim pin (below). It combines the fork's tasks T4 (lifecycle: `resume()`, `dispose()`, a `stopMIDI` that also stops drum hits and queued controller changes), T3.1 (the leading rest kept on the first pass, and `getPlayStatus().startTime`) and T11 (`setSampleWave` and `setHarmonicWave`, not used yet). It moves to a tagged release once the fork publishes one (roadmap phase 0); re-pinning is a one-line change (see [`tests/vendor/README.md`](tests/vendor/README.md)).
+- The class embeds the fork's own minified build at a pinned commit: currently `b198d6c` (`b198d6c54c76579a99da9a494c6e65ba25eb730d`), SHA-256 `59dfcfcd9f6d76014d77f98495b7e7c0106821357ff4aa12c4ed94095a4ee921`, an interim pin (below). It combines the fork's tasks T4 (lifecycle: `resume()`, `dispose()`, a `stopMIDI` that also stops drum hits and queued controller changes), T3.1 (the leading rest kept on the first pass, and `getPlayStatus().startTime`), T11 (`setSampleWave` and `setHarmonicWave`) and T12 (fixed operator filters). T11 and T12 are not used yet: the class reverts custom waves and filters until issues #2 and #3, and with no filter set the audio graph is the same as without T12. It moves to a tagged release once the fork publishes one (roadmap phase 0); re-pinning is a one-line change (see [`tests/vendor/README.md`](tests/vendor/README.md)).
 - **Interim pins.** Until the fork tags a release, the engine may be pinned to a commit of the fork's `improve/integration` branch, as it is now, to test the fork's fixes against this class early. Such a build is for compatibility testing only and must never be declared: declaration requires the engine re-pinned to a tagged fork release with a published SHA-256 (the release gate, issue #12), which gives a new `version()`.
 - The build is offline: the minified file and the fork's NOTICE are vendored in [`tests/vendor/`](tests/vendor), and `ENGINE_PIN` in [`scripts/engine.mjs`](scripts/engine.mjs) checks both SHA-256 hashes on every load, failing before anything is generated.
 - Anyone can check the engine in any token against these values, and rebuild it: see [Verifying the engine](#verifying-the-engine).
@@ -733,13 +733,13 @@ What a class hash fixes, and what the consumer supplies:
    node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256()>
    ```
 
-   For the current version, all three print the gzip payload's SHA-256 `c05e7fd8ab9d1c9106f01a6f0f5c4ebeb2d7b5950624b69592777c02b83b7715` (12,405 bytes) and the engine's `8b5600498c365ce1ee2c912f0149c10e8dac156ab1ff0c37d0f7b7d4fb04e490` (42,421 bytes).
+   For the current version, all three print the gzip payload's SHA-256 `3560697643dedbde3b05398c3f88a6b8b40bfba38c73bf0ebfa5c9b05da3126d` (12,803 bytes) and the engine's `59dfcfcd9f6d76014d77f98495b7e7c0106821357ff4aa12c4ed94095a4ee921` (43,355 bytes).
 3. **Compare.** The engine's SHA-256 must equal the class's `script_sha256()` (the hex form of the `u256` is the `sha256sum` string; a consumer contract or its tests can read it) and the `script_sha256()` column of [Versions](#versions), in the row of the class's `version()`. The gzip payload's SHA-256 and length must match that row too.
 4. **Optionally, rebuild the engine** from the fork commit in that row. The fork commits its minified build, and rebuilding it from the source reproduces it:
 
    ```sh
    git clone https://github.com/Provable-Games/webaudio-tinysynth && cd webaudio-tinysynth
-   git checkout 4b99a2b94b7699310964a6cfe5372fefbd54f3ca
+   git checkout b198d6c54c76579a99da9a494c6e65ba25eb730d
    sha256sum webaudio-tinysynth.min.js   # the committed build
    npm ci && npm run verify              # rebuilds it and compares the bytes
    ```
@@ -757,14 +757,14 @@ The class is declared but never deployed, so block explorers cannot call it (`st
 
 | `version()` | Class hash (Sepolia) | Class hash (mainnet) | Release tag | `script_sha256()` (decompressed engine) | Gzip payload SHA-256 / length | Engine fork commit |
 | --- | --- | --- | --- | --- | --- | --- |
-| `tinysynth-4b99a2b+page.8` | **not for declaration** (interim) | **not for declaration** (interim) | none: **interim**, not a release | `8b5600498c365ce1ee2c912f0149c10e8dac156ab1ff0c37d0f7b7d4fb04e490` | `c05e7fd8ab9d1c9106f01a6f0f5c4ebeb2d7b5950624b69592777c02b83b7715` / 12,405 bytes | [`4b99a2b`](https://github.com/Provable-Games/webaudio-tinysynth/commit/4b99a2b94b7699310964a6cfe5372fefbd54f3ca) on the `improve/integration` branch of [Provable-Games/webaudio-tinysynth](https://github.com/Provable-Games/webaudio-tinysynth): **interim** (`improve/integration` commit, not a release; not for declaration) |
+| `tinysynth-b198d6c+page.8` | **not for declaration** (interim) | **not for declaration** (interim) | none: **interim**, not a release | `59dfcfcd9f6d76014d77f98495b7e7c0106821357ff4aa12c4ed94095a4ee921` | `3560697643dedbde3b05398c3f88a6b8b40bfba38c73bf0ebfa5c9b05da3126d` / 12,803 bytes | [`b198d6c`](https://github.com/Provable-Games/webaudio-tinysynth/commit/b198d6c54c76579a99da9a494c6e65ba25eb730d) on the `improve/integration` branch of [Provable-Games/webaudio-tinysynth](https://github.com/Provable-Games/webaudio-tinysynth): **interim** (`improve/integration` commit, not a release; not for declaration) |
 | `tinysynth-4b29ff1+page.7` | **not for declaration** (interim) | **not for declaration** (interim) | none: **interim**, not a release | `b49e8ceb802b7665cd6f66100dc390874c806a8894be464273d43c532940fc55` | `dec711614d61133881b642bc93829a26a7ac1cc8b7b34e5dd25f4f2482aa5d63` / 10,406 bytes | [`4b29ff1`](https://github.com/Provable-Games/webaudio-tinysynth/commit/4b29ff10d40989fd97967ed26ee4b2c95dbd8a26) on the `improve/integration` branch of [Provable-Games/webaudio-tinysynth](https://github.com/Provable-Games/webaudio-tinysynth): **interim** (`improve/integration` commit, not a release; not for declaration) |
 | `tinysynth-4b29ff1+page.6` | **not for declaration** (interim) | **not for declaration** (interim) | none: **interim**, not a release | `b49e8ceb802b7665cd6f66100dc390874c806a8894be464273d43c532940fc55` | `dec711614d61133881b642bc93829a26a7ac1cc8b7b34e5dd25f4f2482aa5d63` / 10,406 bytes | [`4b29ff1`](https://github.com/Provable-Games/webaudio-tinysynth/commit/4b29ff10d40989fd97967ed26ee4b2c95dbd8a26) on the `improve/integration` branch of [Provable-Games/webaudio-tinysynth](https://github.com/Provable-Games/webaudio-tinysynth): **interim** (`improve/integration` commit, not a release; not for declaration) |
 
 - The hashes and the length are the build's, from [`src/page_data.cairo`](src/page_data.cairo) (`VERSION`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`); `npm test` fails if the row for the current `version()` disagrees with them. The SHA-256 of the whole `PAGE` for each `version()` is in [`scripts/page_versions.json`](scripts/page_versions.json).
 - **A row is final only once its class is declared.** The class hash covers the class's Cairo code as well as the page. That includes the base64 encoder dependency, game-components `v3.1.0` (commit `66ce934`, recorded in `Scarb.lock`). So the class hashes and the tag are filled in at declaration (roadmap phase 6), and until then the row can still change: a different encoder build changes the class hash, and a re-pinned engine or a new page changes `version()` and the hashes. Once declared, a row never changes.
-- **`tinysynth-4b99a2b+page.8` is interim** (`improve/integration` commit, not a release; not for declaration). It pins the engine to a commit of the fork's `improve/integration` branch to test the fork's fixes against this class early (see [Engine provenance](#engine-provenance-and-verification)). Its class must never be declared: the release gate (issue #12) requires the engine re-pinned to a tagged fork release, which gives a new `version()`.
-- **Why `page.8`:** the `4b99a2b` engine stops drum hits, notes scheduled ahead and queued controller changes itself on `stopMIDI`, keeps the leading rest on the first pass, and reports when each pass's tick 0 sounds (`getPlayStatus().startTime`). The player drops its two workarounds for the older engine (replacing the channels' volume nodes on ■, and rewriting `playTick` and `playTime` on ▶), times the art to `startTime`, and restarts the art at every pass, not only on ▶. Settings, MIDI checks and the class's Cairo code are unchanged.
+- **`tinysynth-b198d6c+page.8` is interim** (`improve/integration` commit, not a release; not for declaration). It pins the engine to a commit of the fork's `improve/integration` branch to test the fork's fixes against this class early (see [Engine provenance](#engine-provenance-and-verification)). Its class must never be declared: the release gate (issue #12) requires the engine re-pinned to a tagged fork release, which gives a new `version()`.
+- **Why `page.8`:** the `b198d6c` engine stops drum hits, notes scheduled ahead and queued controller changes itself on `stopMIDI`, keeps the leading rest on the first pass, and reports when each pass's tick 0 sounds (`getPlayStatus().startTime`). The player drops its two workarounds for the older engine (replacing the channels' volume nodes on ■, and rewriting `playTick` and `playTime` on ▶), times the art to `startTime`, and restarts the art at every pass, not only on ▶. Settings, MIDI checks and the class's Cairo code are unchanged.
 - `tinysynth-4b29ff1+page.7`, the previous interim build, is superseded; it was never declared.
 - **Why `page.7`:** the page's parser bounded counts by the class's old caps (32 timbres, 16 waves, 64 harmonics, 256 samples). It now bounds them only by the format: 175 timbres and 256 waves, and no bound on a wave's length, as the engine takes any (fork decision D-028). It also checks every count against the input left. The class accepts the same, no longer caps `SETTINGS` length, and no longer range-checks reverb, master volume or the top of `voices`. Of the operator values it bounds only five, as interim [engine limits](#engine-limits-on-operator-values), and drops the ranges of the other six. Its caps are separate constants from the page's bounds, so changing a cap within those bounds will not need a new page.
 - `tinysynth-4b29ff1+page.6`, the same engine with the page before `page.7`, was the interim build before that. Its page rejects the counts above its old caps, so it is superseded. It was declared on Sepolia only as an interim test class (see [Deployments](#deployments)), never as a release.
@@ -852,12 +852,12 @@ The class compiled with Scarb 2.20.1, against [Starknet's current limits](https:
 
 | | The class | The class without the encoder | Page constants only | Page constants only, `const` felt array (`page.6` before this class) | Limit |
 | --- | --- | --- | --- | --- | --- |
-| Sierra program | 18,455 felts | 13,534 felts | 8,416 felts | 4,369 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 953,570 bytes (23% of the limit) | 665,409 bytes | 369,369 bytes | 191,246 bytes | 4,089,446 bytes |
-| CASM bytecode | 29,536 felts (36% of the limit) | 18,388 felts | 5,957 felts | 2,563 felts | 81,920 felts |
+| Sierra program | 18,641 felts | 13,721 felts | 8,603 felts | 4,369 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 961,436 bytes (24% of the limit) | 673,259 bytes | 377,200 bytes | 191,246 bytes | 4,089,446 bytes |
+| CASM bytecode | 29,653 felts (36% of the limit) | 18,505 felts | 6,074 felts | 2,563 felts | 81,920 felts |
 
-- **The class** is `OnchainTinySynth` with the optimized encoder, at `page.8`. It is 32.2 KB, 742 Sierra felts and 464 CASM felts larger than at `page.7` (921,352 bytes, 17,713 and 29,072 felts, measured the same way at `2e3c9da`; the figures this README gave for `page.7`, 916,094 bytes, 17,625 and 28,912 felts, were measured before #28 added the operator bounds in `c74d355`). All of it is the page constants: the segment is 4,480 bytes and `license()` 907 bytes longer, and the page-constants stub grew by as much (32.1 KB, 740 Sierra felts and 464 CASM felts). `page.7` was 11.4 KB, 195 Sierra felts and 370 CASM felts smaller than `page.6` (932,702 bytes, 17,908 and 29,442 felts), which also checked the numeric ranges and the `SETTINGS` length. "Without the encoder" is the same class with `bytes_base64_encode` returning its input: the encoder adds 4,921 Sierra felts, 288 KB and 11,148 CASM felts. The byte-wise stand-in it replaced added 1,701 Sierra felts, 98 KB and 4,149 CASM felts (the whole class was then 727,248 bytes and 22,242 CASM felts). The optimized encoder costs about 190 KB more class size, for about 83% less gas per encoded byte.
-- **Page constants only** is a stub class serving `animation_url_segment`, `script_sha256`, `version` and `license`. With the `b70ba90` engine, the string-literal segment cost about 130 KB and 2,700 CASM felts more than the `const` felt array, and saved 3.4M L2 gas on every call. The last column predates this class and has the `b70ba90` engine's 42,644-byte segment and the 4,104-byte `license()`. The page-constants column has the `page.8` build's 48,468-byte segment and its 7,324-byte `license()`, which holds the game-components notice and the `4b99a2b` fork NOTICE (with `page.6`'s 43,940-byte segment and 6,417-byte `license()` it was 337,078 bytes, 7,671 Sierra felts and 5,490 CASM felts). The `page.6` class, with the `4b29ff1` engine, was 10.5 KB, 232 Sierra felts and 149 CASM felts larger than the `b70ba90` build (922,222 bytes, 17,676 Sierra felts and 29,293 CASM felts for the class).
+- **The class** is `OnchainTinySynth` with the optimized encoder, at `page.8`. It is 40.1 KB, 928 Sierra felts and 581 CASM felts larger than at `page.7` (921,352 bytes, 17,713 and 29,072 felts, measured the same way at `2e3c9da`; the figures this README gave for `page.7`, 916,094 bytes, 17,625 and 28,912 felts, were measured before #28 added the operator bounds in `c74d355`). All of it is the page constants: the segment is 5,696 bytes and `license()` 907 bytes longer, and the page-constants stub grew by as much (39.9 KB, 927 Sierra felts and 581 CASM felts). `page.7` was 11.4 KB, 195 Sierra felts and 370 CASM felts smaller than `page.6` (932,702 bytes, 17,908 and 29,442 felts), which also checked the numeric ranges and the `SETTINGS` length. "Without the encoder" is the same class with `bytes_base64_encode` returning its input: the encoder adds 4,920 Sierra felts, 288 KB and 11,148 CASM felts. The byte-wise stand-in it replaced added 1,701 Sierra felts, 98 KB and 4,149 CASM felts (the whole class was then 727,248 bytes and 22,242 CASM felts). The optimized encoder costs about 190 KB more class size, for about 83% less gas per encoded byte.
+- **Page constants only** is a stub class serving `animation_url_segment`, `script_sha256`, `version` and `license`. With the `b70ba90` engine, the string-literal segment cost about 130 KB and 2,700 CASM felts more than the `const` felt array, and saved 3.4M L2 gas on every call. The last column predates this class and has the `b70ba90` engine's 42,644-byte segment and the 4,104-byte `license()`. The page-constants column has the `page.8` build's 49,684-byte segment and its 7,324-byte `license()`, which holds the game-components notice and the `b198d6c` fork NOTICE (with `page.6`'s 43,940-byte segment and 6,417-byte `license()` it was 337,078 bytes, 7,671 Sierra felts and 5,490 CASM felts). The `page.6` class, with the `4b29ff1` engine, was 10.5 KB, 232 Sierra felts and 149 CASM felts larger than the `b70ba90` build (922,222 bytes, 17,676 Sierra felts and 29,293 CASM felts for the class).
 - **The rest** of the class is the settings validation and encoding.
 - The method: `contract_class.json` without debug info, and the `bytecode` of `compiled_contract_class.json`.
 
@@ -865,14 +865,14 @@ The class compiled with Scarb 2.20.1, against [Starknet's current limits](https:
 
 The segment's size sets its cost at every step of a consumer's `token_uri`: the class materializes it, the library call returns it, the consumer appends it to its `ByteArray`, and `token_uri` returns it again. [`tests/test_page_gas.cairo`](tests/test_page_gas.cairo) (`snforge test gas_segment`) measures materializing and appending it, in L2 gas:
 
-| | `page.5` (78,804 bytes), `const` array | `b70ba90+page.6` (42,644 bytes), `const` array | `b70ba90+page.6`, string literal | `4b29ff1+page.7` (43,988 bytes), string literal | Now: `4b99a2b+page.8` (48,468 bytes), string literal |
+| | `page.5` (78,804 bytes), `const` array | `b70ba90+page.6` (42,644 bytes), `const` array | `b70ba90+page.6`, string literal | `4b29ff1+page.7` (43,988 bytes), string literal | Now: `b198d6c+page.8` (49,684 bytes), string literal |
 | --- | --- | --- | --- | --- | --- |
-| Materializing `animation_url_segment()` | 6.83M | 3.70M | 0.28M | 0.29M | 0.32M |
-| Appending it to a `ByteArray` with no pending bytes (word-aligned) | +4.00M | +2.16M | +2.16M | +2.23M | +2.46M |
-| Appending it after the 29-byte `data:application/json;base64,` (unaligned) | +17.25M | +9.34M | +9.34M | +9.63M | +10.61M |
-| The class's side of the library call that returns it (the example's gas report) | 10.82M | 5.86M | 2.44M | 2.51M | 2.77M |
+| Materializing `animation_url_segment()` | 6.83M | 3.70M | 0.28M | 0.29M | 0.33M |
+| Appending it to a `ByteArray` with no pending bytes (word-aligned) | +4.00M | +2.16M | +2.16M | +2.23M | +2.52M |
+| Appending it after the 29-byte `data:application/json;base64,` (unaligned) | +17.25M | +9.34M | +9.34M | +9.63M | +10.88M |
+| The class's side of the library call that returns it (the example's gas report) | 10.82M | 5.86M | 2.44M | 2.51M | 2.84M |
 
-The consumer's whole library call, including reading the result, is 7.1M (see [Gas and limits](#gas-and-limits)). The [Integration guide](#integration-guide) shows how a consumer lands the segment on a word boundary.
+The consumer's whole library call, including reading the result, is 7.3M (see [Gas and limits](#gas-and-limits)). The [Integration guide](#integration-guide) shows how a consumer lands the segment on a word boundary.
 
 ## Browser validation
 
@@ -892,20 +892,20 @@ Issue #11's automatable checks, on Playwright's Chromium 153, Firefox 155 and We
 | Settings at their extremes play without an error | `checkExtremes`: notes 0 and 127 at velocity 127 on every custom timbre of the `max_fields`, `min_fields` and `max_chain` settings fixtures, at the engine limits; any error fails it, a non-finite `AudioParam` value included (see [Engine limits on operator values](#engine-limits-on-operator-values)) |
 | Which marketplaces render `data:` HTML; iOS Safari and Android Chrome; indexers, wallets and RPC providers on a full-size `token_uri` | manual |
 
-Every check that CI runs passes on all three engines. From `page.8` the player restarts the art at every pass, timed to that pass's tick 0 as heard, so the art can drift from the sound only by what builds up within one pass. Runs of the drift check at `44206f4`, on `tinysynth-4b99a2b+page.8`, one engine at a time, on a shared 32-core Linux machine, the `beast_140bpm` page (a 1.714 s pass) with a probe art that sweeps once per pass, so the pass is a whole multiple of the art's period, a checkpoint every 10 s:
+Every check that CI runs passes on all three engines. From `page.8` the player restarts the art at every pass, timed to that pass's tick 0 as heard, so the art can drift from the sound only by what builds up within one pass. Runs of the drift check at `0c3d4c3`, on `tinysynth-b198d6c+page.8`, one engine at a time, on a shared 32-core Linux machine, the `beast_140bpm` page (a 1.714 s pass) with a probe art that sweeps once per pass, so the pass is a whole multiple of the art's period, a checkpoint every 10 s:
 
-| `page.8` | Chromium 153, 1 minute | WebKit 26.6, 1 minute | WebKit 26.6, 10 minutes |
-| --- | --- | --- | --- |
-| The art's drift from the sound (trend; at most 20 ms) | +9.5 ms: passes | -5.3 ms: passes | -0.2 ms: passes |
-| Largest checkpoint distance from the trend (at most 20 ms) | 3.3 ms | 3.1 ms | 5.7 ms |
-| The art against the page clock (trend) | +9.5 ms | -5.0 ms | -0.2 ms |
-| The audio clock against the page clock | -0.1 ms (-0.2 ppm) | +0.1 ms (1.8 ppm) | -0.0 ms (0.0 ppm) |
-| Passes after the first that restarted the art | 36 of 36 | 36 of 36 | 351 of 351 |
-| Passes, none missing, on the tempo map's grid | 37, within 0.001 µs | 37, within 0.001 µs | 352, within 0.001 µs |
-| Messages scheduled, none late; the smallest lead | 698; 100.0 ms | 697; 44.9 ms | 6,682; 44.9 ms |
-| `outputLatency` | 32 ms | 0 | 0 |
+| `page.8` | Chromium 153, 1 minute | Chromium 153, 5 minutes | WebKit 26.6, 1 minute | WebKit 26.6, 10 minutes |
+| --- | --- | --- | --- | --- |
+| The art's drift from the sound (trend; at most 20 ms) | +10.2 ms: passes | +0.0 ms: passes | -3.8 ms: passes | -1.4 ms: passes |
+| Largest checkpoint distance from the trend (at most 20 ms) | 1.4 ms | 7.6 ms | 4.1 ms | 5.6 ms |
+| The art against the page clock (trend) | +10.5 ms | -0.0 ms | -3.5 ms | -1.5 ms |
+| The audio clock against the page clock | +0.1 ms (1.8 ppm) | -0.1 ms (-0.1 ppm) | +0.0 ms (0.8 ppm) | +0.0 ms (0.0 ppm) |
+| Passes after the first that restarted the art | 36 of 36 | 176 of 176 | 36 of 36 | 351 of 351 |
+| Passes, none missing, on the tempo map's grid | 37, within 0.001 µs | 177, within 0.001 µs | 37, within 0.001 µs | 352, within 0.001 µs |
+| Messages scheduled, none late; the smallest lead | 698; 100.0 ms | 3,358; 100.0 ms | 697; 44.9 ms | 6,682; 44.9 ms |
+| `outputLatency` | 32 ms | 32 ms | 0 | 0 |
 
-The 1-minute trends are the scatter of seven checkpoints, each the median of seven screenshots that spread over 8-17 ms, not accumulated drift: across 10 minutes WebKit's trend is -0.2 ms. Restarting at every pass did not show in the probe: over 10 minutes no checkpoint lies more than 5.7 ms off the trend. The 10-minute Chromium and Firefox runs below predate the re-sync.
+Nothing accumulates: over 5 minutes on Chromium the trend is 0.0 ms, and over 10 minutes on WebKit -1.4 ms. A 1-minute trend is not drift. The checkpoints are 10 s apart and the pass 1.714 s, so each checkpoint samples a point 0.29 s earlier in the pass, and the sampled point goes round the pass about once a minute; a 1-minute run sees the art's offset vary within a pass (between about 1 and 10 ms on Chromium) as a slope. Restarting at every pass did not show in the probe: no checkpoint lies more than 7.6 ms off the trend. The 10-minute Chromium and Firefox runs below predate the re-sync. The `4b99a2b` engine (without T12's filters) gave the same picture: WebKit -0.2 ms over 10 minutes, and 1-minute trends of +9.5 ms (Chromium) and -5.3 ms (WebKit).
 
 Before the re-sync, on `tinysynth-4b29ff1+page.6` (synced once per ▶; `page.7` has the same player there), at `9fb9a3b`, the 10-minute drift check passed on WebKit and failed on Firefox and Chromium:
 
