@@ -354,7 +354,10 @@ async function checkDataPage() {
     const img = st.imgs[k + 2];
     return img && img.src.includes(`;r=${k + 2};base64,`) ? img.at - (play.at + (t + (play.outputLatency || 0) - play.currentTime) * 1000) : NaN;
   });
-  check(passLags.length >= 2 && passLags.every((l) => l > -5 && l < 100),
+  // Lags are measured against one AudioContext-to-page clock mapping sampled at ▶. In CI's headless
+  // Chromium that mapping moves by several ms between runs (measured from -7.5 to +3.5 ms with the
+  // same player), so the early bound allows -20 ms: still far tighter than any visible early restart.
+  check(passLags.length >= 2 && passLags.every((l) => l > -20 && l < 100),
     `the art restarted at each of the ${passLags.length} passes heard since ▶, at the pass's tick 0 as heard (lags ${passLags.map((l) => l.toFixed(1)).join(", ")} ms)`);
 
   await page.click("#play");
