@@ -1,6 +1,6 @@
 ---
 name: midi-guide
-description: Drive the onchain TinySynth NFT player (Provable-Games/onchain-tinysynth) with Standard MIDI Files. Preview a .mid offline in the exact page the chain serves, check it against the player's strict MIDI contract, and learn only where the player differs from standard MIDI players and upstream TinySynth (End-of-Track looping, sounds set by the contract, ignored controllers, pinned engine quirks, gas per byte, keeping the tempo in sync with animated SVG or GIF art). Use when composing, converting or debugging MIDI for an NFT that uses this player, when check-midi fails, or when music and art drift apart.
+description: Drive the onchain TinySynth NFT player (Provable-Games/onchain-tinysynth) with Standard MIDI Files. Preview a .mid offline in the exact page the chain serves, check it against the player's strict MIDI contract, and learn only where the player differs from standard MIDI players and upstream TinySynth (End-of-Track looping, sounds set by the contract, ignored controllers, pinned engine quirks, gas per byte, keeping the tempo in sync with animated SVG or GIF art), and serve scores from a composer's contract through the sound provider interface (get_sound). Use when composing, converting or debugging MIDI for an NFT that uses this player, when check-midi fails, or when music and art drift apart.
 license: Apache-2.0
 compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-tinysynth whose VERSION in src/page_data.cairo equals the class's version().
 ---

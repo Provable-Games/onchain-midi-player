@@ -1,6 +1,6 @@
 ---
 name: integrator-guide
-description: Add the onchain TinySynth music player (Provable-Games/onchain-tinysynth) to any Starknet NFT whose token_uri is a base64 JSON data URI. Turn the usual one-pass token_uri into base64 pieces, inject the player's pre-encoded animation_url segment and the token's midi_segment, keep the SVG art safe, decide where the class hash lives (in the NFT or in a small renderer contract), handle failures, and test with snforge against the JS reference. Use when integrating the player into an NFT contract, reviewing such an integration, budgeting its gas, or debugging a broken animation_url.
+description: Add the onchain TinySynth music player (Provable-Games/onchain-tinysynth) to any Starknet NFT whose token_uri is a base64 JSON data URI. Turn the usual one-pass token_uri into base64 pieces, inject the player's pre-encoded animation_url segment and the token's midi_segment, keep the SVG art safe, decide where the class hash lives (in the NFT or in a small renderer contract), get each token's MIDI and settings from a composer's sound provider with try_get_sound, handle failures, and test with snforge against the JS reference. Use when integrating the player into an NFT contract, reviewing such an integration, budgeting its gas, or debugging a broken animation_url.
 license: Apache-2.0
 compatibility: Needs the Scarb and Starknet Foundry versions in the repository's .tool-versions, and Node 22 or later with a clone of https://github.com/Provable-Games/onchain-tinysynth for the offline tools.
 ---
