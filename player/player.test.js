@@ -593,6 +593,19 @@ describe("the page's player script, real engine", () => {
     assert.deepEqual(h.consoleErrors, []);
   });
 
+  test("restart images that decode out of order: an older one never replaces a newer one", async () => {
+    const h = runPage(restLoop(), { engine: "real", outputLatency: 0 });
+    h.ready();
+    h.click();
+    await h.flush();
+    h.runTimers(); // the ▶ restart: image r=1 starts decoding
+    while (!h.timers.size) h.advance(0.06);
+    h.runTimers(); // pass 1's restart: image r=2, before r=1 has decoded
+    h.loadImages({ reverse: true }); // r=2 decodes first, then r=1
+    assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, 2), "the newer timeline stays");
+    assert.equal(h.page.body.filter((e) => e.tag === "img").length, 1);
+  });
+
   test("a pass seen while a restart is pending waits for the next poll; a pass start already past is skipped", async () => {
     const h = runPage(restLoop(), { engine: "real", outputLatency: 0 });
     h.ready();

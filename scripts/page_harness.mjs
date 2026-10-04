@@ -341,9 +341,13 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
         due[1].fn();
       }
     },
-    /** Fires the onload handler of every image created so far (images "decode" on demand here). */
-    loadImages() {
-      for (const img of created.splice(0)) if (img.onload) img.onload();
+    /**
+     * Fires the onload handler of every image created so far (images "decode" on demand here), in
+     * creation order, or newest first with `reverse`.
+     */
+    loadImages({ reverse = false } = {}) {
+      const imgs = created.splice(0);
+      for (const img of reverse ? imgs.reverse() : imgs) if (img.onload) img.onload();
     },
     /** Lets pending promise callbacks run. */
     flush: () => new Promise((resolve) => setImmediate(resolve)),

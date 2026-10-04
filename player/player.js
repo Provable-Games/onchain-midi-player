@@ -26,8 +26,9 @@
  * 4. The art restarts when tick 0 is heard: at `getPlayStatus().startTime` (the AudioContext time
  *    at which tick 0 of the current pass sounds) plus the context's output latency, or at once if
  *    the engine is not playing (a song with no events but tempo, which it leaves stopped). Then it
- *    restarts again at every pass: `startTime` moves to the next pass up to 0.2 s before that pass
- *    starts, and the player, polling it every 50 ms, restarts the art at the new time. That bounds
+ *    restarts again at every pass: `startTime` moves to the next pass as soon as the current
+ *    pass's last event is scheduled (up to 0.2 s, plus any rest after that event, before the next
+ *    pass starts), and the player, polling it every 50 ms, restarts the art at the new time. That bounds
  *    any drift between the image's clock and the audio clock to one pass; when the pass is a whole
  *    multiple of the art's period, the art is already at its start there, so the restart is not
  *    seen. At most one restart is pending; when it fires, the next is timed at once. On a short
@@ -248,21 +249,25 @@ export function startPlayer() {
     } catch (e) {
       console.error(e);
     }
+    let shown = 0; // the restart whose image is shown
     /**
      * Restarts the art: a new <img> with a distinct URL, swapped in once decoded (so the art never
-     * blinks out), unless ▶/■ was pressed again in the meantime.
+     * blinks out), unless ▶/■ was pressed again in the meantime, or a later restart's image is
+     * already shown (restarts at every pass can decode out of order).
      * @param {number} current the press that scheduled it
      */
     const restartArt = (current) => {
       if (!art) return;
+      const n = ++restarts;
       const img = document.createElement("img");
       img.alt = "";
       img.onload = () => {
-        if (current !== run || !art) return;
+        if (current !== run || n < shown || !art) return;
+        shown = n;
         art.replaceWith(img);
         art = img;
       };
-      img.src = artUrl(svg, ++restarts);
+      img.src = artUrl(svg, n);
     };
 
     // 2. The engine, settings and MIDI; on failure ▶ stays disabled and no synth is created.
