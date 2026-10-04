@@ -38,6 +38,9 @@ MAX_PREAMBLE_LINES = 3
 PREAMBLE_CONTENT_RE = re.compile(r"\b(?:critical|high|medium|low)\b|[\w.@/-]+:\d+", re.IGNORECASE)
 MAX_PREAMBLE_CHARS = 500
 FIELD_RE = re.compile(r"^- \*\*(" + "|".join(re.escape(f) for f in FINDING_FIELDS) + r"):\*\*(.*)$")
+# The optional closing section of non-blocking agent skill suggestions (review-policy.md).
+SKILLS_HEADING = "## Skill opportunities"
+SKILLS_HEADING_RE = re.compile(r"^#{2,3} Skill opportunities\s*$")
 
 
 CODEX_AUTH_FAILURE = ("Codex authentication failed: the org secret CODEX_AUTH_DOT_JSON needs to be refreshed "
@@ -223,16 +226,85 @@ def claude_args(settings, add_dirs):
 # Review output contract
 
 
+def _closes_fence(fence, line):
+    match = FENCE_RE.match(line)
+    marker_text = match.group(1) if match else ""
+    return bool(marker_text) and marker_text[0] == fence[0] and len(marker_text) >= len(fence) \
+        and not line.strip()[len(marker_text):].strip()
+
+
+def _split_skills(lines):
+    """Split off the closing Skill opportunities section: (main lines, section lines or None)."""
+    fence = None
+    for index, line in enumerate(lines):
+        if fence is not None:
+            if _closes_fence(fence, line):
+                fence = None
+        elif FENCE_RE.match(line):
+            fence = FENCE_RE.match(line).group(1)
+        elif SKILLS_HEADING_RE.match(line):
+            return lines[:index], lines[index + 1:]
+    return lines, None
+
+
+def _parse_skills(lines, first_number):
+    """Validate the Skill opportunities section. Returns (text, errors).
+
+    Suggestions never carry a severity and never block. A finding, another
+    heading, a line that starts like a finding or a bare lgtm inside the section
+    is a contract break, so the review fails closed rather than drop a finding.
+    """
+    errors, fence = [], None
+    for offset, line in enumerate(lines):
+        number = first_number + offset
+        if fence is not None:
+            if _closes_fence(fence, line):
+                fence = None
+        elif FENCE_RE.match(line):
+            fence = FENCE_RE.match(line).group(1)
+        elif FINDING_RE.match(line) or ATX_HEADING_RE.match(line) or PSEUDO_FINDING_RE.match(line):
+            errors.append(f"line {number}: a finding or heading inside the Skill opportunities section "
+                          f"{line[:120]!r}")
+        elif line.strip() == "lgtm":
+            errors.append(f"line {number}: 'lgtm' inside the Skill opportunities section")
+    if fence is not None:
+        errors.append("unterminated code block in the Skill opportunities section")
+    text = "\n".join(lines).strip()
+    if text.strip("-*_. ").lower() in ("", "none"):
+        text = "none"
+    return text, errors
+
+
 def parse_review(text):
     """Classify review text deterministically.
 
     Returns a dict with kind in {"lgtm", "findings", "incomplete", "malformed"},
-    the validated findings, parse errors, warnings, and the findings text. Severity
-    tags count only in exact finding headings outside code fences. Within a
-    finding, list semantics apply: after a blank line, only field bullets, list
-    items, indented lines and code fences continue it, so prose between or after
-    findings is rejected. Up to MAX_PREAMBLE_LINES of prose before the first
-    finding are discarded with a warning, and only when every finding is valid.
+    the validated findings, parse errors, warnings, the findings text, and the
+    non-blocking Skill opportunities text ("none", the suggestions, or None when
+    the section is absent). The section is split off first, outside code fences;
+    the rest is parsed exactly as without it.
+    """
+    lines = (text or "").strip().splitlines()
+    main, section = _split_skills(lines)
+    if section is None:
+        return _parse_main(text) | {"skills": None}
+    skills, skill_errors = _parse_skills(section, len(main) + 2)
+    parsed = _parse_main("\n".join(main))
+    if skill_errors:
+        return parsed | {"kind": "malformed", "errors": parsed["errors"] + skill_errors, "warnings": [],
+                         "body": "", "preamble": "", "skills": None}
+    return parsed | {"skills": skills if parsed["kind"] in ("lgtm", "findings") else None}
+
+
+def _parse_main(text):
+    """Classify review text without a Skill opportunities section.
+
+    Severity tags count only in exact finding headings outside code fences.
+    Within a finding, list semantics apply: after a blank line, only field
+    bullets, list items, indented lines and code fences continue it, so prose
+    between or after findings is rejected. Up to MAX_PREAMBLE_LINES of prose
+    before the first finding are discarded with a warning, and only when every
+    finding is valid.
     """
     stripped = (text or "").strip()
     if not stripped:
@@ -262,9 +334,7 @@ def parse_review(text):
         number = index + 1
         fence_match = FENCE_RE.match(line)
         if fence is not None:
-            marker_text = fence_match.group(1) if fence_match else ""
-            if marker_text and marker_text[0] == fence[0] and len(marker_text) >= len(fence) \
-                    and not line.strip()[len(marker_text):].strip():
+            if _closes_fence(fence, line):
                 fence = None
             continue_field(number, line)
             previous_blank = False
@@ -381,6 +451,9 @@ def build_result(*, identity, execution_ok, execution_errors, text, blocking_sev
     else:
         result["status"] = "incomplete"
         result["errors"].extend(parsed["errors"])
+    # Non-blocking suggestions: recorded and published, never read by blocking or the gate.
+    if result["status"] == "complete" and parsed["skills"] is not None:
+        result["skill_opportunities"] = parsed["skills"]
     return result
 
 
@@ -490,7 +563,8 @@ def render_comment(result, review_text, display_name):
     """One bot-owned comment per provider and agent.
 
     Every comment shows which provider, model and effort produced it. A clean
-    review's body is exactly lgtm. The gate reads result records, never this text.
+    review's verdict is exactly lgtm. Any non-blocking Skill opportunities follow
+    the verdict or findings. The gate reads result records, never this text.
     """
     lines = [marker(result["provider"], result["agent_id"]), _metadata(result), heading(result, display_name), ""]
     if result.get("bootstrap"):
@@ -498,10 +572,13 @@ def render_comment(result, review_text, display_name):
                      "used the configuration from the pull request head.")
         lines.append("")
     body = review_text or ""
-    if result["status"] == "complete" and result["verdict"] == "lgtm":
-        lines.append("lgtm")
-    elif result["status"] == "complete":
-        lines.append(body.strip())
+    if result["status"] == "complete":
+        lines.append("lgtm" if result["verdict"] == "lgtm" else body.strip())
+        skills = result.get("skill_opportunities")
+        if skills == "none":
+            lines += ["", "**Skill opportunities** (non-blocking): none"]
+        elif skills:
+            lines += ["", "**Skill opportunities** (non-blocking):", "", skills.strip()]
         if result.get("discarded_text"):
             lines += ["", "<details><summary>Discarded text before the first finding (not part of the review)"
                       "</summary>", "", result["discarded_text"], "", "</details>"]

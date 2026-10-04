@@ -11,8 +11,8 @@ secret or variables are not configured is skipped (see Policies).
 | File | Purpose |
 | --- | --- |
 | `.github/review-agents.json` | Reviewer role, scope (`"."`, the whole repository), blocking severities, and per-provider variable names and pins |
-| `.github/prompts/review-policy.md` | Shared review policy and output contract |
-| `.github/prompts/onchain-tinysynth-review.md` | Repository reviewer role: Cairo/Starknet, base64 splicing and alignment, the SETTINGS wire format, the permanent declared API, CSP-safe player JS, Cairo/JS byte parity |
+| `.github/prompts/review-policy.md` | Shared review policy and output contract, including the non-blocking Skill opportunities section |
+| `.github/prompts/onchain-tinysynth-review.md` | Repository reviewer role: Cairo/Starknet, base64 splicing and alignment, the SETTINGS wire format, the permanent declared API, CSP-safe player JS, Cairo/JS byte parity, Scarb dependencies, agent skill consistency |
 | `review_lib.py`, `review.py` | Configuration, prompt, result parsing, comment and gate helpers (Python standard library) |
 | `run-codex-review.sh` | Runs the pinned Codex CLI once |
 | `codex-cli/package.json`, `package-lock.json` | The Codex CLI pin |
@@ -166,12 +166,13 @@ All jobs run on `ubuntu-24.04-arm`. Both CLIs publish linux-arm64 builds.
 | Output containing a credential value in any detected form | Fails; the output is withheld |
 | Result for a different base or head, or a newer head at publish time | Fails; nothing is published for a stale head |
 | Complete review with only MEDIUM or LOW findings | Passes; the findings stay visible |
+| Skill opportunities (any content, including severity words) | No effect: recorded as `skill_opportunities` and shown in the comment, never read by the gate |
 | Complete review with a CRITICAL or HIGH finding | Fails after the comment is published |
 
 ## Output contract and parsing
 
-A complete clean review is exactly `lgtm`. Otherwise the output is only
-findings in the form defined in `review-policy.md`:
+A complete clean review's verdict is exactly `lgtm`. Otherwise the output is
+only findings in the form defined in `review-policy.md`:
 
 ```text
 ### [HIGH] src/base64.cairo:123 — concise issue
@@ -181,7 +182,8 @@ findings in the form defined in `review-policy.md`:
 ```
 
 The policy and the last line of the prompt tell the model to start with `lgtm`
-or `### [` and write nothing before, between or after the findings.
+or `### [`, end with the Skill opportunities section (below), and write
+nothing else before, between or after them.
 `review_lib.parse_review` is deterministic and fails closed:
 
 - Finding headings count only outside code fences, and every field is required.
@@ -203,6 +205,39 @@ or `### [` and write nothing before, between or after the findings.
   findings. Models sometimes add a sentence such as "I've finished
   reading the files", and rejecting an otherwise valid review for it adds
   noise without adding safety.
+
+### Skill opportunities (non-blocking)
+
+The reviewer role also checks the agent skills in
+`plugins/onchain-tinysynth/skills/` against the change. A skill that the pull
+request makes wrong, or that misses a new capability, is an ordinary finding at
+the skill's file and line (at least MEDIUM when it would lead an integrator or
+composer to broken output, LOW for stale but harmless wording), so it counts
+like any other finding. `scripts/skills.test.mjs` covers the mechanical drift;
+the reviewer looks for drift in meaning.
+
+Separately, every completed review ends with a section of suggestions for
+refining a skill or adding one, or `none`:
+
+```text
+lgtm
+
+## Skill opportunities
+
+- **Refine `midi-guide`** (`plugins/onchain-tinysynth/skills/midi-guide/SKILL.md:40`): … Evidence: `player/player.js:120`.
+```
+
+`parse_review` splits the output at the first `## Skill opportunities` (or
+`###`) heading outside a code fence and parses the part before it exactly as
+above. The section is recorded as `skill_opportunities` in `result.json`
+(`"none"` or the Markdown text; the key is absent when the model omitted the
+section, so older output parses as before, and `schema` stays 1) and shown in
+the comment under **Skill opportunities** (non-blocking). `blocking` and the
+gate read only the findings, so nothing in the section, including severity
+words, locations or a fenced finding heading, can change the gate. A finding
+heading, any other heading, a line that starts like a finding, a bare `lgtm`
+or an unterminated code fence inside the section still makes the review
+incomplete: a finding written after the section is never dropped silently.
 
 ## Static review and dependency sources
 
@@ -289,9 +324,11 @@ result record, for example:
 It shows the requested model and effort, and adds `(resolved …)` when the
 provider reported a different model ID (which also fails the review). A
 bootstrap review shows a BOOTSTRAP notice below the heading. A clean review's
-body is then exactly `lgtm`; findings and failures follow the same heading. The
-heading is only presentation: the model's own output must still be exactly
-`lgtm`, and the gate reads `result.json`, never comment or review text. A
+body is then `lgtm`; findings and failures follow the same heading. A completed
+review's Skill opportunities follow its verdict or findings, as one line
+`**Skill opportunities** (non-blocking): none` or a short list. The heading is
+only presentation: the model's verdict must still be exactly `lgtm`, and the
+gate reads `result.json`, never comment or review text. A
 failed or incomplete run replaces an earlier verdict with "Review not
 completed", so an old `lgtm` never stays under a new head.
 

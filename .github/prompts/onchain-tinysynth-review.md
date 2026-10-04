@@ -47,6 +47,34 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   context names. The required `cairo` CI job builds and tests both packages
   and fails if a build changes a lockfile, so not building them here is
   expected (see Static review).
+- **Agent skills stay consistent:** `plugins/onchain-tinysynth/skills/` holds
+  the skills that agents in other repositories load: `integrator-guide` (the
+  `IOnchainTinySynth` API and `library_call`, the `token_uri` layout and
+  splicing, the art rule, `examples/beast_consumer`, snforge tests, gas and RPC
+  caps), `midi-guide` (the MIDI contract, `check-midi` and `preview`, player
+  and pinned-engine playback quirks, looping, art sync), `sound-design`
+  (`SynthSettings`, the SETTINGS format, settings validation and its `'TS: …'`
+  reverts, custom timbres and operator fields) and `token-uri-inspector`
+  (decoding and rebuilding a `token_uri`, engine verification,
+  `scripts/page_versions.json`, RPC call caps). Each has a `SKILL.md` and may
+  have `references/` and `scripts/`. They summarize and link to `README.md`
+  and the code, which stay the source of truth. When a change alters
+  behaviour, an API, a limit, the `token_uri` layout, the MIDI contract,
+  settings validation, a script's command line or gas characteristics, search
+  the skills for the names, messages, flags and README sections it touches and
+  read the matches. Report as a finding at the skill file and line each
+  statement that now describes the old behaviour, and each new capability that
+  the skill covering that area should mention but does not: say which skill,
+  what it says and what is now true. When a change edits a skill, check its
+  claims against the code and the README. A skill that would now lead an
+  integrator or composer to broken output (a revert, a malformed `token_uri`,
+  a page that does not play, MIDI that fails `check-midi` or plays wrongly, a
+  wasted declaration or deployment) is at least MEDIUM, and HIGH only under
+  the general severity rules; stale but harmless wording is LOW.
+  `scripts/skills.test.mjs`, run by `npm test` in the required `javascript`
+  check, already checks frontmatter, links and anchors, `checkMidi` messages,
+  operator fields, gas figures, `MAX_*` names and hardcoded re-pin values, so
+  look for drift in meaning that those checks cannot see.
 
 Inspect relevant supporting code and report concrete, high-signal findings
 under the shared review policy.
