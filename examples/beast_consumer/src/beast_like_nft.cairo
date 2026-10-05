@@ -204,9 +204,7 @@ pub fn align_to_word(ref uri: ByteArray, extra: usize) {
 
 #[starknet::contract]
 pub mod BeastLikeNft {
-    use onchain_midi_player::interface::{
-        IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
-    };
+    use onchain_midi_player::interface::{ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher};
     use starknet::ClassHash;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use crate::sound;
@@ -227,7 +225,7 @@ pub mod BeastLikeNft {
         assert(tinysynth_class_hash.is_non_zero(), 'zero tinysynth class hash');
         // Engine classes share the midi_segment selector: reject another engine's class here,
         // rather than render the wrong page later.
-        let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
+        let synth = ITinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
         assert(synth.engine() == 'tinysynth', 'not a TinySynth class');
         self.tinysynth_class_hash.write(tinysynth_class_hash);
     }
@@ -237,7 +235,7 @@ pub mod BeastLikeNft {
         fn token_uri(self: @ContractState, token_id: u256) -> ByteArray {
             // Library calls: the class code runs in this contract's context. It has no storage,
             // so it reads and writes nothing here. No deployed TinySynth contract is involved.
-            let synth = IOnchainTinySynthLibraryDispatcher {
+            let synth = ITinySynthLibraryDispatcher {
                 class_hash: self.tinysynth_class_hash.read(),
             };
 

@@ -70,7 +70,7 @@ The layout above, with word alignment:
 
 ```cairo
 use onchain_midi_player::interface::{
-    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
+    ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher,
 };
 use onchain_midi_player::types::TinySynthSettings;
 
@@ -96,7 +96,7 @@ fn token_uri(
     midi: ByteArray,
     settings: TinySynthSettings,
 ) -> ByteArray {
-    let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth };
+    let synth = ITinySynthLibraryDispatcher { class_hash: tinysynth };
 
     // '{' members ',' <pad>, a multiple of 3 bytes.
     let mut open: ByteArray = "{";

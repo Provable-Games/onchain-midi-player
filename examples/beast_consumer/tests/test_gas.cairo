@@ -18,16 +18,14 @@ use beast_consumer::beast_data::warlock_svg;
 use beast_consumer::beast_like_nft::{IBeastLikeNftDispatcherTrait, comma_b64, image_key_b64};
 use beast_consumer::sound;
 use onchain_midi_player::base64::bytes_base64_encode;
-use onchain_midi_player::interface::{
-    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
-};
+use onchain_midi_player::interface::{ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher};
 use onchain_midi_player::page_data;
 use snforge_std::{DeclareResultTrait, declare};
 use crate::test_token_uri::setup;
 
-fn synth() -> IOnchainTinySynthLibraryDispatcher {
-    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
-    IOnchainTinySynthLibraryDispatcher { class_hash }
+fn synth() -> ITinySynthLibraryDispatcher {
+    let class_hash = declare("TinySynth").unwrap().contract_class().class_hash;
+    ITinySynthLibraryDispatcher { class_hash }
 }
 
 /// `n` bytes of filler: a piece of the right length (append cost depends only on lengths).

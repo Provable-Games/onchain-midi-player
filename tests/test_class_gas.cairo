@@ -14,7 +14,7 @@
 //!   `test_settings_gas.cairo`.
 
 use onchain_midi_player::base64::bytes_base64_encode;
-use onchain_midi_player::interface::IOnchainTinySynthDispatcherTrait;
+use onchain_midi_player::interface::ITinySynthDispatcherTrait;
 use onchain_midi_player::segment::{d_fragment, midi_segment};
 use onchain_midi_player::types::TinySynthSettings;
 use crate::class_fixtures::{

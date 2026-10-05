@@ -31,18 +31,18 @@ Every rule below is fixed per class hash: the checks are `checkMidi` and `decode
 
 Everything else is accepted: any channel message, other meta events and SysEx of any length, and tempo events in any track. The page also rejects a MIDI block that is not strict base64 (`midi: not base64`). The class always writes valid base64, so only `check_midi.mjs` reports it, for a bad base64 input.
 
-The rules follow from how TinySynth reads a file: it stops reading a track at End-of-Track rather than at the chunk length, keeps running status across tracks and after meta and SysEx events, reads tempo at a fixed offset, and turns F7 events into SysEx. On a loop under 50 ms its scheduler would never catch up, and a longer text event can exceed a browser's argument limit.
+The rules follow from how the TinySynth engine reads a file: it stops reading a track at End-of-Track rather than at the chunk length, keeps running status across tracks and after meta and SysEx events, reads tempo at a fixed offset, and turns F7 events into SysEx. On a loop under 50 ms its scheduler would never catch up, and a longer text event can exceed a browser's argument limit.
 
 ## Playback
 
 - **Start.** Nothing plays until ▶ is pressed (a click or tap). Each ▶ reloads the MIDI and plays it from tick 0, after resetting every channel: program 0, volume (CC7) 100, pan (CC10) 64, expression (CC11) 127, modulation 0, sustain off, pitch bend centred, bend range MSB 2 (see RPN 0 below), fine, coarse, master and GS scale tuning 0, and channel 10 as the only drum channel. The tempo is 120 BPM until the first tempo event. Tick 0 sounds 0.1 s after playback starts (once the browser has resumed audio), and a rest before the first event is kept: every event sounds at its own tick's time.
-- **Tracks.** TinySynth merges all tracks into one list by tick; events at the same tick keep file order, track by track. A track does not loop on its own: if it ends before the others, it sends no more events until the next pass, but notes it left sounding (with no note-off yet) keep sounding.
+- **Tracks.** The TinySynth engine merges all tracks into one list by tick; events at the same tick keep file order, track by track. A track does not loop on its own: if it ends before the others, it sends no more events until the next pass, but notes it left sounding (with no note-off yet) keep sounding.
 - **Tempo.** A tempo change takes effect at its tick, from any track. The BPM is 60,000,000 divided by the tempo value, kept fractional.
 - **Loop.** The song always loops. A pass ends at `maxTick`, the latest End-of-Track tick of any track (the player calls `setLoop(1)` and `setLoopEnd(maxTick)`), and the next pass starts at tick 0, keeping the rest before the first event.
 - **State between passes.** At each loop point the tempo returns to 120 BPM, and a tempo event at tick 0 applies at once. Nothing else is reset: programs, controllers, pitch bend, RPN settings and tuning carry over from the end of the previous pass, and notes still sounding at End-of-Track keep sounding. Events at tick 0 run again on every pass, so a song that sets its state at tick 0 starts every pass the same way. Otherwise the first pass starts from the defaults above, and later passes from wherever the previous one ended.
 - **The art.** The player restarts the art when tick 0 is heard, on ▶ and again at every pass (see [The player page](token-uri-layout.md#the-player-page)). A pass that is a whole multiple of every period of the art's animation keeps them in step with no visible jump. Otherwise the art jumps back to its start at every loop point, and an animation longer than the pass never finishes.
-- **■** stops playback: TinySynth's `stopMIDI` cuts every voice (drum hits and notes already scheduled ahead included), and cancels the volume, expression, pan and modulation changes it had already scheduled. The art keeps running.
-- **Scheduling.** TinySynth schedules events about 0.2 s ahead. Each message takes effect at its own time, except CC120, CC121 and CC123–127 (see below) and the voice limit (see [Limits](#limits)), which act when the event is scheduled.
+- **■** stops playback: the TinySynth engine's `stopMIDI` cuts every voice (drum hits and notes already scheduled ahead included), and cancels the volume, expression, pan and modulation changes it had already scheduled. The art keeps running.
+- **Scheduling.** The TinySynth engine schedules events about 0.2 s ahead. Each message takes effect at its own time, except CC120, CC121 and CC123–127 (see below) and the voice limit (see [Limits](#limits)), which act when the event is scheduled.
 - **Notes the engine cannot compute.** A note whose computed frequencies or levels overflow the 32-bit float range, at a high note or tuning on a long FM chain or with a large `key_scale`, is skipped: it makes no sound and takes no voice, and the song plays on (see [Engine limits on operator values](sound-settings.md#engine-limits-on-operator-values)). Tuning adds to the note's pitch, so upward tuning can push such a timbre over.
 
 ## Channels and instruments
@@ -50,7 +50,7 @@ The rules follow from how TinySynth reads a file: it stops reading a track at En
 - **16 channels.** Port and channel-prefix meta events are ignored.
 - **Channel 10 (index 9) is percussion.** A note-on from 35 to 81 plays that drum; other notes are silent. Note-offs are ignored: a hit lasts 3.5 × the decay of its sound's first operator. Program changes on channel 10 have no effect.
 - **The other channels are melodic.** Program changes 0–127 select the General MIDI instrument, and notes 0–127 all play. Bank select (CC0, CC32) is ignored, so there are 128 programs.
-- **Built-in sounds.** `TinySynthSettings.quality` picks TinySynth's built-in set: 0 chip-tune (one oscillator per note), 1 FM.
+- **Built-in sounds.** `TinySynthSettings.quality` picks the TinySynth engine's built-in set: 0 chip-tune (one oscillator per note), 1 FM.
 - **Custom sounds.** Each entry of `TinySynthSettings.timbres` replaces program `slot` (0–127) or drum note `slot` (35–81) for the whole song. The MIDI selects it the ordinary way: a program change to the slot, or that drum note on channel 10.
 
 ## Messages TinySynth honours

@@ -11,7 +11,7 @@ Every figure here is Sierra gas, snforge's default. Cairo-steps accounting gives
 
 ## Entry points
 
-Through `IOnchainTinySynthLibraryDispatcher` on the declared class, as a consumer calls them, including passing the arguments and the result ([`tests/test_class_gas.cairo`](../tests/test_class_gas.cairo), `snforge test gas_lc`):
+Through `ITinySynthLibraryDispatcher` on the declared class, as a consumer calls them, including passing the arguments and the result ([`tests/test_class_gas.cairo`](../tests/test_class_gas.cairo), `snforge test gas_lc`):
 
 | Entry point | L2 gas |
 | --- | --- |

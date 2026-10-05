@@ -6,7 +6,7 @@
 //! <script> that inflates it, the ▶/■ control, the player <script>, then the opening of the
 //! settings block and its alignment spaces.
 //!
-//! - version(): 0.1.0
+//! - version(): 0.2.0
 //! - PAGE: 30051 bytes (len % 9 == 0)
 //! - engine: 46488 bytes, the fork's minified build at commit fc04dbe, gzipped
 //!   to 14056 bytes (fflate 0.8.3, level 9), 18744 as base64
@@ -42,7 +42,7 @@ pub const GZIP_LEN: u32 = 14056;
 
 /// `version()`: the class's SemVer version (engine `fc04dbe`, page revision 10; see
 /// scripts/page_versions.json).
-pub const VERSION: felt252 = '0.1.0';
+pub const VERSION: felt252 = '0.2.0';
 
 /// The `animation_url` JSON member, pre-encoded at both layers, left open for `midi_segment()`.
 /// A string literal: the compiler stores its words as constants, which is the cheapest way to
@@ -115,7 +115,7 @@ const LICENSE: [felt252; 295] = [
     0x666963206c616e677561676520676f7665726e696e67207065726d69737369,
     0x6f6e7320616e64206c696d69746174696f6e7320756e646572207468650a4c,
     0x6963656e73652e0a0a5468697320636c617373202876657273696f6e20302e,
-    0x312e302920656d6265647320696e20697473207061676520746865206d696e,
+    0x322e302920656d6265647320696e20697473207061676520746865206d696e,
     0x6966696564206275696c64206f6620636f6d6d697420666330346462653764,
     0x37386264306134646535656238303838373735366633316332633337336632,
     0x0a6f662068747470733a2f2f6769746875622e636f6d2f50726f7661626c65,

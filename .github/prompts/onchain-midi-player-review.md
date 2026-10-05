@@ -23,7 +23,7 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   close its `<script type="text/plain">` block, and invalid settings must
   revert onchain rather than reach the page.
 - **The API is permanent once declared:** a declared class hash is immutable
-  and consumers store it. Treat changes to `IOnchainTinySynth`, the public
+  and consumers store it. Treat changes to `ITinySynth`, the public
   types, the output byte layout, the SETTINGS format or `version()` as
   compatibility changes: flag anything that silently changes the bytes or
   sound for an existing class version, or an interface or format decision that
@@ -52,7 +52,7 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   expected (see Static review).
 - **Agent skills stay consistent:** `plugins/onchain-midi-player/skills/` holds
   the skills that agents in other repositories load: `integrator-guide` (the
-  `IOnchainTinySynth` API and `library_call`, the `token_uri` layout and
+  `ITinySynth` API and `library_call`, the `token_uri` layout and
   splicing, the art rule, `examples/beast_consumer`, snforge tests, gas and RPC
   caps), `midi-guide` (the MIDI contract, `check-midi` and `preview`, player
   and pinned-engine playback quirks, looping, art sync), `sound-design`

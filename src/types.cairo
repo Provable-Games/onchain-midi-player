@@ -224,7 +224,7 @@ pub enum FilterKind {
 /// - `Serde(TinySynthSound { midi, settings })` equals the calldata of `midi_segment(midi,
 ///   settings)`, so a provider's reply can be forwarded as is. Keep it that way.
 /// - A later engine's provider function is `get_<engine>_sound`, returning `<Engine>Sound`.
-///   `get_sound` belongs to TinySynth permanently.
+///   `get_sound` belongs to the TinySynth engine permanently.
 #[derive(Drop, Clone, Serde, PartialEq, Debug)]
 pub struct TinySynthSound {
     /// The raw bytes of a Standard MIDI File that passes `checkMidi` (docs/midi-contract.md).

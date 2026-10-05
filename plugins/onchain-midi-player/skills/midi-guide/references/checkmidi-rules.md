@@ -28,4 +28,4 @@ Errors read `midi: <message> (byte <offset>)`, where the offset is where reading
 
 Everything else is accepted: any channel message, other meta events, SysEx of any length, and tempo events in any track.
 
-The rules follow from how TinySynth reads a file: it stops reading a track at End-of-Track rather than at the chunk length, keeps running status across tracks and after meta and SysEx events, reads tempo at a fixed offset, and turns F7 events into SysEx. On a pass under 50 ms its scheduler would never catch up, and a longer text event can exceed a browser's argument limit.
+The rules follow from how the TinySynth engine reads a file: it stops reading a track at End-of-Track rather than at the chunk length, keeps running status across tracks and after meta and SysEx events, reads tempo at a fixed offset, and turns F7 events into SysEx. On a pass under 50 ms its scheduler would never catch up, and a longer text event can exceed a browser's argument limit.

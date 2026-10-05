@@ -32,7 +32,7 @@ for (const name of files) {
     const c = d.class;
     assert.deepEqual(Object.keys(c), ["package", "contract", "version", "release_tag", "class_hash", "declare_tx", "built_from", "inspection_instance"]);
     assert.equal(c.package, "onchain_midi_player");
-    assert.equal(c.contract, "OnchainTinySynth");
+    assert.equal(c.contract, "TinySynth");
     assert.ok(versions[c.version], `${c.version} is recorded in scripts/page_versions.json`);
     // A release has the tag v<version>; null marks a test class, not for production.
     assert.ok(c.release_tag === null || c.release_tag === `v${c.version}`, `release_tag ${c.release_tag}`);

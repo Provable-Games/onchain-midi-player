@@ -1,8 +1,8 @@
 [
   {
     "type": "impl",
-    "name": "OnchainTinySynthImpl",
-    "interface_name": "onchain_midi_player::interface::IOnchainTinySynth"
+    "name": "TinySynthImpl",
+    "interface_name": "onchain_midi_player::interface::ITinySynth"
   },
   {
     "type": "struct",
@@ -314,7 +314,7 @@
   },
   {
     "type": "interface",
-    "name": "onchain_midi_player::interface::IOnchainTinySynth",
+    "name": "onchain_midi_player::interface::ITinySynth",
     "items": [
       {
         "type": "function",
@@ -411,7 +411,7 @@
   },
   {
     "type": "event",
-    "name": "onchain_midi_player::contract::OnchainTinySynth::Event",
+    "name": "onchain_midi_player::contract::TinySynth::Event",
     "kind": "enum",
     "variants": []
   }

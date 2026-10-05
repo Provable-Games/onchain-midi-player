@@ -1,11 +1,11 @@
-//! Public interface of the OnchainTinySynth class, onchain-midi-player's TinySynth player class.
+//! Public interface of the TinySynth class, onchain-midi-player's class for the TinySynth engine.
 //!
 //! This class is meant to be **declared, never deployed**. It has no storage and no
 //! constructor. Consumers call it with `library_call` through the dispatcher that the
 //! `#[starknet::interface]` attribute generates:
 //!
 //! ```text
-//! let synth = IOnchainTinySynthLibraryDispatcher { class_hash: TINYSYNTH_CLASS_HASH };
+//! let synth = ITinySynthLibraryDispatcher { class_hash: TINYSYNTH_CLASS_HASH };
 //! let segment = synth.animation_url_segment();
 //! ```
 //!
@@ -80,18 +80,18 @@
 
 use crate::types::{TinySynthSettings, TinySynthSound};
 
-/// The OnchainTinySynth class: the onchain-midi-player class library for the TinySynth engine.
+/// The TinySynth class: onchain-midi-player's class library for the TinySynth engine.
 ///
 /// All functions are view-only and deterministic: for a given class hash, the same inputs
 /// always give the same output. The engine and the page are fixed per class version; a
 /// new engine or page means a new class hash and a new `version()`. Sound settings and
 /// custom sounds are supplied by the consumer on each call through `TinySynthSettings`.
 ///
-/// Intended to be invoked with `library_call` via `IOnchainTinySynthLibraryDispatcher`.
+/// Intended to be invoked with `library_call` via `ITinySynthLibraryDispatcher`.
 /// The class holds no state, so executing it in the caller's context reads and writes
 /// nothing on the caller's storage.
 #[starknet::interface]
-pub trait IOnchainTinySynth<T> {
+pub trait ITinySynth<T> {
     // ------------------------------------------------------------------------------------
     // For contracts that build their own token_uri JSON (the consumer layout).
     // ------------------------------------------------------------------------------------
@@ -198,7 +198,7 @@ pub trait IOnchainTinySynth<T> {
     fn script_sha256(self: @T) -> u256;
 
     /// Short string naming the synthesis engine this class embeds: always `'tinysynth'` for
-    /// `OnchainTinySynth`. Each engine gets its own class, and engine classes share the
+    /// `TinySynth`. Each engine gets its own class, and engine classes share the
     /// `midi_segment` selector, so a class hash of another engine's class could take a call meant
     /// for this one, decode it without error and render the wrong thing. A consumer that checks
     /// `engine()` when it stores or changes the class hash rejects such a hash at configuration
@@ -206,7 +206,7 @@ pub trait IOnchainTinySynth<T> {
     fn engine(self: @T) -> felt252;
 
     /// The class's version: a SemVer short string, `MAJOR.MINOR.PATCH` with an optional
-    /// pre-release tag (at most 31 bytes), e.g. `'0.1.0'`. Every declared class has its own:
+    /// pre-release tag (at most 31 bytes), e.g. `'0.2.0'`. Every declared class has its own:
     /// interim builds are `0.x.0`, and `1.0.0` comes at release, when the call and settings
     /// layouts freeze. From then on the major number promises call and settings-layout
     /// compatibility. A release has the git tag `v<version>`; a class without one is a test
@@ -262,7 +262,7 @@ pub trait IOnchainTinySynth<T> {
 /// - `Serde(TinySynthSound { midi, settings })` equals the calldata of `midi_segment(midi,
 ///   settings)`. Keep it that way.
 /// - A later engine's provider function is `get_<engine>_sound`, returning `<Engine>Sound`.
-///   `get_sound` belongs to TinySynth permanently.
+///   `get_sound` belongs to the TinySynth engine permanently.
 ///
 /// # The provider contract
 ///

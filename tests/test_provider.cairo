@@ -6,7 +6,7 @@
 
 use core::num::traits::Zero;
 use onchain_midi_player::interface::{
-    IOnchainTinySynthDispatcherTrait, ISoundProviderDispatcher, ISoundProviderDispatcherTrait,
+    ISoundProviderDispatcher, ISoundProviderDispatcherTrait, ITinySynthDispatcherTrait,
 };
 use onchain_midi_player::settings::default_operator;
 use onchain_midi_player::types::{
@@ -206,7 +206,7 @@ fn the_snippet_gives_none_when_the_call_fails() {
     assert(fetch_sound(provider, 2).is_none(), 'unknown token');
     assert(fetch_sound(provider, u256 { low: 0x10000, high: 1 }).is_none(), 'low bits 0');
     // The class has no `get_sound` entry point.
-    assert(fetch_sound(deploy("OnchainTinySynth", array![]), 1).is_none(), 'no get_sound');
+    assert(fetch_sound(deploy("TinySynth", array![]), 1).is_none(), 'no get_sound');
     // The provider still answers afterwards.
     assert(fetch_sound(provider, 1).is_some(), 'known token');
 }
