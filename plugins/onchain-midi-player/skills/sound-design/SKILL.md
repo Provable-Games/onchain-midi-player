@@ -27,7 +27,7 @@ Get the tools: Node 22 or later, and a clone whose `grep 'pub const VERSION' src
 
 ## What the class checks
 
-`midi_segment` reverts on exactly the checks in the table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/settings.cairo), in the checkout whose `VERSION` matches your class. Trust that table and `preview`, which runs the same checks; do not rely on remembered ranges, because they differ between class versions:
+`midi_segment` reverts on exactly the checks in the table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/settings.cairo), in the checkout whose `VERSION` matches your class. The rules below are keyed by page revision (`page.N`): a class's is in the README's [Versions](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#versions) "Page revision" column (or the `page` field of `scripts/page_versions.json`), and a version from before SemVer names it. Trust that table and `preview`, which runs the same checks; do not rely on remembered ranges, because they differ between class versions:
 
 From `page.7`:
 
@@ -139,6 +139,8 @@ let hat = Operator {
 `midi_segment` runs `settings::validate`, which applies the checks in the table at the top of `src/settings.cairo` in a fixed order and reverts on the first failure with a `'TS: …'` short string, followed by the 0-based indices of the wave, the timbre, or the timbre and operator. Example: `('TS: route out of range', 3, 1)`. Through a library call the panic data arrives whole, followed by `'ENTRYPOINT_FAILED'`. An invalid setting reverts the whole `token_uri`. The checks, their order and their messages are the table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/settings.cairo).
 
 ## Building settings in Cairo
+
+The snippets use the current names. Against a commit from before the rename (see the integrator-guide's [Depend on the crate](../integrator-guide/SKILL.md#1-depend-on-the-crate)), the package is `onchain_tinysynth` and the type `SynthSettings`.
 
 ```cairo
 use onchain_midi_player::settings::{default_operator, default_settings};

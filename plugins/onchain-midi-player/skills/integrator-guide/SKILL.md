@@ -27,6 +27,8 @@ sierra = true
 build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
 ```
 
+Commits from before the rename to onchain-midi-player, including the "Built from" commits of the Sepolia classes in the README's [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#deployments), name the package `onchain_tinysynth` (dependency key, `use` paths and `build-external-contracts`) and the types `SynthSettings` and `TokenSound`, and their class has no `engine()`; the class and interface names are the same. The Cairo in these skills uses the current names.
+
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#the-base64-encoder)).
 
 ```cairo
