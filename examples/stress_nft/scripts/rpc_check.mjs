@@ -173,9 +173,10 @@ export function label(r) {
   const e = r.error;
   if (/timeout/i.test(e)) return 'TIMEOUT';
   if (/out of gas|OutOfGas|could not reach the end|gas/i.test(e)) return 'OOG';
-  if (/too large|too big|exceed|413|limit|size/i.test(e)) return 'TOO BIG';
   const http = /^HTTP (\d+)/.exec(e);
-  return http ? `HTTP ${http[1]}` : 'ERR';
+  if (http && http[1] !== '413') return `HTTP ${http[1]}`;
+  if (/^HTTP 413|too large|payload|response size|message size/i.test(e)) return 'TOO BIG';
+  return 'ERR';
 }
 
 function parseTokens(spec) {

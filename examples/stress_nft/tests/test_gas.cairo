@@ -1,5 +1,5 @@
 //! Gas of each token's `token_uri`, one call per test (calibration: README.md). The tests are
-//! ignored because the large tokens take about a minute each. Run them all with
+//! ignored because they take a few seconds each. Run them all with
 //!
 //!     snforge test gas_token --ignored --gas-report
 //!

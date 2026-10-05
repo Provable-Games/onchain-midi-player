@@ -75,5 +75,7 @@ test('labels name the failures the matrix is about', () => {
   assert.equal(label({ ok: true, identical: false }), 'DIFF');
   assert.equal(label({ ok: false, error: "40: Contract error | 0x4f7574206f6620676173 ('Out of gas')" }), 'OOG');
   assert.equal(label({ ok: false, error: 'timeout after 180 s' }), 'TIMEOUT');
-  assert.equal(label({ ok: false, error: 'HTTP 429: slow down' }), 'HTTP 429');
+  assert.equal(label({ ok: false, error: 'HTTP 429: rate limit exceeded' }), 'HTTP 429');
+  assert.equal(label({ ok: false, error: 'HTTP 413: payload too large' }), 'TOO BIG');
+  assert.equal(label({ ok: false, error: '-32000: response size exceeded' }), 'TOO BIG');
 });

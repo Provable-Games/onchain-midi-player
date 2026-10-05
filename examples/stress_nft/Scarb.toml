@@ -25,7 +25,7 @@ test = "snforge test"
 [tool.scarb]
 allow-prebuilt-plugins = ["snforge_std"]
 
-# The largest tokens run about 90M Cairo steps through `token_uri`, and `token_uri_12_matches_js_digest`
-# also hashes a 0.5 MB token in Cairo.
+# Above snforge's default step limit of 10M: the large tokens run tens of millions of Cairo steps
+# through `token_uri`, and the digest test of token 12 also hashes its 354 KB in Cairo.
 [tool.snforge]
-max_n_steps = 400000000
+max_n_steps = 100000000
