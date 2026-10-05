@@ -244,7 +244,7 @@ The tools the skills use need Node 22 or later and a clone whose `VERSION` match
 - [Verifying the engine](docs/verifying.md)
 - [`deployments/`](deployments): what is declared and deployed on each network, one JSON file per network
 - [`abi/`](abi): the ABIs of the class and of `ISoundProvider`
-- [`scripts/page_versions.json`](scripts/page_versions.json): every `version()`'s engine commit, page revision and hashes
+- [`scripts/page_versions.json`](scripts/page_versions.json): the current `version()`'s engine commit, page revision and hashes (earlier versions are in its git history)
 - [Development](docs/development.md): toolchain, build, tests and CI, for contributors
 
 ## License
