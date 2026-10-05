@@ -64,7 +64,7 @@ pub struct RawReply {
 
 impl RawReplySerde of Serde<RawReply> {
     fn serialize(self: @RawReply, ref output: Array<felt252>) {
-        for felt in *self.felts {
+        for felt in self.felts {
             output.append(*felt);
         }
     }

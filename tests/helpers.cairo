@@ -11,7 +11,7 @@ use starknet::ClassHash;
 
 /// Declares the class (never deploys it) and returns its class hash.
 pub fn declare_class() -> ClassHash {
-    *declare("OnchainTinySynth").unwrap().contract_class().class_hash
+    declare("OnchainTinySynth").unwrap().contract_class().class_hash
 }
 
 /// The declared class, through the library dispatcher a consumer uses.

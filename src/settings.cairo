@@ -172,10 +172,10 @@ pub fn default_operator() -> Operator {
 
 /// Applies the checks above to `settings`, in order, and reverts on the first failure.
 pub fn validate(settings: @SynthSettings) {
-    assert((*settings.quality).into() <= 1_u32, 'TS: quality out of range');
-    assert((*settings.voices).into() >= MIN_VOICES, 'TS: voices out of range');
+    assert(settings.quality.into() <= 1_u32, 'TS: quality out of range');
+    assert(settings.voices.into() >= MIN_VOICES, 'TS: voices out of range');
 
-    let waves = *settings.waves;
+    let waves = settings.waves;
     let n_waves = waves.len();
     assert(n_waves <= MAX_WAVES, 'TS: too many waves');
     let mut w: u32 = 0;
@@ -197,7 +197,7 @@ pub fn validate(settings: @SynthSettings) {
         w += 1;
     }
 
-    let timbres = *settings.timbres;
+    let timbres = settings.timbres;
     assert(timbres.len() <= MAX_TIMBRES, 'TS: too many timbres');
     let mut used_programs: u128 = 0;
     let mut used_drums: u64 = 0;
@@ -217,8 +217,8 @@ pub fn validate_and_encode(settings: @SynthSettings) -> ByteArray {
 fn validate_timbre(
     timbre: @Timbre, t: u32, n_waves: u32, ref used_programs: u128, ref used_drums: u64,
 ) {
-    let slot: u32 = (*timbre.slot).into();
-    if *timbre.drum {
+    let slot: u32 = timbre.slot.into();
+    if timbre.drum {
         if slot < MIN_DRUM_SLOT || slot > MAX_DRUM_SLOT {
             fail_at('TS: drum slot out of range', t);
         }
@@ -237,7 +237,7 @@ fn validate_timbre(
         }
         used_programs = used_programs | bit;
     }
-    let ops = *timbre.operators;
+    let ops = timbre.operators;
     if ops.len() < 1 {
         fail_at('TS: no operators', t);
     }
@@ -254,7 +254,7 @@ fn validate_timbre(
 fn validate_operator(op: @Operator, t: u32, o: u32, n_waves: u32) {
     // 1-based position of this operator, as TinySynth's `g` counts.
     let pos = o + 1;
-    let route: u32 = (*op.route).into();
+    let route: u32 = op.route.into();
     if route > MAX_ROUTE {
         fail_at_op('TS: route out of range', t, o);
     }
@@ -264,34 +264,34 @@ fn validate_operator(op: @Operator, t: u32, o: u32, n_waves: u32) {
     if route >= 11 && route - 10 >= pos {
         fail_at_op('TS: AM target not earlier', t, o);
     }
-    if let Waveform::Custom(i) = *op.wave {
+    if let Waveform::Custom(i) = op.wave {
         if i.into() >= n_waves {
             fail_at_op('TS: wave index out of range', t, o);
         }
     }
-    if *op.volume > MAX_VOLUME {
+    if op.volume > MAX_VOLUME {
         fail_at_op('TS: volume out of range', t, o);
     }
-    if *op.ratio > MAX_RATIO {
+    if op.ratio > MAX_RATIO {
         fail_at_op('TS: ratio out of range', t, o);
     }
-    if *op.pitch_ratio > MAX_PITCH_RATIO {
+    if op.pitch_ratio > MAX_PITCH_RATIO {
         fail_at_op('TS: pitch_ratio out of range', t, o);
     }
-    if *op.sustain > MAX_SUSTAIN {
+    if op.sustain > MAX_SUSTAIN {
         fail_at_op('TS: sustain out of range', t, o);
     }
-    if *op.key_scale < -MAX_KEY_SCALE || *op.key_scale > MAX_KEY_SCALE {
+    if op.key_scale < -MAX_KEY_SCALE || op.key_scale > MAX_KEY_SCALE {
         fail_at_op('TS: key_scale out of range', t, o);
     }
-    if let Option::Some(filter) = op.filter {
+    if let Option::Some(filter) = @op.filter {
         if route != 0 {
             fail_at_op('TS: filter on modulator', t, o);
         }
-        if *filter.cutoff == 0 {
+        if filter.cutoff == 0 {
             fail_at_op('TS: filter cutoff out of range', t, o);
         }
-        if *filter.q == 0 {
+        if filter.q == 0 {
             fail_at_op('TS: filter q out of range', t, o);
         }
     }
@@ -311,15 +311,15 @@ pub fn encode(settings: @SynthSettings) -> ByteArray {
     let mut out: ByteArray = "";
     put_u(ref out, SETTINGS_FORMAT_VERSION);
     comma(ref out);
-    put_u(ref out, (*settings.quality).into());
+    put_u(ref out, settings.quality.into());
     comma(ref out);
-    put_u(ref out, (*settings.reverb).into());
+    put_u(ref out, settings.reverb.into());
     comma(ref out);
-    put_u(ref out, (*settings.master_vol).into());
+    put_u(ref out, settings.master_vol.into());
     comma(ref out);
-    put_u(ref out, (*settings.voices).into());
+    put_u(ref out, settings.voices.into());
 
-    let waves = *settings.waves;
+    let waves = settings.waves;
     comma(ref out);
     put_u(ref out, waves.len());
     for wave in waves {
@@ -344,19 +344,19 @@ pub fn encode(settings: @SynthSettings) -> ByteArray {
         }
     }
 
-    let timbres = *settings.timbres;
+    let timbres = settings.timbres;
     comma(ref out);
     put_u(ref out, timbres.len());
     for timbre in timbres {
         comma(ref out);
-        out.append_byte(if *timbre.drum {
+        out.append_byte(if timbre.drum {
             '1'
         } else {
             '0'
         });
         comma(ref out);
-        put_u(ref out, (*timbre.slot).into());
-        let ops = *timbre.operators;
+        put_u(ref out, timbre.slot.into());
+        let ops = timbre.operators;
         comma(ref out);
         put_u(ref out, ops.len());
         for op in ops {
@@ -368,9 +368,9 @@ pub fn encode(settings: @SynthSettings) -> ByteArray {
 }
 
 fn put_operator(ref out: ByteArray, op: @Operator) {
-    put_u(ref out, (*op.route).into());
+    put_u(ref out, op.route.into());
     comma(ref out);
-    match *op.wave {
+    match op.wave {
         Waveform::Sine => out.append_byte('0'),
         Waveform::Square => out.append_byte('1'),
         Waveform::Sawtooth => out.append_byte('2'),
@@ -383,29 +383,29 @@ fn put_operator(ref out: ByteArray, op: @Operator) {
         },
     }
     comma(ref out);
-    put_u(ref out, *op.volume);
+    put_u(ref out, op.volume);
     comma(ref out);
-    put_u(ref out, *op.ratio);
+    put_u(ref out, op.ratio);
     comma(ref out);
-    put_i(ref out, *op.offset_hz);
+    put_i(ref out, op.offset_hz);
     comma(ref out);
-    put_u(ref out, *op.attack);
+    put_u(ref out, op.attack);
     comma(ref out);
-    put_u(ref out, *op.hold);
+    put_u(ref out, op.hold);
     comma(ref out);
-    put_u(ref out, *op.decay);
+    put_u(ref out, op.decay);
     comma(ref out);
-    put_u(ref out, *op.sustain);
+    put_u(ref out, op.sustain);
     comma(ref out);
-    put_u(ref out, *op.release);
+    put_u(ref out, op.release);
     comma(ref out);
-    put_u(ref out, *op.pitch_ratio);
+    put_u(ref out, op.pitch_ratio);
     comma(ref out);
-    put_u(ref out, *op.pitch_time);
+    put_u(ref out, op.pitch_time);
     comma(ref out);
-    put_i(ref out, *op.key_scale);
+    put_i(ref out, op.key_scale);
     comma(ref out);
-    put_filter(ref out, op.filter);
+    put_filter(ref out, @op.filter);
 }
 
 fn put_filter(ref out: ByteArray, filter: @Option<Filter>) {
@@ -415,22 +415,22 @@ fn put_filter(ref out: ByteArray, filter: @Option<Filter>) {
             out.append_word('1,', 2);
             out
                 .append_byte(
-                    match *f.kind {
+                    match f.kind {
                         FilterKind::LowPass => '0',
                         FilterKind::HighPass => '1',
                         FilterKind::BandPass => '2',
                     },
                 );
             comma(ref out);
-            put_u(ref out, *f.cutoff);
+            put_u(ref out, f.cutoff);
             comma(ref out);
-            out.append_byte(if *f.key_track {
+            out.append_byte(if f.key_track {
                 '1'
             } else {
                 '0'
             });
             comma(ref out);
-            put_u(ref out, *f.q);
+            put_u(ref out, f.q);
         },
     }
 }
