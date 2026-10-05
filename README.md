@@ -32,7 +32,7 @@ Details: [`token_uri` layout and the player page](docs/token-uri-layout.md).
 ```toml
 [dependencies]
 onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "v<version>" }
-# For a build without a release tag: rev = "<commit>", from "Built from" in docs/versions.md
+# Before a release tag exists: rev = "<commit>", a commit of this repository
 
 [[target.starknet-contract]]
 sierra = true
@@ -40,7 +40,7 @@ sierra = true
 build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
 ```
 
-**2. Hold a class hash.** Store it in your NFT, or in a small renderer contract the NFT calls, and let the owner change it. Take it from [Versions and deployments](docs/versions.md). A class hash fixes the engine and the player, so tokens keep their sound until you switch. When you store or change it, check that `engine()` returns `'tinysynth'`: another engine's class shares the `midi_segment` selector and could render the wrong thing without an error.
+**2. Hold a class hash.** Store it in your NFT, or in a small renderer contract the NFT calls, and let the owner change it. Take it from [Versions and deployments](docs/versions.md). A class hash fixes the engine and the player, so tokens keep their sound until you switch. When you store or change it, check that `engine()` returns `'tinysynth'`: another engine's class shares the `midi_segment` selector and could render the wrong thing without an error. The Sepolia test classes listed there predate `engine()` and the current package and type names, so test against the class your dependency builds instead.
 
 ```cairo
 use onchain_midi_player::interface::{
