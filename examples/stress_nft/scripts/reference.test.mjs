@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { checkMidi } from '../../../player/player.js';
 import { byteArrayFelts, decodeTokenUri } from '../../../scripts/page.mjs';
 import { TOKEN_COUNT, decodeByteArray, defaultRepetitions, rpcResponseBytes, stressMidi, tokenUri } from './reference.mjs';
-import { label, redactor, selector, withText } from './rpc_check.mjs';
+import { isFelts, label, redactor, selector, withText } from './rpc_check.mjs';
 
 test('the table has one growing, positive count per token', () => {
   const bars = defaultRepetitions();
@@ -66,6 +66,12 @@ test('errors never carry a provider URL, host or key, however the key looks', ()
     assert.ok(!redact(`${'x'.repeat(190)} ${key}`).includes(key.slice(0, 4)), 'a cut through a key leaves no prefix');
   }
   assert.equal(redactor([])('the method starknet_call does not exist, see https://other.example/x'), 'the method starknet_call does not exist, see <url>');
+});
+
+test('only an array of hex felts is a result', () => {
+  assert.ok(isFelts(['0x0', '0xabc', '0X1F'.replace('X', 'x')]));
+  assert.ok(!isFelts(['0x0', 'invalid API key SECRET']));
+  assert.ok(!isFelts('0x0') && !isFelts([0]) && !isFelts(['0x']));
 });
 
 test('revert reasons are shown as text', () => {

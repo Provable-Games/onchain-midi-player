@@ -139,6 +139,9 @@ export function withText(msg) {
   });
 }
 
+/** Whether `result` is an array of `0x` hex strings. */
+export const isFelts = (result) => Array.isArray(result) && result.every((f) => typeof f === 'string' && /^0x[0-9a-fA-F]+$/.test(f));
+
 /** One starknet_call. Returns {ok, felts | error, bytes, ms}. `redact` strips provider URLs from errors. */
 async function call(url, redact, timeoutS, address, name, calldata) {
   const body = JSON.stringify({
@@ -173,6 +176,8 @@ async function call(url, redact, timeoutS, address, name, calldata) {
       return { ok: false, error: redact(withText(msg).replace(/\s+/g, ' ')).slice(0, 300), bytes, ms };
     }
     if (!res.ok || !Array.isArray(json.result)) return { ok: false, error: `HTTP ${res.status}: no result`, bytes, ms };
+    // A result is hex felts: anything else is not decoded or echoed, since it could carry a credential.
+    if (!isFelts(json.result)) return { ok: false, error: 'malformed result: not an array of hex felts', bytes, ms };
     return { ok: true, felts: json.result, bytes, ms };
   } catch (e) {
     const ms = Math.round(performance.now() - t0);
@@ -304,7 +309,7 @@ async function main() {
             if (!row.identical) row.error = `differs from the reference (${uri.length} chars, expected ${expected(t).length})`;
           } catch (e) {
             row.ok = false;
-            row.error = `undecodable result: ${e.message}`;
+            row.error = redact(`undecodable result: ${e.message}`);
           }
         } else row.error = r.error;
         row.label = label(row);
