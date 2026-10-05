@@ -62,16 +62,18 @@ export function isSemVer(/** @type {string} */ v) {
 export function compareSemVer(a, b) {
   const parse = (/** @type {string} */ v) => {
     const [core, pre] = v.split(/-(.*)/s);
-    return { core: core.split(".").map(Number), pre: pre === undefined ? [] : pre.split(".") };
+    return { core: core.split(".").map(BigInt), pre: pre === undefined ? [] : pre.split(".") };
   };
+  // Numbers compare exactly, as BigInt: SemVer puts no bound on them.
+  const cmp = (/** @type {bigint} */ m, /** @type {bigint} */ n) => (m < n ? -1 : m > n ? 1 : 0);
   const x = parse(a), y = parse(b);
-  for (let i = 0; i < 3; i++) if (x.core[i] !== y.core[i]) return x.core[i] - y.core[i];
+  for (let i = 0; i < 3; i++) if (x.core[i] !== y.core[i]) return cmp(x.core[i], y.core[i]);
   if (!x.pre.length || !y.pre.length) return y.pre.length - x.pre.length;
   for (let i = 0; i < Math.min(x.pre.length, y.pre.length); i++) {
     const p = x.pre[i], q = y.pre[i];
     if (p === q) continue;
     const pn = /^\d+$/.test(p), qn = /^\d+$/.test(q);
-    if (pn && qn) return Number(p) - Number(q);
+    if (pn && qn) return cmp(BigInt(p), BigInt(q));
     if (pn !== qn) return pn ? -1 : 1;
     return p < q ? -1 : 1;
   }
