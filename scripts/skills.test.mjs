@@ -8,7 +8,8 @@
 //     README, docs/ and the example's README resolves;
 //   - the midi-guide reference lists every checkMidi message, and the sound-design operator table
 //     matches the JS reference of settings::validate;
-//   - every gas figure in the skills appears in the README or docs/;
+//   - every gas figure in the skills appears in the README or docs/, and the MIDI and SETTINGS gas
+//     rates agree with docs/gas.md;
 //   - the skills hardcode nothing a re-pin changes: VERSION, the engine commit, page and segment
 //     sizes, and long hex hashes (class hashes and SHA-256s belong in docs/versions.md);
 //   - the skills' helper scripts work on real fixtures.
@@ -255,6 +256,34 @@ describe("content kept in step with the code", () => {
     for (const file of markdown) {
       for (const [figure] of readFileSync(file, "utf8").matchAll(/(?<![\w.])\d+(?:\.\d+)?[MB](?!\w)/g)) {
         assert.ok(docs.includes(figure), `${relative(ROOT, file)}: ${figure} is not in the README or docs/`);
+      }
+    }
+  });
+
+  test("the MIDI and SETTINGS gas rates agree with docs/gas.md and are quoted separately", () => {
+    // The MIDI rate is the slope of docs/gas.md's `midi_segment` table (16-byte SETTINGS column,
+    // no MIDI to the 3,716-byte score), in M L2 gas per 1,000 bytes. SETTINGS costs a little more per
+    // byte (docs/gas.md, "The size of `SETTINGS`"), so the two must not share a figure.
+    const gas = read("docs/gas.md");
+    const cell = (/** @type {string} */ label) => {
+      const m = gas.match(new RegExp(`^\\| ${label} \\| ([\\d.]+)M`, "m"));
+      assert.ok(m, `the ${label} row of docs/gas.md's midi_segment table`);
+      return Number(m[1]);
+    };
+    const midiRate = (cell("3,716 bytes") - cell("none")) / 3.716;
+    assert.ok(Math.abs(midiRate - 14) <= 0.25, `the table gives ${midiRate.toFixed(2)}M per 1,000 bytes of MIDI, not about 14M`);
+    assert.match(gas, /The MIDI costs about 14M L2 gas per 1,000 bytes/);
+    assert.match(read("docs/midi-contract.md"), /about 14M L2 gas per 1,000 bytes/);
+    assert.match(read("README.md"), /\| MIDI: per KB \| about 14M \|\n\| `SETTINGS`: per KB \| about 14\.5M \|/);
+    assert.match(read("README.md"), /Every byte costs gas: about 14M L2 gas per KB/);
+    const midiGuide = read("plugins/onchain-midi-player/skills/midi-guide/SKILL.md");
+    assert.match(midiGuide, /The MIDI costs about 14M L2 gas per 1,000 bytes \(\[`midi_segment` table\]\([^)]*gas\.md#midi_segment-by-midi-and-settings-size\)\); `SETTINGS` costs about 14\.5M \(\[The size of `SETTINGS`\]\([^)]*gas\.md#the-size-of-settings\)\)/);
+    const settingsRate = /14\.5M L2 gas/;
+    for (const file of ["docs/sound-settings.md", "docs/sound-provider.md", "docs/gas.md"]) assert.match(read(file), settingsRate, file);
+    // No file quotes 14.5M for the MIDI.
+    for (const file of ["README.md", ...DOCS, ...markdown.map((f) => relative(ROOT, f))]) {
+      for (const line of read(file).split("\n")) {
+        if (/14\.5M/.test(line) && /\bMIDI\b/.test(line) && !/SETTINGS/.test(line)) assert.fail(`${file} quotes 14.5M for the MIDI: ${line.slice(0, 120)}`);
       }
     }
   });

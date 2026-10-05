@@ -20,7 +20,7 @@ The consumer passes a typed `TinySynthSettings` value with every `midi_segment` 
 - **Size.** `SETTINGS` is base64-encoded at call time along with the MIDI.
   - It is 16 bytes with the defaults (`1,1,30,40,64,0,0`), plus about 6 bytes per timbre, 50 bytes per operator, 8 to 26 more per filter (a typical one 15 to 18), and 2 to 6 bytes per wave sample or harmonic (about 4.5 per sample at full scale).
   - The three Beast reference sounds (a 2-operator lead, kick and snare) come to 334 bytes.
-  - There is no byte cap. Each KB costs about 14.5M L2 gas (see [Gas and limits](gas.md#the-size-of-settings)).
+  - There is no byte cap. Each 1,000 bytes costs about 14.5M L2 gas through `midi_segment` (see [Gas and limits](gas.md#the-size-of-settings)).
 
 ## The `SETTINGS` format
 
@@ -73,7 +73,7 @@ The crate exports:
 | The 3 Beast reference sounds, no custom wave (`beast_reference`) | 334 | 60.7M |
 | One wave: the reference lead on the 64-sample stepped triangle (`one_wave`) | 365 | 61.3M |
 | The six short reference waves on eight timbres (`reference_waves`) | 1,356 | 77.2M |
-| The long LFSR, 32,767 samples, on one drum timbre (`longLfsr`) | 147,532 | 2,192.8M |
+| The long LFSR, 32,767 samples, on one drum timbre (`longLfsr`), net of the 277.9M that builds the table | 147,532 | 2,192.8M |
 
 The long LFSR adds about 2.1B to a `token_uri`, which fits Pathfinder's 10B call cap but not every RPC provider's (see [Node limits](gas.md#node-limits)). `WhiteNoise` needs no table and is the cheap alternative.
 
@@ -149,7 +149,6 @@ fn filtered_settings() -> TinySynthSettings {
 The class bounds no operator value: every field takes any value of its integer type, so composers can use everything the engine can do.
 
 - **A note whose values overflow is skipped.** The operator values multiply into the frequencies and levels the engine passes to Web Audio, which requires them finite as 32-bit floats (at most about 3.4e38). A note's level is multiplied by `2^((note - 60) / 12 * key_scale)`, and an FM modulator's frequency and depth by its target's frequency, so a long FM chain of high ratios, or a large `key_scale`, can overflow at some notes and tunings. The engine then skips the note: it makes no sound, takes no voice and throws nothing, and the song plays on. [`scripts/engine_contract.test.mjs`](../scripts/engine_contract.test.mjs) pins this.
-- **Earlier classes** bound five operator fields and reject filters: see [Deployments](versions.md#deployments).
 - **How to avoid it.** Keep FM chains short or their ratios low, and `key_scale` moderate. For reference, an 8-operator FM chain with `volume` 100.0, `ratio` 64.0, `pitch_ratio` 16.0, `sustain` 100.0 and `key_scale` ±8.0 sounds at notes 0 and 127 without tuning. A skipped note logs no error, so only listening shows it: preview the score with its settings ([Previewing a score](midi-contract.md#previewing-a-score)) at its highest and lowest notes and its tuning.
 
 ## Designing a custom sound

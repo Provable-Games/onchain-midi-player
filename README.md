@@ -107,7 +107,7 @@ npm run check-midi -- song.mid other.mid
 - Only the tempo resets between passes. Set tempo, programs and controllers at tick 0 so every pass starts the same way.
 - Channel 10 is drums: notes 35–81, and note-offs are ignored. The other channels play General MIDI programs 0–127.
 - The art restarts at every pass. Make the pass a whole multiple of the art's animation periods, or the art jumps at the loop point.
-- Every byte costs gas: about 14.5M L2 gas per KB.
+- Every byte costs gas: about 14M L2 gas per KB.
 
 **Sound settings.** Each `midi_segment` call takes a `TinySynthSettings` value, declared in [`src/types.cairo`](src/types.cairo):
 
@@ -139,7 +139,8 @@ A marketplace or indexer reads `token_uri` with a view call (`starknet_call`). T
 | --- | --- |
 | The fixed page: `animation_url_segment()` and appending it, word-aligned | about 10M |
 | Art: per KB of SVG (it is encoded twice) | about 9M |
-| MIDI or `SETTINGS`: per KB | about 14.5M |
+| MIDI: per KB | about 14M |
+| `SETTINGS`: per KB | about 14.5M |
 | Your contract's own work: rendering the SVG, the JSON members | yours to measure |
 
 `SETTINGS` is the text form of your `TinySynthSettings`. The defaults are 16 bytes, and three typical custom sounds about 0.3 KB. Each operator adds about 50 bytes, and each wave sample or harmonic 2 to 6 bytes. `SETTINGS` has no size cap: gas and the node's cap are the only limits.
