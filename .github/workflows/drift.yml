@@ -39,8 +39,8 @@ jobs:
   drift:
     name: drift (${{ matrix.browser }})
     runs-on: ubuntu-24.04-arm
-    # Setup and the browser take a few minutes; the session is the input's.
-    timeout-minutes: ${{ fromJSON(inputs.minutes || '10') + 20 }}
+    # Setup and the browser take a few minutes. A manual run may ask for a longer session.
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 120 || 30 }}
     strategy:
       fail-fast: false
       matrix:
