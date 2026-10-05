@@ -1,4 +1,4 @@
-//! The tokens' music: a Standard MIDI File and its `SynthSettings`.
+//! The tokens' music: a Standard MIDI File and its `TinySynthSettings`.
 //!
 //! In the real Beasts integration the MIDI comes from the onchain composer (a sound provider whose
 //! `get_sound` reads the Beast's state). For the sample tokens it is a fixed one-bar loop that
@@ -6,7 +6,7 @@
 //! holds a byte-identical copy that the golden test keeps in lockstep. Token 4 uses a synthetic
 //! score the size of the composer's largest production score, and the Beast reference sounds.
 
-use onchain_midi_player::types::{Operator, SynthSettings, Timbre, Waveform};
+use onchain_midi_player::types::{Operator, Timbre, TinySynthSettings, Waveform};
 
 /// Format 0, PPQ 48, one 4/4 bar at 120 BPM (192 ticks), 112 bytes.
 ///
@@ -126,13 +126,13 @@ fn timbres() -> Span<Timbre> {
 /// from the permanent `tier` trait, which keeps each token's sound fixed (docs/sound-settings.md,
 /// "Consistency").
 /// Varying it also changes `len(SETTINGS)`, so the examples exercise different `D` paddings.
-pub fn settings_for(tier: u8) -> SynthSettings {
+pub fn settings_for(tier: u8) -> TinySynthSettings {
     let reverb = match tier {
         0 | 1 => 100,
         2 => 30,
         _ => 5,
     };
-    SynthSettings {
+    TinySynthSettings {
         quality: 1, reverb, master_vol: 40, voices: 64, waves: [].span(), timbres: timbres(),
     }
 }
@@ -141,7 +141,7 @@ pub fn settings_for(tier: u8) -> SynthSettings {
 /// kick (triangle pitch drop plus a noise click) on drum 36 and a snare (noise plus a square body)
 /// on drum 38, with no reverb, as the production page has none. Encodes to the 334-byte `SETTINGS`
 /// of the root crate's `beast_reference` fixture.
-pub fn beast_reference_settings() -> SynthSettings {
+pub fn beast_reference_settings() -> TinySynthSettings {
     let lead = Timbre {
         drum: false,
         slot: 0,
@@ -169,7 +169,7 @@ pub fn beast_reference_settings() -> SynthSettings {
         ]
             .span(),
     };
-    SynthSettings {
+    TinySynthSettings {
         quality: 1,
         reverb: 0,
         master_vol: 40,
@@ -189,7 +189,7 @@ pub fn token_midi(token_id: u256) -> ByteArray {
 }
 
 /// The token's settings: `settings_for(tier)`, or for token 4 the Beast reference sounds.
-pub fn token_settings(token_id: u256, tier: u8) -> SynthSettings {
+pub fn token_settings(token_id: u256, tier: u8) -> TinySynthSettings {
     if token_id == 4 {
         beast_reference_settings()
     } else {

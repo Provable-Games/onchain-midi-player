@@ -2,26 +2,26 @@
 
 use onchain_midi_player::base64::bytes_base64_encode;
 use onchain_midi_player::interface::{
-    IOnchainMidiPlayerLibraryDispatcher, IOnchainMidiPlayerSafeLibraryDispatcher,
+    IOnchainTinySynthLibraryDispatcher, IOnchainTinySynthSafeLibraryDispatcher,
 };
-use onchain_midi_player::types::SynthSettings;
+use onchain_midi_player::types::TinySynthSettings;
 use onchain_midi_player::{page_data, segment};
 use snforge_std::{DeclareResultTrait, declare};
 use starknet::ClassHash;
 
 /// Declares the class (never deploys it) and returns its class hash.
 pub fn declare_class() -> ClassHash {
-    declare("OnchainMidiPlayer").unwrap().contract_class().class_hash
+    declare("OnchainTinySynth").unwrap().contract_class().class_hash
 }
 
 /// The declared class, through the library dispatcher a consumer uses.
-pub fn class() -> IOnchainMidiPlayerLibraryDispatcher {
-    IOnchainMidiPlayerLibraryDispatcher { class_hash: declare_class() }
+pub fn class() -> IOnchainTinySynthLibraryDispatcher {
+    IOnchainTinySynthLibraryDispatcher { class_hash: declare_class() }
 }
 
 /// The declared class, through the safe library dispatcher, to read panic data.
-pub fn safe_class() -> IOnchainMidiPlayerSafeLibraryDispatcher {
-    IOnchainMidiPlayerSafeLibraryDispatcher { class_hash: declare_class() }
+pub fn safe_class() -> IOnchainTinySynthSafeLibraryDispatcher {
+    IOnchainTinySynthSafeLibraryDispatcher { class_hash: declare_class() }
 }
 
 /// Appends spaces until `(s.len() + extra) % 3 == 0`.
@@ -35,7 +35,7 @@ fn pad3(ref s: ByteArray, extra: u32) {
 /// as a consumer does it, with the crate's encoder and segments. The same layout as
 /// `spliceTokenUri` in scripts/page.mjs, which computed the fixtures' digests.
 pub fn beasts_token_uri(
-    members: @ByteArray, svg: @ByteArray, midi: ByteArray, settings: @SynthSettings,
+    members: @ByteArray, svg: @ByteArray, midi: ByteArray, settings: @TinySynthSettings,
 ) -> ByteArray {
     let image_key: ByteArray = "\"image\":\"data:image/svg+xml;base64,";
     let mut head: ByteArray = "{";

@@ -17,7 +17,7 @@ assert_macros = "2.20.0"
 [[target.starknet-contract]]
 sierra = true
 # The class itself, compiled from the root crate, so the tests can declare it (never deploy it).
-build-external-contracts = ["onchain_midi_player::contract::OnchainMidiPlayer"]
+build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
 
 [scripts]
 test = "snforge test"

@@ -10,7 +10,7 @@
 
 import { INVALID, VALID } from "./settings_fixtures.mjs";
 
-/** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
+/** @typedef {import("../player/settings.js").TinySynthSettings} TinySynthSettings */
 
 /** Big-endian unsigned integer bytes. */
 const be = (/** @type {number} */ v, /** @type {number} */ n) => Array.from({ length: n }, (_, i) => (v >>> (8 * (n - 1 - i))) & 255);
@@ -108,7 +108,7 @@ const settingsNamed = (/** @type {string} */ name) => {
 /**
  * Valid cases. `midi(label)` builds the case's MIDI with a text meta event `label`, which the
  * generator lengthens to reach the case's D pad (`dPad`).
- * @type {Array<{name: string, dPad: number, settings: SynthSettings, midi: (label: string) => Buffer, svg: string, members: string}>}
+ * @type {Array<{name: string, dPad: number, settings: TinySynthSettings, midi: (label: string) => Buffer, svg: string, members: string}>}
  */
 export const CASES = [
   {

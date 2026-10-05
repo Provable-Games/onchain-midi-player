@@ -41,7 +41,7 @@ Where:
 
 - `PAGE` is the fixed HTML page. It ends by opening the settings text block (`<script type="text/plain" id="settings">`).
 - `animation_url_segment()` = `b64('"animation_url":"data:text/html;base64,' ++ b64(PAGE))`.
-- `midi_segment(midi, settings)` = `b64(b64(D))`, with `D = SETTINGS '</script><script type="text/plain" id="midi">' b64(midi) <pad> '</script><script type="text/plain" id="art">'`. `SETTINGS` is the ASCII encoding of the `SynthSettings` value (see [Sound settings](sound-settings.md#the-settings-format)).
+- `midi_segment(midi, settings)` = `b64(b64(D))`, with `D = SETTINGS '</script><script type="text/plain" id="midi">' b64(midi) <pad> '</script><script type="text/plain" id="art">'`. `SETTINGS` is the ASCII encoding of the `TinySynthSettings` value (see [Sound settings](sound-settings.md#the-settings-format)).
 - `S = svg_b64 '"' <pad>` is encoded once and used twice. The first time it is the `image` value. The second time, at the HTML layer, it is the tail of the `animation_url` base64 stream: `svg_b64` decodes to the raw SVG, which becomes the contents of the open art block, and the `"` closes the `animation_url` string. So the SVG must never contain `</script` (see [Art (SVG) requirements](#art-svg-requirements)).
 
 Decoded, the `animation_url` value after its `data:text/html;base64,` prefix is `b64(PAGE) ++ b64(D) ++ svg_b64`, which is standard base64 of `PAGE ++ D ++ SVG`. Since `svg_b64` ends that stream, it may end with `=` padding. `b64(PAGE)` and `b64(D)` are mid-stream and unpadded.
@@ -70,9 +70,9 @@ The layout above, with word alignment:
 
 ```cairo
 use onchain_midi_player::interface::{
-    IOnchainMidiPlayerDispatcherTrait, IOnchainMidiPlayerLibraryDispatcher,
+    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
 };
-use onchain_midi_player::types::SynthSettings;
+use onchain_midi_player::types::TinySynthSettings;
 
 /// Appends spaces (between JSON tokens) until `(s.len() + extra) % 3 == 0`.
 fn pad3(ref s: ByteArray, extra: u32) {
@@ -90,13 +90,13 @@ fn align_to_word(ref uri: ByteArray, extra: u32) {
 }
 
 fn token_uri(
-    player_class_hash: starknet::ClassHash,
+    tinysynth: starknet::ClassHash,
     members: ByteArray, // "name":...,"attributes":[...]   (no braces)
     svg: ByteArray, // raw SVG; must never contain `</script`
     midi: ByteArray,
-    settings: SynthSettings,
+    settings: TinySynthSettings,
 ) -> ByteArray {
-    let player = IOnchainMidiPlayerLibraryDispatcher { class_hash: player_class_hash };
+    let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth };
 
     // '{' members ',' <pad>, a multiple of 3 bytes.
     let mut open: ByteArray = "{";
@@ -105,13 +105,13 @@ fn token_uri(
     pad3(ref open, 0);
 
     // S = svg_b64 '"' <pad>, encoded once and used twice.
-    let mut s = player.base64(svg);
+    let mut s = synth.base64(svg);
     s.append_byte('"');
     pad3(ref s, 0);
-    let s_b64 = player.base64(s);
+    let s_b64 = synth.base64(s);
 
     let mut uri: ByteArray = "data:application/json;base64,";
-    uri.append(@player.base64(open));
+    uri.append(@synth.base64(open));
     // b64(' "image":"data:image/svg+xml;base64,'): the image key after one space (36 bytes), a
     // constant. The spaces before it put b64(S) on a word boundary.
     let image_key: ByteArray = "ICJpbWFnZSI6ImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQs";
@@ -121,10 +121,10 @@ fn token_uri(
     // b64(',  '), then spaces until the segment starts on a word boundary.
     uri.append(@"LCAg");
     align_to_word(ref uri, 0);
-    uri.append(@player.animation_url_segment());
-    uri.append(@player.midi_segment(midi, settings));
+    uri.append(@synth.animation_url_segment());
+    uri.append(@synth.midi_segment(midi, settings));
     uri.append(@s_b64);
-    uri.append(@player.base64("}"));
+    uri.append(@synth.base64("}"));
     uri
 }
 ```

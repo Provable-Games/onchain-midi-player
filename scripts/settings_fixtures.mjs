@@ -9,7 +9,7 @@
 
 import { REFERENCE_WAVES, lfsr, triangle4 } from "./reference_waves.mjs";
 
-/** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
+/** @typedef {import("../player/settings.js").TinySynthSettings} TinySynthSettings */
 /** @typedef {import("../player/settings.js").Operator} Operator */
 /** @typedef {import("../player/settings.js").Timbre} Timbre */
 
@@ -25,12 +25,12 @@ export const DEFAULT_OPERATOR = Object.freeze({
  */
 export const op = (fields) => /** @type {Operator} */ ({ ...DEFAULT_OPERATOR, ...fields });
 
-/** @type {SynthSettings} */
+/** @type {TinySynthSettings} */
 export const DEFAULT_SETTINGS = { quality: 1, reverb: 30, master_vol: 40, voices: 64, waves: [], timbres: [] };
 
 /**
- * @param {Partial<SynthSettings>} fields
- * @returns {SynthSettings}
+ * @param {Partial<TinySynthSettings>} fields
+ * @returns {TinySynthSettings}
  */
 const settings = (fields) => ({ ...DEFAULT_SETTINGS, ...fields });
 
@@ -144,7 +144,7 @@ const EVERY_SLOT = settings({ timbres: ALL_SLOTS.map(([drum, slot]) => ({ drum, 
  * work: every slot (175 timbres), 8 operators each, every field at its widest. Too large for a
  * Cairo literal, so the generator pins only its length and SHA-256, and tests/settings_fixtures.cairo
  * builds the same value in a loop (`structural_max()`).
- * @returns {SynthSettings}
+ * @returns {TinySynthSettings}
  */
 export const structuralMax = () => settings({
   reverb: 255, master_vol: 255, voices: 255,
@@ -269,7 +269,7 @@ export const REFERENCE_WAVES_SETTINGS = settings({
  * The long-mode LFSR (32,767 steps) as one custom wave, on a snare (drum 38) stepping at 48 kHz:
  * `offset_hz` 48,000 / 32,767 = 1.4649 Hz. About 147 KB of SETTINGS, so tests/settings_fixtures.cairo
  * builds it in a loop (`long_lfsr()`) and the generator pins only its length and SHA-256.
- * @returns {SynthSettings}
+ * @returns {TinySynthSettings}
  */
 export const longLfsr = () => settings({
   waves: [{ Samples: lfsr("long") }],
@@ -369,7 +369,7 @@ const FILTER_EXTREMES = settings({
 /**
  * Valid settings, with the expected SETTINGS text where it is pinned independently of the
  * encoder (otherwise the generator records the JS encoder's output, and Cairo must match it).
- * @type {Array<{name: string, settings: SynthSettings, expected?: string}>}
+ * @type {Array<{name: string, settings: TinySynthSettings, expected?: string}>}
  */
 export const VALID = [
   { name: "default", settings: DEFAULT_SETTINGS, expected: "1,1,30,40,64,0,0" },
@@ -432,7 +432,7 @@ const routeAt = (/** @type {number} */ pos, /** @type {number} */ route) => sett
 
 /**
  * Invalid settings, each with the expected Cairo panic data (message, then indices).
- * @type {Array<{name: string, settings: SynthSettings, error: [string, ...number[]]}>}
+ * @type {Array<{name: string, settings: TinySynthSettings, error: [string, ...number[]]}>}
  */
 export const INVALID = [
   // Settings-level checks (1-5).

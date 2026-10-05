@@ -1,8 +1,9 @@
-//! Every entry point through `IOnchainMidiPlayerLibraryDispatcher`, with the class declared and
+//! Every entry point through `IOnchainTinySynthLibraryDispatcher`, with the class declared and
 //! never deployed: the way a consumer reaches it. `midi_segment` against every golden fixture, and
 //! its reverts with their exact panic data, are in the generated `page_fixtures.cairo`.
 
-use onchain_midi_player::interface::IOnchainMidiPlayerDispatcherTrait;
+use onchain_midi_player::contract::OnchainTinySynth;
+use onchain_midi_player::interface::{IOnchainTinySynth, IOnchainTinySynthDispatcherTrait};
 use onchain_midi_player::page_data;
 use crate::helpers::class;
 use crate::page_fixtures::{
@@ -39,9 +40,17 @@ fn constants() {
     let synth = class();
     assert(synth.script_sha256() == ENGINE_SHA256, 'script_sha256');
     assert(synth.script_sha256() == page_data::ENGINE_SHA256, 'script_sha256 (page_data)');
-    assert(synth.version() == 'tinysynth-fc04dbe+page.10', 'version');
+    assert(synth.engine() == 'tinysynth', 'engine');
+    assert(synth.version() == '0.1.0', 'version');
     assert(synth.version() == page_data::VERSION, 'version (page_data)');
     let license = synth.license();
     assert_eq!(license.len(), LICENSE_LEN);
     assert(sha256(@license) == LICENSE_SHA256, 'license sha256');
+}
+
+#[test]
+fn engine_is_tinysynth_directly_and_through_a_library_call() {
+    let state = OnchainTinySynth::contract_state_for_testing();
+    assert(IOnchainTinySynth::engine(@state) == 'tinysynth', 'engine (direct)');
+    assert(class().engine() == 'tinysynth', 'engine (library call)');
 }

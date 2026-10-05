@@ -53,7 +53,10 @@ All base64 in the class goes through `onchain_midi_player::base64::bytes_base64_
    - the golden fixtures for the class: [`tests/fixtures/page.json`](../tests/fixtures/page.json) and [`tests/page_fixtures.cairo`](../tests/page_fixtures.cairo);
    - the class's test fixtures, [`tests/class_fixtures.cairo`](../tests/class_fixtures.cairo): the raw `PAGE`, base64 vectors from Node's encoder, and the synthetic scores of [`tests/fixtures/midi/`](../tests/fixtures/midi/README.md).
 
-`VERSION` is `tinysynth-<engine ref>+page.<PAGE_VERSION>`. [`scripts/page_versions.json`](../scripts/page_versions.json) records the SHA-256 of `PAGE` for every `VERSION`, and the build fails if the page changes while `VERSION` stays the same. To change the page, bump `PAGE_VERSION` in [`scripts/page.mjs`](../scripts/page.mjs) (a re-pin changes `VERSION` by itself), run `npm run gen:page -- --record`, and update the first row of [Versions](versions.md#versions).
+`VERSION` is the class's SemVer version (see [Versions and deployments](versions.md)). [`scripts/page_versions.json`](../scripts/page_versions.json) records, for every `VERSION`, the SHA-256 of `PAGE`, the engine pin (`engine_ref`, `engine_commit`) and the page revision (`page`, from `PAGE_VERSION`), and the build fails if any of them changes while `VERSION` stays the same. A new `VERSION` must be SemVer and come after every recorded one; several versions may share a `PAGE`, because a class's Cairo code can change while its page does not.
+
+- To change the page, bump `PAGE_VERSION` and `VERSION` in [`scripts/page.mjs`](../scripts/page.mjs) (a re-pin needs a new `VERSION` too), run `npm run gen:page -- --record`, and update the first row of [Versions](versions.md#versions).
+- Bump `VERSION` for every class that is declared, even when only its Cairo code changed.
 
 **Golden fixtures.** The JS reference ([`scripts/page.mjs`](../scripts/page.mjs)) computes them from the inputs in [`scripts/page_fixtures.mjs`](../scripts/page_fixtures.mjs). The valid cases cover every `D` padding length and every consumer padding length, and include custom waves and filters; the invalid cases cover settings reverts. snforge checks `midi_segment` byte for byte against each, directly and through the library call, and the decoded page and consumer-layout `token_uri` against their length and SHA-256.
 
@@ -70,13 +73,13 @@ Shared fixtures keep Cairo and JavaScript byte-for-byte identical: [`scripts/set
 
 ## Class size
 
-The class compiled with Scarb 2.20.1, at `tinysynth-fc04dbe+page.10`, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info):
+The class compiled with Scarb 2.20.1, at `0.1.0`, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info):
 
 | | The class | Limit |
 | --- | --- | --- |
-| Sierra program | 19,207 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 985,344 bytes (24% of the limit) | 4,089,446 bytes |
-| CASM bytecode | 29,906 felts (37% of the limit) | 81,920 felts |
+| Sierra program | 19,228 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 986,763 bytes (24% of the limit) | 4,089,446 bytes |
+| CASM bytecode | 29,959 felts (37% of the limit) | 81,920 felts |
 
 The base64 encoder accounts for 4,921 Sierra felts, 288 KB and 11,148 CASM felts. Measured from `contract_class.json` without debug info, and the `bytecode` of `compiled_contract_class.json`.
 
@@ -112,7 +115,7 @@ GitHub Actions runs on every pull request and on pushes to `main` ([`.github/wor
 | `generated` | Reruns the fixture generators, `npm run check:settings` and `npm run check:page`, then fails on any diff |
 | `browser` | One leg per engine (Chromium, Firefox, WebKit): the example's `browser_check.mjs`, `render-check`, `page-check` and a 1-minute `drift-check` |
 
-**Drift guards.** [`scripts/skills.test.mjs`](../scripts/skills.test.mjs), run by `npm test`, keeps the agent skills in step with the code and these docs. It checks the skills' frontmatter and the plugin manifests, that every link in the skills, the README and `docs/` resolves (files and anchors), that the MIDI reference lists every `checkMidi` message, that the operator table matches the validator, that every gas figure in the skills appears in the README or `docs/`, that the skills name settings limits by their `src/settings.cairo` constants, and that they hardcode nothing a re-pin changes. `scripts/page.test.mjs` checks the first row of [Versions](versions.md#versions) against the build, and `scripts/check_midi.test.mjs` checks that the [MIDI contract](midi-contract.md) lists every MIDI error.
+**Drift guards.** [`scripts/skills.test.mjs`](../scripts/skills.test.mjs), run by `npm test`, keeps the agent skills in step with the code and these docs. It checks the skills' frontmatter and the plugin manifests, that every link in the skills, the README and `docs/` resolves (files and anchors), that the MIDI reference lists every `checkMidi` message, that the operator table matches the validator, that every gas figure in the skills appears in the README or `docs/`, that the skills name settings limits by their `src/settings.cairo` constants, and that they hardcode nothing a re-pin changes. `scripts/page.test.mjs` checks the [Versions](versions.md#versions) table against the build and `scripts/page_versions.json`, and `scripts/check_midi.test.mjs` checks that the [MIDI contract](midi-contract.md) lists every MIDI error.
 
 **Reviews.** Codex and Claude review each same-repository pull request ([`codex-review.yml`](../.github/workflows/codex-review.yml), [`claude-review.yml`](../.github/workflows/claude-review.yml)) and post one comment each. A HIGH or CRITICAL finding fails that provider's review gate. The reviewers also check the agent skills against each change. Setup, secrets and policies are in [`.github/scripts/README.md`](../.github/scripts/README.md).
 

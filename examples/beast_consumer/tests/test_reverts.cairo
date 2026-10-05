@@ -5,24 +5,24 @@ use beast_consumer::beast_like_nft::{IBeastLikeNftSafeDispatcher, IBeastLikeNftS
 use beast_consumer::sound;
 use core::panic_with_felt252;
 use onchain_midi_player::interface::{
-    IOnchainMidiPlayerSafeDispatcherTrait, IOnchainMidiPlayerSafeLibraryDispatcher,
+    IOnchainTinySynthSafeDispatcherTrait, IOnchainTinySynthSafeLibraryDispatcher,
 };
 use onchain_midi_player::types::{
-    Filter, FilterKind, Operator, SynthSettings, Timbre, WaveDef, Waveform,
+    Filter, FilterKind, Operator, Timbre, TinySynthSettings, WaveDef, Waveform,
 };
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 
-fn synth() -> IOnchainMidiPlayerSafeLibraryDispatcher {
+fn synth() -> IOnchainTinySynthSafeLibraryDispatcher {
     // Declared only, never deployed.
-    let class_hash = declare("OnchainMidiPlayer").unwrap().contract_class().class_hash;
-    IOnchainMidiPlayerSafeLibraryDispatcher { class_hash }
+    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
+    IOnchainTinySynthSafeLibraryDispatcher { class_hash }
 }
 
 /// Asserts that `midi_segment` reverts with panic data starting with `expected`: the short
 /// string, then the 0-based wave, timbre or (timbre, operator) indices. The library call appends
 /// `'ENTRYPOINT_FAILED'` after them.
 #[feature("safe_dispatcher")]
-fn assert_midi_segment_reverts(settings: SynthSettings, expected: Span<felt252>) {
+fn assert_midi_segment_reverts(settings: TinySynthSettings, expected: Span<felt252>) {
     match synth().midi_segment(sound::midi(), settings) {
         Result::Ok(_) => panic_with_felt252('should have reverted'),
         Result::Err(panic_data) => {
@@ -149,7 +149,7 @@ fn custom_waves_are_accepted() {
 }
 
 /// The kick of `settings_for(1)`, its first operator given `filter` and `route`.
-fn with_kick_filter(route: u8, filter: Filter) -> SynthSettings {
+fn with_kick_filter(route: u8, filter: Filter) -> TinySynthSettings {
     let mut s = sound::settings_for(1);
     let mut kick = *s.timbres.at(1);
     let first = *kick.operators.at(0);
@@ -199,7 +199,7 @@ fn filter_cutoff_or_q_of_zero_reverts() {
 #[test]
 #[feature("safe_dispatcher")]
 fn unknown_token_reverts() {
-    let class_hash = declare("OnchainMidiPlayer").unwrap().contract_class().class_hash;
+    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
     let (address, _) = declare("BeastLikeNft")
         .unwrap()
         .contract_class()

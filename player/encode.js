@@ -30,7 +30,7 @@ function bool(v, what) {
 }
 
 /**
- * @param {import("./settings.js").SynthSettings} s
+ * @param {import("./settings.js").TinySynthSettings} s
  * @returns {string}
  */
 export function encodeSettings(s) {

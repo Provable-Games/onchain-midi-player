@@ -1,15 +1,15 @@
 # Sound settings
 
-The consumer passes a typed `SynthSettings` value with every `midi_segment` call. The types are declared in [`src/types.cairo`](../src/types.cairo), and the checks and their messages are in [`src/settings.cairo`](../src/settings.cairo).
+The consumer passes a typed `TinySynthSettings` value with every `midi_segment` call. The types are declared in [`src/types.cairo`](../src/types.cairo), and the checks and their messages are in [`src/settings.cairo`](../src/settings.cairo).
 
 ## Types
 
 | Type | Contents |
 | --- | --- |
-| `SynthSettings` | `quality` (0 chip-tune, 1 FM), `reverb` (`u8` percent, 0 off), `master_vol` (`u8` percent), `voices` (`u8`, at least 1), `waves: Span<WaveDef>` (custom waveforms shared by all timbres, up to 256: `MAX_WAVES`) and `timbres: Span<Timbre>` (up to 175, `MAX_TIMBRES`: each program and drum slot at most once) |
+| `TinySynthSettings` | `quality` (0 chip-tune, 1 FM), `reverb` (`u8` percent, 0 off), `master_vol` (`u8` percent), `voices` (`u8`, at least 1), `waves: Span<WaveDef>` (custom waveforms shared by all timbres, up to 256: `MAX_WAVES`) and `timbres: Span<Timbre>` (up to 175, `MAX_TIMBRES`: each program and drum slot at most once) |
 | `Timbre` | A custom sound replacing General MIDI program `slot` (0–127), or drum note `slot` (35–81) when `drum` is true. Holds 1 to 8 operators (`MAX_OPERATORS`) |
 | `Operator` | One oscillator, in TinySynth's 13-parameter model: `route` (output, FM or AM target), `wave`, `volume`, `ratio`, `offset_hz`, `attack`, `hold`, `decay`, `sustain`, `release`, `pitch_ratio`, `pitch_time`, `key_scale`, plus an optional `filter`. The values after `wave` are `u32` (`offset_hz` and `key_scale`: `i32`), fixed point ÷10,000, with no limit (see [Engine limits](#engine-limits-on-operator-values)) |
-| `Waveform` | `Sine`, `Square`, `Sawtooth`, `Triangle`, `WhiteNoise`, `MetallicNoise`, or `Custom(index)`: entry `index` of `SynthSettings.waves` |
+| `Waveform` | `Sine`, `Square`, `Sawtooth`, `Triangle`, `WhiteNoise`, `MetallicNoise`, or `Custom(index)`: entry `index` of `TinySynthSettings.waves` |
 | `WaveDef` | `Harmonics(Span<u16>)` (a band-limited wave, at least 1 harmonic) or `Samples(Span<i8>)` (one cycle of a chip wave, played sample-and-hold, at least 1 sample). See [Custom waves](#custom-waves) |
 | `Filter` | `LowPass`, `HighPass` or `BandPass`, with a cutoff (in Hz, or a multiple of the note frequency when `key_track` is set) and a linear Q, on an audio-output operator. Fixed, with no envelope. See [Filters](#filters) |
 
@@ -44,7 +44,7 @@ The crate exports:
 
 ## Custom waves
 
-`SynthSettings.waves` holds up to 256 wave definitions (`MAX_WAVES`), shared by every timbre. An operator plays entry `i` with `wave: Waveform::Custom(i)` (`'TS: wave index out of range'` past the end). Unused and repeated entries are allowed.
+`TinySynthSettings.waves` holds up to 256 wave definitions (`MAX_WAVES`), shared by every timbre. An operator plays entry `i` with `wave: Waveform::Custom(i)` (`'TS: wave index out of range'` past the end). Unused and repeated entries are allowed.
 
 - **`Samples(Span<i8>)`: one cycle, played sample-and-hold.** Each sample `s` is `s / 128`: −128 is −1.0, 0 is 0 and 127 is 0.9921875. The note's frequency is the cycle rate, whatever the table's length: a 64-sample stepped triangle at A4 plays at 440 Hz, stepping 64 × 440 times a second.
 - **`Harmonics(Span<u16>)`: a band-limited wave.** Element `i` is the amplitude of harmonic `i + 1`, as a sine term. The browser normalizes the peak to full scale, so only the ratios matter (`[2, 1]` sounds like `[65_535, 32_767]`), and all zeros is silent.
@@ -81,9 +81,9 @@ The long LFSR adds about 2.1B to a `token_uri`, which fits Pathfinder's 10B call
 
 ```cairo
 use onchain_midi_player::settings::{default_operator, default_settings};
-use onchain_midi_player::types::{Operator, SynthSettings, Timbre, WaveDef, Waveform};
+use onchain_midi_player::types::{Operator, TinySynthSettings, Timbre, WaveDef, Waveform};
 
-fn chip_settings() -> SynthSettings {
+fn chip_settings() -> TinySynthSettings {
     let waves = [
         WaveDef::Samples([127, -128, -128, -128, -128, -128, -128, -128].span()), // 0: 12.5% pulse
         WaveDef::Harmonics([100, 0, 50, 0, 25].span()), // 1: harmonics 1, 3 and 5
@@ -95,7 +95,7 @@ fn chip_settings() -> SynthSettings {
     };
     let lead = Timbre { drum: false, slot: 80, operators: [voice(0)].span() };
     let organ = Timbre { drum: false, slot: 16, operators: [voice(1)].span() };
-    SynthSettings { waves, timbres: [lead, organ].span(), ..default_settings() }
+    TinySynthSettings { waves, timbres: [lead, organ].span(), ..default_settings() }
 }
 ```
 
@@ -115,9 +115,9 @@ An audio-output operator (`route` 0) can carry a fixed filter, `filter: Option::
 
 ```cairo
 use onchain_midi_player::settings::{default_operator, default_settings};
-use onchain_midi_player::types::{Filter, FilterKind, Operator, SynthSettings, Timbre, Waveform};
+use onchain_midi_player::types::{Filter, FilterKind, Operator, TinySynthSettings, Timbre, Waveform};
 
-fn filtered_settings() -> SynthSettings {
+fn filtered_settings() -> TinySynthSettings {
     // Metallic noise at playback rate 390 / 440 through a flat 3 kHz high-pass.
     let hat = Operator {
         wave: Waveform::MetallicNoise, volume: 2_000, ratio: 0, offset_hz: 3_900_000, hold: 0,
@@ -140,7 +140,7 @@ fn filtered_settings() -> SynthSettings {
         Timbre { drum: false, slot: 80, operators: [lead].span() },
     ]
         .span();
-    SynthSettings { timbres, ..default_settings() }
+    TinySynthSettings { timbres, ..default_settings() }
 }
 ```
 

@@ -81,7 +81,7 @@ describe("defaults", () => {
     assert.ok(html.endsWith('<script type="text/plain" id="art">' + PLACEHOLDER_SVG));
     assert.deepEqual(DEFAULT_SETTINGS, defaults.settings);
     assert.equal(verifyEngine(html).page.length, page.length);
-    assert.match(r.stdout, /^ {2}page tinysynth-\S+: it must equal the class's version\(\)$/m);
+    assert.match(r.stdout, /^ {2}page of version \d+\.\d+\.\d+\S*: it must equal the class's version\(\)$/m);
   });
 });
 

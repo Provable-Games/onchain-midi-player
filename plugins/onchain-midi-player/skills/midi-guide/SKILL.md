@@ -9,7 +9,7 @@ compatibility: Needs Node 22 or later and a clone of https://github.com/Provable
 
 This guide is for experienced MIDI authors. It lists only what differs from standard MIDI players and upstream TinySynth. The source of truth is the [MIDI contract](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/midi-contract.md); read it when a detail matters.
 
-Boundaries: this skill covers what goes in the `.mid` (notes, program changes, controllers, tempo, loop point), and how a composer's contract serves it ([Serving the score from a contract](#serving-the-score-from-a-contract)). The contract's `SynthSettings` (which sounds the programs and drums play, reverb, volume, voices) is the [sound-design](../sound-design/SKILL.md) skill. Wiring the player into a contract is the [integrator-guide](../integrator-guide/SKILL.md) skill.
+Boundaries: this skill covers what goes in the `.mid` (notes, program changes, controllers, tempo, loop point), and how a composer's contract serves it ([Serving the score from a contract](#serving-the-score-from-a-contract)). The contract's `TinySynthSettings` (which sounds the programs and drums play, reverb, volume, voices) is the [sound-design](../sound-design/SKILL.md) skill. Wiring the player into a contract is the [integrator-guide](../integrator-guide/SKILL.md) skill.
 
 ## Start offchain
 
@@ -42,9 +42,9 @@ Rows trace to the [MIDI contract](https://github.com/Provable-Games/onchain-midi
 
 | Behaviour | What to do | Why |
 | --- | --- | --- |
-| Instruments come from `SynthSettings`: `quality` picks the built-in set (0 chip-tune, 1 FM), and each custom timbre replaces program `slot` 0–127 or drum note `slot` 35–81 for the whole song. | Select sounds the ordinary way (program change, drum note on channel 10). Agree the slots with whoever writes the settings. | Onchain control: the contract decides the sound. |
-| Reverb, master volume and voices are `SynthSettings.reverb`, `master_vol` and `voices`. CC91, CC93, GM Master Volume, GM System On and GS Reset do nothing. | Balance with CC7, CC11 and velocity. Stay within `voices` notes at once. | Onchain control. |
-| Bank select (CC0, CC32) is ignored: 128 programs. | Do not rely on banks or GS variations. | Engine: TinySynth has one bank. Those 128 programs and drums 35–81 are also the only slots `SynthSettings` can replace. |
+| Instruments come from `TinySynthSettings`: `quality` picks the built-in set (0 chip-tune, 1 FM), and each custom timbre replaces program `slot` 0–127 or drum note `slot` 35–81 for the whole song. | Select sounds the ordinary way (program change, drum note on channel 10). Agree the slots with whoever writes the settings. | Onchain control: the contract decides the sound. |
+| Reverb, master volume and voices are `TinySynthSettings.reverb`, `master_vol` and `voices`. CC91, CC93, GM Master Volume, GM System On and GS Reset do nothing. | Balance with CC7, CC11 and velocity. Stay within `voices` notes at once. | Onchain control. |
+| Bank select (CC0, CC32) is ignored: 128 programs. | Do not rely on banks or GS variations. | Engine: TinySynth has one bank. Those 128 programs and drums 35–81 are also the only slots `TinySynthSettings` can replace. |
 | The song always loops. A pass ends at `maxTick`, the latest End-of-Track of any track, not at the last note. | Put the latest End-of-Track exactly on the loop point, such as the last bar line. | Looping with the art: the page repeats the music while the art runs, and the End-of-Track sets the pass length exactly. |
 | At each loop point the tempo returns to 120 BPM; a tempo event at tick 0 applies at once. Programs, controllers, bend, RPNs and tuning carry over, and held notes keep sounding. Each ▶ resets the channels and plays from tick 0, which sounds 0.1 s after playback starts; a rest before the first event is kept, on the first pass as on every later one. | Set every state the song changes at tick 0. Release every note by End-of-Track. A leading rest is fine: the first note sounds at its own tick. | Engine: its loop restarts only the tempo map, and it times every pass from tick 0. |
 | A track that ends early sends nothing more until the next pass, but its held notes keep sounding. | Release notes before a track's End-of-Track. | Engine: it merges all tracks into one event list. |
@@ -74,7 +74,7 @@ The full list of honoured and ignored messages is in the MIDI contract: [Message
 
 From `page.8`, the player restarts the art when tick 0 is heard: on ▶, and again at every pass. (The `page.6` class on Sepolia, in [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#deployments), restarts it only on ▶: there a mismatched pass makes the art drift across its loop instead of jumping. Check the `version()` of the class you target.) When the pass is a whole multiple of every period of the art's animation, the art is back at its start at each loop point anyway, so the restart does not show, and music and art stay in step for the whole session. When it is not, the art jumps back to its start at every loop point, and an animation longer than the pass never finishes. Within a pass, the music's beat and the art's frames line up only if their periods match.
 
-1. **Measure the art's periods:** GIF frame delays (in 10 ms units), SMIL `dur` (one repeat of the animation's `values`), and CSS animation durations (one iteration; with `alternate` or `alternate-reverse` the art repeats every two iterations). From the checkout, `node plugins/onchain-midi-player/skills/midi-guide/scripts/art_periods.mjs art.svg` prints them. Ignore animations that change nothing visible.
+1. **Measure the art's periods:** GIF frame delays (in 10 ms units), SMIL `dur` (one repeat of the animation's `values`), and CSS animation durations (one iteration; with `alternate` or `alternate-reverse` the art repeats every two iterations). From the checkout, `node plugins/onchain-midi-player/skills/midi-guide/scripts/art_periods.mjs art.svg` prints them. In checkouts from before the rename to onchain-midi-player, the plugin directory is `plugins/onchain-tinysynth/`. Ignore animations that change nothing visible.
 2. **Choose the tempo:** make the beat, or a subdivision of it, a whole number of frames.
 3. **Choose the pass length:** make it (the `loop` that `check-midi` prints, `maxTick` × the tick time) a whole multiple of every visible art period, so every pass starts in phase.
 
@@ -94,19 +94,19 @@ Why the art restarts at every pass: the art runs on the page's clock and the sou
 
 ## Serving the score from a contract
 
-A composer whose contract writes the scores onchain implements the sound provider interface, `onchain_midi_player::interface::ISoundProvider`, so any NFT that uses the player can call it. A MIDI file can select an instrument but not define one, so `get_sound` returns the score together with the instrument definitions it plays, as an `onchain_midi_player::types::TokenSound`:
+A composer whose contract writes the scores onchain implements the sound provider interface, `onchain_midi_player::interface::ISoundProvider`, so any NFT that uses the player can call it. A MIDI file can select an instrument but not define one, so `get_sound` returns the score together with the instrument definitions it plays, as an `onchain_midi_player::types::TinySynthSound`:
 
 ```cairo
 use onchain_midi_player::interface::ISoundProvider;
-use onchain_midi_player::types::TokenSound;
+use onchain_midi_player::types::TinySynthSound;
 
 // In the composer's contract: `get_sound` is the whole interface.
 #[abi(embed_v0)]
 impl SoundProviderImpl of ISoundProvider<ContractState> {
-    fn get_sound(self: @ContractState, token_id: u256) -> TokenSound {
+    fn get_sound(self: @ContractState, token_id: u256) -> TinySynthSound {
         let midi = compose(self, token_id);
         let settings = instruments_for(@midi);
-        TokenSound { midi, settings }
+        TinySynthSound { midi, settings }
     }
 }
 ```

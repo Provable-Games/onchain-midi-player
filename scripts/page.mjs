@@ -20,19 +20,59 @@ import { encodeSettings } from "../player/encode.js";
 import { validateSettings } from "../player/validate.js";
 import { ENGINE_PIN, engineNotice } from "./engine.mjs";
 
-/** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
+/** @typedef {import("../player/settings.js").TinySynthSettings} TinySynthSettings */
 
 export const PAGE_PATH = new URL("../tests/fixtures/page.html", import.meta.url);
 
 /**
- * Version of the page (player, markup and styles). VERSION, returned by version(), combines it with
- * the engine pin. scripts/page_versions.json records the SHA-256 of PAGE for every VERSION, and the
- * build fails when PAGE changes under a recorded VERSION: bump PAGE_VERSION (or re-pin the engine),
- * then record the new VERSION with `npm run gen:page -- --record`.
+ * The class's version, returned by version(): SemVer, `MAJOR.MINOR.PATCH` with an optional
+ * pre-release tag, at most 31 bytes. Bump it for every class that is declared: interim builds are
+ * `0.x.0` while pre-release, and `1.0.0` comes at release, when the call and settings layouts
+ * freeze; from then on the major number promises call and settings-layout compatibility.
+ * `engine()` names the engine. scripts/page_versions.json records, for every VERSION, the SHA-256
+ * of its PAGE, the engine pin and PAGE_VERSION, and the build fails when any of them changes under
+ * a recorded VERSION: bump VERSION, then record it with `npm run gen:page -- --record`. Classes
+ * declared before this format return `tinysynth-<engine ref>+page.<PAGE_VERSION>`; their records
+ * stay, under those keys.
  */
+export const VERSION = "0.1.0";
+/** Revision of the page (player, markup and styles): bump it when the page changes. */
 export const PAGE_VERSION = 10;
-export const VERSION = `tinysynth-${ENGINE_PIN.ref}+page.${PAGE_VERSION}`;
 export const PAGE_VERSIONS_PATH = new URL("./page_versions.json", import.meta.url);
+
+/** SemVer 2.0.0 without build metadata: `MAJOR.MINOR.PATCH`, then an optional `-pre.release` tag. */
+const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+/** Whether `v` is a valid VERSION: SemVer (see SEMVER) that fits a Cairo short string (31 bytes). */
+export function isSemVer(/** @type {string} */ v) {
+  return v.length <= 31 && SEMVER.test(v);
+}
+
+/**
+ * SemVer precedence: negative if `a` comes before `b`, positive if after, 0 if equal. A pre-release
+ * comes before its release; pre-release identifiers compare numerically when both are numbers,
+ * otherwise as ASCII, with numbers first.
+ * @param {string} a
+ * @param {string} b
+ */
+export function compareSemVer(a, b) {
+  const parse = (/** @type {string} */ v) => {
+    const [core, pre] = v.split(/-(.*)/s);
+    return { core: core.split(".").map(Number), pre: pre === undefined ? [] : pre.split(".") };
+  };
+  const x = parse(a), y = parse(b);
+  for (let i = 0; i < 3; i++) if (x.core[i] !== y.core[i]) return x.core[i] - y.core[i];
+  if (!x.pre.length || !y.pre.length) return y.pre.length - x.pre.length;
+  for (let i = 0; i < Math.min(x.pre.length, y.pre.length); i++) {
+    const p = x.pre[i], q = y.pre[i];
+    if (p === q) continue;
+    const pn = /^\d+$/.test(p), qn = /^\d+$/.test(q);
+    if (pn && qn) return Number(p) - Number(q);
+    if (pn !== qn) return pn ? -1 : 1;
+    return p < q ? -1 : 1;
+  }
+  return x.pre.length - y.pre.length;
+}
 
 /**
  * The gunzip shim in PAGE: player/gunzip.js (derived from fflate 0.8.3, MIT), flattened and minified
@@ -74,28 +114,40 @@ export function encoderLicense() {
   return text;
 }
 
+/** @typedef {{page_sha256: string, engine_ref: string, engine_commit: string, page: number}} VersionRecord */
+
+/** This build's record for VERSION in scripts/page_versions.json. */
+export function versionRecord(/** @type {string} */ pageSha256) {
+  return { page_sha256: pageSha256, engine_ref: ENGINE_PIN.ref, engine_commit: ENGINE_PIN.commit, page: PAGE_VERSION };
+}
+
 /**
- * Checks that `version` names exactly this PAGE in the record of versions (VERSION -> sha256(PAGE)),
- * so version() can never stay the same while the page changes. With `record`, a VERSION not yet in
- * it is added. Returns the (possibly extended) record; throws if the page changed under a recorded
- * VERSION, or if VERSION is new and `record` is false.
- * @param {Record<string, string>} versions
+ * Checks that `version` names exactly this build in the record of versions (VERSION -> the
+ * SHA-256 of PAGE, the engine pin and the page revision), so version() can never stay the same
+ * while the page or the engine changes. With `record`, a VERSION not yet in it is added: it must be
+ * SemVer and come after every SemVer version recorded. (Several versions may share a PAGE: a
+ * version names a class, and a class can change while its page does not.) Returns the (possibly
+ * extended) record; throws if the build changed under a recorded VERSION, or if VERSION is new and
+ * `record` is false.
+ * @param {Record<string, VersionRecord>} versions
  * @param {string} version
- * @param {string} digest sha256(PAGE)
+ * @param {VersionRecord} entry
  * @param {{record?: boolean}} [options]
  */
-export function checkPageVersion(versions, version, digest, { record = false } = {}) {
+export function checkPageVersion(versions, version, entry, { record = false } = {}) {
   const known = versions[version];
-  if (known === digest) return versions;
+  const fields = /** @type {Array<keyof VersionRecord>} */ (["page_sha256", "engine_ref", "engine_commit", "page"]);
+  if (known !== undefined && fields.every((f) => known[f] === entry[f])) return versions;
   if (known !== undefined) {
-    throw new Error(`PAGE changed (sha256 ${digest}) but VERSION ${version} is recorded for sha256 ${known}: ` +
-      "bump PAGE_VERSION in scripts/page.mjs (or re-pin the engine), then run npm run gen:page -- --record");
+    throw new Error(`PAGE or the engine changed (${JSON.stringify(entry)}) but VERSION ${version} is recorded for ` +
+      `${JSON.stringify(known)}: bump VERSION in scripts/page.mjs, then run npm run gen:page -- --record`);
   }
-  for (const [v, d] of Object.entries(versions)) {
-    if (d === digest) throw new Error(`this PAGE is already recorded as ${v}; VERSION ${version} would name it twice`);
+  if (!isSemVer(version)) throw new Error(`VERSION ${version} is not SemVer (MAJOR.MINOR.PATCH[-pre], at most 31 bytes)`);
+  for (const v of Object.keys(versions)) {
+    if (isSemVer(v) && compareSemVer(version, v) <= 0) throw new Error(`VERSION ${version} must come after the recorded ${v}`);
   }
   if (!record) throw new Error(`VERSION ${version} is not recorded in scripts/page_versions.json: run npm run gen:page -- --record`);
-  return { ...versions, [version]: digest };
+  return { ...versions, [version]: entry };
 }
 
 /**
@@ -117,7 +169,7 @@ export function licenseText() {
     "implied. See the License for the specific language governing permissions and limitations under the",
     "License.",
     "",
-    `This class (${VERSION}) embeds in its page the minified build of commit ${ENGINE_PIN.commit}`,
+    `This class (version ${VERSION}) embeds in its page the minified build of commit ${ENGINE_PIN.commit}`,
     `of https://github.com/Provable-Games/webaudio-tinysynth (SHA-256 ${ENGINE_PIN.sha256},`,
     "returned by script_sha256()). The NOTICE of that repository follows.",
     "",
@@ -259,7 +311,7 @@ export function segmentFor(page) {
  * SETTINGS: validated and encoded by the JS reference (player/settings.js, player/encode.js),
  * which mirror src/settings.cairo check for check. Throws a SettingsError on invalid settings,
  * where midi_segment reverts.
- * @param {SynthSettings} settings
+ * @param {TinySynthSettings} settings
  */
 export function settingsText(settings) {
   const text = encodeSettings(validateSettings(settings));
@@ -270,7 +322,7 @@ export function settingsText(settings) {
 /**
  * D = SETTINGS MIDI_OPEN b64(midi) <pad> ART_OPEN, with 0..8 pad spaces so len(D) % 9 == 0.
  * @param {Uint8Array} midi
- * @param {SynthSettings} settings
+ * @param {TinySynthSettings} settings
  */
 export function dFragment(midi, settings) {
   const head = settingsText(settings) + MIDI_OPEN + b64(midi);
@@ -281,7 +333,7 @@ export function dFragment(midi, settings) {
 }
 
 /** midi_segment(midi, settings) = b64(b64(D)). */
-export const midiSegment = (/** @type {Uint8Array} */ midi, /** @type {SynthSettings} */ settings) => b64(b64(dFragment(midi, settings).d));
+export const midiSegment = (/** @type {Uint8Array} */ midi, /** @type {TinySynthSettings} */ settings) => b64(b64(dFragment(midi, settings).d));
 
 // ---------------------------------------------------------------------------------------------
 // The consumer's token_uri (the consumer layout)

@@ -10,7 +10,7 @@
  */
 import { SettingsError } from "./settings.js";
 
-/** @typedef {import("./settings.js").SynthSettings} SynthSettings */
+/** @typedef {import("./settings.js").TinySynthSettings} TinySynthSettings */
 
 // Cairo's caps, as in src/settings.cairo: what the format and the engine require. They equal the
 // page's parse bounds (player/settings.js) but are kept apart from them, so a Cairo cap can change
@@ -33,8 +33,8 @@ const MAX_ROUTE = 10 + MAX_OPERATORS;
  * indices, and throws a `SettingsError` on the first failure. The other numeric fields, and every
  * wave sample and harmonic, take any value of their type, except a filter's cutoff and Q, which
  * must be above 0 (checks 16-17).
- * @param {SynthSettings} s
- * @returns {SynthSettings} `s`
+ * @param {TinySynthSettings} s
+ * @returns {TinySynthSettings} `s`
  */
 export function validateSettings(s) {
   /** @param {boolean} ok @param {string} code @param {number[]} [indices] */

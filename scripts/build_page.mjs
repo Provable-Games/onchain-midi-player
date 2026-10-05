@@ -30,8 +30,9 @@
 //   node scripts/build_page.mjs --check   exit 1 if any file is out of date     (npm run check:page)
 //   node scripts/build_page.mjs --record  also record a new VERSION in scripts/page_versions.json
 //
-// Every run fails if PAGE changed while VERSION stayed the same (scripts/page_versions.json maps
-// each VERSION to the SHA-256 of its PAGE): bump PAGE_VERSION in scripts/page.mjs, then --record.
+// Every run fails if PAGE or the engine pin changed while VERSION stayed the same
+// (scripts/page_versions.json maps each VERSION to the SHA-256 of its PAGE, the engine pin and
+// PAGE_VERSION): bump VERSION (and PAGE_VERSION if the page changed) in scripts/page.mjs, then --record.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -42,9 +43,9 @@ import { ENGINE_PIN, engineSource } from "./engine.mjs";
 import { classFixturesCairo } from "./gen_class_fixtures.mjs";
 import { pageFixtures } from "./gen_page_fixtures.mjs";
 import {
-  GZIP_CLOSE, GZIP_OPEN, PAGE_PATH, PAGE_VERSIONS_PATH, SETTINGS_OPEN, SHIM_PIN, VERSION, b64, blen, bytes,
-  cairoBase64Literal, cairoByteArrayConst, checkPage, checkPageVersion, countCI, licenseText, padLen, pageScripts,
-  segmentFor, sha256, shimLicense, spaces,
+  GZIP_CLOSE, GZIP_OPEN, PAGE_PATH, PAGE_VERSION, PAGE_VERSIONS_PATH, SETTINGS_OPEN, SHIM_PIN, VERSION, b64, blen,
+  bytes, cairoBase64Literal, cairoByteArrayConst, checkPage, checkPageVersion, countCI, isSemVer, licenseText, padLen,
+  pageScripts, segmentFor, sha256, shimLicense, spaces, versionRecord,
 } from "./page.mjs";
 import { gunzip } from "../player/gunzip.js";
 import { PLAY_ICON } from "../player/player.js";
@@ -187,7 +188,7 @@ export async function build() {
   }
   const segment = segmentFor(page);
   const license = licenseText();
-  if (VERSION.length > 31 || !/^[\x20-\x7e]+$/.test(VERSION)) throw new Error(`VERSION ${VERSION} is not a short string`);
+  if (!isSemVer(VERSION)) throw new Error(`VERSION ${VERSION} is not SemVer (MAJOR.MINOR.PATCH[-pre], at most 31 bytes)`);
   const sizes = {
     page: page.length,
     pad: page.length - page.trimEnd().length,
@@ -255,7 +256,8 @@ pub const GZIP_SHA256: u256 = 0x${gzipSha256};
 /// Length of the gzip payload in bytes.
 pub const GZIP_LEN: u32 = ${sizes.gzip};
 
-/// \`version()\`: the engine pin and the page version.
+/// \`version()\`: the class's SemVer version (engine \`${ENGINE_PIN.ref}\`, page revision ${PAGE_VERSION}; see
+/// scripts/page_versions.json).
 pub const VERSION: felt252 = '${VERSION}';
 
 ${cairoBase64Literal("animation_url_segment", segment, [
@@ -282,7 +284,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
   let recorded;
   try {
-    recorded = checkPageVersion(versions, VERSION, sha256(page), { record: process.argv.includes("--record") });
+    recorded = checkPageVersion(versions, VERSION, versionRecord(sha256(page)), { record: process.argv.includes("--record") });
   } catch (e) {
     console.error(/** @type {Error} */ (e).message);
     process.exit(1);
@@ -304,7 +306,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(stale.length ? 1 : 0);
   }
   for (const [path, text] of files) writeFileSync(path, text);
-  console.log(`${VERSION}: PAGE ${sizes.page} bytes (engine ${sizes.engine} gzipped to ${sizes.gzip}, ${sizes.gzipB64} as base64;` +
+  console.log(`${VERSION} (engine ${ENGINE_PIN.ref}, page.${PAGE_VERSION}): PAGE ${sizes.page} bytes (engine ${sizes.engine} gzipped to ${sizes.gzip}, ${sizes.gzipB64} as base64;` +
     ` shim ${sizes.shim}; player ${sizes.player}; pad ${sizes.pad}), segment ${sizes.segment}`);
   console.log(`license ${sizes.license} bytes`);
 }

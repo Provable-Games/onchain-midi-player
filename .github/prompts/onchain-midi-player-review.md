@@ -16,14 +16,14 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   the final stream may end with it. Check pad lengths, the placement of pad
   spaces (insignificant positions only), and every residue class, not only the
   sample token.
-- **SETTINGS wire format:** the ASCII encoding of `SynthSettings` that the
+- **SETTINGS wire format:** the ASCII encoding of `TinySynthSettings` that the
   class writes and the player parses. Range checks, separators, field order,
   signs and fixed-point scales must agree between the Cairo encoder, the JS
   reference encoder and the player parser. The text must never be able to
   close its `<script type="text/plain">` block, and invalid settings must
   revert onchain rather than reach the page.
 - **The API is permanent once declared:** a declared class hash is immutable
-  and consumers store it. Treat changes to `IOnchainMidiPlayer`, the public
+  and consumers store it. Treat changes to `IOnchainTinySynth`, the public
   types, the output byte layout, the SETTINGS format or `version()` as
   compatibility changes: flag anything that silently changes the bytes or
   sound for an existing class version, or an interface or format decision that
@@ -49,11 +49,11 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   expected (see Static review).
 - **Agent skills stay consistent:** `plugins/onchain-midi-player/skills/` holds
   the skills that agents in other repositories load: `integrator-guide` (the
-  `IOnchainMidiPlayer` API and `library_call`, the `token_uri` layout and
+  `IOnchainTinySynth` API and `library_call`, the `token_uri` layout and
   splicing, the art rule, `examples/beast_consumer`, snforge tests, gas and RPC
   caps), `midi-guide` (the MIDI contract, `check-midi` and `preview`, player
   and pinned-engine playback quirks, looping, art sync), `sound-design`
-  (`SynthSettings`, the SETTINGS format, settings validation and its `'TS: …'`
+  (`TinySynthSettings`, the SETTINGS format, settings validation and its `'TS: …'`
   reverts, custom timbres and operator fields) and `token-uri-inspector`
   (decoding and rebuilding a `token_uri`, engine verification,
   `scripts/page_versions.json`, RPC call caps). Each has a `SKILL.md` and may

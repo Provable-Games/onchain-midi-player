@@ -50,8 +50,8 @@ The rules follow from how TinySynth reads a file: it stops reading a track at En
 - **16 channels.** Port and channel-prefix meta events are ignored.
 - **Channel 10 (index 9) is percussion.** A note-on from 35 to 81 plays that drum; other notes are silent. Note-offs are ignored: a hit lasts 3.5 × the decay of its sound's first operator. Program changes on channel 10 have no effect.
 - **The other channels are melodic.** Program changes 0–127 select the General MIDI instrument, and notes 0–127 all play. Bank select (CC0, CC32) is ignored, so there are 128 programs.
-- **Built-in sounds.** `SynthSettings.quality` picks TinySynth's built-in set: 0 chip-tune (one oscillator per note), 1 FM.
-- **Custom sounds.** Each entry of `SynthSettings.timbres` replaces program `slot` (0–127) or drum note `slot` (35–81) for the whole song. The MIDI selects it the ordinary way: a program change to the slot, or that drum note on channel 10.
+- **Built-in sounds.** `TinySynthSettings.quality` picks TinySynth's built-in set: 0 chip-tune (one oscillator per note), 1 FM.
+- **Custom sounds.** Each entry of `TinySynthSettings.timbres` replaces program `slot` (0–127) or drum note `slot` (35–81) for the whole song. The MIDI selects it the ordinary way: a program change to the slot, or that drum note on channel 10.
 
 ## Messages TinySynth honours
 
@@ -74,20 +74,20 @@ The rules follow from how TinySynth reads a file: it stops reading a track at En
 | GS SysEx `F0 41 dd 42 12`, address, data, checksum, `F7`, at its standard length (device ID and checksum are not checked) | `40 00 00`: master tune, four data nibbles n, (n − 0x400) × 0.1 cent. `40 00 05`: master key-shift, data − 64 semitones. `40 1x 40` to `40 1x 4B`: scale tuning of C to B, data − 64 cents. `40 1x 15`: use for rhythm part, which makes part x's channel a drum channel (data not 0) or melodic (0); notes on a melodic channel 10 skip their release envelope. Part x: 0 is channel 10, 1–9 are channels 1–9, A–F channels 11–16. |
 | Meta `FF 51` (tempo), `FF 2F` (End-of-Track) | See [Playback](#playback). |
 
-Ignored, with no effect: every other controller, including bank select (CC0, CC32), CC91 reverb send (reverb is engine-wide: `SynthSettings.reverb`), CC93 chorus, portamento (CC5, CC65), CC66 sostenuto, CC67 soft pedal, the sound controllers (CC70–79) and CC122 local control; polyphonic aftertouch (`An`) and channel pressure (`Dn`); every other SysEx, including GM System On, GS Reset and GM Master Volume (master volume is `SynthSettings.master_vol`); and every other meta event (text, markers, lyrics, time and key signatures).
+Ignored, with no effect: every other controller, including bank select (CC0, CC32), CC91 reverb send (reverb is engine-wide: `TinySynthSettings.reverb`), CC93 chorus, portamento (CC5, CC65), CC66 sostenuto, CC67 soft pedal, the sound controllers (CC70–79) and CC122 local control; polyphonic aftertouch (`An`) and channel pressure (`Dn`); every other SysEx, including GM System On, GS Reset and GM Master Volume (master volume is `TinySynthSettings.master_vol`); and every other meta event (text, markers, lyrics, time and key signatures).
 
 ## Limits
 
-- **Polyphony:** at most `SynthSettings.voices` (at least 1) melodic notes at once, across all channels. A note beyond that cuts a released note first (the one ending soonest), otherwise the held note that started earliest (of notes that started together, the one latest in the file). The cut happens when the new note is scheduled, up to about 0.2 s before it sounds, so the cut note ends early. A drum hit takes no voice and is never cut, but it applies the limit too: right after one, at most `voices` − 1 melodic notes remain, so with `voices` 1 every drum hit cuts the melody.
+- **Polyphony:** at most `TinySynthSettings.voices` (at least 1) melodic notes at once, across all channels. A note beyond that cuts a released note first (the one ending soonest), otherwise the held note that started earliest (of notes that started together, the one latest in the file). The cut happens when the new note is scheduled, up to about 0.2 s before it sounds, so the cut note ends early. A drum hit takes no voice and is never cut, but it applies the limit too: right after one, at most `voices` − 1 melodic notes remain, so with `voices` 1 every drum hit cuts the melody.
 - **Range:** 16 channels, programs 0–127, notes 0–127 (drum notes 35–81), and velocity 1–127, with loudness following its square.
 - **Timing:** 1–32,767 ticks per quarter note, tempo 1–16,777,215 µs per quarter note, and a pass of at least 50 ms.
 - **Size:** text events at most 4,096 bytes. Nothing else in the page limits the size; gas does (see the recommendations).
-- **Mix:** master volume and reverb are `SynthSettings.master_vol` and `SynthSettings.reverb`, the same for the whole song. MIDI cannot change them.
+- **Mix:** master volume and reverb are `TinySynthSettings.master_vol` and `TinySynthSettings.reverb`, the same for the whole song. MIDI cannot change them.
 
 ## What's fixed and what's driven
 
 - **Fixed per class hash:** the engine, the player and the page, and so every rule in this section. A new engine or page means a new class hash and `version()`.
-- **Driven on each call:** the MIDI (by the composer), and the `SynthSettings` and the art (by the consumer).
+- **Driven on each call:** the MIDI (by the composer), and the `TinySynthSettings` and the art (by the consumer).
 
 The full list is in [Verifying the engine](verifying.md).
 
@@ -134,10 +134,10 @@ npm run check-midi -- song.mid                        # the same, through npm
     32 bytes
   ```
 - **Exit status.** 0 if every score passes, 1 if any fails, and 2 for a usage error or an input it cannot read (a missing file, invalid JSON, or JSON with no `midi_b64` string), so it can gate another repository's CI.
-- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player, and a declared class keeps the player it was declared with. So use a checkout whose `VERSION` (in `src/page_data.cairo`) is the `version()` of the class your consumer stores (see [Versions](versions.md#versions)): its release tag, or `main` while its `VERSION` matches. In another repository's CI, for example:
+- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player, and a declared class keeps the player it was declared with. So use a checkout whose `VERSION` (in `src/page_data.cairo`) is the `version()` of the class your consumer stores (see [Versions](versions.md#versions)): its release tag `v<version>`, or `main` while its `VERSION` matches. In another repository's CI, for example:
 
   ```sh
-  REF=main   # or the release tag of the class version you target (docs/versions.md)
+  REF=main   # or v<version>, the release tag of the class you target (docs/versions.md)
   git clone --depth 1 --branch "$REF" https://github.com/Provable-Games/onchain-midi-player "$RUNNER_TEMP/onchain-midi-player"
   node "$RUNNER_TEMP/onchain-midi-player/scripts/check_midi.mjs" path/to/*.mid
   ```
@@ -153,6 +153,6 @@ npm run preview -- song.mid --serve                                # also serve 
 ```
 
 - **Checks first.** It runs the MIDI through `checkMidi` and reports it as `check_midi.mjs` does; the settings through `player/validate.js` and `player/encode.js`, the JS reference of `settings::validate` and the encoder, printing the panic data `midi_segment` would revert with; and the SVG through the [art rule](token-uri-layout.md#art-svg-requirements). Any failure exits 1 and writes nothing.
-- **Inputs.** The MIDI in any form `check_midi.mjs` reads (one score). `--settings` takes a `SynthSettings` value as JSON, in the shape of the `settings` objects in [`tests/fixtures/settings.json`](../tests/fixtures/settings.json) (a whole fixture entry also works; every field is required and unknown fields are rejected), or a page's `SETTINGS` text, so a deployed token's page can be rebuilt from its blocks. `--out` defaults to `preview.html`; `--serve` takes an optional port (0 picks a free one).
+- **Inputs.** The MIDI in any form `check_midi.mjs` reads (one score). `--settings` takes a `TinySynthSettings` value as JSON, in the shape of the `settings` objects in [`tests/fixtures/settings.json`](../tests/fixtures/settings.json) (a whole fixture entry also works; every field is required and unknown fields are rejected), or a page's `SETTINGS` text, so a deployed token's page can be rebuilt from its blocks. `--out` defaults to `preview.html`; `--serve` takes an optional port (0 picks a free one).
 - **Identity.** `npm test` checks that, for the example's token 1, the output equals [`examples/beast_consumer/fixtures/animation.html`](../examples/beast_consumer/fixtures/animation.html), decoded from the golden `token_uri` the contract matches byte for byte, and that the `token_uri` around token 4's page has the digest the contract's is tested against.
 - **Playback** is the same engine and player code as in every token. Audio can still differ slightly across browsers and sample rates. Noise and reverb are generated from a fixed seed (fork #7), so they are the same on every load at a given sample rate.

@@ -11,7 +11,7 @@ Every figure here is Sierra gas, snforge's default. Cairo-steps accounting gives
 
 ## Entry points
 
-Through `IOnchainMidiPlayerLibraryDispatcher` on the declared class, as a consumer calls them, including passing the arguments and the result ([`tests/test_class_gas.cairo`](../tests/test_class_gas.cairo), `snforge test gas_lc`):
+Through `IOnchainTinySynthLibraryDispatcher` on the declared class, as a consumer calls them, including passing the arguments and the result ([`tests/test_class_gas.cairo`](../tests/test_class_gas.cairo), `snforge test gas_lc`):
 
 | Entry point | L2 gas |
 | --- | --- |
@@ -19,6 +19,7 @@ Through `IOnchainMidiPlayerLibraryDispatcher` on the declared class, as a consum
 | `midi_segment(midi, settings)` | 1.6M with no MIDI and the default settings; 60.7M with a 3,716-byte score and the 3 reference sounds (334 bytes of `SETTINGS`); 3,162.7M with that score and the largest valid `SETTINGS` without custom waves (218,264 bytes) |
 | `base64(data)` | 0.2M for 3 bytes, 3.8M for 1,023 bytes, and about 3.6K per input byte for large inputs |
 | `script_sha256()` | 0.1M |
+| `engine()` | 0.1M |
 | `version()` | 0.1M |
 | `license()` | 2.2M |
 

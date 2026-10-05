@@ -4,7 +4,7 @@ A Cairo class library for Starknet that gives an NFT's `token_uri` an onchain MI
 
 ## How it works
 
-Your contract holds the class hash and calls the class through `IOnchainMidiPlayerLibraryDispatcher`. Every function is a deterministic view, and the class touches none of your storage.
+Your contract holds the class hash and calls the class through `IOnchainTinySynthLibraryDispatcher`. Every function is a deterministic view, and the class touches none of your storage.
 
 `token_uri` is nested base64 data URIs. The JSON is `data:application/json;base64,…`, and its `animation_url` is `data:text/html;base64,…`, the player page. The engine and player are the same for every token, so the class stores them already encoded and never encodes them at call time. Your contract encodes only per-token data, in pieces that are each a multiple of 3 bytes long, and joins them. That works because `b64(X ++ Y) == b64(X) ++ b64(Y)` when `len(X) % 3 == 0`.
 
@@ -31,22 +31,22 @@ Details: [`token_uri` layout and the player page](docs/token-uri-layout.md).
 
 ```toml
 [dependencies]
-onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "<release tag>" }
+onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "v<version>" }
 
 [[target.starknet-contract]]
 sierra = true
 # Builds the class from the dependency so your tests can declare it.
-build-external-contracts = ["onchain_midi_player::contract::OnchainMidiPlayer"]
+build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
 ```
 
-**2. Hold a class hash.** Store it in your NFT, or in a small renderer contract the NFT calls, and let the owner change it. Take it from [Versions and deployments](docs/versions.md). A class hash fixes the engine and the player, so tokens keep their sound until you switch.
+**2. Hold a class hash.** Store it in your NFT, or in a small renderer contract the NFT calls, and let the owner change it. Take it from [Versions and deployments](docs/versions.md). A class hash fixes the engine and the player, so tokens keep their sound until you switch. When you store or change it, check that `engine()` returns `'tinysynth'`: another engine's class shares the `midi_segment` selector and could render the wrong thing without an error.
 
 ```cairo
 use onchain_midi_player::interface::{
-    IOnchainMidiPlayerDispatcherTrait, IOnchainMidiPlayerLibraryDispatcher,
+    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
 };
 
-let player = IOnchainMidiPlayerLibraryDispatcher { class_hash: player_class_hash };
+let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
 ```
 
 The interface, in [`src/interface.cairo`](src/interface.cairo):
@@ -57,7 +57,8 @@ The interface, in [`src/interface.cairo`](src/interface.cairo):
 | `midi_segment(midi, settings)` | This token's settings and MIDI, encoded at both layers. Reverts with `'TS: …'` on invalid settings. |
 | `base64(data)` | Standard RFC 4648 base64, for your own JSON pieces. |
 | `script_sha256()` | SHA-256 of the engine script. |
-| `version()` | The engine and page version, such as `'tinysynth-fc04dbe+page.10'`. |
+| `engine()` | The engine's name: `'tinysynth'`. |
+| `version()` | The class's SemVer version, such as `'0.1.0'`. |
 | `license()` | The license notices for the class and the code it embeds. |
 
 **3. Assemble `token_uri`** in the layout above. [Building `token_uri` in Cairo](docs/token-uri-layout.md#building-token_uri-in-cairo) has the full function. The rules:
@@ -70,7 +71,7 @@ The interface, in [`src/interface.cairo`](src/interface.cairo):
 **4. Test it.** In snforge, declare the class (never deploy it) and library-call it from your NFT. Then:
 
 - Decode your `token_uri` and compare it with a reference, as the example's golden tests do.
-- Check `version()` and `script_sha256()` against the row for your class in [Versions](docs/versions.md#versions).
+- Check `engine()`, `version()` and `script_sha256()` against the row for your class in [Versions](docs/versions.md#versions).
 - Test that your rendered SVGs never contain `</script`.
 - Run `check-midi` on every score in CI (see below).
 - Budget your largest token's gas (see [How much fits](#how-much-fits-gas-and-limits)).
@@ -107,7 +108,7 @@ npm run check-midi -- song.mid other.mid
 - The art restarts at every pass. Make the pass a whole multiple of the art's animation periods, or the art jumps at the loop point.
 - Every byte costs gas: about 14.5M L2 gas per KB.
 
-**Sound settings.** Each `midi_segment` call takes a `SynthSettings` value, declared in [`src/types.cairo`](src/types.cairo):
+**Sound settings.** Each `midi_segment` call takes a `TinySynthSettings` value, declared in [`src/types.cairo`](src/types.cairo):
 
 - `quality`: TinySynth's built-in sounds, 0 chip-tune or 1 FM.
 - `reverb`, `master_vol` and `voices`: the mix and the polyphony.
@@ -121,11 +122,11 @@ Fractional values are fixed point, in units of 1/10,000. Invalid settings revert
 ```cairo
 #[starknet::interface]
 pub trait ISoundProvider<T> {
-    fn get_sound(self: @T, token_id: u256) -> TokenSound; // TokenSound { midi: ByteArray, settings: SynthSettings }
+    fn get_sound(self: @T, token_id: u256) -> TinySynthSound; // { midi: ByteArray, settings: TinySynthSettings }
 }
 ```
 
-`get_sound` takes the token ID as minted, returns a raw MIDI file and valid settings, and is deterministic and view-only. The rules, and a safe way to call a provider, are in [Sound provider interface](docs/sound-provider.md).
+`get_sound` takes the token ID as minted, returns a raw MIDI file and valid settings, and is deterministic and view-only. Each engine has its own typed settings struct, with no enum, and the layouts of `TinySynthSettings` and `TinySynthSound` are fixed at release. A later engine's providers will implement `get_<engine>_sound`; `get_sound` belongs to TinySynth. The rules, and a safe way to call a provider, are in [Sound provider interface](docs/sound-provider.md).
 
 AI agents can use the [`midi-guide`](plugins/onchain-midi-player/skills/midi-guide/SKILL.md) and [`sound-design`](plugins/onchain-midi-player/skills/sound-design/SKILL.md) skills.
 
@@ -140,7 +141,7 @@ A marketplace or indexer reads `token_uri` with a view call (`starknet_call`). T
 | MIDI or `SETTINGS`: per KB | about 14.5M |
 | Your contract's own work: rendering the SVG, the JSON members | yours to measure |
 
-`SETTINGS` is the text form of your `SynthSettings`. The defaults are 16 bytes, and three typical custom sounds about 0.3 KB. Each operator adds about 50 bytes, and each wave sample or harmonic 2 to 6 bytes. `SETTINGS` has no size cap: gas and the node's cap are the only limits.
+`SETTINGS` is the text form of your `TinySynthSettings`. The defaults are 16 bytes, and three typical custom sounds about 0.3 KB. Each operator adds about 50 bytes, and each wave sample or harmonic 2 to 6 bytes. `SETTINGS` has no size cap: gas and the node's cap are the only limits.
 
 **Example.** A full-size token from [`examples/beast_consumer`](examples/beast_consumer) costs **288.6M** L2 gas: a 22,733-byte animated SVG, a 3,716-byte MIDI file and 334 bytes of `SETTINGS`. A token with a 1 KB SVG and a 112-byte MIDI file costs about 33M.
 
@@ -181,7 +182,7 @@ Four skills help AI agents in other projects use the player. They live in [`plug
 | --- | --- |
 | [`integrator-guide`](plugins/onchain-midi-player/skills/integrator-guide/SKILL.md) | Adding the player to a contract's `token_uri`, testing it and budgeting its gas |
 | [`midi-guide`](plugins/onchain-midi-player/skills/midi-guide/SKILL.md) | Writing MIDI for the player, previewing it and keeping it in step with the art |
-| [`sound-design`](plugins/onchain-midi-player/skills/sound-design/SKILL.md) | Designing `SynthSettings`: custom timbres, waves and filters |
+| [`sound-design`](plugins/onchain-midi-player/skills/sound-design/SKILL.md) | Designing `TinySynthSettings`: custom timbres, waves and filters |
 | [`token-uri-inspector`](plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) | Decoding, verifying and viewing a deployed or local `token_uri` |
 
 **Install in Claude Code.** This repository is a plugin marketplace ([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)). In your project:
@@ -204,7 +205,7 @@ The skills then run as `/onchain-midi-player:midi-guide` and so on. `claude plug
 
 **Other agents.** Each `SKILL.md` follows the open [Agent Skills](https://agentskills.io/specification) format. Copy the whole `skills/` folder into your agent's skills directory to keep the links between skills.
 
-The tools the skills use need Node 22 or later and a clone whose `VERSION` matches your class (see [Quick start for composers](#quick-start-for-composers)). Every commit with the same `VERSION` has the same `PAGE`, so use `main` while its `VERSION` matches, otherwise the last commit before it changed (`git log --oneline -- src/page_data.cairo`).
+The tools the skills use need Node 22 or later and a clone whose `VERSION` matches your class (see [Quick start for composers](#quick-start-for-composers)). Every commit with the same `VERSION` has the same `PAGE`, so use `main` while its `VERSION` matches, otherwise the last commit before it changed (`git log --oneline -- src/page_data.cairo`). A released class's tag, `v<version>`, works too.
 
 ## Documentation
 
