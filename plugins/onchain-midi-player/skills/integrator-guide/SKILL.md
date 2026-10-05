@@ -9,7 +9,7 @@ compatibility: Needs the Scarb and Starknet Foundry versions in the repository's
 
 The class is declared on Starknet, and your contract reaches it by class hash with `library_call`, never through a deployed instance. It gets back the pieces of a `token_uri` whose `animation_url` is an offline HTML page: the TinySynth engine gzipped, the player, then the token's settings, MIDI and SVG art.
 
-- **Supported today:** `token_uri`s that are base64 JSON data URIs (`data:application/json;base64,…`). Plain-JSON `token_uri`s are issue [#29](https://github.com/Provable-Games/onchain-midi-player/issues/29).
+- **Supported:** `token_uri`s that are base64 JSON data URIs (`data:application/json;base64,…`). Plain-JSON `token_uri`s are not supported.
 - **Source of truth:** [Building `token_uri` in Cairo](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#building-token_uri-in-cairo) and [Consumer `token_uri` layout](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#consumer-token_uri-layout). The interface and its byte formats: [`src/interface.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/interface.cairo).
 - **Reference implementation:** [`examples/beast_consumer/src/beast_like_nft.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/examples/beast_consumer/src/beast_like_nft.cairo), commented step by step, with golden tests.
 - **Related skills:** the MIDI comes from the [midi-guide](../midi-guide/SKILL.md), the `TinySynthSettings` from [sound-design](../sound-design/SKILL.md) (both often from a composer's contract through the sound provider interface, step 5), and checking a deployed token is the [token-uri-inspector](../token-uri-inspector/SKILL.md).
@@ -93,7 +93,7 @@ A `library_call` runs the class's code with your contract's storage. This class 
 | In the NFT, per token | Store the hash at mint. | Each token keeps the version it was minted with. | A storage write per mint and a read per `token_uri`. |
 | **In a small renderer contract** | A deployed contract with no storage of value holds the layout, the `TinySynthSettings` and the class hash (or receives it), and library-calls the class. The NFT `call_contract`s the renderer. | The NFT's storage is never exposed to the class. The renderer, its sounds and the layout are replaceable without redeploying the NFT. Its CASM stays out of the NFT. | One more contract and call. |
 
-Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is settable. beasts-v3 does this ([PR #124](https://github.com/Provable-Games/beasts-v3/pull/124)). In any setter, check the new value before storing it: library-call `engine()` on a new hash and require `'tinysynth'`, then `version()` and compare it with the version you expect, or have the renderer render a probe token. Engine classes share the `midi_segment` selector, so without the `engine()` check another engine's class could take your calls without reverting and render the wrong thing.
+Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is settable. In any setter, check the new value before storing it: library-call `engine()` on a new hash and require `'tinysynth'`, then `version()` and compare it with the version you expect, or have the renderer render a probe token. Engine classes share the `midi_segment` selector, so without the `engine()` check another engine's class could take your calls without reverting and render the wrong thing.
 
 ```cairo
 fn set_sound_config(ref self: ContractState, class_hash: ClassHash) {
@@ -124,8 +124,6 @@ Decide what `token_uri` returns when the sound path fails: usually the token wit
 - **What cannot.** An undeployed address, an undeclared class and running out of gas still revert the whole call. Probe them in your setters (step 4) and keep a kill switch, such as a zero value that turns sound off.
 - **snforge 0.64.0 bug:** catching a panic from a safe *library* call leaves the caller's class hash replaced for the rest of the test, so later calls fail with `ENTRYPOINT_NOT_FOUND`. Test the failure paths with `call_contract` into mock contracts.
 
-These findings come from the beasts-v3 integration ([PR #124](https://github.com/Provable-Games/beasts-v3/pull/124)).
-
 ## 7. Test with snforge
 
 ```cairo
@@ -149,7 +147,7 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
   - Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
   - Treat devnet estimates through the predeployed accounts as inflated by about 2.0–2.6×.
 - **Keep every class in the `token_uri` call chain at Sierra 1.7 or later:** the NFT, any proxy, the renderer, the sound provider and this class. A Cairo 0 or older-Sierra frame switches itself and every call below it to Cairo-steps accounting, which is sticky downward and has its own step cap.
-- **Providers' call caps decide who can read a full token, not the protocol.** Node software caps `starknet_call` differently, and hosted providers do not document their caps ([Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits)). On Sepolia, one public provider reverted `Out of gas` on the example's full-size token while others served it ([Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits), issue [#11](https://github.com/Provable-Games/onchain-midi-player/issues/11)). Call your worst token through the providers your marketplaces and indexers use; the token-uri-inspector shows how.
+- **Providers' call caps decide who can read a full token, not the protocol.** Node software caps `starknet_call` differently, and hosted providers do not document their caps ([Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits)). A provider can revert `Out of gas` on a full-size token that another serves. Call your worst token through the providers your marketplaces and indexers use; the token-uri-inspector shows how.
 
 ## 9. Choose the class hash
 

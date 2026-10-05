@@ -31,7 +31,7 @@ Open the printed URL and press ▶. If it plays right there, it plays the same f
 
 ## What the offline check guarantees
 
-- **Bytes.** `preview` writes exactly the decoded `animation_url` page (`PAGE ++ D ++ SVG`) that the class and a consumer produce for the same MIDI, settings and SVG. `npm test` checks this against the example contract's golden output, and on Sepolia the deployed example's `token_uri` came back byte-identical through several RPC providers (issue [#11](https://github.com/Provable-Games/onchain-midi-player/issues/11)).
+- **Bytes.** `preview` writes exactly the decoded `animation_url` page (`PAGE ++ D ++ SVG`) that the class and a consumer produce for the same MIDI, settings and SVG. `npm test` checks this against the example contract's golden output and the deployed example's `token_uri` is checked against it through several RPC providers.
 - **Playback.** Every browser runs the same engine and player code, but audio can differ slightly across browsers and sample rates (see [The player page](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#the-player-page)).
 - **Noise and reverb** are generated from a fixed seed in the pinned engine, so they are the same on every load at a given sample rate.
 - **A bad file does not revert.** The class embeds the MIDI without parsing it. The page shows the error, ▶ stays disabled and the art still shows. Only an offline check catches it before mint.

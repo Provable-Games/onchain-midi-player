@@ -73,7 +73,7 @@ See [Custom waves](https://github.com/Provable-Games/onchain-midi-player/blob/ma
 - **Noise tables are set by their step rate:** a table of `N` samples steps `N` times per cycle, so use `ratio` 0 and `offset_hz` = steps per second / `N` (the short LFSR at 20 kHz: 215.0538 Hz, stored as 2,150,538).
 - **Retune rule.** A noise table written straight into the engine's `noiseBuf`, as TinyChip does, plays one sample per frame at `playbackRate = f / 440`, so its step rate depends on the sample rate `R` it was tuned at. Registered as a `Samples` wave it steps at `f × N` on every device. Keep the sound with `f_new = f_old × R / (440 × N)`.
 - **Cost.** Each sample or harmonic is 2 to 6 bytes of `SETTINGS` (about 4.5 at full scale), and `SETTINGS` costs about 14.5M L2 gas per 1,000 bytes through `midi_segment`. Short chip waves are cheap: the six short reference waves on eight timbres take `midi_segment` with a full-size score to 77.2M, against 60.7M for the three reference sounds. The long LFSR (147,532 bytes) adds about 2.1B, which needs a node with a large call budget ([Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits)); deterministic `WhiteNoise` is the cheap alternative.
-- **Same on every load.** The waves' tables, and the engine's noise and reverb (seeded, fork issue [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7)), are the same on every load at a given sample rate. Browsers differ slightly, so audition in more than one.
+- **Same on every load.** The waves' tables, and the engine's noise and reverb (seeded), are the same on every load at a given sample rate. Browsers differ slightly, so audition in more than one.
 
 ```cairo
 use onchain_midi_player::settings::default_operator;

@@ -91,11 +91,11 @@ If the page plays here but not inside a marketplace's frame, the host is withhol
 Marketplaces read `token_uri` with `starknet_call`, and each provider caps call gas. Call the token through several providers and compare: an `Out of gas` revert is that provider's cap, not a bug in the token.
 
 ```sh
-# Sepolia endpoints: use your network's providers
-for RPC in https://api.zan.top/public/starknet-sepolia/rpc/v0_10 https://api.cartridge.gg/x/starknet/sepolia https://starknet-sepolia-rpc.publicnode.com; do
+# The providers your marketplaces and indexers use, on the network you deploy to
+for RPC in "$RPC_1" "$RPC_2" "$RPC_3"; do
   sncast --json call --url "$RPC" --contract-address "$NFT" --function token_uri --calldata 4 0 > call.json 2>&1
   node $I/bytearray.mjs call.json | sha256sum
 done
 ```
 
-[Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits) records which Sepolia providers served the example's full-size Beast (issue [#11](https://github.com/Provable-Games/onchain-midi-player/issues/11)). Use your marketplaces' and indexers' actual providers, on the network you deploy to.
+[Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits) lists what each node software caps. Use your marketplaces' and indexers' actual providers, on the network you deploy to.

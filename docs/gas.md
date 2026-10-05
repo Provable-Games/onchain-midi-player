@@ -97,18 +97,17 @@ A `token_uri` is a view call (`starknet_call`), so what limits it is the node th
 - Moving data costs what the Serde code costs: about 3.3K gas per `felt252` per hop, and about 4.3K per 31-byte `ByteArray` chunk per hop.
 - Call depth is capped at 50.
 - The 1.11B L2 gas cap per transaction and the 5,000-felt calldata cap apply only to transactions, never to `starknet_call`. A view call measured at 5.38B passed.
-- Source: [starkware-libs/sequencer](https://github.com/starkware-libs/sequencer) at `16facd2c92`, files `crates/blockifier/src/execution/syscalls/hint_processor.rs`, `entry_point.rs`, `blockifier_versioned_constants_0_14_3.json` and `transaction/account_transaction.rs`.
 
 **Node limits**, from their configuration or code:
 
 | Node | Gas for a view call | Other limits |
 | --- | --- | --- |
-| Pathfinder v0.24.0 | 10B, compiled in (`default_initial_gas_cost`, `crates/executor/src/call.rs`) | Top-level `starknet_call` calldata at most 10,000 felts, which `token_uri(token_id)` never approaches; 120 s timeout |
-| Juno v0.16.6 | `--rpc-call-max-gas`, 100M by default (raisable) | No cap on a single response |
+| Pathfinder | 10B, compiled in (`default_initial_gas_cost`) | Top-level `starknet_call` calldata at most 10,000 felts, which `token_uri(token_id)` never approaches; 120 s timeout |
+| Juno | `--rpc-call-max-gas`, 100M by default (raisable) | No cap on a single response |
 | Madara | 10B | Requests and responses at most 15 MiB |
 | jsonrpsee, and StarkWare's `apollo_rpc` | | Responses at most 10 MiB: a returned `ByteArray` of about 4.85 MB, or about 2.7 MB of `SETTINGS` |
 | Katana (development) | 1B by default | |
-| Hosted providers | Undocumented | On Sepolia, zan.top, Cartridge and dRPC served the example's full-size token; PublicNode reverted `Out of gas` on it |
+| Hosted providers | Undocumented | Each provider runs one of the nodes above with its own configuration, so a full-size token can succeed on one and revert `Out of gas` on another |
 
 - A full-size token with the reference sounds (288.6M) already needs more than Juno's default.
 - Check a full-size token through the providers your marketplaces and indexers use. The [`token-uri-inspector`](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill shows how.

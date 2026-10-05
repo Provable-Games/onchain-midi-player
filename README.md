@@ -166,7 +166,7 @@ A marketplace or indexer reads `token_uri` with a view call (`starknet_call`). T
 | Madara | 10B |
 | Katana (development) | 1B by default |
 | Juno | 100M by default (`--rpc-call-max-gas`) |
-| Hosted providers | Undocumented. On Sepolia, PublicNode refused the full-size example |
+| Hosted providers | Undocumented. Each configures its own cap, so a full-size token can revert `Out of gas` on one and succeed on another |
 
 - Check a full-size token through the providers your marketplaces and indexers use, on the network you deploy to. A provider's cap on one network says nothing about another.
 - At 10B, a token has room for about 670 KB of `SETTINGS`.

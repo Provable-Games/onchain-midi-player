@@ -1,7 +1,7 @@
 # Codex review. The required check is the "Codex review gate" job.
 # Model and effort come only from the Actions variables CODEX_REVIEW_MODEL and
 # CODEX_REVIEW_EFFORT; the CLI version is pinned in .github/scripts/codex-cli.
-# Setup, trust boundary and bootstrap rules: .github/scripts/README.md.
+# Setup and trust boundary rules: .github/scripts/README.md.
 name: Codex Review
 
 on:
@@ -57,7 +57,6 @@ jobs:
       merge_base: ${{ steps.policy.outputs.merge_base }}
       missing: ${{ steps.policy.outputs.missing }}
       config_sha: ${{ steps.trust.outputs.config_sha }}
-      bootstrap: ${{ steps.trust.outputs.bootstrap }}
     steps:
       - name: Check out the pull request head as data
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,10 +71,6 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          # Bases that may take the configuration from the pull request head
-          # while they lack it: only main, for the one-time path that lands it.
-          BOOTSTRAP_BASE_BRANCHES: main
         run: |
           # begin trusted-config-selection
           set -euo pipefail
@@ -85,17 +80,11 @@ jobs:
           git -C src cat-file -e "$BASE_SHA^{commit}"
           if git -C src cat-file -e "$BASE_SHA:.github/review-agents.json" 2>/dev/null; then
             config_sha="$BASE_SHA"
-            bootstrap=false
-          elif [[ " $BOOTSTRAP_BASE_BRANCHES " == *" $BASE_REF "* ]]; then
-            config_sha="$HEAD_SHA"
-            bootstrap=true
-            echo "::warning title=AI review bootstrap::Base revision $BASE_SHA has no .github/review-agents.json, so this review uses the review configuration from the pull request head $HEAD_SHA."
           else
-            echo "::error title=AI review configuration::Base branch '$BASE_REF' ($BASE_SHA) has no .github/review-agents.json. Bootstrap from the pull request head is allowed only for: $BOOTSTRAP_BASE_BRANCHES. Land the review configuration on '$BASE_REF' first."
+            echo "::error title=AI review configuration::Base branch '$BASE_REF' ($BASE_SHA) has no .github/review-agents.json. Land the review configuration on '$BASE_REF' first."
             exit 1
           fi
           echo "config_sha=$config_sha" >> "$GITHUB_OUTPUT"
-          echo "bootstrap=$bootstrap" >> "$GITHUB_OUTPUT"
           # end trusted-config-selection
 
       - name: Check out the trusted review configuration
@@ -114,7 +103,6 @@ jobs:
         id: policy
         env:
           CONFIG_SHA: ${{ steps.trust.outputs.config_sha }}
-          BOOTSTRAP: ${{ steps.trust.outputs.bootstrap }}
           # Only whether the secret is set reaches this job (see the credential
           # job), never its value. When the secret or a variable is unset, the
           # review is skipped (policy "unconfigured") and the gate passes with a
@@ -124,7 +112,7 @@ jobs:
           CODEX_REVIEW_EFFORT: ${{ vars.CODEX_REVIEW_EFFORT }}
         run: >-
           python3 -I -B trusted/.github/scripts/review.py prepare --config-root trusted --provider codex
-          --repo-dir src --event "$GITHUB_EVENT_PATH" --config-sha "$CONFIG_SHA" --bootstrap "$BOOTSTRAP"
+          --repo-dir src --event "$GITHUB_EVENT_PATH" --config-sha "$CONFIG_SHA" --bootstrap false
 
       # Dependency sources for the reviewer, which has no network access (see
       # .github/scripts/README.md, "Static review and dependency sources"). This
@@ -379,12 +367,11 @@ jobs:
         env:
           REVIEW_DEPS_DIR: ${{ runner.temp }}/deps
           CONFIG_SHA: ${{ needs.prepare.outputs.config_sha }}
-          BOOTSTRAP: ${{ needs.prepare.outputs.bootstrap }}
           AGENT_ID: ${{ matrix.agent_id }}
         run: >-
           python3 -I -B trusted/.github/scripts/review.py prompt --config-root trusted --provider codex
           --repo-dir src --event "$GITHUB_EVENT_PATH" --agent-id "$AGENT_ID"
-          --out-dir "$RUNNER_TEMP/review" --config-sha "$CONFIG_SHA" --bootstrap "$BOOTSTRAP"
+          --out-dir "$RUNNER_TEMP/review" --config-sha "$CONFIG_SHA" --bootstrap false
 
       - name: Run the Codex review
         id: run
@@ -424,7 +411,6 @@ jobs:
           CODEX_REVIEW_EFFORT: ${{ vars.CODEX_REVIEW_EFFORT }}
           CODEX_AUTH_DOT_JSON: ${{ secrets.CODEX_AUTH_DOT_JSON }}
           CONFIG_SHA: ${{ needs.prepare.outputs.config_sha }}
-          BOOTSTRAP: ${{ needs.prepare.outputs.bootstrap }}
           MERGE_BASE: ${{ needs.prepare.outputs.merge_base }}
           AGENT_ID: ${{ matrix.agent_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
@@ -443,7 +429,7 @@ jobs:
           run_dir="$RUNNER_TEMP/review/run"
           python3 -I -B trusted/.github/scripts/review.py result --config-root trusted --provider codex \
             --event "$GITHUB_EVENT_PATH" --agent-id "$AGENT_ID" --out-dir "$RUNNER_TEMP/review/out" \
-            --config-sha "$CONFIG_SHA" --bootstrap "$BOOTSTRAP" --merge-base "$MERGE_BASE" --run-url "$RUN_URL" \
+            --config-sha "$CONFIG_SHA" --bootstrap false --merge-base "$MERGE_BASE" --run-url "$RUN_URL" \
             --exit-code-file "$run_dir/exit-code" --review-file "$run_dir/review.txt" \
             --log-file "$run_dir/codex.log" --auth-file "$RUNNER_TEMP/codex-home/auth.json" "${steps[@]}"
 
