@@ -31,9 +31,9 @@ fn pad3(ref s: ByteArray, extra: u32) {
     }
 }
 
-/// The Beasts-layout `token_uri` (README, "Consumer token_uri layout"), assembled as a consumer
-/// does it, with the crate's encoder and segments. The same layout as `spliceTokenUri` in
-/// scripts/page.mjs, which computed the fixtures' digests.
+/// The Beasts-layout `token_uri` (docs/token-uri-layout.md, "Consumer token_uri layout"), assembled
+/// as a consumer does it, with the crate's encoder and segments. The same layout as
+/// `spliceTokenUri` in scripts/page.mjs, which computed the fixtures' digests.
 pub fn beasts_token_uri(
     members: @ByteArray, svg: @ByteArray, midi: ByteArray, settings: @TinySynthSettings,
 ) -> ByteArray {

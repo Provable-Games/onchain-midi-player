@@ -1,4 +1,4 @@
-// The art rule (root README, "Art (SVG) requirements"): the SVG must never contain `</script`, in
+// The art rule (docs/token-uri-layout.md, "Art (SVG) requirements"): the SVG must never contain `</script`, in
 // any letter case. In the animation_url page the SVG is the raw text of the last block,
 // <script type="text/plain" id="art">, and the HTML parser ends that block at the first
 // `</script`: the art is cut short and the rest of the SVG is parsed as page markup. The class never

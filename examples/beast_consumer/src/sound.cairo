@@ -2,9 +2,9 @@
 //!
 //! In the real Beasts integration the MIDI comes from the onchain composer (a sound provider whose
 //! `get_sound` reads the Beast's state). For the sample tokens it is a fixed one-bar loop that
-//! exercises what the README's "MIDI contract" recommends. `scripts/reference.mjs` holds a
-//! byte-identical copy that the golden test keeps in lockstep. Token 4 uses a synthetic score the
-//! size of the composer's largest production score, and the Beast reference sounds.
+//! exercises what the MIDI contract (docs/midi-contract.md) recommends. `scripts/reference.mjs`
+//! holds a byte-identical copy that the golden test keeps in lockstep. Token 4 uses a synthetic
+//! score the size of the composer's largest production score, and the Beast reference sounds.
 
 use onchain_midi_player::types::{Operator, Timbre, TinySynthSettings, Waveform};
 
@@ -123,7 +123,8 @@ fn timbres() -> Span<Timbre> {
 }
 
 /// The token's settings. Timbres and engine settings are constants; only `reverb` varies, derived
-/// from the permanent `tier` trait, which keeps each token's sound fixed (README, "Consistency").
+/// from the permanent `tier` trait, which keeps each token's sound fixed (docs/sound-settings.md,
+/// "Consistency").
 /// Varying it also changes `len(SETTINGS)`, so the examples exercise different `D` paddings.
 pub fn settings_for(tier: u8) -> TinySynthSettings {
     let reverb = match tier {

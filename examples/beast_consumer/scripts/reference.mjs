@@ -224,7 +224,7 @@ export function midiWithSysex() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The art rule: the SVG must never contain `</script` (README: "Art (SVG) requirements")
+// The art rule: the SVG must never contain `</script` (docs/token-uri-layout.md: "Art (SVG) requirements")
 // ---------------------------------------------------------------------------------------------
 
 /**

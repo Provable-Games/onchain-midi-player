@@ -1,5 +1,5 @@
 // @ts-check
-// Node tests for scripts/preview.mjs, the offline preview of a token's page (README: "Agent skills").
+// Node tests for scripts/preview.mjs, the offline preview of a token's page (docs/midi-contract.md: "Previewing a score").
 // The identity tests tie its output to the Cairo contract's: for the example's token 1 it must equal
 // examples/beast_consumer/fixtures/animation.html (decoded from the golden token_uri that the
 // contract matches byte for byte), and for token 4, a full-size Beast, the token_uri built around it

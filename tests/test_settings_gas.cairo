@@ -1,6 +1,6 @@
 //! Gas of `validate` and `encode` (`snforge test gas_`). Each input has three tests: `build`
 //! (deserializing the fixture only, the baseline), `validate` and `encode`, each including the
-//! build; subtract `build` for the cost of the function itself. Results are in the README.
+//! build; subtract `build` for the cost of the function itself. Summarized in docs/gas.md.
 
 use onchain_midi_player::settings::{encode, validate};
 use crate::settings_fixtures::{

@@ -8,10 +8,11 @@
 //! on an audio output with a cutoff and a Q above 0. Every other numeric field takes any value of
 //! its integer type, and so does every wave sample and harmonic. A note whose computed frequencies
 //! or levels overflow (a long FM chain, or a large `key_scale`, at a high note or tuning) is
-//! skipped by the engine: it is silent and the song plays on (README, "Engine limits on operator
-//! values"). `midi_segment` reverts with a descriptive error when a check fails; the
-//! exact checks, their order and their messages are listed in `crate::settings`. This is the only
-//! place they are enforced: the player page parses `SETTINGS` strictly but does not repeat them.
+//! skipped by the engine: it is silent and the song plays on (docs/sound-settings.md, "Engine
+//! limits on operator values"). `midi_segment` reverts with a descriptive error when a check fails;
+//! the exact checks, their order and their messages are listed in `crate::settings`. This is the
+//! only place they are enforced: the player page parses `SETTINGS` strictly but does not repeat
+//! them.
 //!
 //! # Fixed-point numbers
 //!
@@ -67,12 +68,12 @@ pub struct TinySynthSettings {
     /// unused and repeated entries are allowed. The player registers each with the engine, in
     /// order, before any timbre is installed, under a name made from its index (`nS<index>` for
     /// `Samples`, `wH<index>` for `Harmonics`). Each sample or harmonic adds 2 to 6 bytes to the
-    /// encoded `SETTINGS`, and gas with it (see the README).
+    /// encoded `SETTINGS`, and gas with it (see docs/gas.md).
     pub waves: Span<WaveDef>,
     /// Custom sounds replacing built-in programs or drum notes. Empty means built-ins only.
     /// At most 175 timbres per call: each `(drum, slot)` pair may appear once, and there are 128
     /// programs and 47 drum notes. The encoded `SETTINGS` has no byte cap; it is about 50 bytes per
-    /// operator plus 6 per timbre, and its gas grows with it (see the README).
+    /// operator plus 6 per timbre, and its gas grows with it (see docs/gas.md).
     pub timbres: Span<Timbre>,
 }
 
@@ -226,7 +227,7 @@ pub enum FilterKind {
 ///   `get_sound` belongs to TinySynth permanently.
 #[derive(Drop, Clone, Serde, PartialEq, Debug)]
 pub struct TinySynthSound {
-    /// The raw bytes of a Standard MIDI File that passes `checkMidi` (README, "MIDI contract").
+    /// The raw bytes of a Standard MIDI File that passes `checkMidi` (docs/midi-contract.md).
     pub midi: ByteArray,
     /// The engine settings and the custom timbres and waves `midi` uses. Must pass
     /// `crate::settings::validate`.

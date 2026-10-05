@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @ts-check
-// Checks MIDI files against the page's MIDI contract (README: "MIDI contract") with the page's own
+// Checks MIDI files against the page's MIDI contract (docs/midi-contract.md) with the page's own
 // `checkMidi` and `decodeMidi` from player/player.js, so a score passes here exactly when the player
 // in this checkout loads it. Node built-ins only, but it imports player/player.js: run it from a
 // checkout of this repository.

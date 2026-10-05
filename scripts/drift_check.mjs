@@ -39,7 +39,7 @@
 // contributes, is unchanged. It is loaded as an offline data: URI.
 //
 // Usage (the engine as in scripts/browsers.mjs; Firefox plays audio only with an output device,
-// which a PulseAudio null sink provides on a machine without one: see README, CI):
+// which a PulseAudio null sink provides on a machine without one: see docs/development.md, "Browser validation"):
 //
 //   PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromium|firefox|webkit \
 //   node scripts/drift_check.mjs [--minutes 10] [--every 10] [out_dir]

@@ -63,7 +63,7 @@ fn valid_settings_do_not_revert() {
 // Only what the format or the engine requires is checked: reverb, master volume, the upper end of
 // voices and every operator value take any value of their type. A note whose computed frequencies
 // or levels overflow at some pitch is the engine's to skip: it plays silently and the song goes on
-// (README, "Engine limits on operator values").
+// (docs/sound-settings.md, "Engine limits on operator values").
 #[test]
 #[feature("safe_dispatcher")]
 fn type_extremes_do_not_revert() {

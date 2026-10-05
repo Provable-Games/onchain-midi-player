@@ -7,11 +7,11 @@ compatibility: Needs Node 22 or later, a clone of https://github.com/Provable-Ga
 
 # Inspecting a `token_uri`
 
-A `token_uri` from this player is `data:application/json;base64,` + JSON whose `animation_url` is `data:text/html;base64,` + one HTML page: the fixed `PAGE` (engine gzipped, player), then the token's `SETTINGS`, MIDI and SVG art blocks. README: [Consumer `token_uri` layout](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#consumer-token_uri-layout) and [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#verifying-the-engine).
+A `token_uri` from this player is `data:application/json;base64,` + JSON whose `animation_url` is `data:text/html;base64,` + one HTML page: the fixed `PAGE` (engine gzipped, player), then the token's `SETTINGS`, MIDI and SVG art blocks. See [Consumer `token_uri` layout](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#consumer-token_uri-layout) and [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md).
 
-The class's `engine()` names its engine, and so the format of the `SETTINGS` block: `'tinysynth'` is the format these tools decode. RPC can call it only on a deployed instance of the class or through a getter of the NFT. No instance in the README's [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#deployments) answers it yet: those classes predate `engine()` (the call fails), and their `version()`, `tinysynth-<engine ref>+page.<n>`, already marks them as TinySynth.
+The class's `engine()` names its engine, and so the format of the `SETTINGS` block: `'tinysynth'` is the format these tools decode. RPC can call it only on a deployed instance of the class or through a getter of the NFT. No instance in [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#deployments) answers it yet: those classes predate `engine()` (the call fails), and their `version()`, `tinysynth-<engine ref>+page.<n>`, already marks them as TinySynth.
 
-Run everything from a clone whose `grep 'pub const VERSION' src/page_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed (README [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills)). The same `VERSION` always means the same page bytes, and newer commits have the tools; a released class's tag, `v<version>`, has its page too. `version()` is SemVer; the Sepolia classes from before SemVer return `tinysynth-<engine ref>+page.<n>`. Node 22 or later; no `npm ci`. `I=plugins/onchain-midi-player/skills/token-uri-inspector/scripts` below. In checkouts from before the rename to onchain-midi-player, the plugin directory is `plugins/onchain-tinysynth/`, so there set `I=plugins/onchain-tinysynth/skills/token-uri-inspector/scripts`.
+Run everything from a clone whose `grep 'pub const VERSION' src/page_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed (README, [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills)). The same `VERSION` always means the same page bytes, and newer commits have the tools; a released class's tag, `v<version>`, has its page too. `version()` is SemVer; the Sepolia classes from before SemVer return `tinysynth-<engine ref>+page.<n>`. Node 22 or later; no `npm ci`. `I=plugins/onchain-midi-player/skills/token-uri-inspector/scripts` below. In checkouts from before the rename to onchain-midi-player, the plugin directory is `plugins/onchain-tinysynth/`, so there set `I=plugins/onchain-tinysynth/skills/token-uri-inspector/scripts`.
 
 ## 1. Fetch
 
@@ -43,7 +43,7 @@ For a local contract, print the `token_uri` from an snforge test instead, as the
 node examples/beast_consumer/scripts/decode.mjs token_uri.txt out/   # out/token.json, out/image.svg, out/animation.html
 ```
 
-It writes `out/image.svg` only when the `image` is a base64 SVG data URI, as when the consumer reuses its onchain SVG as the art. For any other `image` (an external URL, a PNG) it prints the value and writes no `image.svg`: the art then comes only from the page (step 4). It checks that every base64 layer is canonical standard base64 and that the JSON is valid UTF-8. A failure here means the consumer's splicing is wrong: usually a piece that is not a multiple of 3 bytes, which leaves `=` padding mid-stream (README: [Integration guide](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#integration-guide)).
+It writes `out/image.svg` only when the `image` is a base64 SVG data URI, as when the consumer reuses its onchain SVG as the art. For any other `image` (an external URL, a PNG) it prints the value and writes no `image.svg`: the art then comes only from the page (step 4). It checks that every base64 layer is canonical standard base64 and that the JSON is valid UTF-8. A failure here means the consumer's splicing is wrong: usually a piece that is not a multiple of 3 bytes, which leaves `=` padding mid-stream (see [Alignment](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#alignment)).
 
 ## 3. Verify the engine
 
@@ -51,7 +51,7 @@ It writes `out/image.svg` only when the `image` is a base64 SVG data URI, as whe
 node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256() of the class>
 ```
 
-It prints the SHA-256 and length of the gzip payload, the engine and the fixed `PAGE`, and exits 1 unless the engine matches `--expect`. Compare all three with the class's row in [Versions](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#versions) and [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json). A matching `PAGE` also proves the shim and the player around the engine are the class's.
+It prints the SHA-256 and length of the gzip payload, the engine and the fixed `PAGE`, and exits 1 unless the engine matches `--expect`. Compare all three with the class's row in [Versions](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#versions) and [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json). A matching `PAGE` also proves the shim and the player around the engine are the class's.
 
 ## 4. Split the page, check the MIDI and the art
 
@@ -61,7 +61,7 @@ node $I/split_page.mjs out/animation.html out/image.svg   # writes out/settings.
 npm run check-midi -- out/midi.b64
 ```
 
-- `split_page.mjs` checks the art contains no `</script` and, given `image.svg`, that the art block holds exactly the `image` bytes. A failure means the page shows a broken image even though marketplaces show the `image` fine (README: [Art (SVG) requirements](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#art-svg-requirements)).
+- `split_page.mjs` checks the art contains no `</script` and, given `image.svg`, that the art block holds exactly the `image` bytes. A failure means the page shows a broken image even though marketplaces show the `image` fine (see [Art (SVG) requirements](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#art-svg-requirements)).
 - `check-midi` runs the page's own MIDI check. A failure is the error the page shows with ▶ disabled ([midi-guide](../midi-guide/SKILL.md)).
 - `out/settings.txt` is the token's `SETTINGS`; the class validated it before writing it ([sound-design](../sound-design/SKILL.md)).
 
@@ -95,4 +95,4 @@ for RPC in https://api.zan.top/public/starknet-sepolia/rpc/v0_10 https://api.car
 done
 ```
 
-The README's [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#deployments) section records which Sepolia providers served the example's full-size Beast (issue [#11](https://github.com/Provable-Games/onchain-midi-player/issues/11)). Use your marketplaces' and indexers' actual providers, on the network you deploy to.
+[Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits) records which Sepolia providers served the example's full-size Beast (issue [#11](https://github.com/Provable-Games/onchain-midi-player/issues/11)). Use your marketplaces' and indexers' actual providers, on the network you deploy to.

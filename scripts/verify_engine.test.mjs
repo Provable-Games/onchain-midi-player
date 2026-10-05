@@ -1,5 +1,5 @@
 // @ts-check
-// Node tests for scripts/verify_engine.mjs, the collector's engine check (README: "Verifying the
+// Node tests for scripts/verify_engine.mjs, the collector's engine check (docs/verifying.md: "Verifying the
 // engine"): on every form of input it reproduces the hashes the class carries in src/page_data.cairo.
 
 import assert from "node:assert/strict";

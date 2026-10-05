@@ -262,7 +262,7 @@ jobs:
       # One minute of the long-session check: every pass on the tempo map's grid, no late notes,
       # the art running. The art's drift from the sound is printed, not checked (--drift-info): in
       # a minute one stall of a headless audio clock can exceed the limit while the page does
-      # nothing wrong. The README's evidence is a 10-minute run per engine, which checks it.
+      # nothing wrong. Longer runs check it: see "Browser validation" in docs/development.md.
       - name: Drift check, 1 minute (loop schedule; art against sound printed)
         if: steps.detect.outputs.has_drift_check == 'true'
         run: npm run drift-check -- --minutes 1 --drift-info "$RUNNER_TEMP/screenshots"

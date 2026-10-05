@@ -1,9 +1,8 @@
 //! The sound provider interface (`onchain_midi_player::interface::ISoundProvider`, with
 //! `onchain_midi_player::types::TinySynthSound`): a mock composer's provider fed into
-//! `midi_segment`
-//! end to end, the README's "Calling a provider" snippet compiled and exercised, and a Serde round
-//! trip of `TinySynthSound`. The mocks are reached with `call_contract`, as an NFT reaches a
-//! provider.
+//! `midi_segment` end to end, the "Calling a provider" snippet (docs/sound-provider.md) compiled
+//! and exercised, and a Serde round trip of `TinySynthSound`. The mocks are reached with
+//! `call_contract`, as an NFT reaches a provider.
 
 use core::num::traits::Zero;
 use onchain_midi_player::interface::{
@@ -124,8 +123,8 @@ mod MockLongScoreProvider {
 }
 
 // ------------------------------------------------------------------------------------------------
-// The README's "Calling a provider" snippet: a copy that CI compiles and these tests run. It is not
-// part of the crate. Keep it identical to the README's snippet.
+// The "Calling a provider" snippet in docs/sound-provider.md: a copy that CI compiles and these
+// tests run. It is not part of the crate. Keep it identical to that snippet.
 // ------------------------------------------------------------------------------------------------
 
 /// The largest reply, in felts, that this renderer will decode: set it from your own gas budget.
