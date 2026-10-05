@@ -82,7 +82,7 @@ The interface, in [`src/interface.cairo`](src/interface.cairo):
 - Run `check-midi` on every score in CI (see below).
 - Budget your largest token's gas (see [How much fits](#how-much-fits-gas-and-limits)).
 
-[`examples/beast_consumer`](examples/beast_consumer) is a complete, tested NFT that does all of this. AI agents can use the [`integrator-guide`](plugins/onchain-midi-player/skills/integrator-guide/SKILL.md) skill.
+[`examples/beast_consumer`](examples/beast_consumer) is a complete, tested NFT that does all of this. AI agents can use the [`integrator-guide`](plugins/onchain-midi-player/skills/integrator-guide/SKILL.md) skill. [`examples/stress_nft`](examples/stress_nft) is a test NFT of twenty tokens whose `token_uri` costs from 30M to over 10B gas, for finding where RPC providers, wallets and explorers stop serving a large token.
 
 ## Quick start for composers
 

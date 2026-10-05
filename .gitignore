@@ -2,3 +2,4 @@ target/
 .snfoundry_cache/
 node_modules/
 preview.html
+rpc_check_results.json

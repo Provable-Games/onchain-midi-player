@@ -123,8 +123,8 @@ GitHub Actions runs on every pull request and on pushes to `main` ([`.github/wor
 
 | Job | What it checks |
 | --- | --- |
-| `cairo` | `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer`; the Scarb lockfiles stay unchanged |
-| `javascript` | The example's Node tests, `npm ci`, `npm test`, and `tsc --checkJs` on `player/` |
+| `cairo` | `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer` and `examples/stress_nft`; the Scarb lockfiles stay unchanged |
+| `javascript` | The examples' Node tests, `npm ci`, `npm test`, and `tsc --checkJs` on `player/` |
 | `generated` | Reruns the fixture generators, `npm run check:settings`, `npm run check:page` and the ABI generator, then fails on any diff |
 | `browser` | One leg per engine (Chromium, Firefox, WebKit): the example's `browser_check.mjs`, `render-check`, `page-check`, `hosting-check` and a 1-minute `drift-check` |
 
@@ -139,8 +139,10 @@ Run the same checks locally from the repository root:
 ```sh
 scarb fmt --check && scarb build && snforge test
 (cd examples/beast_consumer && scarb fmt --check && scarb build && snforge test)
+(cd examples/stress_nft && scarb fmt --check && scarb build && snforge test)
 node scripts/gen_midi_fixtures.mjs
 (cd examples/beast_consumer && node --test scripts/*.test.mjs && node scripts/gen_fixtures.mjs)
+(cd examples/stress_nft && node --test scripts/*.test.mjs && node scripts/gen_fixtures.mjs)
 npm ci && npm test && npm run check:settings && npm run check:page && npm run check:abi
 git diff --exit-code                     # generators left no drift
 
