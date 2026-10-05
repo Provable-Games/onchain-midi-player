@@ -11,12 +11,12 @@
 // the revert, directly and through the library dispatcher, with its exact panic data.
 
 use core::sha256::compute_sha256_byte_array;
-use onchain_tinysynth::interface::{
-    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthSafeDispatcherTrait,
+use onchain_midi_player::interface::{
+    IOnchainMidiPlayerDispatcherTrait, IOnchainMidiPlayerSafeDispatcherTrait,
 };
-use onchain_tinysynth::settings::{encode, validate};
-use onchain_tinysynth::types::SynthSettings;
-use onchain_tinysynth::{page_data, segment};
+use onchain_midi_player::settings::{encode, validate};
+use onchain_midi_player::types::SynthSettings;
+use onchain_midi_player::{page_data, segment};
 use crate::class_fixtures;
 use crate::helpers::{beasts_token_uri, class, safe_class};
 
@@ -37,9 +37,9 @@ pub const PAGE_SHA256: u256 = 0x6b6da50eafd9e9ef8ecf9891cd7c883440fa9d0340af2a58
 /// SHA-256 of `animation_url_segment()`, 53476 bytes.
 pub const SEGMENT_SHA256: u256 = 0xf3c6dbf17ec8e2985581b59e289fe9e90c98749a995df9cdcf4eb2dcc7ddce93;
 
-/// SHA-256 of `license()`, 9062 bytes.
-pub const LICENSE_SHA256: u256 = 0x95d85fb31795b8b08859bcdc78ea5fff2918f57e3178ac0d9333e28082be8a43;
-pub const LICENSE_LEN: u32 = 9062;
+/// SHA-256 of `license()`, 9066 bytes.
+pub const LICENSE_SHA256: u256 = 0x778dfa36a41f0e85f12fc5008c08f54f8715770b5e0d053866a75d840b03c55b;
+pub const LICENSE_LEN: u32 = 9066;
 
 /// SHA-256 of the engine (the pinned fork build, commit fc04dbe).
 pub const ENGINE_SHA256: u256 = 0x4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c;

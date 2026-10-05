@@ -1,6 +1,6 @@
 # `checkMidi` rules and messages
 
-The page runs `checkMidi` (in [`player/player.js`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/player/player.js)) on the token's MIDI before ▶ is enabled. `npm run check-midi` and `npm run preview` run the same function. The source of truth is the README's [Accepted format](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#accepted-format) table; `npm test` fails if this file misses one of the player's messages.
+The page runs `checkMidi` (in [`player/player.js`](https://github.com/Provable-Games/onchain-midi-player/blob/main/player/player.js)) on the token's MIDI before ▶ is enabled. `npm run check-midi` and `npm run preview` run the same function. The source of truth is the README's [Accepted format](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#accepted-format) table; `npm test` fails if this file misses one of the player's messages.
 
 Errors read `midi: <message> (byte <offset>)`, where the offset is where reading stopped. A failing file does not revert onchain: the page shows the error, ▶ stays disabled and the art still shows.
 

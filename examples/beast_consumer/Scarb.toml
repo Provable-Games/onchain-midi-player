@@ -2,12 +2,12 @@
 name = "beast_consumer"
 version = "0.1.0"
 edition = "2025_12"
-description = "End-to-end example: a Beasts-style NFT injecting the onchain TinySynth player into its token_uri, with library calls to the real class."
+description = "End-to-end example: a Beasts-style NFT injecting the onchain MIDI player into its token_uri, with library calls to the real class."
 license = "Apache-2.0"
 publish = false
 
 [dependencies]
-onchain_tinysynth = { path = "../.." }
+onchain_midi_player = { path = "../.." }
 starknet = "2.20.1"
 
 [dev-dependencies]
@@ -17,7 +17,7 @@ assert_macros = "2.20.0"
 [[target.starknet-contract]]
 sierra = true
 # The class itself, compiled from the root crate, so the tests can declare it (never deploy it).
-build-external-contracts = ["onchain_tinysynth::contract::OnchainTinySynth"]
+build-external-contracts = ["onchain_midi_player::contract::OnchainMidiPlayer"]
 
 [scripts]
 test = "snforge test"

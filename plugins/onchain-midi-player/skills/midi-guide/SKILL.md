@@ -1,13 +1,13 @@
 ---
 name: midi-guide
-description: Drive the onchain TinySynth NFT player (Provable-Games/onchain-tinysynth) with Standard MIDI Files. Preview a .mid offline in the exact page the chain serves, check it against the player's strict MIDI contract, and learn only where the player differs from standard MIDI players and upstream TinySynth (End-of-Track looping, sounds set by the contract, ignored controllers, pinned engine quirks, gas per byte, keeping the tempo in sync with animated SVG or GIF art), and serve scores from a composer's contract through the sound provider interface (get_sound). Use when composing, converting or debugging MIDI for an NFT that uses this player, when check-midi fails, or when music and art drift apart.
+description: Drive the onchain MIDI player for NFTs (Provable-Games/onchain-midi-player) with Standard MIDI Files. Preview a .mid offline in the exact page the chain serves, check it against the player's strict MIDI contract, and learn only where the player differs from standard MIDI players and upstream TinySynth (End-of-Track looping, sounds set by the contract, ignored controllers, pinned engine quirks, gas per byte, keeping the tempo in sync with animated SVG or GIF art), and serve scores from a composer's contract through the sound provider interface (get_sound). Use when composing, converting or debugging MIDI for an NFT that uses this player, when check-midi fails, or when music and art drift apart.
 license: Apache-2.0
-compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-tinysynth whose VERSION in src/page_data.cairo equals the class's version().
+compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-midi-player whose VERSION in src/page_data.cairo equals the class's version().
 ---
 
-# Driving the onchain TinySynth player with MIDI
+# Driving the onchain MIDI player with MIDI
 
-This guide is for experienced MIDI authors. It lists only what differs from standard MIDI players and upstream TinySynth. The source of truth is the README's [MIDI contract](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#midi-contract); read it when a detail matters.
+This guide is for experienced MIDI authors. It lists only what differs from standard MIDI players and upstream TinySynth. The source of truth is the README's [MIDI contract](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#midi-contract); read it when a detail matters.
 
 Boundaries: this skill covers what goes in the `.mid` (notes, program changes, controllers, tempo, loop point), and how a composer's contract serves it ([Serving the score from a contract](#serving-the-score-from-a-contract)). The contract's `SynthSettings` (which sounds the programs and drums play, reverb, volume, voices) is the [sound-design](../sound-design/SKILL.md) skill. Wiring the player into a contract is the [integrator-guide](../integrator-guide/SKILL.md) skill.
 
@@ -16,7 +16,7 @@ Boundaries: this skill covers what goes in the `.mid` (notes, program changes, c
 Preview the score in the page the chain serves, and check it, before anything goes onchain:
 
 ```sh
-git clone https://github.com/Provable-Games/onchain-tinysynth && cd onchain-tinysynth
+git clone https://github.com/Provable-Games/onchain-midi-player && cd onchain-midi-player
 grep 'pub const VERSION' src/page_data.cairo   # must print the class's version(); see "Get the tools"
 npm run check-midi -- song.mid             # the page's own MIDI check
 npm run preview -- song.mid --settings sound.json --svg art.svg --serve
@@ -27,18 +27,18 @@ Open the printed URL and press ▶. If it plays right there, it plays the same f
 ### Get the tools
 
 - Node 22 or later. `check-midi` and `preview` need no `npm ci`.
-- Use a clone whose `PAGE` is your class's: `grep 'pub const VERSION' src/page_data.cairo` must print the class's `version()` (`preview` prints it too). The same `VERSION` always means the same `PAGE` bytes, so the newest commit with it has both the tools and the right page: `main` while its `VERSION` matches, otherwise the last commit before `VERSION` changed (`git log --oneline -- src/page_data.cairo`). A class's "Built from" commit in [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments) can predate the tools. Details: README [Agent skills](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#agent-skills).
+- Use a clone whose `PAGE` is your class's: `grep 'pub const VERSION' src/page_data.cairo` must print the class's `version()` (`preview` prints it too). The same `VERSION` always means the same `PAGE` bytes, so the newest commit with it has both the tools and the right page: `main` while its `VERSION` matches, otherwise the last commit before `VERSION` changed (`git log --oneline -- src/page_data.cairo`). A class's "Built from" commit in [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#deployments) can predate the tools. Details: README [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills).
 
 ## What the offline check guarantees
 
-- **Bytes.** `preview` writes exactly the decoded `animation_url` page (`PAGE ++ D ++ SVG`) that the class and a consumer produce for the same MIDI, settings and SVG. `npm test` checks this against the example contract's golden output, and on Sepolia the deployed example's `token_uri` came back byte-identical through several RPC providers (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)).
-- **Playback.** Every browser runs the same engine and player code, but audio can differ slightly across browsers and sample rates (README: [The player page](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#the-player-page)).
+- **Bytes.** `preview` writes exactly the decoded `animation_url` page (`PAGE ++ D ++ SVG`) that the class and a consumer produce for the same MIDI, settings and SVG. `npm test` checks this against the example contract's golden output, and on Sepolia the deployed example's `token_uri` came back byte-identical through several RPC providers (issue [#11](https://github.com/Provable-Games/onchain-midi-player/issues/11)).
+- **Playback.** Every browser runs the same engine and player code, but audio can differ slightly across browsers and sample rates (README: [The player page](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#the-player-page)).
 - **Noise and reverb** are generated from a fixed seed in the engine the class pins from `page.9` (fork issue [#7](https://github.com/Provable-Games/webaudio-tinysynth/issues/7)), so they are the same on every load at a given sample rate; with an earlier class they vary slightly from load to load.
 - **A bad file does not revert.** The class embeds the MIDI without parsing it. The page shows the error, ▶ stays disabled and the art still shows. Only an offline check catches it before mint.
 
 ## Where the player is not a standard MIDI player
 
-Rows trace to the README's MIDI contract and to [`scripts/engine_contract.test.mjs`](https://github.com/Provable-Games/onchain-tinysynth/blob/main/scripts/engine_contract.test.mjs), which pins the less obvious ones on the pinned engine.
+Rows trace to the README's MIDI contract and to [`scripts/engine_contract.test.mjs`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/engine_contract.test.mjs), which pins the less obvious ones on the pinned engine.
 
 | Behaviour | What to do | Why |
 | --- | --- | --- |
@@ -56,11 +56,11 @@ Rows trace to the README's MIDI contract and to [`scripts/engine_contract.test.m
 | The voice limit cuts a note when the new note is scheduled, up to about 0.2 s before it sounds. A drum hit takes no voice but applies the limit, so with `voices` 1 every hit cuts the melody. | Leave headroom under `voices`. | Pinned engine: it schedules about 0.2 s ahead. |
 | CC120 and CC123–127 cut the channel's melodic notes when scheduled (up to about 0.2 s early), not drums. CC121 leaves notes held by sustain sounding. | Prefer note-offs. Avoid CC121. | Pinned engine. |
 | CC1 is one 5 Hz LFO shared by all channels, ±(value × 100 / 127) cents. Loudness follows velocity squared; FM depth ignores velocity. Aftertouch, channel pressure, portamento, sostenuto and soft pedal are ignored. | Write vibrato and dynamics with that in mind. | Pinned engine. |
-| Tuning far up can silence notes on a deep FM timbre. On a long FM chain of high ratios, or with a large `key_scale`, a high note's computed frequencies or levels can pass the 32-bit float range: the engine skips that note, which makes no sound, and the song plays on. Upward tuning adds to it: coarse tuning +63, GS key-shift +63 and GS master tune at its maximum together are about +190 semitones, and one GS master tune message whose data nibbles are bytes above `0x0F` about +556. `check-midi` accepts all of these. | Keep GS master tune data nibbles within `0x00`–`0x0F`, keep the total upward tuning moderate on deep FM timbres, and audition the score with the contract's settings in `preview`. | Pinned engine (the fork's task T5.2); README: [Engine limits on operator values](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#engine-limits-on-operator-values). Classes up to `tinysynth-3d965d1+page.10` threw on that note and stopped the song. |
+| Tuning far up can silence notes on a deep FM timbre. On a long FM chain of high ratios, or with a large `key_scale`, a high note's computed frequencies or levels can pass the 32-bit float range: the engine skips that note, which makes no sound, and the song plays on. Upward tuning adds to it: coarse tuning +63, GS key-shift +63 and GS master tune at its maximum together are about +190 semitones, and one GS master tune message whose data nibbles are bytes above `0x0F` about +556. `check-midi` accepts all of these. | Keep GS master tune data nibbles within `0x00`–`0x0F`, keep the total upward tuning moderate on deep FM timbres, and audition the score with the contract's settings in `preview`. | Pinned engine (the fork's task T5.2); README: [Engine limits on operator values](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#engine-limits-on-operator-values). Classes up to `tinysynth-3d965d1+page.10` threw on that note and stopped the song. |
 | Nothing plays until the viewer taps ▶. | Do not count on autoplay or on the first beat landing at page load. | Browser rule: audio starts only from a user gesture. |
-| Every byte costs gas: `midi_segment` base64-encodes the MIDI at call time, once alone and twice inside the page fragment. About 14M L2 gas per 1,000 bytes ([README](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#midi_segment-by-midi-and-settings-size)). | Strip text, marker, lyric and name events (the player ignores them). Use running status, with note-on velocity 0 as note-off. | Gas: the contract pays per byte on every `token_uri` call. |
+| Every byte costs gas: `midi_segment` base64-encodes the MIDI at call time, once alone and twice inside the page fragment. About 14M L2 gas per 1,000 bytes ([README](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#midi_segment-by-midi-and-settings-size)). | Strip text, marker, lyric and name events (the player ignores them). Use running status, with note-on velocity 0 as note-off. | Gas: the contract pays per byte on every `token_uri` call. |
 
-The full list of honoured and ignored messages is in the README: [Messages TinySynth honours](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#messages-tinysynth-honours) and [Limits](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#limits).
+The full list of honoured and ignored messages is in the README: [Messages TinySynth honours](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#messages-tinysynth-honours) and [Limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#limits).
 
 ## Practical recommendations
 
@@ -72,9 +72,9 @@ The full list of honoured and ignored messages is in the README: [Messages TinyS
 
 ## Syncing with the art
 
-From `page.8`, the player restarts the art when tick 0 is heard: on ▶, and again at every pass. (The `page.6` class on Sepolia, in the README's [Deployments](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#deployments), restarts it only on ▶: there a mismatched pass makes the art drift across its loop instead of jumping. Check the `version()` of the class you target.) When the pass is a whole multiple of every period of the art's animation, the art is back at its start at each loop point anyway, so the restart does not show, and music and art stay in step for the whole session. When it is not, the art jumps back to its start at every loop point, and an animation longer than the pass never finishes. Within a pass, the music's beat and the art's frames line up only if their periods match.
+From `page.8`, the player restarts the art when tick 0 is heard: on ▶, and again at every pass. (The `page.6` class on Sepolia, in the README's [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#deployments), restarts it only on ▶: there a mismatched pass makes the art drift across its loop instead of jumping. Check the `version()` of the class you target.) When the pass is a whole multiple of every period of the art's animation, the art is back at its start at each loop point anyway, so the restart does not show, and music and art stay in step for the whole session. When it is not, the art jumps back to its start at every loop point, and an animation longer than the pass never finishes. Within a pass, the music's beat and the art's frames line up only if their periods match.
 
-1. **Measure the art's periods:** GIF frame delays (in 10 ms units), SMIL `dur` (one repeat of the animation's `values`), and CSS animation durations (one iteration; with `alternate` or `alternate-reverse` the art repeats every two iterations). From the checkout, `node plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs art.svg` prints them. Ignore animations that change nothing visible.
+1. **Measure the art's periods:** GIF frame delays (in 10 ms units), SMIL `dur` (one repeat of the animation's `values`), and CSS animation durations (one iteration; with `alternate` or `alternate-reverse` the art repeats every two iterations). From the checkout, `node plugins/onchain-midi-player/skills/midi-guide/scripts/art_periods.mjs art.svg` prints them. Ignore animations that change nothing visible.
 2. **Choose the tempo:** make the beat, or a subdivision of it, a whole number of frames.
 3. **Choose the pass length:** make it (the `loop` that `check-midi` prints, `maxTick` × the tick time) a whole multiple of every visible art period, so every pass starts in phase.
 
@@ -94,11 +94,11 @@ Why the art restarts at every pass: the art runs on the page's clock and the sou
 
 ## Serving the score from a contract
 
-A composer whose contract writes the scores onchain implements the sound provider interface, `onchain_tinysynth::interface::ISoundProvider`, so any NFT that uses the player can call it. A MIDI file can select an instrument but not define one, so `get_sound` returns the score together with the instrument definitions it plays, as an `onchain_tinysynth::types::TokenSound`:
+A composer whose contract writes the scores onchain implements the sound provider interface, `onchain_midi_player::interface::ISoundProvider`, so any NFT that uses the player can call it. A MIDI file can select an instrument but not define one, so `get_sound` returns the score together with the instrument definitions it plays, as an `onchain_midi_player::types::TokenSound`:
 
 ```cairo
-use onchain_tinysynth::interface::ISoundProvider;
-use onchain_tinysynth::types::TokenSound;
+use onchain_midi_player::interface::ISoundProvider;
+use onchain_midi_player::types::TokenSound;
 
 // In the composer's contract: `get_sound` is the whole interface.
 #[abi(embed_v0)]
@@ -111,7 +111,7 @@ impl SoundProviderImpl of ISoundProvider<ContractState> {
 }
 ```
 
-NFTs call `get_sound`: one call that reads the token's state once. It is the interface's only function: interfaces for the MIDI alone or the settings alone belong to your own project, and a contract that already has them (`get_midi`, `get_settings`) adds `get_sound` beside them. If it exposes the MIDI or the settings through its own interfaces, they should equal `get_sound(token_id).midi` and `.settings`; build all of them from one internal function. The provider contract, from the README's [Sound provider interface](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-provider-interface), which has the details:
+NFTs call `get_sound`: one call that reads the token's state once. It is the interface's only function: interfaces for the MIDI alone or the settings alone belong to your own project, and a contract that already has them (`get_midi`, `get_settings`) adds `get_sound` beside them. If it exposes the MIDI or the settings through its own interfaces, they should equal `get_sound(token_id).midi` and `.settings`; build all of them from one internal function. The provider contract, from the README's [Sound provider interface](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#sound-provider-interface), which has the details:
 
 - **Token IDs as minted:** accept the whole `u256` the NFT minted, decode only the bits you use, and ignore the rest (Beasts' newer IDs are 180 bits).
 - **A raw Standard MIDI File** (not base64) that passes `check-midi`. In your CI, check the scores the contract produces for a spread of tokens, read from `get_sound(token_id).midi` or written out by snforge tests.

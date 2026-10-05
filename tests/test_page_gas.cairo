@@ -5,7 +5,7 @@
 //! (unaligned: every word is split across two). Subtract `fetch` for the cost of the append itself.
 //! Results are in the README.
 
-use onchain_tinysynth::page_data;
+use onchain_midi_player::page_data;
 
 #[test]
 fn gas_segment_fetch() {

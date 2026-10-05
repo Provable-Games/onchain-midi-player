@@ -1,5 +1,5 @@
 // @ts-check
-// Drift guards for the agent skills in plugins/onchain-tinysynth (README: "Agent skills"). The skills
+// Drift guards for the agent skills in plugins/onchain-midi-player (README: "Agent skills"). The skills
 // summarise the README and link to it; these tests keep them from becoming a second copy that drifts:
 //   - the plugin manifests and every SKILL.md frontmatter follow the formats (Claude Code plugin
 //     marketplaces and the open Agent Skills specification, https://agentskills.io/specification);
@@ -24,14 +24,14 @@ import { JSON_PREFIX, VERSION, b64, byteArrayFelts, dFragment, decodeTokenUri, d
 import { MIDI, renderSvg } from "../examples/beast_consumer/scripts/reference.mjs";
 import { buildPreview, settingsFromText } from "./preview.mjs";
 import { DEFAULT_OPERATOR, DEFAULT_SETTINGS } from "./settings_fixtures.mjs";
-import { artPeriods, cssDurations, gifDelays } from "../plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs";
-import { byteArrayFromFelts, tokenUriFromCall } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/bytearray.mjs";
-import { checkArt, run as splitRun, splitPage } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/split_page.mjs";
+import { artPeriods, cssDurations, gifDelays } from "../plugins/onchain-midi-player/skills/midi-guide/scripts/art_periods.mjs";
+import { byteArrayFromFelts, tokenUriFromCall } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/bytearray.mjs";
+import { checkArt, run as splitRun, splitPage } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/split_page.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const PLUGIN = join(ROOT, "plugins/onchain-tinysynth");
+const PLUGIN = join(ROOT, "plugins/onchain-midi-player");
 const SKILLS = join(PLUGIN, "skills");
-const REPO_URL = "https://github.com/Provable-Games/onchain-tinysynth";
+const REPO_URL = "https://github.com/Provable-Games/onchain-midi-player";
 const read = (/** @type {string} */ p) => readFileSync(join(ROOT, p), "utf8");
 
 /**
@@ -81,7 +81,7 @@ describe("plugin and marketplace manifests", () => {
     assert.doesNotMatch(marketplace.name, /^(claude|anthropic)/, "reserved-looking marketplace name");
     assert.ok(marketplace.owner?.name, "owner.name");
     assert.ok(marketplace.description);
-    assert.deepEqual(marketplace.plugins.map((/** @type {{name: string}} */ p) => p.name), ["onchain-tinysynth"]);
+    assert.deepEqual(marketplace.plugins.map((/** @type {{name: string}} */ p) => p.name), ["onchain-midi-player"]);
     for (const entry of marketplace.plugins) {
       assert.match(entry.name, NAME);
       assert.match(entry.source, /^\.\/[\w./-]+$/, "a relative source from the marketplace root");
@@ -220,12 +220,12 @@ describe("content kept in step with the code", () => {
     const thrown = new Set([...src.matchAll(/fail\("([^"]*)"/g)].map((m) => m[1]));
     for (const m of src.matchAll(/new Error\("midi: ([^"]*)"\)/g)) thrown.add(m[1]);
     assert.ok(thrown.size >= 19, `found ${thrown.size} messages`);
-    const reference = read("plugins/onchain-tinysynth/skills/midi-guide/references/checkmidi-rules.md");
+    const reference = read("plugins/onchain-midi-player/skills/midi-guide/references/checkmidi-rules.md");
     for (const text of thrown) assert.ok(reference.includes("`" + text) || reference.includes("`midi: " + text + "`"), `the reference lists "${text}"`);
   });
 
   test("the sound-design operator table matches the operator fields, their types and default_operator()", () => {
-    const table = read("plugins/onchain-tinysynth/skills/sound-design/references/operator-fields.md");
+    const table = read("plugins/onchain-midi-player/skills/sound-design/references/operator-fields.md");
     const n = (/** @type {number} */ x) => x.toLocaleString("en-US");
     for (const [name, type, key] of OPERATOR_FIELDS) {
       const row = `| \`${name}\` | \`${key}\` | \`${type}\` | ${n(/** @type {any} */ (DEFAULT_OPERATOR)[name])} |`;
@@ -369,7 +369,7 @@ describe("the skills' helper scripts", () => {
     const unsafe = checkArt(Buffer.from("<svg><script></SCRIPT></svg>"), image);
     assert.equal(unsafe.ok, false);
     assert.match(unsafe.lines[0], /contains "<\/script" at byte 13/);
-    assert.throws(() => splitPage(Buffer.from("<html></html>")), /not an onchain TinySynth page/);
+    assert.throws(() => splitPage(Buffer.from("<html></html>")), /not an onchain-midi-player page/);
   });
 
   test("an external-image token: the integrator-guide's second layout is valid, and the inspector handles it", () => {

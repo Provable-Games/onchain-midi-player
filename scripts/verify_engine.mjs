@@ -84,7 +84,7 @@ export function pageFromInput(input) {
 export function verifyEngine(html) {
   // PAGE ends with the settings block's opening tag and its alignment spaces; D follows with digits.
   const settings = html.indexOf(SETTINGS_OPEN);
-  if (settings < 0) throw new Error("no settings block: not an onchain TinySynth page");
+  if (settings < 0) throw new Error("no settings block: not an onchain-midi-player page");
   let end = settings + SETTINGS_OPEN.length;
   while (html[end] === " ") end++;
   const page = Buffer.from(html.slice(0, end), "latin1");

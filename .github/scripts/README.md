@@ -2,7 +2,7 @@
 
 Codex (`.github/workflows/codex-review.yml`) and Claude
 (`.github/workflows/claude-review.yml`) review every same-repository pull request
-with one onchain-tinysynth reviewer role and one shared output policy. The design
+with one onchain-midi-player reviewer role and one shared output policy. The design
 mirrors the Provable-Games TinySynth fork's review workflows
 (`webaudio-tinysynth`, `.github/` on `improve/integration`), adapted to this
 repository's prompt, paths and job names, plus one addition: a review whose
@@ -12,7 +12,7 @@ secret or variables are not configured is skipped (see Policies).
 | --- | --- |
 | `.github/review-agents.json` | Reviewer role, scope (`"."`, the whole repository), blocking severities, and per-provider variable names and pins |
 | `.github/prompts/review-policy.md` | Shared review policy and output contract, including the non-blocking Skill opportunities section |
-| `.github/prompts/onchain-tinysynth-review.md` | Repository reviewer role: Cairo/Starknet, base64 splicing and alignment, the SETTINGS wire format, the permanent declared API, CSP-safe player JS, Cairo/JS byte parity, Scarb dependencies, agent skill consistency |
+| `.github/prompts/onchain-midi-player-review.md` | Repository reviewer role: Cairo/Starknet, base64 splicing and alignment, the SETTINGS wire format, the permanent declared API, CSP-safe player JS, Cairo/JS byte parity, Scarb dependencies, agent skill consistency |
 | `review_lib.py`, `review.py` | Configuration, prompt, result parsing, comment and gate helpers (Python standard library) |
 | `run-codex-review.sh` | Runs the pinned Codex CLI once |
 | `codex-cli/package.json`, `package-lock.json` | The Codex CLI pin |
@@ -29,7 +29,7 @@ Each provider workflow runs four jobs. Require the two gates in the branch rules
 | `Claude review gate` | yes | Claude review outcome for this head |
 | `Codex review credential check`, `Claude review credential check` | no | Reports only whether the provider's secret is set |
 | `Codex review setup`, `Claude review setup` | no | Policy, trusted configuration, change detection and the dependency sources |
-| `Codex review / onchain-tinysynth`, `Claude review / onchain-tinysynth` | no | The credential-bearing review run |
+| `Codex review / onchain-midi-player`, `Claude review / onchain-midi-player` | no | The credential-bearing review run |
 | `Codex review comment`, `Claude review comment` | no | Publishes the bot comment |
 | `Review helper tests` (`review-helpers.yml`) | optional | Runs `test_review.py`, shellcheck, and actionlint on every workflow |
 
@@ -209,7 +209,7 @@ nothing else before, between or after them.
 ### Skill opportunities (non-blocking)
 
 The reviewer role also checks the agent skills in
-`plugins/onchain-tinysynth/skills/` against the change. A skill that the pull
+`plugins/onchain-midi-player/skills/` against the change. A skill that the pull
 request makes wrong, or that misses a new capability, is an ordinary finding at
 the skill's file and line (at least MEDIUM when it would lead an integrator or
 composer to broken output, LOW for stale but harmless wording), so it counts
@@ -224,7 +224,7 @@ lgtm
 
 ## Skill opportunities
 
-- **Refine `midi-guide`** (`plugins/onchain-tinysynth/skills/midi-guide/SKILL.md:40`): … Evidence: `player/player.js:120`.
+- **Refine `midi-guide`** (`plugins/onchain-midi-player/skills/midi-guide/SKILL.md:40`): … Evidence: `player/player.js:120`.
 ```
 
 `parse_review` splits the output at the first `## Skill opportunities` heading
@@ -309,7 +309,7 @@ Security, within the trust boundary below:
 Each provider keeps one bot comment per reviewer. A comment belongs to a
 provider and reviewer only if `github-actions[bot]` (type `Bot`) wrote it and
 its first line is exactly the hidden marker
-`<!-- onchain-tinysynth-ai-review:<provider>:<agent> -->`. Both providers post as the
+`<!-- onchain-midi-player-ai-review:<provider>:<agent> -->`. Both providers post as the
 same bot, so a comment that merely quotes another marker, including the other
 provider's comment, is never edited or deleted. A second hidden comment records
 the base, head, merge base, configuration revision, model, effort and run.

@@ -1,5 +1,5 @@
 //! `BeastLikeNft`: a simplified Beasts-style collectible that renders its own SVG and injects the
-//! onchain TinySynth player into `token_uri`.
+//! onchain MIDI player into `token_uri`.
 //!
 //! # Today's Beasts approach (for contrast)
 //!
@@ -7,7 +7,7 @@
 //! the whole JSON as one string, then base64-encodes that JSON in one more pass. That last pass
 //! runs over everything, including the already-encoded image.
 //!
-//! # With the TinySynth class
+//! # With the player class
 //!
 //! The JSON gains an `animation_url` holding an HTML page (engine + player + MIDI + the same SVG).
 //! Encoding that page at call time would cost hundreds of millions of gas, so instead `token_uri`
@@ -48,7 +48,7 @@ use starknet::ClassHash;
 #[starknet::interface]
 pub trait IBeastLikeNft<T> {
     fn token_uri(self: @T, token_id: u256) -> ByteArray;
-    fn tinysynth_class_hash(self: @T) -> ClassHash;
+    fn midi_player_class_hash(self: @T) -> ClassHash;
 }
 
 /// Fixed collection description. Contains no `"` or `\`, so it embeds in JSON unescaped.
@@ -204,8 +204,8 @@ pub fn align_to_word(ref uri: ByteArray, extra: usize) {
 
 #[starknet::contract]
 pub mod BeastLikeNft {
-    use onchain_tinysynth::interface::{
-        IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
+    use onchain_midi_player::interface::{
+        IOnchainMidiPlayerDispatcherTrait, IOnchainMidiPlayerLibraryDispatcher,
     };
     use starknet::ClassHash;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
@@ -217,24 +217,24 @@ pub mod BeastLikeNft {
 
     #[storage]
     struct Storage {
-        /// Class hash of the declared (never deployed) TinySynth class. Pinning a new class hash
+        /// Class hash of the declared (never deployed) player class. Pinning a new class hash
         /// is how the collection opts into a new engine or page version.
-        tinysynth_class_hash: ClassHash,
+        midi_player_class_hash: ClassHash,
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, tinysynth_class_hash: ClassHash) {
-        assert(tinysynth_class_hash.is_non_zero(), 'zero tinysynth class hash');
-        self.tinysynth_class_hash.write(tinysynth_class_hash);
+    fn constructor(ref self: ContractState, midi_player_class_hash: ClassHash) {
+        assert(midi_player_class_hash.is_non_zero(), 'zero midi player class hash');
+        self.midi_player_class_hash.write(midi_player_class_hash);
     }
 
     #[abi(embed_v0)]
     impl BeastLikeNftImpl of super::IBeastLikeNft<ContractState> {
         fn token_uri(self: @ContractState, token_id: u256) -> ByteArray {
             // Library calls: the class code runs in this contract's context. It has no storage,
-            // so it reads and writes nothing here. No deployed TinySynth contract is involved.
-            let synth = IOnchainTinySynthLibraryDispatcher {
-                class_hash: self.tinysynth_class_hash.read(),
+            // so it reads and writes nothing here. No deployed player contract is involved.
+            let synth = IOnchainMidiPlayerLibraryDispatcher {
+                class_hash: self.midi_player_class_hash.read(),
             };
 
             // Token data and the renderer, exactly as without sound.
@@ -292,8 +292,8 @@ pub mod BeastLikeNft {
             uri
         }
 
-        fn tinysynth_class_hash(self: @ContractState) -> ClassHash {
-            self.tinysynth_class_hash.read()
+        fn midi_player_class_hash(self: @ContractState) -> ClassHash {
+            self.midi_player_class_hash.read()
         }
     }
 }

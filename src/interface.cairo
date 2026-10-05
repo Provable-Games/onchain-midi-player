@@ -1,11 +1,11 @@
-//! Public interface of the onchain TinySynth class library.
+//! Public interface of the onchain MIDI player class library.
 //!
 //! This class is meant to be **declared, never deployed**. It has no storage and no
 //! constructor. Consumers call it with `library_call` through the dispatcher that the
 //! `#[starknet::interface]` attribute generates:
 //!
 //! ```text
-//! let synth = IOnchainTinySynthLibraryDispatcher { class_hash: TINYSYNTH_CLASS_HASH };
+//! let synth = IOnchainMidiPlayerLibraryDispatcher { class_hash: MIDI_PLAYER_CLASS_HASH };
 //! let segment = synth.animation_url_segment();
 //! ```
 //!
@@ -79,18 +79,18 @@
 
 use crate::types::{SynthSettings, TokenSound};
 
-/// Onchain TinySynth class library.
+/// Onchain MIDI player class library.
 ///
 /// All functions are view-only and deterministic: for a given class hash, the same inputs
 /// always give the same output. The engine and the page are fixed per class version; a
 /// new engine or page means a new class hash and a new `version()`. Sound settings and
 /// custom sounds are supplied by the consumer on each call through `SynthSettings`.
 ///
-/// Intended to be invoked with `library_call` via `IOnchainTinySynthLibraryDispatcher`.
+/// Intended to be invoked with `library_call` via `IOnchainMidiPlayerLibraryDispatcher`.
 /// The class holds no state, so executing it in the caller's context reads and writes
 /// nothing on the caller's storage.
 #[starknet::interface]
-pub trait IOnchainTinySynth<T> {
+pub trait IOnchainMidiPlayer<T> {
     // ------------------------------------------------------------------------------------
     // For contracts that build their own token_uri JSON (the consumer layout).
     // ------------------------------------------------------------------------------------
@@ -212,13 +212,13 @@ pub trait IOnchainTinySynth<T> {
 }
 
 // ----------------------------------------------------------------------------------------------
-// Interfaces implemented by other contracts (sound providers). The TinySynth class does NOT
+// Interfaces implemented by other contracts (sound providers). The player class does NOT
 // implement the interface below: it is a convention between composers and NFTs, declared here so
 // that both compile against the same `ISoundProvider` and `TokenSound`.
 // ----------------------------------------------------------------------------------------------
 
 /// What a composer's contract implements to hand an NFT the sound of a token, and what the NFT, or
-/// the renderer that builds its `token_uri`, calls. The TinySynth class does not implement it and
+/// the renderer that builds its `token_uri`, calls. The player class does not implement it and
 /// never calls it. README: "Sound provider interface", which has the provider contract.
 ///
 /// A Standard MIDI File can select an instrument (a program change, or a note on the percussion

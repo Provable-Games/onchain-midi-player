@@ -1,14 +1,14 @@
-//! The sound provider interface (`onchain_tinysynth::interface::ISoundProvider`, with
-//! `onchain_tinysynth::types::TokenSound`): a mock composer's provider fed into `midi_segment` end
-//! to end, the README's "Calling a provider" snippet compiled and exercised, and a Serde round trip
-//! of `TokenSound`. The mocks are reached with `call_contract`, as an NFT reaches a provider.
+//! The sound provider interface (`onchain_midi_player::interface::ISoundProvider`, with
+//! `onchain_midi_player::types::TokenSound`): a mock composer's provider fed into `midi_segment`
+//! end to end, the README's "Calling a provider" snippet compiled and exercised, and a Serde round
+//! trip of `TokenSound`. The mocks are reached with `call_contract`, as an NFT reaches a provider.
 
 use core::num::traits::Zero;
-use onchain_tinysynth::interface::{
-    IOnchainTinySynthDispatcherTrait, ISoundProviderDispatcher, ISoundProviderDispatcherTrait,
+use onchain_midi_player::interface::{
+    IOnchainMidiPlayerDispatcherTrait, ISoundProviderDispatcher, ISoundProviderDispatcherTrait,
 };
-use onchain_tinysynth::settings::default_operator;
-use onchain_tinysynth::types::{
+use onchain_midi_player::settings::default_operator;
+use onchain_midi_player::types::{
     Filter, FilterKind, Operator, SynthSettings, Timbre, TokenSound, WaveDef, Waveform,
 };
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
@@ -26,8 +26,8 @@ use crate::settings_fixtures::{valid_filter_extremes, valid_reference_waves};
 /// only `get_sound`, the whole of `ISoundProvider`.
 #[starknet::contract]
 mod MockSoundProvider {
-    use onchain_tinysynth::interface::ISoundProvider;
-    use onchain_tinysynth::types::TokenSound;
+    use onchain_midi_player::interface::ISoundProvider;
+    use onchain_midi_player::types::TokenSound;
     use crate::page_fixtures::{case_beast_140bpm_midi, case_beast_140bpm_settings};
 
     #[storage]
@@ -100,8 +100,8 @@ mod MockRawProvider {
 /// settings, to test the reply cap without storing a long reply.
 #[starknet::contract]
 mod MockLongScoreProvider {
-    use onchain_tinysynth::interface::ISoundProvider;
-    use onchain_tinysynth::types::TokenSound;
+    use onchain_midi_player::interface::ISoundProvider;
+    use onchain_midi_player::types::TokenSound;
     use super::small_sound;
 
     #[storage]
@@ -202,7 +202,7 @@ fn the_snippet_gives_none_when_the_call_fails() {
     assert(fetch_sound(provider, 2).is_none(), 'unknown token');
     assert(fetch_sound(provider, u256 { low: 0x10000, high: 1 }).is_none(), 'low bits 0');
     // The class has no `get_sound` entry point.
-    assert(fetch_sound(deploy("OnchainTinySynth", array![]), 1).is_none(), 'no get_sound');
+    assert(fetch_sound(deploy("OnchainMidiPlayer", array![]), 1).is_none(), 'no get_sound');
     // The provider still answers afterwards.
     assert(fetch_sound(provider, 1).is_some(), 'known token');
 }

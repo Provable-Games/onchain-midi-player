@@ -1,4 +1,4 @@
-# onchain-tinysynth
+# onchain-midi-player
 
 A Cairo class library for Starknet that serves a fully onchain, offline-playable music player for NFTs. The class embeds the TinySynth General MIDI synthesizer (oscillator/FM, no samples) and a small player page. A collectible contract passes in a token's MIDI file, SVG art and sound settings (including optional custom instrument and drum sounds), and the class returns the pieces of a `token_uri` whose `animation_url` plays that MIDI in the browser with no network requests. The class is declared but never deployed, has no storage and no constructor, and contains no collectible-specific logic. The first consumer is the Beasts NFT.
 
@@ -11,7 +11,7 @@ Implemented:
 - **The player page (issue #8):** [`player/player.js`](player/player.js), with the settings module, in the fixed page `PAGE`. See [The player page](#the-player-page).
 - **The offline build pipeline (issue #9):** the pinned engine, the page build, the generated [`src/page_data.cairo`](src/page_data.cairo) and the golden fixtures for the class. See [Build pipeline](#build-pipeline).
 - **The gzipped engine (issue #14):** `PAGE` carries the engine gzipped, with a small gunzip shim, which nearly halves the segment and its gas. See [The gzipped engine](#the-gzipped-engine).
-- **The class (issue #10):** `OnchainTinySynth` in [`src/contract.cairo`](src/contract.cairo), with `midi_segment` in [`src/segment.cairo`](src/segment.cairo). It matches every golden fixture byte for byte, directly and through a library call. See [Gas and limits](#gas-and-limits).
+- **The class (issue #10):** `OnchainMidiPlayer` in [`src/contract.cairo`](src/contract.cairo), with `midi_segment` in [`src/segment.cairo`](src/segment.cairo). It matches every golden fixture byte for byte, directly and through a library call. See [Gas and limits](#gas-and-limits).
 - **Custom waves (issue #2):** `SynthSettings.waves`, sample and harmonic waveforms that the player registers with the engine before installing the timbres, from `page.9`. See [Custom waves](#custom-waves).
 - **The sound provider interface:** `ISoundProvider` in [`src/interface.cairo`](src/interface.cairo) and `TokenSound` in [`src/types.cairo`](src/types.cairo): a composer's contract implements the single function `get_sound` to serve a token's MIDI and `SynthSettings` in one call, and an NFT calls it. The class does not implement or call it. See [Sound provider interface](#sound-provider-interface).
 - **Filters (issue #3):** an optional fixed low-, high- or band-pass filter on each audio-output operator, which the player passes to the engine's operator filter, from `page.10`. See [Filters](#filters).
@@ -28,7 +28,7 @@ See [Roadmap](#roadmap).
 The class is declared on Starknet but never deployed. Consumers hold its class hash and call it with `library_call` through the dispatcher generated from the interface:
 
 ```cairo
-let synth = IOnchainTinySynthLibraryDispatcher { class_hash: TINYSYNTH_CLASS_HASH };
+let synth = IOnchainMidiPlayerLibraryDispatcher { class_hash: MIDI_PLAYER_CLASS_HASH };
 ```
 
 Because the class has no storage, running it in the caller's context reads and writes nothing on the caller's storage. All functions are view-only and deterministic for a given class hash.
@@ -91,7 +91,7 @@ Alignment. The consumer's own pieces (`'{' ... base64,'`, `S`, `',' <pad>`) must
 - **■** stops playback, and cancels a pending art restart and the polling. TinySynth's `stopMIDI` cuts every voice, including drum hits and notes already scheduled ahead, and cancels the volume, pan and modulation changes it had scheduled, so nothing reaches the next playback. The art keeps running.
 - Plain JavaScript (`// @ts-check` and JSDoc), no modules, no `eval`, no network requests, no storage or cookies. It works in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles and `data:` images.
 
-Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) records them), against the uncompressed `page.5` (with the engine at fork commit `b70ba90`) and the previous build, `tinysynth-3d965d1+page.10`. Now is `tinysynth-fc04dbe+page.10`: the same player, with the engine re-pinned to `fc04dbe` (the fork's T5.2), 46,488 bytes with a 14,056-byte gzip payload, 79 and 62 bytes more. So `PAGE` is 90 bytes longer (84 bytes of base64 and 6 alignment spaces), the segment 160 bytes longer, and `license()` 278 bytes longer: the fork's NOTICE lists T5.2. (`3d965d1+page.10` added filters: its player was 107 bytes longer than `page.9`'s, its `PAGE` 99 bytes and its segment 176 bytes longer. `page.9` re-pinned the engine to `3d965d1`, 46,409 bytes with a 13,994-byte gzip payload, and added the custom waves: its `PAGE` was 1,899 bytes and its segment 3,376 bytes longer than `page.8`'s.)
+Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) records them), against the uncompressed `page.5` (with the engine at fork commit `b70ba90`) and the previous build, `tinysynth-3d965d1+page.10`. Now is `tinysynth-fc04dbe+page.10`: the same player, with the engine re-pinned to `fc04dbe` (the fork's T5.2), 46,488 bytes with a 14,056-byte gzip payload, 79 and 62 bytes more. So `PAGE` is 90 bytes longer (84 bytes of base64 and 6 alignment spaces), the segment 160 bytes longer, and `license()` 282 bytes longer: the fork's NOTICE lists T5.2, and this repository's NOTICE names the project `onchain-midi-player` (4 bytes more than `onchain-tinysynth`). (`3d965d1+page.10` added filters: its player was 107 bytes longer than `page.9`'s, its `PAGE` 99 bytes and its segment 176 bytes longer. `page.9` re-pinned the engine to `3d965d1`, 46,409 bytes with a 13,994-byte gzip payload, and added the custom waves: its `PAGE` was 1,899 bytes and its segment 3,376 bytes longer than `page.8`'s.)
 
 | | `page.5` (bytes) | `3d965d1+page.10` (bytes) | Now (bytes) |
 | --- | --- | --- | --- |
@@ -100,7 +100,7 @@ Sizes (the build prints them; [`src/page_data.cairo`](src/page_data.cairo) recor
 | of which the gunzip shim (minified) | | 3,247 | 3,247 |
 | of which the player (minified) | 6,047 | 6,641 | 6,641 |
 | `animation_url_segment()` | 78,804 | 53,316 | 53,476 |
-| `license()` | 2,594 | 8,784 | 9,062 |
+| `license()` | 2,594 | 8,784 | 9,066 |
 
 The player does not re-check settings ranges: dropping that re-check (and the install path's custom-wave guards, which only repeated Cairo rules) saved 1,512 bytes of the uncompressed `PAGE` (45,810 to 44,298). The build fails if a validation rule reappears in the player.
 
@@ -137,7 +137,7 @@ The engine was 37,060 of the uncompressed page's 44,298 bytes, and the segment's
 
 ## Interface
 
-Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`. The doc comments there give exact byte formats and preconditions.
+Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainMidiPlayer`. The doc comments there give exact byte formats and preconditions.
 
 | Function | Returns |
 | --- | --- |
@@ -152,11 +152,11 @@ The same file also declares `ISoundProvider`, the interface composers implement 
 
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
 
-The class is `onchain_tinysynth::contract::OnchainTinySynth`: an empty `#[storage]` struct, no constructor, every entry point a view. `animation_url_segment`, `script_sha256`, `version` and `license` return the generated constants of [`src/page_data.cairo`](src/page_data.cairo). `midi_segment` validates and encodes the settings ([`src/settings.cairo`](src/settings.cairo)), builds `D` and returns `b64(b64(D))` ([`src/segment.cairo`](src/segment.cairo)). Invalid settings revert with the `'TS: ...'` short string and the indices as extra panic felts; through a library call the panic data arrives whole, followed by `'ENTRYPOINT_FAILED'`.
+The class is `onchain_midi_player::contract::OnchainMidiPlayer`: an empty `#[storage]` struct, no constructor, every entry point a view. `animation_url_segment`, `script_sha256`, `version` and `license` return the generated constants of [`src/page_data.cairo`](src/page_data.cairo). `midi_segment` validates and encodes the settings ([`src/settings.cairo`](src/settings.cairo)), builds `D` and returns `b64(b64(D))` ([`src/segment.cairo`](src/segment.cairo)). Invalid settings revert with the `'TS: ...'` short string and the indices as extra panic felts; through a library call the panic data arrives whole, followed by `'ENTRYPOINT_FAILED'`.
 
 ## The base64 encoder
 
-All base64 in the class goes through one function, `onchain_tinysynth::base64::bytes_base64_encode(_bytes: ByteArray) -> ByteArray`: `midi_segment` (three passes) and the `base64` entry point.
+All base64 in the class goes through one function, `onchain_midi_player::base64::bytes_base64_encode(_bytes: ByteArray) -> ByteArray`: `midi_segment` (three passes) and the `base64` entry point.
 
 - **The encoder: `game_components_encoding`.** [`src/base64.cairo`](src/base64.cairo) re-exports `bytes_base64_encode` from the maintainer's optimized word-wise encoder, the zero-dependency package `game_components_encoding` (`packages/encoding` in [game-components](https://github.com/Provable-Games/game-components)). It encodes 93-byte blocks into four 31-byte words. For large inputs it costs about 3.3K L2 gas per input byte, or 3.6K through the library call. It uses the unstable corelib features `bounded-int-utils`, `byte-span` and `corelib-get-trait`, which compile as a dependency under Scarb 2.20.1. It is MIT licensed: its license is [vendored](tests/vendor/game-components.LICENSE) and in `license()`.
 - **The pin.** [`Scarb.toml`](Scarb.toml) pins it to the game-components release tag `v3.1.0`. `Scarb.lock` records the commit the tag resolves to, `66ce934e750f8162de4f6a377357b2b8f8e5c4c0`, and CI fails if a build changes the lockfile. The SHA-256 of its `packages/encoding/src/encoding.cairo` is `ef6d2fc50e1b5d1d81cd81091d3c34402ad41ebcd670d03e38a2a82b74c13883`.
@@ -168,10 +168,10 @@ All base64 in the class goes through one function, `onchain_tinysynth::base64::b
 How a consumer builds its `token_uri` (the layout above), with the word alignment described below. [`examples/beast_consumer`](examples/beast_consumer) runs exactly this against the class. AI agents can install the [`integrator-guide`](#agent-skills) skill, which walks through it.
 
 ```cairo
-use onchain_tinysynth::interface::{
-    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
+use onchain_midi_player::interface::{
+    IOnchainMidiPlayerDispatcherTrait, IOnchainMidiPlayerLibraryDispatcher,
 };
-use onchain_tinysynth::types::SynthSettings;
+use onchain_midi_player::types::SynthSettings;
 
 /// Appends spaces (between JSON tokens) until `(s.len() + extra) % 3 == 0`.
 fn pad3(ref s: ByteArray, extra: u32) {
@@ -189,13 +189,13 @@ fn align_to_word(ref uri: ByteArray, extra: u32) {
 }
 
 fn token_uri(
-    tinysynth: starknet::ClassHash,
+    midi_player: starknet::ClassHash,
     members: ByteArray, // "name":...,"attributes":[...]   (no braces)
     svg: ByteArray, // raw SVG; must never contain `</script`
     midi: ByteArray,
     settings: SynthSettings,
 ) -> ByteArray {
-    let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth };
+    let synth = IOnchainMidiPlayerLibraryDispatcher { class_hash: midi_player };
 
     // '{' members ',' <pad>, a multiple of 3 bytes.
     let mut open: ByteArray = "{";
@@ -252,19 +252,19 @@ At most 30 groups are needed in each place (120 characters), and the decoded JSO
 
 ## Sound provider interface
 
-The class plays a token's MIDI with its `SynthSettings`; it does not know where they come from. [`ISoundProvider`](src/interface.cairo) (`onchain_tinysynth::interface::ISoundProvider`) and [`TokenSound`](src/types.cairo) (`onchain_tinysynth::types::TokenSound`) fix how a composer's contract serves them, so any NFT can call any composer, and an NFT can change composers without changing its code. **The class does not implement or call `ISoundProvider`**: it is a convention between composers and NFTs, declared in this crate so that both compile against the same types. It changes neither the class hash nor `PAGE`.
+The class plays a token's MIDI with its `SynthSettings`; it does not know where they come from. [`ISoundProvider`](src/interface.cairo) (`onchain_midi_player::interface::ISoundProvider`) and [`TokenSound`](src/types.cairo) (`onchain_midi_player::types::TokenSound`) fix how a composer's contract serves them, so any NFT can call any composer, and an NFT can change composers without changing its code. **The class does not implement or call `ISoundProvider`**: it is a convention between composers and NFTs, declared in this crate so that both compile against the same types. It changes neither the class hash nor `PAGE`.
 
 A Standard MIDI File can select an instrument, with a program change or a note on channel 10, but it cannot define one. So the composer's contract owns both the score and the instrument definitions it plays, as `SynthSettings`. The NFT, or its renderer, calls `get_sound` and passes both straight to `midi_segment`:
 
 ```cairo
-// onchain_tinysynth::types
+// onchain_midi_player::types
 #[derive(Drop, Clone, Serde, PartialEq, Debug)]
 pub struct TokenSound {
     pub midi: ByteArray, // a raw Standard MIDI File
     pub settings: SynthSettings, // the instruments it plays
 }
 
-// onchain_tinysynth::interface
+// onchain_midi_player::interface
 #[starknet::interface]
 pub trait ISoundProvider<T> {
     /// The score and the instruments in one call: what NFTs call.
@@ -305,7 +305,7 @@ The crate has no helper for the call: copy this one into your NFT or renderer. I
 
 ```cairo
 use core::num::traits::Zero;
-use onchain_tinysynth::types::TokenSound;
+use onchain_midi_player::types::TokenSound;
 use starknet::ContractAddress;
 use starknet::syscalls::call_contract_syscall;
 
@@ -350,7 +350,7 @@ L2 gas, measured with snforge 0.64.0 and Scarb 2.20.1, with the optimized encode
 
 ### Measuring: Sierra gas, not Cairo steps
 
-Every figure here is Sierra gas, snforge's default. The accounting method changes the number about 2.5×. Measured on the example's full-size Beast (`snforge test gas_t4_token_uri`, the call with its test setup): about 301M with `--tracked-resource sierra-gas` and about 765M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M: that account's class is Sierra 1.6, which forces Cairo-steps (VM) accounting for the whole transaction. The same artifact produced the earlier 1.7–1.86B Beasts figures (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)).
+Every figure here is Sierra gas, snforge's default. The accounting method changes the number about 2.5×. Measured on the example's full-size Beast (`snforge test gas_t4_token_uri`, the call with its test setup): about 301M with `--tracked-resource sierra-gas` and about 765M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M: that account's class is Sierra 1.6, which forces Cairo-steps (VM) accounting for the whole transaction. The same artifact produced the earlier 1.7–1.86B Beasts figures (issue [#11](https://github.com/Provable-Games/onchain-midi-player/issues/11)).
 
 - Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
 - Treat devnet estimates through its predeployed accounts as inflated by about 2.0–2.6×.
@@ -358,7 +358,7 @@ Every figure here is Sierra gas, snforge's default. The accounting method change
 
 ### Entry points
 
-Through `IOnchainTinySynthLibraryDispatcher` on the declared class, as a consumer calls them, including passing the arguments and the result ([`tests/test_class_gas.cairo`](tests/test_class_gas.cairo), `snforge test gas_lc`):
+Through `IOnchainMidiPlayerLibraryDispatcher` on the declared class, as a consumer calls them, including passing the arguments and the result ([`tests/test_class_gas.cairo`](tests/test_class_gas.cairo), `snforge test gas_lc`):
 
 | Entry point | L2 gas | Base64 share |
 | --- | --- | --- |
@@ -543,8 +543,8 @@ Issue #2, from `page.9`. `SynthSettings.waves` holds up to 256 wave definitions 
 **Designing in Cairo.** A 12.5% pulse lead and a harmonic organ:
 
 ```cairo
-use onchain_tinysynth::settings::{default_operator, default_settings};
-use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, WaveDef, Waveform};
+use onchain_midi_player::settings::{default_operator, default_settings};
+use onchain_midi_player::types::{Operator, SynthSettings, Timbre, WaveDef, Waveform};
 
 fn chip_settings() -> SynthSettings {
     let waves = [
@@ -609,8 +609,8 @@ Issue #3, from `page.10`. An audio-output operator (`route` 0) can carry a fixed
 **Designing in Cairo.** A closed chip hi-hat and a key-tracked sawtooth lead:
 
 ```cairo
-use onchain_tinysynth::settings::{default_operator, default_settings};
-use onchain_tinysynth::types::{Filter, FilterKind, Operator, SynthSettings, Timbre, Waveform};
+use onchain_midi_player::settings::{default_operator, default_settings};
+use onchain_midi_player::types::{Filter, FilterKind, Operator, SynthSettings, Timbre, Waveform};
 
 fn filtered_settings() -> SynthSettings {
     // Metallic noise at playback rate 390 / 440 through a flat 3 kHz high-pass.
@@ -660,7 +660,7 @@ The goal is to let composers use everything the engine can do, with no limit for
 The class writes settings into the page as `SETTINGS`, format version 1.
 - **Syntax.** A flat list of canonical decimal integers separated by commas (`[0-9,-]` only, so it can never close its `<script>` block).
 - **Structure.** Fields in declaration order, a length before every list, enums as their variant index, `bool` as 0/1, and `Option` as 0 (`None`) or 1 followed by the value.
-- **Spec.** The grammar, the 17 checks and their messages are in [`src/settings.cairo`](src/settings.cairo). They were specified in issue #1 ([spec](https://github.com/Provable-Games/onchain-tinysynth/issues/1#issuecomment-5964892140), [shared-wave-table amendment](https://github.com/Provable-Games/onchain-tinysynth/issues/1#issuecomment-5965159953)).
+- **Spec.** The grammar, the 17 checks and their messages are in [`src/settings.cairo`](src/settings.cairo). They were specified in issue #1 ([spec](https://github.com/Provable-Games/onchain-midi-player/issues/1#issuecomment-5964892140), [shared-wave-table amendment](https://github.com/Provable-Games/onchain-midi-player/issues/1#issuecomment-5965159953)).
 
 ```text
 1,1,0,40,64,0,3,                                         version, quality, reverb, master_vol, voices, 0 waves, 3 timbres
@@ -669,7 +669,7 @@ The class writes settings into the page as `SETTINGS`, format version 1.
 ```
 
 The crate exports:
-- the pure functions `onchain_tinysynth::settings::{validate, encode, validate_and_encode}`;
+- the pure functions `onchain_midi_player::settings::{validate, encode, validate_and_encode}`;
 - the helpers `default_settings()` and `default_operator()` (TinySynth's operator defaults in fixed-point);
 - the limits as constants (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`, `MIN_HARMONICS`, `MIN_SAMPLES`, `MIN_VOICES`, …).
 
@@ -726,8 +726,8 @@ Shared fixtures keep Cairo and JavaScript byte-for-byte identical:
 The Beast reference lead, as Cairo:
 
 ```cairo
-use onchain_tinysynth::settings::default_operator;
-use onchain_tinysynth::types::{Operator, Timbre, Waveform};
+use onchain_midi_player::settings::default_operator;
+use onchain_midi_player::types::{Operator, Timbre, Waveform};
 
 // Triangle carrier, 3 ms attack, full sustain, 10 ms release.
 let carrier = Operator {
@@ -843,7 +843,7 @@ Nothing checks these; a file that ignores them still plays.
 
 - **Set the state at tick 0:** tempo, program, volume (CC7), pan (CC10), and any controller or GS scale tuning the song changes, so that every pass, and every ▶, starts the same way.
 - **Put End-of-Track at the loop point:** the latest End-of-Track should sit exactly where the song loops, such as the last bar line.
-- **Make the pass a whole multiple of the art's animation periods:** the art restarts at every loop point, so any other length makes it jump there (see the [`midi-guide`](plugins/onchain-tinysynth/skills/midi-guide/SKILL.md) skill for measuring the periods).
+- **Make the pass a whole multiple of the art's animation periods:** the art restarts at every loop point, so any other length makes it jump there (see the [`midi-guide`](plugins/onchain-midi-player/skills/midi-guide/SKILL.md) skill for measuring the periods).
 - **Release every note by End-of-Track:** a note still held there sounds into the next pass.
 - **Put the note-off first:** at one tick, put a note's note-off before the next note-on of the same pitch on that channel. The other way round, the note-off releases the new note too.
 - **Prefer note-offs to CC120–127, and avoid CC121** (see the table).
@@ -884,8 +884,8 @@ npm run check-midi -- song.mid                        # the same, through npm
 
   ```sh
   TAG=main   # the release tag of the class version you target, from the Versions table, once one is declared
-  git clone --depth 1 --branch "$TAG" https://github.com/Provable-Games/onchain-tinysynth "$RUNNER_TEMP/onchain-tinysynth"
-  node "$RUNNER_TEMP/onchain-tinysynth/scripts/check_midi.mjs" path/to/*.mid
+  git clone --depth 1 --branch "$TAG" https://github.com/Provable-Games/onchain-midi-player "$RUNNER_TEMP/onchain-midi-player"
+  node "$RUNNER_TEMP/onchain-midi-player/scripts/check_midi.mjs" path/to/*.mid
   ```
 
 ### Previewing a score
@@ -977,7 +977,7 @@ What a class hash fixes, and what the consumer supplies:
    ```
 
    The fork pins its build: Terser 5.51.2 exactly, in its `package.json` and `package-lock.json`, with every option in `scripts/build.js`. `npm run verify` rebuilds the minified file and its source map into a temporary directory, fails on any byte difference from the committed files, and prints their SHA-256 (`npm run build` rebuilds them in place instead). A tagged fork release with a published SHA-256 is roadmap phase 0.
-5. **Optionally, check the rest of the page and the class.** `verify_engine.mjs` also prints the SHA-256 and length of the fixed page `PAGE` (the decoded page up to the opening tag of the settings block and its alignment spaces), which [`scripts/page_versions.json`](scripts/page_versions.json) records for every `version()`. A matching `PAGE` also proves that the payload you hashed sits in the page's own engine tag, the one that runs, and that the shim and the player around it are the class's. To check the class itself, check out this repository at the row's release tag, rebuild the page with `npm ci && npm run check:page` (the pinned Terser and fflate; it fails on any difference from the committed `PAGE` and `src/page_data.cairo`), run `scarb build`, compute the class hash (for example with `sncast utils class-hash --contract-name OnchainTinySynth`, the class `onchain_tinysynth::contract::OnchainTinySynth`), and compare it with the row's class hash.
+5. **Optionally, check the rest of the page and the class.** `verify_engine.mjs` also prints the SHA-256 and length of the fixed page `PAGE` (the decoded page up to the opening tag of the settings block and its alignment spaces), which [`scripts/page_versions.json`](scripts/page_versions.json) records for every `version()`. A matching `PAGE` also proves that the payload you hashed sits in the page's own engine tag, the one that runs, and that the shim and the player around it are the class's. To check the class itself, check out this repository at the row's release tag, rebuild the page with `npm ci && npm run check:page` (the pinned Terser and fflate; it fails on any difference from the committed `PAGE` and `src/page_data.cairo`), run `scarb build`, compute the class hash (for example with `sncast utils class-hash --contract-name OnchainMidiPlayer`, the class `onchain_midi_player::contract::OnchainMidiPlayer`), and compare it with the row's class hash.
 
 ## Versioning
 
@@ -998,6 +998,7 @@ The class is declared but never deployed, so block explorers cannot call it (`st
 
 - The hashes and the length are the build's, from [`src/page_data.cairo`](src/page_data.cairo) (`VERSION`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`); `npm test` fails if the row for the current `version()` disagrees with them. The SHA-256 of the whole `PAGE` for each `version()` is in [`scripts/page_versions.json`](scripts/page_versions.json).
 - **A row is final only once its class is declared.** The class hash covers the class's Cairo code as well as the page. That includes the base64 encoder dependency, game-components `v3.1.0` (commit `66ce934`, recorded in `Scarb.lock`). So the class hashes and the tag are filled in at declaration (roadmap phase 6), and until then the row can still change: a different encoder build changes the class hash, and a re-pinned engine or a new page changes `version()` and the hashes. Once declared, a row never changes.
+- **The rename changes the class hash, not `version()`.** The class is now `OnchainMidiPlayer` in the package `onchain_midi_player`, with the interface `IOnchainMidiPlayer`. Those names are in the class's ABI, and `license()` includes the NOTICE, which names the project, so at `tinysynth-fc04dbe+page.10` the class hash changes from `0x0576ef79652684aceeeb4d8077c99cddc1fe622e4dee5132eba0f36e12a218be` (`OnchainTinySynth`, at `8d6dbbe`) to `0x03138eb8419dbb6402073f8813ab515f97af5881bfae7d6cd95b837156eaab79` (`OnchainMidiPlayer`; both from `sncast utils class-hash`, release profile). `version()`, `PAGE`, the segment and every other output are unchanged; `license()` is 4 bytes longer. The Sepolia classes in this table were declared as `OnchainTinySynth`, before the rename (see [Deployments](#deployments)).
 - **`tinysynth-fc04dbe+page.10` is interim** (`improve/integration` commit, not a release; not for declaration). It pins the engine to a commit of the fork's `improve/integration` branch to test the fork's fixes against this class early (see [Engine provenance](#engine-provenance-and-verification)). Its class must never be declared: the release gate (issue #12) requires the engine re-pinned to a tagged fork release, which gives a new `version()`.
 - **Why `fc04dbe+page.10`:** the engine is re-pinned to `fc04dbe`, which adds the fork's T5.2: a note whose computed values overflow the 32-bit float range is skipped instead of throwing and stalling the song. With it the class drops its five interim operator bounds (`settings::validate`'s checks 15-19; the filter checks become 15-17), so its Cairo code changes too (see [Engine limits on operator values](#engine-limits-on-operator-values)). The player and `PAGE_VERSION` are unchanged; the gzip payload, `PAGE`, the segment and `license()` change with the engine.
 - `tinysynth-3d965d1+page.10`, the previous interim build, is superseded; it was never declared.
@@ -1017,16 +1018,17 @@ Where the class and the example are declared or deployed. A consumer stores a cl
 
 | Network | What | Class hash | Contract address | Built from | Status |
 | --- | --- | --- | --- | --- | --- |
-| Sepolia | `OnchainTinySynth`, `version()` `tinysynth-3d965d1+page.9` | `0x1a0c989b6cb7d5f045e526728fb22069fa584515e17c77ad4f0da5932161b66` | `0x073956b0a1dd278fe75a9a190afba520cc5ea1a10036264e640791a29dbdb511` (inspection instance) | [`7f5d592`](https://github.com/Provable-Games/onchain-tinysynth/commit/7f5d592) | **INTERIM**: engine `3d965d1` (fork 2.0.0, untagged), `page.9`, not for production |
-| Sepolia | Example `BeastLikeNft` ([`examples/beast_consumer`](examples/beast_consumer)), library-calling the class above | `0x7f290530571bdfd547b05125ff87ac54b5b395f580e41c64226e06f3a3b725c` | `0x02afe413608e07eb426344cd9108440e9304321fc55626f7e91e1ba6655f8392` | [`7f5d592`](https://github.com/Provable-Games/onchain-tinysynth/commit/7f5d592) | **INTERIM** test consumer of the `page.9` class, not for production |
-| Sepolia | `OnchainTinySynth`, `version()` `tinysynth-4b29ff1+page.6` | `0x442cab13e9049a2eed9e508273ccfad626e690da394de58ba4f62d675b4f85a` | `0x064b629e081c108fef2a39fbd314a792d78be06339a6edc32c397bb7e8aab97d` (inspection instance) | [`d735793`](https://github.com/Provable-Games/onchain-tinysynth/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) | **INTERIM**: engine `4b29ff1`, `page.6`, not for production; superseded by the `page.9` row above |
-| Sepolia | Example `BeastLikeNft` ([`examples/beast_consumer`](examples/beast_consumer)), library-calling the class above | `0x7f290530571bdfd547b05125ff87ac54b5b395f580e41c64226e06f3a3b725c` | `0x066dd6aa3b669e66df4cf6fc74cf18a335a95268154292e44ea0c59227caea92` | [`d735793`](https://github.com/Provable-Games/onchain-tinysynth/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) | **INTERIM** test consumer of the `page.6` class, not for production; superseded by the `page.9` row above |
-| Sepolia and mainnet | Release `OnchainTinySynth` | not declared yet | | | |
+| Sepolia | `OnchainTinySynth` (the class's name before the rename), `version()` `tinysynth-3d965d1+page.9` | `0x1a0c989b6cb7d5f045e526728fb22069fa584515e17c77ad4f0da5932161b66` | `0x073956b0a1dd278fe75a9a190afba520cc5ea1a10036264e640791a29dbdb511` (inspection instance) | [`7f5d592`](https://github.com/Provable-Games/onchain-midi-player/commit/7f5d592) | **INTERIM**: engine `3d965d1` (fork 2.0.0, untagged), `page.9`, not for production; redeclaration as `OnchainMidiPlayer` pending |
+| Sepolia | Example `BeastLikeNft` ([`examples/beast_consumer`](examples/beast_consumer)), library-calling the class above | `0x7f290530571bdfd547b05125ff87ac54b5b395f580e41c64226e06f3a3b725c` | `0x02afe413608e07eb426344cd9108440e9304321fc55626f7e91e1ba6655f8392` | [`7f5d592`](https://github.com/Provable-Games/onchain-midi-player/commit/7f5d592) | **INTERIM** test consumer of the `page.9` class, not for production |
+| Sepolia | `OnchainTinySynth` (the class's name before the rename), `version()` `tinysynth-4b29ff1+page.6` | `0x442cab13e9049a2eed9e508273ccfad626e690da394de58ba4f62d675b4f85a` | `0x064b629e081c108fef2a39fbd314a792d78be06339a6edc32c397bb7e8aab97d` (inspection instance) | [`d735793`](https://github.com/Provable-Games/onchain-midi-player/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) | **INTERIM**: engine `4b29ff1`, `page.6`, not for production; superseded by the `page.9` row above |
+| Sepolia | Example `BeastLikeNft` ([`examples/beast_consumer`](examples/beast_consumer)), library-calling the class above | `0x7f290530571bdfd547b05125ff87ac54b5b395f580e41c64226e06f3a3b725c` | `0x066dd6aa3b669e66df4cf6fc74cf18a335a95268154292e44ea0c59227caea92` | [`d735793`](https://github.com/Provable-Games/onchain-midi-player/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) | **INTERIM** test consumer of the `page.6` class, not for production; superseded by the `page.9` row above |
+| Sepolia and mainnet | Release `OnchainMidiPlayer` | not declared yet | | | |
 
-- **Interim.** The Sepolia class was declared only to test explorers and RPC providers against a real class (issue [#12](https://github.com/Provable-Games/onchain-tinysynth/issues/12)). The Versions table's "not for declaration" means not as a release: the release class needs the engine re-pinned to a tagged fork release, which gives a new `version()` and class hash.
-- **Built from** is the commit to rebuild each class from. The `page.6` rows predate `npm run preview` and the agent skills: run those from the newest commit with the same `VERSION` (see [Agent skills](#agent-skills)). The example's class is unchanged since `page.6`; only its instance (which stores the TinySynth class hash) is new.
+- **Interim.** The Sepolia class was declared only to test explorers and RPC providers against a real class (issue [#12](https://github.com/Provable-Games/onchain-midi-player/issues/12)). The Versions table's "not for declaration" means not as a release: the release class needs the engine re-pinned to a tagged fork release, which gives a new `version()` and class hash.
+- **Renamed; redeclaration pending.** The project was renamed from onchain-tinysynth to onchain-midi-player. The Sepolia rows above are the old `OnchainTinySynth` class (package `onchain_tinysynth`, interface `IOnchainTinySynth`) and the example built against it. They keep working: a declared class never changes. A build from this repository now gives `OnchainMidiPlayer`, with a different class hash for the same `version()` (see [Versions](#versions)), and the example's class hash changes with it, because its ABI names the renamed package's types. Neither is declared yet: the Sepolia class and the example are to be redeclared and redeployed under the new name.
+- **Built from** is the commit to rebuild each class from. The `page.6` rows predate `npm run preview` and the agent skills: run those from the newest commit with the same `VERSION` (see [Agent skills](#agent-skills)). The example's class was the same from `page.6` until the rename; only its instance (which stores the `OnchainTinySynth` class hash) is new.
 - **The inspection instance** is a deployment of the class (no storage, no constructor), so explorers and RPC can call `version()`, `script_sha256()` and `license()`. Consumers still `library_call` the class hash.
-- **RPC providers** (issue [#11](https://github.com/Provable-Games/onchain-tinysynth/issues/11)). On the `page.9` deployment (2026-10-04), all four example tokens came back byte-identical to the JS reference through zan.top, Cartridge and dRPC; the class's `animation_url_segment()` (53,140 bytes) and `license()` match the local build, and `script_sha256()` matches the pinned engine. PublicNode served tokens 1–3 but reverted `Out of gas` on token 4, the full-size Beast (about 288.5M L2 gas), as it did on `page.6`. Providers cap `starknet_call` gas differently: check a full-size token through the providers your marketplaces and indexers use (see [Network and node limits](#network-and-node-limits)).
+- **RPC providers** (issue [#11](https://github.com/Provable-Games/onchain-midi-player/issues/11)). On the `page.9` deployment (2026-10-04), all four example tokens came back byte-identical to the JS reference through zan.top, Cartridge and dRPC; the class's `animation_url_segment()` (53,140 bytes) and `license()` match the local build, and `script_sha256()` matches the pinned engine. PublicNode served tokens 1–3 but reverted `Out of gas` on token 4, the full-size Beast (about 288.5M L2 gas), as it did on `page.6`. Providers cap `starknet_call` gas differently: check a full-size token through the providers your marketplaces and indexers use (see [Network and node limits](#network-and-node-limits)).
 
 ## Toolchain
 
@@ -1095,11 +1097,11 @@ The class compiled with Scarb 2.20.1, against [Starknet's current limits](https:
 
 | | The class | The class without the encoder | Page constants only | Page constants only, `const` felt array (`page.6` before this class) | Limit |
 | --- | --- | --- | --- | --- | --- |
-| Sierra program | 19,206 felts | 13,735 felts | 8,617 felts | 4,369 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 985,129 bytes (24% of the limit) | 673,908 bytes | 377,769 bytes | 191,246 bytes | 4,089,446 bytes |
+| Sierra program | 19,207 felts | 13,735 felts | 8,617 felts | 4,369 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 985,344 bytes (24% of the limit) | 673,908 bytes | 377,769 bytes | 191,246 bytes | 4,089,446 bytes |
 | CASM bytecode | 29,906 felts (37% of the limit) | 18,514 felts | 6,083 felts | 2,563 felts | 81,920 felts |
 
-- **The class** is `OnchainTinySynth` with the optimized encoder, at `fc04dbe+page.10`. It is 3.2 KB, 49 Sierra felts and 135 CASM felts smaller than with `3d965d1+page.10` (988,362 bytes, 19,255 and 30,041 felts, measured the same way at `e0b33af`): validation no longer checks the five interim operator bounds, while the segment is 160 bytes and `license()` 278 bytes longer. At `3d965d1+page.10` it was 2.7 KB, 54 Sierra felts and 55 CASM felts larger than at `page.9` (985,647 bytes, 19,201 and 29,986 felts, measured the same way at `7f5d592`): the segment was 176 bytes and `license()` 1 byte longer, and validation checked the filters. At `page.9` it was 23.7 KB, 545 Sierra felts and 324 CASM felts larger than at `page.8` (961,925 bytes, 18,656 and 29,662 felts, measured the same way at `973f4cf`): the segment was 3,376 bytes and `license()` 1,459 bytes longer, and validation dropped the two custom-wave checks. The other columns were measured at `page.8` and not again. At `page.8` the class was 40.6 KB, 943 Sierra felts and 590 CASM felts larger than at `page.7` (921,352 bytes, 17,713 and 29,072 felts, measured the same way at `2e3c9da`; the figures this README gave for `page.7`, 916,094 bytes, 17,625 and 28,912 felts, were measured before #28 added the operator bounds in `c74d355`), all of it page constants. `page.7` was 11.4 KB, 195 Sierra felts and 370 CASM felts smaller than `page.6` (932,702 bytes, 17,908 and 29,442 felts), which also checked the numeric ranges and the `SETTINGS` length. "Without the encoder" is the same class with `bytes_base64_encode` returning its input: the encoder adds 4,921 Sierra felts, 288 KB and 11,148 CASM felts. The byte-wise stand-in it replaced added 1,701 Sierra felts, 98 KB and 4,149 CASM felts (the whole class was then 727,248 bytes and 22,242 CASM felts). The optimized encoder costs about 190 KB more class size, for about 83% less gas per encoded byte.
+- **The class** is `OnchainMidiPlayer` with the optimized encoder, at `fc04dbe+page.10`. The rename from `OnchainTinySynth` added 215 bytes and 1 Sierra felt, and no CASM felts: the longer names in the ABI, and 4 more bytes of `license()`. As `OnchainTinySynth` (985,129 bytes, 19,206 and 29,906 felts, measured the same way at `8d6dbbe`) it was 3.2 KB, 49 Sierra felts and 135 CASM felts smaller than with `3d965d1+page.10` (988,362 bytes, 19,255 and 30,041 felts, measured the same way at `e0b33af`): validation no longer checks the five interim operator bounds, while the segment is 160 bytes and `license()` 278 bytes longer. At `3d965d1+page.10` it was 2.7 KB, 54 Sierra felts and 55 CASM felts larger than at `page.9` (985,647 bytes, 19,201 and 29,986 felts, measured the same way at `7f5d592`): the segment was 176 bytes and `license()` 1 byte longer, and validation checked the filters. At `page.9` it was 23.7 KB, 545 Sierra felts and 324 CASM felts larger than at `page.8` (961,925 bytes, 18,656 and 29,662 felts, measured the same way at `973f4cf`): the segment was 3,376 bytes and `license()` 1,459 bytes longer, and validation dropped the two custom-wave checks. The other columns were measured at `page.8` and not again. At `page.8` the class was 40.6 KB, 943 Sierra felts and 590 CASM felts larger than at `page.7` (921,352 bytes, 17,713 and 29,072 felts, measured the same way at `2e3c9da`; the figures this README gave for `page.7`, 916,094 bytes, 17,625 and 28,912 felts, were measured before #28 added the operator bounds in `c74d355`), all of it page constants. `page.7` was 11.4 KB, 195 Sierra felts and 370 CASM felts smaller than `page.6` (932,702 bytes, 17,908 and 29,442 felts), which also checked the numeric ranges and the `SETTINGS` length. "Without the encoder" is the same class with `bytes_base64_encode` returning its input: the encoder adds 4,921 Sierra felts, 288 KB and 11,148 CASM felts. The byte-wise stand-in it replaced added 1,701 Sierra felts, 98 KB and 4,149 CASM felts (the whole class was then 727,248 bytes and 22,242 CASM felts). The optimized encoder costs about 190 KB more class size, for about 83% less gas per encoded byte.
 - **Page constants only** is a stub class serving `animation_url_segment`, `script_sha256`, `version` and `license`. With the `b70ba90` engine, the string-literal segment cost about 130 KB and 2,700 CASM felts more than the `const` felt array, and saved 3.4M L2 gas on every call. The last column predates this class and has the `b70ba90` engine's 42,644-byte segment and the 4,104-byte `license()`. The page-constants column has the `page.8` build's 49,764-byte segment and its 7,324-byte `license()`, which holds the game-components notice and the `b198d6c` fork NOTICE (with `page.6`'s 43,940-byte segment and 6,417-byte `license()` it was 337,078 bytes, 7,671 Sierra felts and 5,490 CASM felts). The `page.6` class, with the `4b29ff1` engine, was 10.5 KB, 232 Sierra felts and 149 CASM felts larger than the `b70ba90` build (922,222 bytes, 17,676 Sierra felts and 29,293 CASM felts for the class).
 - **The rest** of the class is the settings validation and encoding.
 - The method: `contract_class.json` without debug info, and the `bytecode` of `compiled_contract_class.json`.
@@ -1201,34 +1203,34 @@ The Beast and MIDI test fixtures are Apache-2.0 as well. The Beast SVG in [`test
 
 ## Agent skills
 
-Four skills help AI agents working in other repositories, such as an NFT contract, integrate the player and drive it with MIDI. They live in [`plugins/onchain-tinysynth/skills/`](plugins/onchain-tinysynth/skills), summarise this README and link to it, and never hardcode class hashes: they point to [Deployments](#deployments).
+Four skills help AI agents working in other repositories, such as an NFT contract, integrate the player and drive it with MIDI. They live in [`plugins/onchain-midi-player/skills/`](plugins/onchain-midi-player/skills), summarise this README and link to it, and never hardcode class hashes: they point to [Deployments](#deployments).
 
 | Skill | For |
 | --- | --- |
-| [`integrator-guide`](plugins/onchain-tinysynth/skills/integrator-guide/SKILL.md) | Adding the player to a contract's `token_uri`: the library dispatcher, holding the class hash, the `token_uri` layout, the art rule, calling a sound provider, snforge tests, gas and RPC caps |
-| [`midi-guide`](plugins/onchain-tinysynth/skills/midi-guide/SKILL.md) | Writing MIDI for the player: previewing offline, where it differs from standard MIDI players, every `checkMidi` rule, keeping the music in sync with the art, serving scores from a sound provider |
-| [`sound-design`](plugins/onchain-tinysynth/skills/sound-design/SKILL.md) | The `SynthSettings` a contract passes: engine settings, custom timbres, `'TS: …'` errors, building settings in Cairo, a sound provider's per-token subsets |
-| [`token-uri-inspector`](plugins/onchain-tinysynth/skills/token-uri-inspector/SKILL.md) | Fetching, decoding, verifying, rebuilding and viewing a deployed or local `token_uri`, and checking RPC call caps |
+| [`integrator-guide`](plugins/onchain-midi-player/skills/integrator-guide/SKILL.md) | Adding the player to a contract's `token_uri`: the library dispatcher, holding the class hash, the `token_uri` layout, the art rule, calling a sound provider, snforge tests, gas and RPC caps |
+| [`midi-guide`](plugins/onchain-midi-player/skills/midi-guide/SKILL.md) | Writing MIDI for the player: previewing offline, where it differs from standard MIDI players, every `checkMidi` rule, keeping the music in sync with the art, serving scores from a sound provider |
+| [`sound-design`](plugins/onchain-midi-player/skills/sound-design/SKILL.md) | The `SynthSettings` a contract passes: engine settings, custom timbres, `'TS: …'` errors, building settings in Cairo, a sound provider's per-token subsets |
+| [`token-uri-inspector`](plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) | Fetching, decoding, verifying, rebuilding and viewing a deployed or local `token_uri`, and checking RPC call caps |
 
-**Install in Claude Code.** The repository is a plugin marketplace ([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)) with one plugin, `onchain-tinysynth`. In the other project:
+**Install in Claude Code.** The repository is a plugin marketplace ([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)) with one plugin, `onchain-midi-player`. In the other project:
 
 ```sh
-claude plugin marketplace add Provable-Games/onchain-tinysynth    # or Provable-Games/onchain-tinysynth#<tag> to pin a ref
-claude plugin install onchain-tinysynth@onchain-tinysynth --scope project
+claude plugin marketplace add Provable-Games/onchain-midi-player    # or Provable-Games/onchain-midi-player#<tag> to pin a ref
+claude plugin install onchain-midi-player@onchain-midi-player --scope project
 ```
 
-Inside a session, `/plugin marketplace add Provable-Games/onchain-tinysynth` and `/plugin install onchain-tinysynth@onchain-tinysynth` do the same. The skills then run as `/onchain-tinysynth:midi-guide` and so on, and Claude loads them when a task matches. To offer them to everyone who opens the project, commit this to its `.claude/settings.json`. Claude Code prompts each collaborator to install plugins from a marketplace the project declares, and a plugin like this one, kept inside its marketplace, then loads without a per-user install. Cloud sessions skip project marketplaces: they never show the workspace trust dialog.
+Inside a session, `/plugin marketplace add Provable-Games/onchain-midi-player` and `/plugin install onchain-midi-player@onchain-midi-player` do the same. The skills then run as `/onchain-midi-player:midi-guide` and so on, and Claude loads them when a task matches. To offer them to everyone who opens the project, commit this to its `.claude/settings.json`. Claude Code prompts each collaborator to install plugins from a marketplace the project declares, and a plugin like this one, kept inside its marketplace, then loads without a per-user install. Cloud sessions skip project marketplaces: they never show the workspace trust dialog.
 
 ```json
 {
   "extraKnownMarketplaces": {
-    "onchain-tinysynth": { "source": { "source": "github", "repo": "Provable-Games/onchain-tinysynth" } }
+    "onchain-midi-player": { "source": { "source": "github", "repo": "Provable-Games/onchain-midi-player" } }
   },
-  "enabledPlugins": { "onchain-tinysynth@onchain-tinysynth": true }
+  "enabledPlugins": { "onchain-midi-player@onchain-midi-player": true }
 }
 ```
 
-The plugin sets no `version`, so Claude Code versions it by commit: `claude plugin update onchain-tinysynth@onchain-tinysynth` brings the latest skills (auto-update is off by default for third-party marketplaces).
+The plugin sets no `version`, so Claude Code versions it by commit: `claude plugin update onchain-midi-player@onchain-midi-player` brings the latest skills (auto-update is off by default for third-party marketplaces).
 
 **Without Claude Code.** Each `SKILL.md` follows the open [Agent Skills](https://agentskills.io/specification) format (YAML frontmatter with `name` and `description`, then Markdown), so any agent can read the files. Copying a skill folder into another agent's skills directory, or into a project's `.claude/skills/`, also works; copy the whole `skills/` folder to keep the links between skills.
 

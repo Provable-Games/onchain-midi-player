@@ -14,7 +14,7 @@ from pathlib import Path
 SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW")
 PROVIDERS = ("codex", "claude")
 FINDING_FIELDS = ("Evidence/trigger", "Impact", "Recommended action")
-MARKER_PREFIX = "onchain-tinysynth-ai-review"
+MARKER_PREFIX = "onchain-midi-player-ai-review"
 BOT_LOGIN = "github-actions[bot]"
 MAX_COMMENT_CHARS = 60000
 

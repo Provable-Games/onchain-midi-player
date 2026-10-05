@@ -7,7 +7,7 @@ version = "2.7.0"
 source = "git+https://github.com/Provable-Games/game-components?tag=v3.1.0#66ce934e750f8162de4f6a377357b2b8f8e5c4c0"
 
 [[package]]
-name = "onchain_tinysynth"
+name = "onchain_midi_player"
 version = "0.1.0"
 dependencies = [
  "game_components_encoding",

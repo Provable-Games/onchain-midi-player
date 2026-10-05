@@ -4,18 +4,18 @@
 use beast_consumer::beast_like_nft::{IBeastLikeNftSafeDispatcher, IBeastLikeNftSafeDispatcherTrait};
 use beast_consumer::sound;
 use core::panic_with_felt252;
-use onchain_tinysynth::interface::{
-    IOnchainTinySynthSafeDispatcherTrait, IOnchainTinySynthSafeLibraryDispatcher,
+use onchain_midi_player::interface::{
+    IOnchainMidiPlayerSafeDispatcherTrait, IOnchainMidiPlayerSafeLibraryDispatcher,
 };
-use onchain_tinysynth::types::{
+use onchain_midi_player::types::{
     Filter, FilterKind, Operator, SynthSettings, Timbre, WaveDef, Waveform,
 };
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 
-fn synth() -> IOnchainTinySynthSafeLibraryDispatcher {
+fn synth() -> IOnchainMidiPlayerSafeLibraryDispatcher {
     // Declared only, never deployed.
-    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
-    IOnchainTinySynthSafeLibraryDispatcher { class_hash }
+    let class_hash = declare("OnchainMidiPlayer").unwrap().contract_class().class_hash;
+    IOnchainMidiPlayerSafeLibraryDispatcher { class_hash }
 }
 
 /// Asserts that `midi_segment` reverts with panic data starting with `expected`: the short
@@ -199,7 +199,7 @@ fn filter_cutoff_or_q_of_zero_reverts() {
 #[test]
 #[feature("safe_dispatcher")]
 fn unknown_token_reverts() {
-    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
+    let class_hash = declare("OnchainMidiPlayer").unwrap().contract_class().class_hash;
     let (address, _) = declare("BeastLikeNft")
         .unwrap()
         .contract_class()

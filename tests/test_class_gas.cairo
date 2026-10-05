@@ -13,10 +13,10 @@
 //!   alone, net of building the MIDI. `validate` and `encode` alone are in
 //!   `test_settings_gas.cairo`.
 
-use onchain_tinysynth::base64::bytes_base64_encode;
-use onchain_tinysynth::interface::IOnchainTinySynthDispatcherTrait;
-use onchain_tinysynth::segment::{d_fragment, midi_segment};
-use onchain_tinysynth::types::SynthSettings;
+use onchain_midi_player::base64::bytes_base64_encode;
+use onchain_midi_player::interface::IOnchainMidiPlayerDispatcherTrait;
+use onchain_midi_player::segment::{d_fragment, midi_segment};
+use onchain_midi_player::types::SynthSettings;
 use crate::class_fixtures::{
     beast_midi_genesis, beast_midi_heaviest, beast_midi_threshold_1, beast_midi_threshold_3,
     beast_midi_veteran, seq_bytes,
@@ -164,7 +164,7 @@ fn gas_lc_version() {
 
 #[test]
 fn gas_lc_license() {
-    assert(class().license().len() == 9062, 'license');
+    assert(class().license().len() == 9066, 'license');
 }
 
 // ------------------------------------------------------------------------------------------------

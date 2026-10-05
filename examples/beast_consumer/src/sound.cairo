@@ -6,7 +6,7 @@
 //! byte-identical copy that the golden test keeps in lockstep. Token 4 uses a synthetic score the
 //! size of the composer's largest production score, and the Beast reference sounds.
 
-use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, Waveform};
+use onchain_midi_player::types::{Operator, SynthSettings, Timbre, Waveform};
 
 /// Format 0, PPQ 48, one 4/4 bar at 120 BPM (192 ticks), 112 bytes.
 ///

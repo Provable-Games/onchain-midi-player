@@ -3,9 +3,9 @@
 //! is in place: they passed unchanged when it replaced the byte-wise stand-in. Expected outputs
 //! come from RFC 4648 and from Node's encoder (the JS reference, `tests/class_fixtures.cairo`).
 
-use onchain_tinysynth::base64::bytes_base64_encode;
-use onchain_tinysynth::interface::IOnchainTinySynthDispatcherTrait;
-use onchain_tinysynth::page_data;
+use onchain_midi_player::base64::bytes_base64_encode;
+use onchain_midi_player::interface::IOnchainMidiPlayerDispatcherTrait;
+use onchain_midi_player::page_data;
 use crate::class_fixtures::{all_bytes_b64, page, seq_b64_long, seq_b64_short, seq_bytes};
 use crate::helpers::class;
 use crate::page_fixtures::sha256;

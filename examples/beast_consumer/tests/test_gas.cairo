@@ -16,17 +16,17 @@
 use beast_consumer::beast_data::warlock_svg;
 use beast_consumer::beast_like_nft::{IBeastLikeNftDispatcherTrait, comma_b64, image_key_b64};
 use beast_consumer::sound;
-use onchain_tinysynth::base64::bytes_base64_encode;
-use onchain_tinysynth::interface::{
-    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
+use onchain_midi_player::base64::bytes_base64_encode;
+use onchain_midi_player::interface::{
+    IOnchainMidiPlayerDispatcherTrait, IOnchainMidiPlayerLibraryDispatcher,
 };
-use onchain_tinysynth::page_data;
+use onchain_midi_player::page_data;
 use snforge_std::{DeclareResultTrait, declare};
 use crate::test_token_uri::setup;
 
-fn synth() -> IOnchainTinySynthLibraryDispatcher {
-    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
-    IOnchainTinySynthLibraryDispatcher { class_hash }
+fn synth() -> IOnchainMidiPlayerLibraryDispatcher {
+    let class_hash = declare("OnchainMidiPlayer").unwrap().contract_class().class_hash;
+    IOnchainMidiPlayerLibraryDispatcher { class_hash }
 }
 
 /// `n` bytes of filler: a piece of the right length (append cost depends only on lengths).
@@ -51,7 +51,7 @@ fn filler(n: u32) -> ByteArray {
 #[test]
 fn gas_t4_setup() {
     let (nft, class_hash) = setup();
-    assert(nft.tinysynth_class_hash() == class_hash, 'class hash');
+    assert(nft.midi_player_class_hash() == class_hash, 'class hash');
 }
 
 #[test]

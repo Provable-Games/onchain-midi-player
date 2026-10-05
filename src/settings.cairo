@@ -1,7 +1,7 @@
 //! `SETTINGS`: validation and ASCII encoding of `SynthSettings` (format version 1).
 //!
 //! Specified in issue #1 (spec and shared-wave-table amendment):
-//! <https://github.com/Provable-Games/onchain-tinysynth/issues/1>. The JavaScript
+//! <https://github.com/Provable-Games/onchain-midi-player/issues/1>. The JavaScript
 //! counterparts are `player/settings.js` (the page's strict parser and TinySynth installer; the
 //! page does not repeat these checks), `player/validate.js` (reference of these checks, with the
 //! same messages; tooling only) and `player/encode.js` (reference encoder); shared fixtures keep

@@ -2,7 +2,7 @@
 //! (deserializing the fixture only, the baseline), `validate` and `encode`, each including the
 //! build; subtract `build` for the cost of the function itself. Results are in the README.
 
-use onchain_tinysynth::settings::{encode, validate};
+use onchain_midi_player::settings::{encode, validate};
 use crate::settings_fixtures::{
     LONG_LFSR_LEN, STRUCTURAL_MAX_LEN, long_lfsr, structural_max, valid_default, valid_every_slot,
     valid_filters, valid_one_filter, valid_one_wave, valid_reference_waves, valid_six_timbres,

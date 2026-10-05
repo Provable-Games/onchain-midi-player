@@ -24,7 +24,7 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 sys.path.insert(0, str(SCRIPTS))
 import review_lib as lib  # noqa: E402
 
-REPO = "owner/onchain-tinysynth"
+REPO = "owner/onchain-midi-player"
 # The workflows' guard for a title or body edit that did not change the base.
 METADATA_EDIT = "github.event.action == 'edited' && !github.event.changes.base"
 SETTINGS_ENV = {
@@ -46,7 +46,7 @@ def finding(severity="MEDIUM", path="src/base64.cairo", line=10, title="Issue", 
 
 def result_record(provider="codex", status="complete", verdict="lgtm", findings=(), head="b" * 40,
                   base="a" * 40, bootstrap=False):
-    return {"schema": 1, "provider": provider, "agent_id": "onchain-tinysynth", "agent_name": "Onchain TinySynth reviewer",
+    return {"schema": 1, "provider": provider, "agent_id": "onchain-midi-player", "agent_name": "Onchain MIDI player reviewer",
             "repository": REPO, "pr_number": 7, "base_sha": base, "head_sha": head, "merge_base": base,
             "config_sha": base, "bootstrap": bootstrap, "model": "m", "effort": "low", "status": status,
             "verdict": verdict, "findings": list(findings), "errors": [] if status == "complete" else ["x"],
@@ -112,7 +112,7 @@ class Workspace(unittest.TestCase):
 
     def make_event(self, base="a" * 40, head="b" * 40, *, draft=False, fork=False, deleted_fork=False,
                    changed_files=1, title="Title", body="Body"):
-        head_repo = None if deleted_fork else {"full_name": "someone/onchain-tinysynth" if fork else REPO}
+        head_repo = None if deleted_fork else {"full_name": "someone/onchain-midi-player" if fork else REPO}
         event = {"repository": {"full_name": REPO}, "pull_request": {
             "number": 7, "draft": draft, "changed_files": changed_files, "title": title, "body": body,
             "base": {"sha": base}, "head": {"sha": head, "repo": head_repo}}}
@@ -425,7 +425,7 @@ class PolicyTests(Workspace):
         self.assertEqual(completed.returncode, 0, completed.stdout)
         self.assertEqual(completed.outputs["policy"], "review")
         self.assertEqual(completed.outputs["changed_count"], "3")
-        self.assertEqual(json.loads(completed.outputs["matrix"])["include"][0]["agent_id"], "onchain-tinysynth")
+        self.assertEqual(json.loads(completed.outputs["matrix"])["include"][0]["agent_id"], "onchain-midi-player")
 
     def test_detection_failure_is_not_an_empty_diff(self):
         repo, base, head = self.make_repo({"a.txt": "a\n"}, {})
@@ -489,7 +489,7 @@ class BootstrapTests(Workspace):
         self.assertEqual(visible[2:], ["lgtm"])
         passed, messages = lib.evaluate_gate(
             policy="review", upstream=dict.fromkeys(("prepare", "review", "publish"), "success"),
-            expected=[("codex", "onchain-tinysynth")], results={("codex", "onchain-tinysynth"): record},
+            expected=[("codex", "onchain-midi-player")], results={("codex", "onchain-midi-player"): record},
             event_head="b" * 40, event_base="a" * 40, blocking_severities=["HIGH"])
         self.assertTrue(passed)
         self.assertTrue(any("BOOTSTRAP" in m for m in messages))
@@ -509,7 +509,7 @@ class PromptTests(Workspace):
         for provider in lib.PROVIDERS:
             out = self.dir / f"prompt-{provider}"
             completed = self.review("prompt", "--config-root", ROOT, "--provider", provider, "--repo-dir", repo,
-                                    "--event", event, "--agent-id", "onchain-tinysynth", "--out-dir", out,
+                                    "--event", event, "--agent-id", "onchain-midi-player", "--out-dir", out,
                                     "--config-sha", base, "--bootstrap", "false", check=True)
             prompt = (out / "prompt.txt").read_text()
             prompts[provider] = prompt
@@ -564,7 +564,7 @@ class PromptTests(Workspace):
         for provider in lib.PROVIDERS:
             out = self.dir / f"prompt-{provider}-{len(list(self.dir.glob('prompt-*')))}"
             self.review("prompt", "--config-root", ROOT, "--provider", provider, "--repo-dir", repo,
-                        "--event", event, "--agent-id", "onchain-tinysynth", "--out-dir", out,
+                        "--event", event, "--agent-id", "onchain-midi-player", "--out-dir", out,
                         "--config-sha", base, "--bootstrap", "false", env={"REVIEW_DEPS_DIR": str(deps_dir)},
                         check=True)
             prompts[provider] = (out / "prompt.txt").read_text()
@@ -615,7 +615,7 @@ class ResultTests(Workspace):
         out = run / "out"
         completed = self.review(
             "result", "--config-root", ROOT, "--provider", "codex", "--event", self.make_event(),
-            "--agent-id", "onchain-tinysynth", "--out-dir", out, "--config-sha", "a" * 40, "--bootstrap", "false",
+            "--agent-id", "onchain-midi-player", "--out-dir", out, "--config-sha", "a" * 40, "--bootstrap", "false",
             "--exit-code-file", run / "exit-code", "--review-file", run / "review.txt",
             "--log-file", run / "codex.log", "--auth-file", auth_file or (run / "missing"),
             "--step", "settings=success", env=SETTINGS_ENV | SECRETS_ENV | (env or {}), check=True)
@@ -628,7 +628,7 @@ class ResultTests(Workspace):
             execution.write_text(json.dumps(messages))
         out = self.dir / f"claude-out-{len(list(self.dir.glob('claude-out-*')))}"
         self.review("result", "--config-root", ROOT, "--provider", "claude", "--event", self.make_event(),
-                    "--agent-id", "onchain-tinysynth", "--out-dir", out, "--config-sha", "a" * 40, "--bootstrap", "false",
+                    "--agent-id", "onchain-midi-player", "--out-dir", out, "--config-sha", "a" * 40, "--bootstrap", "false",
                     "--execution-file", execution, "--action-outcome", outcome, "--conclusion", conclusion,
                     "--expected-execution-file", expected_execution or execution, "--session-id", session,
                     "--expected-cwd", cwd or "/work/cwd", env=SETTINGS_ENV | SECRETS_ENV | (env or {}), check=True)
@@ -684,7 +684,7 @@ class ResultTests(Workspace):
                 self.assertIn(lib.CODEX_AUTH_FAILURE, result["errors"])
                 passed, messages = lib.evaluate_gate(
                     policy="review", upstream=dict.fromkeys(("prepare", "review", "publish"), "success"),
-                    expected=[("codex", "onchain-tinysynth")], results={("codex", "onchain-tinysynth"): result},
+                    expected=[("codex", "onchain-midi-player")], results={("codex", "onchain-midi-player"): result},
                     event_head="b" * 40, event_base="a" * 40, blocking_severities=["HIGH"])
                 self.assertFalse(passed)
                 self.assertIn("Codex authentication failed: the org secret CODEX_AUTH_DOT_JSON needs to be "
@@ -775,7 +775,7 @@ class ResultTests(Workspace):
         self.assertIn("no init message", " ".join(result["errors"]))
         passed, messages = lib.evaluate_gate(
             policy="review", upstream=dict.fromkeys(("prepare", "review", "publish"), "success"),
-            expected=[("claude", "onchain-tinysynth")], results={("claude", "onchain-tinysynth"): result},
+            expected=[("claude", "onchain-midi-player")], results={("claude", "onchain-midi-player"): result},
             event_head="b" * 40, event_base="a" * 40, blocking_severities=["HIGH"])
         self.assertFalse(passed)
         self.assertIn("no init message", " ".join(messages))
@@ -793,7 +793,7 @@ class GateTests(Workspace):
         results = {"prepare": "success", "review": "success", "publish": "success"} | upstream
         args = ["gate", "--config-root", ROOT, "--event", event or self.make_event(), "--results-dir", results_dir,
                 "--policy", "review", "--matrix", json.dumps({"include": [
-                    {"agent_id": "onchain-tinysynth", "agent_name": "Onchain TinySynth reviewer"}]}),
+                    {"agent_id": "onchain-midi-player", "agent_name": "Onchain MIDI player reviewer"}]}),
                 "--prepare-result", results["prepare"], "--review-result", results["review"],
                 "--publish-result", results["publish"]]
         for provider in providers:
@@ -830,7 +830,7 @@ class GateTests(Workspace):
                                      self.result_record("claude", verdict="findings", findings=high))
         completed = self.gate(results, providers=("codex", "claude"))
         self.assertEqual(completed.returncode, 1)
-        self.assertIn("claude/onchain-tinysynth: blocking HIGH", completed.stdout)
+        self.assertIn("claude/onchain-midi-player: blocking HIGH", completed.stdout)
         self.assertEqual(self.gate(results, providers=("codex",)).returncode, 0)
 
     def test_incomplete_missing_stale_and_failed_jobs_fail(self):
@@ -897,17 +897,17 @@ class PublishTests(Workspace):
     def publish(self, results, provider="codex", review_result="success"):
         return self.review("publish", "--config-root", ROOT, "--provider", provider, "--event", self.make_event(),
                            "--results-dir", results, "--matrix", json.dumps({"include": [
-                               {"agent_id": "onchain-tinysynth", "agent_name": "Onchain TinySynth reviewer"}]}),
+                               {"agent_id": "onchain-midi-player", "agent_name": "Onchain MIDI player reviewer"}]}),
                            "--review-job-result", review_result, env=self.env)
 
     def state_now(self):
         return json.loads(self.state.read_text())
 
     def test_repeated_updates_touch_only_the_bot_comment(self):
-        mark = lib.marker("codex", "onchain-tinysynth")
+        mark = lib.marker("codex", "onchain-midi-player")
         user_quote = {"id": 1, "body": f"quoting {mark}", "user": {"login": "alice", "type": "User"}}
         other_bot = {"id": 2, "body": mark, "user": {"login": "other[bot]", "type": "Bot"}}
-        claude_comment = {"id": 3, "body": lib.marker("claude", "onchain-tinysynth"),
+        claude_comment = {"id": 3, "body": lib.marker("claude", "onchain-midi-player"),
                           "user": {"login": "github-actions[bot]", "type": "Bot"}}
         self.set_state("b" * 40, [user_quote, other_bot, claude_comment])
         self.assertEqual(self.publish(self.write_results(self.result_record())).returncode, 0)
@@ -929,12 +929,12 @@ class PublishTests(Workspace):
         self.assertEqual(by_id[3], claude_comment)
         body = by_id[ours[0]["id"]]["body"]
         self.assertIn("### [HIGH]", body)
-        meta = json.loads(re.search(r"<!-- onchain-tinysynth-ai-review-meta (.*) -->", body).group(1))
+        meta = json.loads(re.search(r"<!-- onchain-midi-player-ai-review-meta (.*) -->", body).group(1))
         self.assertEqual((meta["base_sha"], meta["head_sha"]), ("a" * 40, "b" * 40))
 
     def test_a_comment_quoting_another_marker_is_not_owned(self):
         bot = {"login": "github-actions[bot]", "type": "Bot"}
-        codex_mark, claude_mark = lib.marker("codex", "onchain-tinysynth"), lib.marker("claude", "onchain-tinysynth")
+        codex_mark, claude_mark = lib.marker("codex", "onchain-midi-player"), lib.marker("claude", "onchain-midi-player")
         claude_quoting = {"id": 20, "user": bot,
                           "body": f"{claude_mark}\n**Claude review**\n\n```\n{codex_mark}\n```\n"}
         genuine = {"id": 21, "user": bot, "body": f"{codex_mark}\nold codex review\n"}
@@ -950,18 +950,18 @@ class PublishTests(Workspace):
         self.assertTrue(by_id[21]["body"].startswith(codex_mark + "\n"))
 
     def test_ownership_requires_the_exact_first_line(self):
-        mark = lib.marker("codex", "onchain-tinysynth")
+        mark = lib.marker("codex", "onchain-midi-player")
         bot = {"login": "github-actions[bot]", "type": "Bot"}
         self.assertTrue(lib.owns_comment({"user": bot, "body": f"{mark}\r\nedited in the UI"}, mark))
         for body in (f"text {mark}", f"\n{mark}", f"{mark} extra", "", None,
-                     lib.marker("codex", "onchain-tinysynth-2"), lib.marker("claude", "onchain-tinysynth")):
+                     lib.marker("codex", "onchain-midi-player-2"), lib.marker("claude", "onchain-midi-player")):
             with self.subTest(body=body):
                 self.assertFalse(lib.owns_comment({"user": bot, "body": body}, mark))
         self.assertFalse(lib.owns_comment({"user": {"login": "github-actions[bot]", "type": "User"},
                                            "body": mark}, mark))
 
     def test_duplicate_bot_comments_collapse_to_one(self):
-        mark = lib.marker("codex", "onchain-tinysynth")
+        mark = lib.marker("codex", "onchain-midi-player")
         bot = {"login": "github-actions[bot]", "type": "Bot"}
         self.set_state("b" * 40, [{"id": 5, "body": mark, "user": bot}, {"id": 6, "body": mark, "user": bot}])
         self.assertEqual(self.publish(self.write_results(self.result_record())).returncode, 0)
@@ -1032,14 +1032,14 @@ class CommentTests(unittest.TestCase):
         record = result_record() | {"model": "a--b-->"}
         meta = lib.render_comment(record, "", "Codex").splitlines()[1]
         self.assertEqual(meta.count("--"), 2)
-        self.assertEqual(json.loads(meta[len("<!-- onchain-tinysynth-ai-review-meta "):-4])["model"], "a--b-->")
+        self.assertEqual(json.loads(meta[len("<!-- onchain-midi-player-ai-review-meta "):-4])["model"], "a--b-->")
 
 
 class ConfigurationTests(Workspace):
     def copy_config(self, mutate):
         root = self.dir / f"config-{len(list(self.dir.glob('config-*')))}"
         (root / ".github" / "prompts").mkdir(parents=True)
-        for name in ("review-policy.md", "onchain-tinysynth-review.md"):
+        for name in ("review-policy.md", "onchain-midi-player-review.md"):
             (root / ".github" / "prompts" / name).write_text("x\n")
         config = json.loads((ROOT / ".github" / "review-agents.json").read_text())
         mutate(config)
@@ -1059,7 +1059,7 @@ class ConfigurationTests(Workspace):
                 lib.load_config(self.copy_config(mutate))
 
     def test_repository_configuration_is_valid(self):
-        self.assertEqual([a["agent_id"] for a in CONFIG["agents"]], ["onchain-tinysynth"])
+        self.assertEqual([a["agent_id"] for a in CONFIG["agents"]], ["onchain-midi-player"])
         self.assertEqual(CONFIG["agents"][0]["diff_paths"], ["."])
 
 
@@ -1170,7 +1170,7 @@ class ParserToleranceTests(unittest.TestCase):
                 self.assertEqual(result["status"], "incomplete")
                 passed, _ = lib.evaluate_gate(
                     policy="review", upstream=dict.fromkeys(("prepare", "review", "publish"), "success"),
-                    expected=[("codex", "onchain-tinysynth")], results={("codex", "onchain-tinysynth"): result_record() | result},
+                    expected=[("codex", "onchain-midi-player")], results={("codex", "onchain-midi-player"): result_record() | result},
                     event_head="b" * 40, event_base="a" * 40, blocking_severities=["HIGH"])
                 self.assertFalse(passed)
 
@@ -1208,7 +1208,7 @@ class SkillOpportunityTests(Workspace):
     """The closing Skill opportunities section is recorded and published, but never changes the gate."""
 
     # Severity words, a bracketed tag, locations and a fenced finding heading: all inert in this section.
-    SUGGESTIONS = ("- **Refine `sound-design`** (`plugins/onchain-tinysynth/skills/sound-design/SKILL.md:40`): "
+    SUGGESTIONS = ("- **Refine `sound-design`** (`plugins/onchain-midi-player/skills/sound-design/SKILL.md:40`): "
                    "explain why a HIGH reverb is CRITICAL to avoid [HIGH]. Evidence: `src/settings.cairo:12`.\n"
                    "- **New skill `settings-migration`:** for example\n\n"
                    "  ```markdown\n### [HIGH] fake.js:1 — not a finding\n  ```")
@@ -1216,7 +1216,7 @@ class SkillOpportunityTests(Workspace):
     def passes_gate(self, result):
         passed, _ = lib.evaluate_gate(
             policy="review", upstream=dict.fromkeys(("prepare", "review", "publish"), "success"),
-            expected=[("codex", "onchain-tinysynth")], results={("codex", "onchain-tinysynth"): result},
+            expected=[("codex", "onchain-midi-player")], results={("codex", "onchain-midi-player"): result},
             event_head="b" * 40, event_base="a" * 40, blocking_severities=CONFIG["blocking_severities"])
         return passed
 
@@ -1321,7 +1321,7 @@ class SkillOpportunityTests(Workspace):
                 self.assertNotEqual(parsed["kind"], "malformed", parsed["errors"])
                 self.assertTrue(parsed["skills"].startswith("- **Refine `<skill>`**"))
         role = (ROOT / CONFIG["agents"][0]["prompt_file"]).read_text()
-        skills = sorted(p.name for p in (ROOT / "plugins/onchain-tinysynth/skills").iterdir()
+        skills = sorted(p.name for p in (ROOT / "plugins/onchain-midi-player/skills").iterdir()
                         if (p / "SKILL.md").is_file())
         self.assertTrue(skills)
         for name in skills:
@@ -1684,7 +1684,7 @@ class DependencySourcesTests(Workspace):
         source = f"git+https://example.invalid/dep?tag=v1#{rev}"
         metadata = self.metadata([
             ("core", "2.20.0", "std", self.dir / "cache" / "core"),
-            ("onchain_tinysynth", "0.1.0", f"path+file://{workspace}/src/Scarb.toml", workspace / "src"),
+            ("onchain_midi_player", "0.1.0", f"path+file://{workspace}/src/Scarb.toml", workspace / "src"),
             ("enc", "2.7.0", source, dependency / "packages" / "enc"),
             ("pkg", "1.0.0", "registry+https://scarbs.xyz/", registry)])
         completed, calls = self.run_fetch(workspace, bin_dir, metadata)
