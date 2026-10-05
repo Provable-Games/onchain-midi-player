@@ -12,8 +12,8 @@ at commit `4bf982994dc3d1187661385726fed2e6595fafbe` on the fork's `improve/inte
 - License: Apache License 2.0. Copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games (see the fork's NOTICE
   and this repository's [NOTICE](../../NOTICE)).
 
-**This is an interim pin**, not a fork release: it tracks the fork's `improve/integration` branch to test compatibility
-early, and its class must never be declared. Declaring needs the engine re-pinned to a tagged fork release with a
+**This pin is not a fork release**: it tracks the fork's `improve/integration` branch. Classes built from it are test
+classes, without a `v<version>` release tag. A release needs the engine re-pinned to a tagged fork release with a
 published SHA-256 (the release gate, issue #12).
 
 This is the engine the class embeds: `scripts/build_page.mjs` gzips the minified file's exact bytes into the page (the

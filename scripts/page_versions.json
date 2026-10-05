@@ -1,13 +1,4 @@
 {
-  "0.1.0": {
-    "page_sha256": "6b6da50eafd9e9ef8ecf9891cd7c883440fa9d0340af2a5868d7ab8b38323f26",
-    "engine_ref": "fc04dbe",
-    "engine_commit": "fc04dbe7d78bd0a4de5eb80887756f31c2c373f2",
-    "page": 10,
-    "script_sha256": "4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c",
-    "gzip_sha256": "3a0f61485f5ac3bd723566adbcdb595da7a7bfa93f9d28fd29c22f0408270310",
-    "gzip_len": 14056
-  },
   "0.3.0": {
     "page_sha256": "848f718394f243ceb60b774b1e11daaa017b9c667c55991e8df8615741697a8f",
     "engine_ref": "4bf9829",

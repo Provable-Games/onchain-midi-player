@@ -3,25 +3,25 @@
   "chain_id": "SN_SEPOLIA",
   "class": {
     "package": "onchain_midi_player",
-    "contract": "OnchainTinySynth",
-    "version": "0.1.0",
+    "contract": "TinySynth",
+    "version": "0.3.0",
     "release_tag": null,
-    "class_hash": "0x00a02eabc2fdcd63b736228b03519bfbd9b259d50a50fc125c8d3bd8286401c9",
-    "declare_tx": "0x03f52c70811609f687ca25a657a43d352e4fc194210dfd59ffd81cc03e0149c6",
-    "built_from": "e1b0d54757d5545824fffb6c9913bc673f6c5a9e",
+    "class_hash": "0x01f893742bfae85e760a0949d391015d8858d181f9def86ee75d5619d1af83b0",
+    "declare_tx": "0x0003ebb167b5657c099aace7b4d901c4f60c3e0bdcdc6a3b0a35fbfe389ffa3e",
+    "built_from": "38d76ce6120d964502891c16445ce083bf1bfedd",
     "inspection_instance": {
-      "address": "0x0003395155b5526d41f32ad26c7b1fa7ef38067643d7da0325a7cd115bc5abc9",
-      "deploy_tx": "0x01ce3fade874e3748496ceb4b483f11438063f7cdfb54a7364456e861b82a4e6"
+      "address": "0x06a1a27f1148b48c5af504a25eb1c123eb5451bebdd3733b6d3053c774c8fd37",
+      "deploy_tx": "0x06338388b3fc1abfde865a6ebc8da277840ab6225103c5be56cb300af3cdf50b"
     }
   },
   "example": {
     "package": "beast_consumer",
     "contract": "BeastLikeNft",
-    "class_hash": "0x00985623e977c1570ae682f25688c083b07178de1f8b6d2124573948499bb913",
-    "declare_tx": "0x001f2cfecc30c437ebc6f43f2609b561365ce9e14d74e64b0193a4812e9b0fd1",
-    "address": "0x06a01505c95b5e5aa4de00e3b160135a887b475dae855eaf3c910a773af4bffa",
-    "deploy_tx": "0x060aa97ba8b1d9c56227b7f9f8fde380f91ebced6b480a2ec993ed08bc8736d6",
-    "player_class_hash": "0x00a02eabc2fdcd63b736228b03519bfbd9b259d50a50fc125c8d3bd8286401c9",
-    "built_from": "e1b0d54757d5545824fffb6c9913bc673f6c5a9e"
+    "class_hash": "0x079cb8e96fe1ce500738c6a3577b93e7235b39bf2eb27236160d95d692d11c42",
+    "declare_tx": "0x053c6cdcfc022fe6a23dc7309994808daa17335d0957ba2ffca289411d47da71",
+    "address": "0x051ae0c48964d049ca791475478cb2ada765f2c32aa8e3a3f7e309e46d34ca0e",
+    "deploy_tx": "0x043931e53e4eb94c230ba629a22ff216ad6a2527bc08c2502e4f2c83b8ad577e",
+    "player_class_hash": "0x01f893742bfae85e760a0949d391015d8858d181f9def86ee75d5619d1af83b0",
+    "built_from": "38d76ce6120d964502891c16445ce083bf1bfedd"
   }
 }
