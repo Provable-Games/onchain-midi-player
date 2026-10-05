@@ -186,6 +186,8 @@ Every token's `animation_url` carries the engine, so anyone can check it offline
 4. When `engine_ref` in that record is a fork release tag, the release's `SHA256SUMS` lists the same SHA-256 for `webaudio-tinysynth.min.js`.
 5. Optionally, rebuild the engine from the fork ref in that record (`engine_commit`), and the page and class from this repository's tag `v<version>`: the class hash must equal `class.class_hash`.
 
+To check a whole `token_uri` (OpenSea metadata fields and attributes, the SVG image, the page, the MIDI and the sizes), run `npm run validate-token-uri -- token_uri.txt`, or fetch one with `--rpc <url> --contract <address> --token <id>`: [Validating a `token_uri`](docs/verifying.md#validating-a-token_uri).
+
 Each deployment file also lists an inspection instance: a deployment of the class with no constructor and no state, so an explorer or an RPC call can read `version()`, `engine()`, `script_sha256()` and `license()`. Your contract never calls it.
 
 Shell and Python versions of step 2, and the rebuild steps: [Verifying the engine](docs/verifying.md).

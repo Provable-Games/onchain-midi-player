@@ -20,6 +20,7 @@
     "hosting-check": "node scripts/hosting_check.mjs",
     "drift-check": "node scripts/drift_check.mjs",
     "check-midi": "node scripts/check_midi.mjs",
+    "validate-token-uri": "node scripts/validate_token_uri.mjs",
     "preview": "node scripts/preview.mjs"
   },
   "devDependencies": {
