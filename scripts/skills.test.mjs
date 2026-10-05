@@ -210,7 +210,7 @@ describe("links and paths", () => {
   });
 
   test("every repository path the skills name in code exists (from the root, or from the skill folder)", () => {
-    const PATH = /(?<![\w/.$-])((?:scripts|player|examples|tests|src|plugins|references)\/[\w./-]*\w)/g;
+    const PATH = /(?<![\w/.$-])((?:scripts|player|examples|tests|src|plugins|references|docs)\/[\w./-]*\w)/g;
     let checked = 0;
     for (const file of markdown) {
       const skillDir = join(SKILLS, relative(SKILLS, file).split("/")[0]);
