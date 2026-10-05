@@ -37,7 +37,7 @@ node $I/bytearray.mjs call.json > token_uri.txt
 
 For a local contract, print the `token_uri` from an snforge test instead, as the example's `print_sample_token_uri` does ([example README](https://github.com/Provable-Games/onchain-midi-player/blob/main/examples/beast_consumer/README.md#run-it)).
 
-To check the whole token in one run, including the OpenSea metadata fields and attributes and every layer below, use the validator ([Validating a token_uri](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md#validating-a-token_uri)):
+To check the whole token in one run (it needs `npm ci` once, for the pinned SVG parser, unlike the scripts below), including the OpenSea metadata fields and attributes and every layer below, use the validator ([Validating a token_uri](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md#validating-a-token_uri)):
 
 ```sh
 npm run validate-token-uri -- token_uri.txt            # or call.json from step 1

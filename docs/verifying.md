@@ -58,7 +58,7 @@ What a class hash fixes, and what the consumer supplies:
 
 ## Validating a `token_uri`
 
-[`scripts/validate_token_uri.mjs`](../scripts/validate_token_uri.mjs) checks a whole `token_uri` against OpenSea's metadata standards and against the player page this repository produces. It needs Node 22 or later and a checkout whose `VERSION` equals the class's `version()` (or pass `--version`). `--expect <script_sha256>` replaces only the engine comparison: the gzip payload and `PAGE` are always compared with the record, and warn if the version has none:
+[`scripts/validate_token_uri.mjs`](../scripts/validate_token_uri.mjs) checks a whole `token_uri` against OpenSea's metadata standards and against the player page this repository produces. It needs Node 22 or later, `npm ci` (the SVG is parsed with the pinned dev dependency [`@xmldom/xmldom`](https://github.com/xmldom/xmldom)) and a checkout whose `VERSION` equals the class's `version()` (or pass `--version`). `--expect <script_sha256>` replaces only the engine comparison: the gzip payload and `PAGE` are always compared with the record, and warn if the version has none:
 
 ```sh
 npm run validate-token-uri -- token_uri.txt                    # a file, or - for stdin
@@ -66,7 +66,7 @@ npm run validate-token-uri -- --rpc "$RPC" --contract "$NFT" --token 4   # fetch
 npm run validate-token-uri -- call.json --json                 # machine-readable report
 ```
 
-The input is a `token_uri`, the token JSON, a raw `starknet_call` response (or its result felts), or `sncast --json call` output. The report lists PASS, WARN and FAIL checks with the source of each, the SHA-256 of `PAGE`, and the size of every layer. It exits 0 unless a check fails, 1 on a failure and 2 for a usage error or an input it cannot read or fetch. The RPC URL, which may hold an API key, is never printed.
+The input is a `token_uri`, the token JSON, a raw `starknet_call` response (or its result felts), or `sncast --json call` output. The report lists PASS, WARN and FAIL checks with the source of each, the SHA-256 of `PAGE`, and the size of every layer. It exits 0 unless a check fails, 1 on a failure and 2 for a usage error or an input it cannot read or fetch. The RPC URL, which may hold an API key, is never printed, and neither is any of an RPC error's payload: a failed call shows only its code, a fixed name for it, and known revert reasons (`Out of gas`, `ENTRYPOINT_NOT_FOUND`, the class's `TS: ...`).
 
 | Layer | Checks | Source |
 | --- | --- | --- |
@@ -74,7 +74,7 @@ The input is a `token_uri`, the token JSON, a raw `starknet_call` response (or i
 | `token_uri` | printable ASCII, the `data:application/json;base64,` prefix, canonical base64 with the offset of the first bad character, UTF-8 | OpenSea [Metadata storage](https://docs.opensea.io/docs/metadata-storage) |
 | JSON | strict parse; `name` and `image` present and strings, `description` a string (warn if absent); `external_url` an http(s) URL; `background_color` six hex digits without `#`; unknown and legacy fields (`youtube_url`, `image_data`) warn | OpenSea [Media and traits](https://docs.opensea.io/docs/media-and-traits), [ERC-721](https://eips.ethereum.org/EIPS/eip-721) metadata schema |
 | `attributes` | an array of objects with a `value` (string or number); `display_type` one of `number`, `boost_number`, `boost_percentage`, `date` with a numeric value (`date` in Unix seconds); `max_value` a number; a quoted number is a string trait (warn) | OpenSea [Media and traits](https://docs.opensea.io/docs/media-and-traits) |
-| `image` | an SVG data URI of canonical base64, UTF-8, well-formed XML in the SVG namespace (a DOCTYPE is accepted, one with an internal subset is not), no `<script>` or event handler, no `</script` in any case, no reference outside the document (`href`, `src`, `url()`, `@import` must be `#fragment` or `data:`); warns above 1 MiB | OpenSea Media and traits, [Art (SVG) requirements](token-uri-layout.md#art-svg-requirements) |
+| `image` | an SVG data URI of canonical base64, UTF-8, well-formed XML in the SVG namespace (no `<!ENTITY>` declarations), no `<script>`, event handler or processing instruction, no `</script` in any case, no reference outside the document (`href`, `src`, `url()`, `@import`, with CSS escapes decoded, must be `#fragment` or `data:`); warns above 1 MiB | OpenSea Media and traits, [Art (SVG) requirements](token-uri-layout.md#art-svg-requirements) |
 | `animation_url` | an HTML data URI of canonical base64; no element or CSS reference outside the page, and a warning for network URLs in the page text | OpenSea Media and traits |
 | player page | the engine inflates and its SHA-256, the gzip payload and `PAGE` equal the record of the version in [`page_versions.json`](../scripts/page_versions.json); the settings, MIDI and art blocks follow `PAGE`; `SETTINGS` decodes and passes the class's checks; the MIDI passes [`check_midi`](midi-contract.md)'s check; the art block equals the `image` | steps 2 to 5 above, [Sound settings](sound-settings.md), [MIDI contract](midi-contract.md) |
 | sizes | the JSON-RPC response (measured when fetched, otherwise estimated from the felts) against the 10 MiB cap of jsonrpsee nodes; a warning above 80% of it | [Node limits](gas.md#node-limits) |

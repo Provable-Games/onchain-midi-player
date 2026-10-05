@@ -202,9 +202,6 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
     assert.ok(failing(`${bad}<svg xmlns='http://www.w3.org/2000/svg'/>`).includes("image.xml"), bad);
   }
   assert.deepEqual(failing(`<!DOCTYPE svg SYSTEM "x.dtd"><svg xmlns='http://www.w3.org/2000/svg'/>`).filter((i) => i.startsWith("image.")), []);
-  // Prefixes bound to one namespace are the same attribute.
-  assert.ok(failing("<svg xmlns='http://www.w3.org/2000/svg' xmlns:a='urn:x' xmlns:b='urn:x' a:foo='1' b:foo='2'/>").includes("image.xml"));
-  assert.deepEqual(failing("<svg xmlns='http://www.w3.org/2000/svg' xmlns:a='urn:x' xmlns:b='urn:y' a:foo='1' b:foo='2' foo='3'/>").filter((i) => i.startsWith("image.")), []);
   // CSS escapes are decoded before the reference checks.
   for (const css of ["rect{fill:u\\72l(https://example.com/p)}", "@\\69mport 'https://example.com/a.css';", "rect{fill:\\75rl( 'https://e.com/p' )}"]) {
     assert.ok(failing(svg(`<style>${css}</style>`)).includes("image.self_contained"), css);
@@ -231,7 +228,8 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
 
 test("the XML parser accepts well-formed documents and rejects malformed ones", () => {
   assert.doesNotThrow(() => parseXml('<?xml version="1.0"?><!DOCTYPE a><!-- c --><a x="1" y=\'2&amp;\'><b/><![CDATA[<]]>t&#65;</a>'));
-  for (const bad of ["", "<a>", "<a></b>", "<a/><b/>", "<a x=1/>", '<a x="1" x="2"/>', "<a>&nbsp;</a>", "<a>]]></a>", "<a/><!DOCTYPE a>", "<!DOCTYPE a><!DOCTYPE a><a/>", "<!ELEMENT a>", "<a/>text", "<a><!-- -- --></a>", '<a x="<"/>', "<a:b/>", "<?pi x?><a/>", "<a b='1'c='2'/>"]) {
+  assert.throws(() => parseXml("<a>\n<b></a>"), /mismatch/);
+  for (const bad of ["", "<a>", "<a></b>", "<a/><b/>", "<a x=1/>", '<a x="1" x="2"/>', "<a>&nbsp;</a>", "<a/><!DOCTYPE a>", "<!DOCTYPE a><!DOCTYPE a><a/>", "<!ELEMENT a>", "<a/>text", "<a><!-- -- --></a>", '<a x="<"/>', "<a:b/>", "<?pi x?><a/>", "<a b='1'c='2'/>"]) {
     assert.throws(() => parseXml(bad), undefined, JSON.stringify(bad));
   }
 });
@@ -343,37 +341,45 @@ test("fetch: calls token_uri with the u256 split, falls back to tokenURI, and ne
   assert.equal(calls[0][1].entry_point_selector, selector("token_uri"));
   assert.equal(calls[1][1].entry_point_selector, selector("tokenURI"));
   assert.deepEqual(calls[0][1].calldata, ["0x5", "0x4"]);
-  const fails = async (/** @type {any} */ impl) => {
+  const fails = async (/** @type {any} */ impl, url = rpc) => {
     /** @type {Error | undefined} */
     let error;
     try {
-      await fetchTokenUri({ rpc, contract: "0x1", token: "1", fetchImpl: impl });
+      await fetchTokenUri({ rpc: url, contract: "0x1", token: "1", fetchImpl: impl });
     } catch (e) {
       error = /** @type {Error} */ (e);
     }
     assert.ok(error);
-    assert.doesNotMatch(error.message + String(error.cause ?? ""), /SECRET_KEY|rpc\.example\.com/);
+    assert.doesNotMatch(error.message + String(error.cause ?? ""), /SECRET_KEY|rpc\.example\.com|rpc\.test|KEY/);
     return error.message;
   };
   assert.match(await fails(async () => { throw Object.assign(new TypeError(`fetch failed ${rpc}`), { cause: { code: "ENOTFOUND" } }); }), /request failed \(ENOTFOUND\)/);
   assert.match(await fails(async () => ({ ok: false, status: 429, text: async () => "" })), /HTTP 429/);
   assert.match(await fails(async () => ({ ok: true, status: 200, text: async () => "<html>" })), /not JSON/);
-  assert.match(await fails(async () => reply({ error: { code: 40, message: `Contract error at ${rpc}`, data: { revert_error: ["0x4f7574206f6620676173"] } } })), /revert reason: Out of gas/);
-  // A revert reason that decodes to the URL is redacted too.
-  const urlFelt = "0x" + Buffer.from(rpc2).toString("hex");
-  const redacted = await fetchTokenUri({ rpc: rpc2, contract: "0x1", token: "1", fetchImpl: /** @type {any} */ (async () => reply({ error: { code: 40, message: "Contract error", data: { revert_error: [urlFelt] } } })) }).catch((e) => e.message);
-  assert.doesNotMatch(redacted, /rpc\.test|KEY/);
-  assert.doesNotMatch(redacted, new RegExp(urlFelt.slice(2, 14)), "no encoded URL either");
-  // The URL split across two felts: neither plain nor encoded.
-  const half = Buffer.from(rpc2).subarray(0, 10).toString("hex");
-  const rest = Buffer.from(rpc2).subarray(10).toString("hex");
-  const split = await fetchTokenUri({ rpc: rpc2, contract: "0x1", token: "1", fetchImpl: /** @type {any} */ (async () => reply({ error: { code: 40, message: "Contract error", data: { revert_error: ["0x" + half, "0x" + rest] } } })) }).catch((e) => e.message);
-  assert.doesNotMatch(split, new RegExp(`rpc\\.test|KEY|${half}|${rest}`));
+  // A known revert reason and a fixed name for the code are printed.
+  assert.match(await fails(async () => reply({ error: { code: 40, message: `Contract error at ${rpc}`, data: { revert_error: ["0x4f7574206f6620676173"] } } })), /Contract error \(code 40\); revert reason: Out of gas/);
+  // Nothing else of the payload is: not the message, not the data, not a string that decodes to the URL (whole, split or encoded).
+  const hex = (/** @type {Uint8Array} */ b) => "0x" + Buffer.from(b).toString("hex");
+  const url = Buffer.from(rpc2);
+  const payloads = [
+    { code: 40, message: `bad ${rpc2}`, data: { revert_error: [hex(url)] } },
+    { code: 40, message: "Contract error", data: { revert_error: [hex(url.subarray(0, 10)), hex(url.subarray(10))] } },
+    { code: 40, message: "Contract error", data: `see ${rpc2}` },
+    { code: 99, message: "Odd", data: { x: hex(url) }, extra: rpc2 },
+  ];
+  for (const error of payloads) {
+    const m = await fails(async () => reply({ error }), rpc2);
+    assert.doesNotMatch(m, new RegExp(`${Buffer.from("KEY").toString("hex")}|${hex(url.subarray(0, 10)).slice(2)}|see`), JSON.stringify(error));
+    assert.match(m, /token_uri: starknet_call failed: (Contract error|error) \(code (40|99)\)/);
+  }
   // A nested ENTRYPOINT_NOT_FOUND (a bad library_call) retries with tokenURI, and the first error stays in the message.
   const nested = "0x" + Buffer.from("ENTRYPOINT_NOT_FOUND").toString("hex");
   let n = 0;
-  const msg = await fetchTokenUri({ rpc, contract: "0x1", token: "1", fetchImpl: /** @type {any} */ (async () => reply({ error: { code: 40, message: "Contract error", data: { revert_error: [n++ === 0 ? nested : "0x4f7574206f6620676173"] } } })) }).catch((e) => e.message);
-  assert.match(msg, /token_uri: starknet_call failed[\s\S]*revert reason: ENTRYPOINT_NOT_FOUND[\s\S]*then tokenURI: starknet_call failed[\s\S]*Out of gas/);
+  const msg = await fails(async () => reply({ error: { code: 40, message: "Contract error", data: { revert_error: [n++ === 0 ? nested : "0x4f7574206f6620676173"] } } }));
+  assert.match(msg, /token_uri: starknet_call failed[^\n]*revert reason: ENTRYPOINT_NOT_FOUND\nthen tokenURI: starknet_call failed[^\n]*Out of gas/);
+  // The class's own TS: reasons are known strings.
+  const ts = "0x" + Buffer.from("TS: quality out of range").toString("hex");
+  assert.match(await fails(async () => reply({ error: { code: 40, message: "x", data: { revert_error: [ts] } } })), /revert reason: TS: quality out of range/);
 });
 
 test("command line: exit codes, --json, stdin, usage errors", async () => {

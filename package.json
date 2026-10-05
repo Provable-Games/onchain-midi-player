@@ -24,6 +24,7 @@
     "preview": "node scripts/preview.mjs"
   },
   "devDependencies": {
+    "@xmldom/xmldom": "0.9.12",
     "fflate": "0.8.3",
     "terser": "5.51.2"
   }

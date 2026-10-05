@@ -3,9 +3,10 @@
 // Validates a token_uri built with this player against OpenSea's metadata standards and against the
 // player page this repository produces (docs/verifying.md: "Validating a token_uri"). It decodes
 // every layer (ByteArray felts, data URI, base64, JSON, the image SVG, the animation_url page) and
-// reports the first error of each with its position. Node built-ins only; it imports the repository's
+// reports the first error of each with its position. It imports the repository's
 // own checks (verify_engine, check_midi, the settings decoder and the skill's bytearray and split_page
-// helpers), so run it from a checkout whose VERSION equals the class's version().
+// helpers) and the dev dependency @xmldom/xmldom for the SVG, so run it from a checkout (after
+// `npm ci`) whose VERSION equals the class's version().
 //
 // Usage: node scripts/validate_token_uri.mjs <file | -> [options]
 //        node scripts/validate_token_uri.mjs --rpc <url> --contract <address> --token <id> [options]
@@ -26,6 +27,7 @@
 // an input that cannot be read or fetched.
 
 import { readFileSync } from "node:fs";
+import { DOMParser } from "@xmldom/xmldom";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { decodeSettings } from "../player/settings.js";
@@ -160,219 +162,67 @@ export function keccak256(/** @type {Uint8Array} */ data) {
 export const selector = (/** @type {string} */ name) => "0x" + (BigInt("0x" + keccak256(Buffer.from(name)).toString("hex")) & ((1n << 250n) - 1n)).toString(16).padStart(64, "0");
 
 // ---------------------------------------------------------------------------------------------
-// A small XML well-formedness check for the SVG (no dependencies)
+// The SVG: parsed with @xmldom/xmldom, then the parsed tree is checked
 // ---------------------------------------------------------------------------------------------
 
-/** The grammar of an XML declaration (XML 1.0, production 23). */
-const XML_DECL = /^<\?xml[ \t\r\n]+version[ \t\r\n]*=[ \t\r\n]*(["'])1\.[0-9]+\1([ \t\r\n]+encoding[ \t\r\n]*=[ \t\r\n]*(["'])[A-Za-z][A-Za-z0-9._-]*\3)?([ \t\r\n]+standalone[ \t\r\n]*=[ \t\r\n]*(["'])(yes|no)\5)?[ \t\r\n]*\?>$/;
-
-/** A DOCTYPE declaration (XML 1.0, production 28): a name, an optional external id, an optional internal subset. */
-const DOCTYPE = /<!DOCTYPE[ \t\r\n]+[A-Za-z_:][A-Za-z0-9_:.-]*(?:[ \t\r\n]+(?:SYSTEM[ \t\r\n]+(?:"[^"]*"|'[^']*')|PUBLIC[ \t\r\n]+(?:"[^"]*"|'[^']*')[ \t\r\n]+(?:"[^"]*"|'[^']*')))?[ \t\r\n]*(?:\[([^\]]*)\][ \t\r\n]*)?>/y;
-
-/** Whether a code point is an XML 1.0 Char. */
-const xmlChar = (/** @type {number} */ cp) => cp === 9 || cp === 10 || cp === 13 || (cp >= 0x20 && cp <= 0xd7ff) || (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff);
-
-/** Expands the predefined entities and character references of text that passed the checks of `parseXml`. */
-const expandRefs = (/** @type {string} */ t) =>
-  t.replace(/&(amp|lt|gt|quot|apos|#x[0-9a-fA-F]+|#[0-9]+);/g, (_, ref) => {
-    if (ref[0] !== "#") return { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" }[/** @type {"amp"} */ (ref)];
-    return String.fromCodePoint(ref[1] === "x" ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10));
-  });
-
-class XmlError extends Error {
-  /** @param {string} message @param {number} at */
-  constructor(message, at) {
-    super(message);
-    this.at = at;
-  }
-}
-
-/** "line L, column C" of an offset. */
-function lineCol(/** @type {string} */ s, /** @type {number} */ at) {
-  const before = s.slice(0, at);
-  const line = before.split("\n").length;
-  return `line ${line}, column ${at - before.lastIndexOf("\n")}`;
-}
+class XmlError extends Error {}
 
 /**
- * Parses XML for well-formedness (one root; matching, properly nested tags; quoted unique attributes;
- * known entities and valid character references; bound namespace prefixes) and collects what the
- * reference checks need, with attribute values and style text expanded as a browser reads them. A DOCTYPE
- * is accepted (a browser does not fetch its DTD) and its internal subset reported; processing
- * instructions other than the XML declaration are rejected. Throws an `XmlError`.
+ * Parses an SVG with @xmldom/xmldom, treating every warning and error it reports as a failure, and
+ * collects what the reference checks need from the tree. Literal characters and character
+ * references are checked against XML's Char production first, which the parser does not do.
+ * Throws an `XmlError` whose message ends with the position the parser gives.
  * @param {string} s
  */
 export function parseXml(s) {
-  /** @type {{el: string, name: string, value: string, at: number}[]} */
-  const attrs = [];
-  /** @type {{text: string, at: number}[]} */
-  const styles = [];
-  /** @type {string[]} */
-  const elements = [];
-  /** @type {{name: string, local: string, scope: Map<string, string>, style?: {text: string, at: number}}[]} */
-  const stack = [];
-  /** @type {{local: string, ns: string | undefined} | null} */
-  let root = null;
-  let rootClosed = false;
-  let doctype = false;
-  let internalSubset = false;
-  const n = s.length;
-  const badChar = s.search(/[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u);
-  if (badChar >= 0) throw new XmlError(`U+${s.charCodeAt(badChar).toString(16).toUpperCase().padStart(4, "0")} is not an XML character`, badChar);
-  let i = s.charCodeAt(0) === 0xfeff ? 1 : 0;
-  const NAME = /[A-Za-z_:À-￿][A-Za-z0-9_:.\-·À-￿]*/y;
-  const name = (/** @type {number} */ at, /** @type {string} */ what) => {
-    NAME.lastIndex = at;
-    const m = NAME.exec(s);
-    if (!m) throw new XmlError(`invalid ${what} name`, at);
-    return m[0];
-  };
-  const ws = (/** @type {number} */ at) => {
-    while (at < n && " \t\r\n".includes(s[at])) at++;
-    return at;
-  };
-  const text = (/** @type {string} */ t, /** @type {number} */ at) => {
-    const ent = t.search(/&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)/);
-    if (ent >= 0) throw new XmlError("undefined entity or a bare &", at + ent);
-    for (const m of t.matchAll(/&#(x[0-9a-fA-F]+|[0-9]+);/g)) {
-      const cp = m[1][0] === "x" ? parseInt(m[1].slice(1), 16) : parseInt(m[1], 10);
-      if (!xmlChar(cp)) throw new XmlError(`character reference ${m[0]} is not an XML character`, at + (m.index ?? 0));
-    }
-    const ctl = t.search(/[\x00-\x08\x0B\x0C\x0E-\x1F]/);
-    if (ctl >= 0) throw new XmlError("control character", at + ctl);
-  };
-  while (i < n) {
-    if (s[i] !== "<") {
-      let j = s.indexOf("<", i);
-      if (j < 0) j = n;
-      const t = s.slice(i, j);
-      if (!stack.length) {
-        if (/[^ \t\r\n]/.test(t)) throw new XmlError("text outside the root element", i);
-      } else {
-        text(t, i);
-        if (t.includes("]]>")) throw new XmlError('"]]>" in text', i + t.indexOf("]]>"));
-        {
-          const st = stack[stack.length - 1].style;
-          if (st) st.text += expandRefs(t);
-        }
-      }
-      i = j;
-    } else if (s.startsWith("<!--", i)) {
-      const j = s.indexOf("-->", i + 4);
-      if (j < 0) throw new XmlError("unterminated comment", i);
-      if (s.slice(i + 4, j).includes("--")) throw new XmlError('"--" inside a comment', i);
-      i = j + 3;
-    } else if (s.startsWith("<![CDATA[", i)) {
-      const j = s.indexOf("]]>", i);
-      if (!stack.length) throw new XmlError("CDATA outside the root element", i);
-      if (j < 0) throw new XmlError("unterminated CDATA section", i);
-      {
-        const st = stack[stack.length - 1].style;
-        if (st) st.text += s.slice(i + 9, j);
-      }
-      i = j + 3;
-    } else if (s.startsWith("<?", i)) {
-      const j = s.indexOf("?>", i);
-      if (j < 0) throw new XmlError("unterminated processing instruction", i);
-      if (!/^<\?xml[ \t\r\n]/.test(s.slice(i, i + 7)) || i > (s.charCodeAt(0) === 0xfeff ? 1 : 0)) throw new XmlError("processing instruction (only a leading XML declaration is allowed)", i);
-      if (!XML_DECL.test(s.slice(i, j + 2))) throw new XmlError('malformed XML declaration (expected <?xml version="1.0" [encoding="..."] [standalone="yes|no"]?>)', i);
-      i = j + 2;
-    } else if (s.startsWith("<!DOCTYPE", i)) {
-      if (root || doctype) throw new XmlError("DOCTYPE after the root element or a second DOCTYPE", i);
-      DOCTYPE.lastIndex = i;
-      const m = DOCTYPE.exec(s);
-      if (!m) throw new XmlError('malformed DOCTYPE (expected <!DOCTYPE name [SYSTEM "id" | PUBLIC "id" "id"] [internal subset]>)', i);
-      doctype = true;
-      // An internal subset can declare entities: it is skipped, and reported as its own rule.
-      if (m[1] !== undefined) internalSubset = true;
-      i += m[0].length;
-    } else if (s.startsWith("<!", i)) {
-      throw new XmlError("markup declaration outside a DOCTYPE", i);
-    } else if (s.startsWith("</", i)) {
-      const nm = name(i + 2, "closing tag");
-      const top = stack.pop();
-      if (!top) throw new XmlError(`closing tag </${nm}> with nothing open`, i);
-      if (top.name !== nm) throw new XmlError(`closing tag </${nm}> does not match <${top.name}>`, i);
-      const e = ws(i + 2 + nm.length);
-      if (s[e] !== ">") throw new XmlError("closing tag is not closed with >", e);
-      if (!stack.length) rootClosed = true;
-      i = e + 1;
-    } else {
-      if (rootClosed) throw new XmlError("more than one root element", i);
-      const nm = name(i + 1, "tag");
-      let k = i + 1 + nm.length;
-      /** @type {{name: string, value: string, at: number}[]} */
-      const own = [];
-      let selfClosed = false;
-      for (;;) {
-        const w = ws(k);
-        if (s[w] === ">") {
-          k = w + 1;
-          break;
-        }
-        if (s.startsWith("/>", w)) {
-          selfClosed = true;
-          k = w + 2;
-          break;
-        }
-        if (w >= n) throw new XmlError(`unterminated <${nm}> tag`, i);
-        if (w === k) throw new XmlError("expected whitespace before the attribute", w);
-        const an = name(w, "attribute");
-        let e = ws(w + an.length);
-        if (s[e] !== "=") throw new XmlError(`attribute ${an} has no =value`, e);
-        e = ws(e + 1);
-        const q = s[e];
-        if (q !== '"' && q !== "'") throw new XmlError(`attribute ${an} is not quoted`, e);
-        const close = s.indexOf(q, e + 1);
-        if (close < 0) throw new XmlError(`unterminated value of attribute ${an}`, e);
-        const value = s.slice(e + 1, close);
-        if (value.includes("<")) throw new XmlError(`"<" in the value of attribute ${an}`, e + 1 + value.indexOf("<"));
-        text(value, e + 1);
-        if (own.some((a) => a.name === an)) throw new XmlError(`duplicate attribute ${an}`, w);
-        own.push({ name: an, value: expandRefs(value), at: w });
-        k = close + 1;
-      }
-      const scope = new Map(stack.length ? stack[stack.length - 1].scope : [["xml", "http://www.w3.org/XML/1998/namespace"]]);
-      for (const a of own) {
-        if (a.name === "xmlns") scope.set("", a.value);
-        else if (a.name.startsWith("xmlns:")) scope.set(a.name.slice(6), a.value);
-      }
-      const prefix = (/** @type {string} */ q) => (q.includes(":") ? q.slice(0, q.indexOf(":")) : "");
-      if (prefix(nm) && !scope.has(prefix(nm))) throw new XmlError(`unbound namespace prefix ${prefix(nm)}: in <${nm}>`, i);
-      /** @type {Set<string>} */
-      const expanded = new Set();
-      for (const a of own) {
-        if (a.name !== "xmlns" && !a.name.startsWith("xmlns:")) {
-          const key = `${prefix(a.name) ? scope.get(prefix(a.name)) : ""}|${a.name.slice(a.name.indexOf(":") + 1)}`;
-          if (expanded.has(key)) throw new XmlError(`attribute ${a.name} repeats another attribute with the same namespace and local name`, a.at);
-          expanded.add(key);
-        }
-        if (a.name !== "xmlns" && !a.name.startsWith("xmlns:") && prefix(a.name) && !scope.has(prefix(a.name))) {
-          throw new XmlError(`unbound namespace prefix ${prefix(a.name)}: in attribute ${a.name} (declare xmlns:${prefix(a.name)})`, a.at);
-        }
-        attrs.push({ el: nm, ...a });
-      }
-      elements.push(nm);
-      if (!root) root = { local: nm.slice(nm.indexOf(":") + 1), ns: scope.get(prefix(nm)) };
-      if (selfClosed) {
-        if (!stack.length) rootClosed = true;
-      } else {
-        // The text of a style element is all its text and CDATA chunks together, as the browser reads it.
-        const local = nm.slice(nm.indexOf(":") + 1);
-        const style = local === "style" ? { text: "", at: i } : undefined;
-        if (style) styles.push(style);
-        stack.push({ name: nm, local, scope, style });
-      }
-      i = k;
+  const bad = s.search(/[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u);
+  const at = (/** @type {number} */ i) => `line ${s.slice(0, i).split("\n").length}, column ${i - s.slice(0, i).lastIndexOf("\n")}`;
+  if (bad >= 0) throw new XmlError(`U+${s.charCodeAt(bad).toString(16).toUpperCase().padStart(4, "0")} is not an XML character at ${at(bad)}`);
+  for (const m of s.matchAll(/&#(x[0-9a-fA-F]+|[0-9]+);/g)) {
+    const cp = m[1][0] === "x" ? parseInt(m[1].slice(1), 16) : parseInt(m[1], 10);
+    if (!(cp === 9 || cp === 10 || cp === 13 || (cp >= 0x20 && cp <= 0xd7ff) || (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff))) {
+      throw new XmlError(`character reference ${m[0]} is not an XML character at ${at(m.index ?? 0)}`);
     }
   }
-  if (stack.length) throw new XmlError(`<${stack[stack.length - 1].name}> is never closed`, n);
-  if (!root) throw new XmlError("no root element", 0);
-  return { root, attrs, styles, elements, internalSubset };
+  /** @type {string | null} */
+  let problem = null;
+  const note = (/** @type {string} */ msg) => {
+    problem ??= msg.replace(/^\[xmldom [a-zA-Z]+\]\s*/, "").replace(/\n@#\[line:(\d+),col:(\d+)\]/, " at line $1, column $2").replace(/\s+/g, " ").trim();
+  };
+  /** @type {import("@xmldom/xmldom").Document | undefined} */
+  let doc;
+  try {
+    doc = new DOMParser({ onError: (level, msg) => level !== "fatalError" && note(msg) }).parseFromString(s, "text/xml");
+  } catch (e) {
+    const err = /** @type {any} */ (e);
+    note(`${err.message}${err.locator?.lineNumber ? ` at line ${err.locator.lineNumber}, column ${err.locator.columnNumber}` : ""}`);
+  }
+  if (problem !== null || !doc || !doc.documentElement) throw new XmlError(problem ?? "no root element");
+  /** @type {{el: string, name: string, value: string, line: number}[]} */
+  const attrs = [];
+  /** @type {{text: string, line: number}[]} */
+  const styles = [];
+  /** @type {{name: string, line: number}[]} */
+  const elements = [];
+  /** @param {any} node */
+  const walk = (node) => {
+    if (node.nodeType === 7 && node.target !== "xml") throw new XmlError(`processing instruction <?${node.target}?> (not allowed) at line ${node.lineNumber}`);
+    if (node.nodeType !== 1) return;
+    elements.push({ name: node.nodeName, line: node.lineNumber });
+    for (let i = 0; i < node.attributes.length; i++) {
+      const a = node.attributes[i];
+      attrs.push({ el: node.nodeName, name: a.name, value: a.value, line: node.lineNumber });
+    }
+    if (node.localName === "style") styles.push({ text: node.textContent ?? "", line: node.lineNumber });
+    for (let c = node.firstChild; c; c = c.nextSibling) walk(c);
+  };
+  for (let c = doc.firstChild; c; c = c.nextSibling) walk(c);
+  const root = doc.documentElement;
+  return { root: { local: root.localName, ns: root.namespaceURI ?? undefined }, attrs, styles, elements, entities: /<!ENTITY/.test(s) };
 }
 
 /**
- * Problems with external references and scripts in an SVG, as `[message, offset]`.
+ * Problems with external references and scripts in an SVG, as `[message, line]`.
  * @param {ReturnType<typeof parseXml>} xml
  */
 function svgReferenceProblems(xml) {
@@ -382,20 +232,20 @@ function svgReferenceProblems(xml) {
   /** CSS escapes (\72 = r, \i = i) are decoded before the tokens are read. */
   const unescape = (/** @type {string} */ css) =>
     css.replace(/\\(?:([0-9a-fA-F]{1,6})[ \t\r\n\f]?|([^\n\r\f0-9a-fA-F]))/g, (_, hex, ch) => (hex ? String.fromCodePoint(Math.min(parseInt(hex, 16) || 0xfffd, 0x10ffff)) : ch));
-  const urls = (/** @type {string} */ raw, /** @type {number} */ at, /** @type {string} */ where) => {
+  const urls = (/** @type {string} */ raw, /** @type {number} */ line, /** @type {string} */ where) => {
     const css = unescape(raw);
-    for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, at]);
-    if (/@import/i.test(css)) out.push([`${where} has @import`, at]);
+    for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, line]);
+    if (/@import/i.test(css)) out.push([`${where} has @import`, line]);
   };
-  for (const el of xml.elements) if (el.slice(el.indexOf(":") + 1).toLowerCase() === "script") out.push(["<script> element", 0]);
+  for (const el of xml.elements) if (el.name.slice(el.name.indexOf(":") + 1).toLowerCase() === "script") out.push(["<script> element", el.line]);
   for (const a of xml.attrs) {
     const local = a.name.slice(a.name.indexOf(":") + 1).toLowerCase();
     if (a.name === "xmlns" || a.name.startsWith("xmlns:")) continue; // namespace names are identifiers, not links
-    if (/^on/.test(local)) out.push([`event handler attribute ${a.name} on <${a.el}>`, a.at]);
-    if ((local === "href" || local === "src") && external(a.value)) out.push([`${a.name}="${a.value.slice(0, 60)}" on <${a.el}> points outside the document and data: URIs`, a.at]);
-    urls(a.value, a.at, `attribute ${a.name} on <${a.el}>`);
+    if (/^on/.test(local)) out.push([`event handler attribute ${a.name} on <${a.el}>`, a.line]);
+    if ((local === "href" || local === "src") && external(a.value)) out.push([`${a.name}="${a.value.slice(0, 60)}" on <${a.el}> points outside the document and data: URIs`, a.line]);
+    urls(a.value, a.line, `attribute ${a.name} on <${a.el}>`);
   }
-  for (const st of xml.styles) urls(st.text, st.at, "a <style> element");
+  for (const st of xml.styles) urls(st.text, st.line, "a <style> element");
   return out;
 }
 
@@ -581,18 +431,18 @@ function checkSvg(r, layer, svg, bytes) {
     xml = parseXml(svg);
   } catch (e) {
     if (!(e instanceof XmlError)) throw e;
-    r.fail(`${layer}.xml`, `not well-formed XML: ${e.message} at ${lineCol(svg, e.at)}`, "OpenSea media-and-traits");
+    r.fail(`${layer}.xml`, `not well-formed XML: ${e.message}`, "OpenSea media-and-traits");
     return;
   }
   r.pass(`${layer}.xml`, "well-formed XML", "OpenSea media-and-traits");
   r.check(xml.root.local === "svg" && xml.root.ns === SVG_NS, `${layer}.svg_root`, `the root is <svg xmlns="${SVG_NS}">`, `the root must be <svg xmlns="${SVG_NS}">: browsers do not draw an <img> SVG without the namespace (found <${xml.root.local}> in ${JSON.stringify(xml.root.ns ?? "no namespace")})`, "OpenSea media-and-traits");
-  if (xml.internalSubset) r.fail(`${layer}.no_entities`, "the DOCTYPE has an internal subset, which can declare entities: this validator does not accept it (a rule of this validator, not of XML)", "validator");
+  if (xml.entities) r.fail(`${layer}.no_entities`, "the SVG declares an <!ENTITY>: this validator does not accept entity declarations (a rule of this validator, not of XML)", "validator");
   const problems = svgReferenceProblems(xml);
   const scriptLike = problems.filter(([m]) => /^(<script>|event handler)/.test(m));
   const refs = problems.filter((p) => !scriptLike.includes(p));
-  if (scriptLike.length) r.fail(`${layer}.no_script`, `${scriptLike[0][0]}${scriptLike[0][1] ? ` at ${lineCol(svg, scriptLike[0][1])}` : ""}: an SVG for NFT metadata carries no scripts, and a <script> ends the page's art block`, src);
+  if (scriptLike.length) r.fail(`${layer}.no_script`, `${scriptLike[0][0]} at line ${scriptLike[0][1]}: an SVG for NFT metadata carries no scripts, and a <script> ends the page's art block`, src);
   else r.pass(`${layer}.no_script`, "no <script> or event handler", src);
-  if (refs.length) r.fail(`${layer}.self_contained`, `${refs[0][0]} at ${lineCol(svg, refs[0][1])}${refs.length > 1 ? ` (and ${refs.length - 1} more)` : ""}`, "OpenSea media-and-traits");
+  if (refs.length) r.fail(`${layer}.self_contained`, `${refs[0][0]} at line ${refs[0][1]}${refs.length > 1 ? ` (and ${refs.length - 1} more)` : ""}`, "OpenSea media-and-traits");
   else r.pass(`${layer}.self_contained`, "no external references (only #fragments and data: URIs)", "OpenSea media-and-traits");
   const art = checkArt(Buffer.from(bytes));
   r.check(art.ok, `${layer}.no_script_end_tag`, 'no "</script" in any letter case', art.lines.find((l) => l.startsWith("FAIL"))?.replace(/^FAIL /, "") ?? 'contains "</script"', src);
@@ -844,9 +694,15 @@ function finish(r, opts) {
 // Fetching through RPC
 // ---------------------------------------------------------------------------------------------
 
+/** Fixed names of the starknet_call error codes (JSON-RPC spec): the node's own wording is never printed. */
+const RPC_ERRORS = /** @type {Record<number, string>} */ ({ 20: "Contract not found", 21: "Invalid message selector", 24: "Block not found", 28: "Class hash not found", 40: "Contract error", [-32602]: "Invalid params", [-32603]: "Internal error" });
+/** Revert reasons that are printed: the nodes' and the runtime's own fixed strings. Any other string could carry the URL. */
+const SAFE_REASONS = new Set(["Out of gas", "ENTRYPOINT_NOT_FOUND", "ENTRYPOINT_FAILED", "CONTRACT_NOT_FOUND", "CLASS_HASH_NOT_FOUND", "Input too long for arguments", "Failed to deserialize param #1", "Failed to deserialize param #2"]);
+
 /**
  * Calls `token_uri` (then `tokenURI`, if the contract has no such entry point) with starknet_call.
- * Errors never contain the RPC URL, which may carry an API key.
+ * Errors never contain the RPC URL or any of the RPC error's payload (which may echo the URL, which
+ * may carry an API key): only its code, a fixed name for it, and known revert reasons.
  * @param {{rpc: string, contract: string, token: string, fetchImpl?: typeof fetch}} p
  * @returns {Promise<{uri: string, felts: number, responseBytes: number}>}
  */
@@ -854,24 +710,6 @@ export async function fetchTokenUri({ rpc, contract, token, fetchImpl = fetch })
   const id = BigInt(token);
   if (id < 0n || id >= 1n << 256n) throw new Error("--token is not a u256");
   const calldata = ["0x" + (id & ((1n << 128n) - 1n)).toString(16), "0x" + (id >> 128n).toString(16)];
-  const hostOf = (/** @type {string} */ u) => {
-    try {
-      return new URL(u).host;
-    } catch {
-      return u;
-    }
-  };
-  const clean = (/** @type {string} */ s) => {
-    // Long hex strings are felts, which can encode the URL (even split across felts): the decoded
-    // reasons are printed instead, redacted below.
-    let out = s.replace(/0x[0-9a-fA-F]{8,}/g, "0x\u2026").split(rpc).join("<rpc>");
-    try {
-      out = out.split(new URL(rpc).host).join("<rpc host>");
-    } catch {
-      // not a URL: it is rejected by fetch below
-    }
-    return out;
-  };
   let last = "";
   let first = "";
   for (const name of ["token_uri", "tokenURI"]) {
@@ -896,13 +734,14 @@ export async function fetchTokenUri({ rpc, contract, token, fetchImpl = fetch })
       throw new Error("the RPC response is not JSON");
     }
     if (doc.error) {
-      const raw = `${doc.error.message ?? "error"} (code ${doc.error.code}) ${doc.error.data ? JSON.stringify(doc.error.data) : ""}`.trim();
-      let reasons = shortStrings(doc.error);
-      // A URL split across felts shows only in the reasons joined: then print none of them.
-      if (reasons.join("").includes(rpc) || reasons.join("").includes(hostOf(rpc))) reasons = ["<redacted: it holds the RPC URL>"];
-      // Redact after assembling the whole message: a decoded revert reason can hold the URL too.
-      last = clean(`${name}: starknet_call failed: ${raw}${reasons.length ? `\nrevert reason: ${reasons.join(", ")}` : ""}`);
-      if (name === "token_uri" && (doc.error.code === 21 || reasons.includes("ENTRYPOINT_NOT_FOUND") || /ENTRYPOINT_NOT_FOUND/.test(raw))) {
+      // Nothing of the error's payload is printed (its message and data can echo the URL, in any
+      // encoding): only its code, a fixed name for it, and the revert reasons that are known.
+      const code = Number(doc.error.code);
+      const reasons = shortStrings(doc.error);
+      const known = [...new Set(reasons.filter((x) => SAFE_REASONS.has(x) || /^TS: [a-z0-9 _:-]{1,40}$/.test(x)))];
+      const hidden = new Set(reasons).size - known.length;
+      last = `${name}: starknet_call failed: ${RPC_ERRORS[code] ?? "error"} (code ${Number.isFinite(code) ? code : "unknown"})${known.length ? `; revert reason: ${known.join(", ")}` : ""}${hidden > 0 ? `; ${hidden} other revert string(s) not shown` : ""}`;
+      if (name === "token_uri" && (code === 21 || reasons.includes("ENTRYPOINT_NOT_FOUND"))) {
         first = last;
         continue;
       }
