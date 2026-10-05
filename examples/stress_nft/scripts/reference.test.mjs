@@ -45,6 +45,16 @@ test('a ByteArray decodes from its felts, and the response size is the size of t
   assert.equal(rpcResponseBytes(uri), JSON.stringify({ jsonrpc: '2.0', id: 1, result: felts }).length);
 });
 
+test('a malformed ByteArray is rejected, not decoded to something', () => {
+  const ok = ['0x1', '0x' + 'ab'.repeat(31), '0x6869', '0x2'];
+  assert.equal(decodeByteArray(ok).length, 33);
+  const bad = (i, v) => ok.map((f, j) => (j === i ? v : f));
+  assert.throws(() => decodeByteArray(bad(1, '0x' + 'ab'.repeat(31) + '1')), /does not fit/); // one hex digit too many
+  assert.throws(() => decodeByteArray(bad(2, '0x686900')), /does not fit/); // pending word wider than its length
+  assert.throws(() => decodeByteArray(bad(3, '0x1f')), /pending length/);
+  assert.throws(() => decodeByteArray(['0x1', '0x1']), /felts for/);
+});
+
 test('the largest response stays under the 10 MiB response cap of jsonrpsee', () => {
   const bars = defaultRepetitions();
   for (const t of [TOKEN_COUNT - 1, TOKEN_COUNT]) assert.ok(rpcResponseBytes(tokenUri(t, bars[t - 1])) < 10 * 1024 * 1024);

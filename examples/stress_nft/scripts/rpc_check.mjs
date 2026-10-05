@@ -350,7 +350,7 @@ async function main() {
   }
   for (const [msg, ts] of Object.entries(errors)) console.log(`- tokens ${ts.join(',')} - ${msg}`);
 
-  writeFileSync(opt.out, JSON.stringify({ address: opt.address, class_hash: DEPLOYMENT.class_hash, date: new Date().toISOString(), bars, providers: results }, null, 2) + '\n');
+  writeFileSync(opt.out, JSON.stringify({ address: opt.address, class_hash: opt.address === DEPLOYMENT.address ? DEPLOYMENT.class_hash : null, date: new Date().toISOString(), bars, providers: results }, null, 2) + '\n');
   console.log(`\nresults written to ${opt.out}`);
 }
 

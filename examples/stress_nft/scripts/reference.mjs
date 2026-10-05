@@ -76,13 +76,22 @@ export const tokenUri = (tokenId, bars) => spliceTokenUri(tokenParts(tokenId, ba
 
 export { consumerPieces, sha256 };
 
-/** The Serde felts of a returned ByteArray (as hex strings or numbers) as the string it holds. */
+/**
+ * The string held by the Serde felts of a returned ByteArray (hex strings or numbers). Strict, like
+ * Cairo's own decoding: every full word is below 256^31, the pending length is 0 to 30 and the
+ * pending word below 256^length, so a malformed array throws instead of decoding to something.
+ */
 export function decodeByteArray(felts) {
   const n = Number(BigInt(felts[0]));
   if (felts.length !== n + 3) throw new Error(`ByteArray: ${felts.length} felts for ${n} words`);
   const pendingLen = Number(BigInt(felts[n + 2]));
+  if (!(pendingLen >= 0 && pendingLen <= 30)) throw new Error(`ByteArray: pending length ${pendingLen}`);
   const out = Buffer.alloc(n * 31 + pendingLen);
-  const put = (felt, len, at) => out.write(BigInt(felt).toString(16).padStart(len * 2, '0'), at, 'hex');
+  const put = (felt, len, at) => {
+    const v = BigInt(felt);
+    if (v < 0n || v >= 1n << BigInt(8 * len)) throw new Error(`ByteArray: a word does not fit ${len} bytes`);
+    out.write(v.toString(16).padStart(len * 2, '0'), at, 'hex');
+  };
   for (let i = 0; i < n; i++) put(felts[1 + i], 31, i * 31);
   put(felts[n + 1], pendingLen, n * 31);
   return out.toString('latin1');
