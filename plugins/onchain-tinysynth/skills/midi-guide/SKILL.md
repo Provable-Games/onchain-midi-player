@@ -98,33 +98,23 @@ A composer whose contract writes the scores onchain implements the sound provide
 
 ```cairo
 use onchain_tinysynth::interface::ISoundProvider;
-use onchain_tinysynth::types::{SynthSettings, TokenSound};
+use onchain_tinysynth::types::TokenSound;
 
-// In the composer's contract: one internal function builds the sound, so the three functions agree.
+// In the composer's contract: `get_sound` is the whole interface.
 #[abi(embed_v0)]
 impl SoundProviderImpl of ISoundProvider<ContractState> {
     fn get_sound(self: @ContractState, token_id: u256) -> TokenSound {
-        sound_of(self, token_id)
+        let midi = compose(self, token_id);
+        let settings = instruments_for(@midi);
+        TokenSound { midi, settings }
     }
-    fn get_midi(self: @ContractState, token_id: u256) -> ByteArray {
-        sound_of(self, token_id).midi
-    }
-    fn get_settings(self: @ContractState, token_id: u256) -> SynthSettings {
-        sound_of(self, token_id).settings
-    }
-}
-
-fn sound_of(self: @ContractState, token_id: u256) -> TokenSound {
-    let midi = compose(self, token_id);
-    let settings = instruments_for(@midi);
-    TokenSound { midi, settings }
 }
 ```
 
-NFTs call `get_sound`: one call that reads the token's state once. `get_midi(token_id) -> ByteArray` and `get_settings(token_id) -> SynthSettings` serve tools and MIDI-only consumers, and must return the same bytes and value as the two fields of `get_sound(token_id)`. A composer that already has `get_midi` and `get_settings` only needs to add `get_sound`. The provider contract, from the README's [Sound provider interface](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-provider-interface), which has the details:
+NFTs call `get_sound`: one call that reads the token's state once. It is the interface's only function: interfaces for the MIDI alone or the settings alone belong to your own project, and a contract that already has them (`get_midi`, `get_settings`) adds `get_sound` beside them. If it exposes the MIDI or the settings through its own interfaces, they should equal `get_sound(token_id).midi` and `.settings`; build all of them from one internal function. The provider contract, from the README's [Sound provider interface](https://github.com/Provable-Games/onchain-tinysynth/blob/main/README.md#sound-provider-interface), which has the details:
 
 - **Token IDs as minted:** accept the whole `u256` the NFT minted, decode only the bits you use, and ignore the rest (Beasts' newer IDs are 180 bits).
-- **A raw Standard MIDI File** (not base64) that passes `check-midi`. In your CI, check the scores the contract produces for a spread of tokens, read with `get_midi` or written out by snforge tests.
+- **A raw Standard MIDI File** (not base64) that passes `check-midi`. In your CI, check the scores the contract produces for a spread of tokens, read from `get_sound(token_id).midi` or written out by snforge tests.
 - **Valid settings:** `settings` passes `settings::validate` in the class version the NFT calls. Return only the timbres and waves this token's score uses, and keep the bank as constants in code (see [sound-design](../sound-design/SKILL.md)).
 - **Deterministic:** the same token and live state always give the same bytes, whoever calls.
 - **View-only:** no storage writes.
