@@ -1,5 +1,8 @@
 //! Consumer-supplied sound settings for `midi_segment`.
 //!
+//! `TokenSound` (at the end) pairs a score with these settings: what a sound provider returns
+//! (`crate::interface::ISoundProvider`).
+//!
 //! `crate::settings::validate` checks only what the format or the engine requires: `quality`
 //! is 0 or 1, `voices` at least 1, the counts, slots, routes and wave indices, and that a filter is
 //! on an audio output with a cutoff and a Q above 0. Every other numeric field takes any value of
@@ -205,4 +208,15 @@ pub enum FilterKind {
     LowPass,
     HighPass,
     BandPass,
+}
+
+/// A token's sound: its score and the instruments the score plays, the two arguments of
+/// `midi_segment`.
+#[derive(Drop, Clone, Serde, PartialEq, Debug)]
+pub struct TokenSound {
+    /// The raw bytes of a Standard MIDI File that passes `checkMidi` (README, "MIDI contract").
+    pub midi: ByteArray,
+    /// The engine settings and the custom timbres and waves `midi` uses. Must pass
+    /// `crate::settings::validate`.
+    pub settings: SynthSettings,
 }

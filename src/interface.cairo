@@ -73,8 +73,11 @@
 //! The HTML parser ends the art element at the first `</script`, so the SVG must never contain
 //! `</script` in any letter case. The class never sees the SVG: the consumer checks this in its
 //! own tests (see "Art (SVG) requirements" in the README).
+//!
+//! This file also declares `ISoundProvider`, at the end: the interface a composer's contract
+//! implements to hand an NFT a token's MIDI and `SynthSettings`. The class does not implement it.
 
-use crate::types::SynthSettings;
+use crate::types::{SynthSettings, TokenSound};
 
 /// Onchain TinySynth class library.
 ///
@@ -206,4 +209,90 @@ pub trait IOnchainTinySynth<T> {
     /// License of fflate, from which the page's gunzip shim is derived, and the MIT License of
     /// game-components, whose base64 encoder (`game_components_encoding`) the class embeds.
     fn license(self: @T) -> ByteArray;
+}
+
+// ----------------------------------------------------------------------------------------------
+// Interfaces implemented by other contracts (sound providers). The TinySynth class does NOT
+// implement the interface below: it is a convention between composers and NFTs, declared here so
+// that both compile against the same `ISoundProvider` and `TokenSound`.
+// ----------------------------------------------------------------------------------------------
+
+/// What a composer's contract implements to hand an NFT the sound of a token, and what the NFT, or
+/// the renderer that builds its `token_uri`, calls. The TinySynth class does not implement it and
+/// never calls it. README: "Sound provider interface", which has the provider contract.
+///
+/// A Standard MIDI File can select an instrument (a program change, or a note on the percussion
+/// channel) but cannot define one. So the provider owns both the score, as a raw Standard MIDI
+/// File, and the instruments it plays, as a `SynthSettings`.
+///
+/// The three functions are views of one sound, tied by this rule:
+///
+/// ```text
+/// get_sound(id) == TokenSound { midi: get_midi(id), settings: get_settings(id) }
+/// ```
+///
+/// **An NFT calls `get_sound`**: one call that reads the token's state once, and whose reply goes
+/// straight to `midi_segment`:
+///
+/// ```text
+/// let sound = <the README's snippet>(provider, token_id)?;
+/// let segment = synth.midi_segment(sound.midi, sound.settings);
+/// ```
+///
+/// `get_midi` and `get_settings` serve tools and consumers that need only one half. A provider
+/// that already implements both, as the Beast composer's does, only needs to add `get_sound`.
+///
+/// A provider can implement all three with one internal function that builds the `TokenSound`,
+/// which keeps the rule true by construction. Sharing it also matters because a per-token subset
+/// of the settings depends on the programs the token's MIDI uses: `get_settings` has to work out
+/// the same score that `get_midi` returns.
+///
+/// # The provider contract
+///
+/// A contract implementing `ISoundProvider` must honour all of these:
+///
+/// - **Token IDs as minted.** Every function takes the NFT's token ID exactly as the NFT minted
+///   it, the whole `u256`. Decode only the bits you use and ignore the rest: a provider that
+///   rejects unused bits breaks when the NFT's ID layout grows (Beasts' newer IDs are 180 bits).
+/// - **A raw Standard MIDI File.** `midi` is the file's bytes (not base64, not a data URI), and it
+///   passes the page's MIDI check, `checkMidi` (`npm run check-midi`; README "MIDI contract"). The
+///   class embeds the bytes without parsing them, so a bad file does not revert: the page shows an
+///   error instead of playing.
+/// - **Valid settings.** `settings` passes `crate::settings::validate`, in the class version the
+///   NFT calls; otherwise `midi_segment` reverts.
+/// - **One sound.** `get_sound(id)` equals `TokenSound { midi: get_midi(id), settings:
+///   get_settings(id) }`, for every token, at every state.
+/// - **Deterministic.** The same token and the same live state always give the same bytes, for any
+///   caller. Derive the sound from the token and contract state, never from the caller or the
+///   transaction.
+/// - **View-only.** No storage writes, no events, no calls that change state.
+/// - **Reverts only for an unknown token.** Every token the NFT has minted gets a sound.
+///
+/// Recommended:
+///
+/// - **Return only what the token's MIDI uses:** the timbres of the programs and drum notes it
+///   plays, and the waves those timbres select. `SETTINGS` costs about 14.5M L2 gas per 1,000
+///   bytes through `midi_segment`: a Beast's subset is about 0.9 to 1.4 KB, a full chip bank about
+///   3.9 KB.
+/// - **Hold the preset bank as constants in the provider's code,** not in storage: a storage read
+///   costs about 24K L2 gas per felt.
+/// - **Keep sample tables short.** Every sample is 2 to 6 bytes of `SETTINGS`; a 32,767-step noise
+///   table adds about 2.1B L2 gas, more than many RPC nodes serve. `Waveform::WhiteNoise` needs no
+///   table.
+#[starknet::interface]
+pub trait ISoundProvider<T> {
+    /// The sound of `token_id`: its score and its instruments, in one call that reads the token's
+    /// state once. This is what an NFT calls. A view, deterministic for a given token and state.
+    /// Reverts only for an unknown token.
+    fn get_sound(self: @T, token_id: u256) -> TokenSound;
+
+    /// The score alone: the raw Standard MIDI File of `token_id`, the same bytes as
+    /// `get_sound(token_id).midi`. The signature matches the `get_midi(token_id) -> ByteArray` of
+    /// the Beast composer's provider (`midi_fun_contract`).
+    fn get_midi(self: @T, token_id: u256) -> ByteArray;
+
+    /// The instruments alone: the `SynthSettings` of `token_id`, the same value as
+    /// `get_sound(token_id).settings`. The signature matches the Beast composer's
+    /// `ISynthSettingsProvider::get_settings`.
+    fn get_settings(self: @T, token_id: u256) -> SynthSettings;
 }
