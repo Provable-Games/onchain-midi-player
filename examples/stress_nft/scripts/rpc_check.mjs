@@ -25,6 +25,7 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeByteArray, defaultRepetitions, rpcResponseBytes, tokenUri } from './reference.mjs';
+import { pageHtml, sha256 } from '../../../scripts/page.mjs';
 
 /**
  * Public Sepolia endpoints, checked live on 2026-10-05 (starknet_specVersion). Discontinued, so
@@ -122,6 +123,7 @@ export function redactor(urls) {
       add(url.username);
       add(url.password);
       for (const part of url.pathname.split('/')) if (part.length >= 3) add(part);
+      for (const pair of url.search.slice(1).split('&')) add(pair.slice(pair.indexOf('=') + 1)); // raw, as an error echoes it
       for (const [, v] of url.searchParams) add(v);
     } catch {
       /* not a URL: redacted whole */
@@ -141,6 +143,9 @@ export function withText(msg) {
 
 /** Whether `result` is an array of `0x` hex strings. */
 export const isFelts = (result) => Array.isArray(result) && result.every((f) => typeof f === 'string' && /^0x[0-9a-fA-F]+$/.test(f));
+
+/** The single felt of a successful call, as a bigint, or undefined if the call failed or returned anything else. */
+export const scalar = (r) => (r.ok && r.felts.length === 1 ? BigInt(r.felts[0]) : undefined);
 
 /** One starknet_call. Returns {ok, felts | error, bytes, ms}. `redact` strips provider URLs from errors. */
 async function call(url, redact, timeoutS, address, name, calldata) {
@@ -253,41 +258,46 @@ async function main() {
   const redact = redactor(Object.keys(providers).filter((n) => !(n in PUBLIC_ENDPOINTS) || providers[n] !== PUBLIC_ENDPOINTS[n]).map((n) => providers[n]));
   console.log(`providers: ${names.join(', ')}; tokens ${opt.tokens}; contract ${opt.address}`);
 
-  // The class the contract library-calls: the reference builds the page of this checkout, so it
-  // matches only while the contract pins a class with that page.
-  const known = new Set(
-    readdirSync(new URL('../../../deployments/', import.meta.url))
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => BigInt(JSON.parse(readFileSync(new URL(`../../../deployments/${f}`, import.meta.url), 'utf8')).class.class_hash)),
-  );
+  // The class the contract library-calls. The reference is the page of this checkout, so it matches
+  // only a contract that pins a class with that page: find the class's version in deployments/ and
+  // compare the page's SHA-256 with scripts/page_versions.json.
+  const versionOf = new Map();
+  for (const f of readdirSync(new URL('../../../deployments/', import.meta.url)).filter((f) => f.endsWith('.json'))) {
+    const c = JSON.parse(readFileSync(new URL(`../../../deployments/${f}`, import.meta.url), 'utf8')).class;
+    versionOf.set(BigInt(c.class_hash), c.version);
+  }
+  const pageSha = sha256(pageHtml());
+  const recorded = JSON.parse(readFileSync(new URL('../../../scripts/page_versions.json', import.meta.url), 'utf8'));
   for (const name of names) {
-    const r = await call(providers[name], redact, 30, opt.address, 'tinysynth_class_hash', []);
-    if (!r.ok) continue;
-    const pinned = BigInt(r.felts[0]);
-    if (!known.has(pinned)) {
-      console.log(`warning: the contract pins class 0x${pinned.toString(16)}, which is not a class in deployments/; the reference is the page of this checkout, so ok cells need the same page and DIFF may be a page mismatch`);
+    const pinned = scalar(await call(providers[name], redact, 30, opt.address, 'tinysynth_class_hash', []));
+    if (pinned === undefined) continue;
+    const version = versionOf.get(pinned);
+    if (version === undefined || recorded[version]?.page_sha256 !== pageSha) {
+      console.log(`warning: the contract pins class 0x${pinned.toString(16)}, ${version === undefined ? 'which is not a class in deployments/' : `version ${version}, whose page is not this checkout's`}: the reference is the page of this checkout, so DIFF may be a page mismatch, not a provider fault`);
     }
     break;
   }
 
-  // The number of bars per token, from the contract, through the first provider that answers.
+  // The number of bars per token, from the contract: each token from the first provider that
+  // answers for it. Tokens no provider answers for use repetitions.json.
   const bars = Object.fromEntries(tokens.map((t) => [t, defaultRepetitions()[t - 1]]));
-  let barsFrom = 'repetitions.json';
+  const live = {};
   for (const name of names) {
-    const got = {};
-    for (const t of tokens) {
-      const r = await call(providers[name], redact, 30, opt.address, 'repetitions', [`0x${t.toString(16)}`, '0x0']);
-      if (!r.ok) break;
-      got[t] = Number(BigInt(r.felts[0]));
+    for (const t of tokens.filter((t) => !(t in live))) {
+      const n = scalar(await call(providers[name], redact, 30, opt.address, 'repetitions', [`0x${t.toString(16)}`, '0x0']));
+      if (n === undefined) break;
+      live[t] = Number(n);
     }
-    if (Object.keys(got).length === tokens.length) {
-      const changed = tokens.filter((t) => got[t] !== bars[t]);
-      Object.assign(bars, got);
-      barsFrom = `the contract, through ${name}${changed.length ? `; differs from repetitions.json for tokens ${changed.join(',')}` : ''}`;
-      break;
-    }
+    if (Object.keys(live).length === tokens.length) break;
   }
-  console.log(`bars per token: from ${barsFrom}`);
+  Object.assign(bars, live);
+  const fallback = tokens.filter((t) => !(t in live));
+  const changed = tokens.filter((t) => t in live && live[t] !== defaultRepetitions()[t - 1]);
+  console.log(
+    `bars per token: ${fallback.length === tokens.length ? 'from repetitions.json' : 'from the contract'}` +
+      (fallback.length && fallback.length < tokens.length ? `, except tokens ${fallback.join(',')} (repetitions.json)` : '') +
+      (changed.length ? `; differs from repetitions.json for tokens ${changed.join(',')}` : ''),
+  );
   const reference = new Map();
   const expected = (t) => {
     if (!reference.has(t)) reference.set(t, tokenUri(t, bars[t]));

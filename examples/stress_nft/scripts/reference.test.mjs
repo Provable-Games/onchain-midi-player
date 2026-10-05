@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { checkMidi } from '../../../player/player.js';
 import { byteArrayFelts, decodeTokenUri } from '../../../scripts/page.mjs';
 import { TOKEN_COUNT, decodeByteArray, defaultRepetitions, rpcResponseBytes, stressMidi, tokenUri } from './reference.mjs';
-import { isFelts, label, redactor, selector, withText } from './rpc_check.mjs';
+import { isFelts, label, redactor, scalar, selector, withText } from './rpc_check.mjs';
 
 test('the table has one growing, positive count per token', () => {
   const bars = defaultRepetitions();
@@ -72,6 +72,16 @@ test('only an array of hex felts is a result', () => {
   assert.ok(isFelts(['0x0', '0xabc', '0X1F'.replace('X', 'x')]));
   assert.ok(!isFelts(['0x0', 'invalid API key SECRET']));
   assert.ok(!isFelts('0x0') && !isFelts([0]) && !isFelts(['0x']));
+});
+
+test('a scalar is exactly one felt of a successful call', () => {
+  assert.equal(scalar({ ok: true, felts: ['0x7'] }), 7n);
+  for (const r of [{ ok: true, felts: [] }, { ok: true, felts: ['0x1', '0x2'] }, { ok: false, error: 'x' }]) assert.equal(scalar(r), undefined);
+});
+
+test('an encoded query key is redacted as the provider echoes it', () => {
+  const redact = redactor(['https://rpc.example.com/?key=Ab%2FCd']);
+  for (const echo of ['Invalid API key Ab%2FCd', 'Invalid API key Ab/Cd']) assert.ok(!/Ab.{1,3}Cd/.test(redact(echo)), redact(echo));
 });
 
 test('revert reasons are shown as text', () => {
