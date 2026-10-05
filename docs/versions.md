@@ -15,6 +15,7 @@ The class is declared but never deployed, so block explorers cannot call `versio
 - The first row is the version this repository builds. Its hashes and length come from [`src/page_data.cairo`](../src/page_data.cairo) (`VERSION`, `ENGINE_SHA256`, `GZIP_SHA256`, `GZIP_LEN`), and `npm test` fails if the row disagrees with them.
 - The SHA-256 of the whole `PAGE` for each `version()` is in [`scripts/page_versions.json`](../scripts/page_versions.json).
 - The class hash covers the class's Cairo code as well as the page, so it is known only once a class is declared. A declared row never changes.
+- A release has a release tag. A row without one is a build for testing: do not store its class hash for production tokens.
 
 ## Deployments
 
@@ -28,6 +29,8 @@ Where the class and the example are declared or deployed. A consumer stores a cl
 | Sepolia | Example `BeastLikeNft` ([`examples/beast_consumer`](../examples/beast_consumer)), library-calling the class above | `0x7f290530571bdfd547b05125ff87ac54b5b395f580e41c64226e06f3a3b725c` | `0x066dd6aa3b669e66df4cf6fc74cf18a335a95268154292e44ea0c59227caea92` | [`d735793`](https://github.com/Provable-Games/onchain-midi-player/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) |
 
 - **The Sepolia classes** were declared before the project was renamed, as `OnchainTinySynth` in the package `onchain_tinysynth`.
-- **The `page.6` class** restarts the art only on ▶, not at every pass, and its page rejects settings counts above its older, lower caps.
+- **Each class validates settings with its own code,** in `src/settings.cairo` at its "Built from" commit. The current [Sound settings](sound-settings.md) describe the first row of [Versions](#versions). Test your settings against the class you will call.
+- **The `page.9` class** reverts filters (`'TS: filter unsupported'`), and bounds `volume` to 100.0, `ratio` to 64.0, `pitch_ratio` to 16.0, `sustain` to 100.0 and `key_scale` to ±8.0 (`'TS: … out of range'`).
+- **The `page.6` class** also reverts custom waves (`'TS: custom wave unsupported'`), range-checks `reverb`, `master_vol`, `voices` and every operator value, caps the counts lower, and caps the `SETTINGS` length (`'TS: settings too long'`). It restarts the art only on ▶, not at every pass.
 - **The inspection instance** is a deployment of the class (no storage, no constructor), so explorers and RPC can call `version()`, `script_sha256()` and `license()`. Consumers still `library_call` the class hash.
 - **Built from** is the commit to rebuild each class from. To run `npm run preview` and the agent skills' tools against a class, use the newest commit with the same `VERSION` (see [Agent skills](../README.md#agent-skills)).
