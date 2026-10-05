@@ -2,7 +2,7 @@
 // @ts-check
 // Writes the ABIs in abi/ from the release build's Sierra artifacts (target/release/):
 //
-//   - abi/OnchainTinySynth.json: the `abi` array of the class's contract_class.json, the class that
+//   - abi/TinySynth.json: the `abi` array of the class's contract_class.json, the class that
 //     is declared and that consumers library-call.
 //   - abi/ISoundProvider.json: the interface a composer's contract implements, with the types it
 //     uses. The crate declares it but no contract of the crate implements it, so it comes from the
@@ -35,7 +35,7 @@ function abiOf(name) {
 
 /** @returns {Array<[URL, string]>} each file of abi/ and its text */
 export function abiFiles() {
-  const player = abiOf("onchain_midi_player_OnchainTinySynth.contract_class.json");
+  const player = abiOf("onchain_midi_player_TinySynth.contract_class.json");
   const provider = abiOf("onchain_midi_player_tests_MockSoundProvider.test.contract_class.json")
     .filter((/** @type {{type: string}} */ entry) => entry.type !== "impl" && entry.type !== "event");
   if (!provider.some((/** @type {{type: string, name: string}} */ e) => e.type === "interface" && e.name === "onchain_midi_player::interface::ISoundProvider")) {
@@ -43,7 +43,7 @@ export function abiFiles() {
   }
   const text = (/** @type {unknown} */ abi) => JSON.stringify(abi, null, 2) + "\n";
   return [
-    [new URL("OnchainTinySynth.json", ABI_DIR), text(player)],
+    [new URL("TinySynth.json", ABI_DIR), text(player)],
     [new URL("ISoundProvider.json", ABI_DIR), text(provider)],
   ];
 }

@@ -67,7 +67,7 @@ All base64 in the class goes through `onchain_midi_player::base64::bytes_base64_
 
 [`abi/`](../abi) holds the ABIs integrators load into starknet.js, starknet.py or another client. [`scripts/gen_abi.mjs`](../scripts/gen_abi.mjs) (`npm run gen:abi`, or `npm run check:abi` to verify) writes them from the release build's artifacts in `target/release/`:
 
-- `abi/OnchainTinySynth.json`: the `abi` array of the class's `contract_class.json`.
+- `abi/TinySynth.json`: the `abi` array of the class's `contract_class.json`.
 - `abi/ISoundProvider.json`: the provider interface and the types it uses. No contract of the crate implements it, so it comes from the test crate's `MockSoundProvider` ([`tests/test_provider.cairo`](../tests/test_provider.cairo)), less the mock's own `impl` and `event` entries.
 
 ## Player JavaScript
@@ -83,12 +83,12 @@ Shared fixtures keep Cairo and JavaScript byte-for-byte identical: [`scripts/set
 
 ## Class size
 
-The class compiled with Scarb 2.20.1, at `0.1.0`, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info):
+The class compiled with Scarb 2.20.1, at `0.2.0`, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info):
 
 | | The class | Limit |
 | --- | --- | --- |
 | Sierra program | 19,228 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 986,763 bytes (24% of the limit) | 4,089,446 bytes |
+| Contract class as declared (Sierra, entry points, ABI) | 986,035 bytes (24% of the limit) | 4,089,446 bytes |
 | CASM bytecode | 29,959 felts (37% of the limit) | 81,920 felts |
 
 The base64 encoder accounts for 4,921 Sierra felts, 288 KB and 11,148 CASM felts. Measured from `contract_class.json` without debug info, and the `bytecode` of `compiled_contract_class.json`.

@@ -24,17 +24,17 @@ onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-pl
 [[target.starknet-contract]]
 sierra = true
 # Builds the class from the dependency, so your tests can declare it (never deploy it).
-build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
+build-external-contracts = ["onchain_midi_player::contract::TinySynth"]
 ```
 
-**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch. For the deployed class, that is its `built_from` commit in [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json).
+**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch. For the deployed class, that is its `built_from` commit in [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json). The names in this guide are the current source's: the class with `version()` 0.1.0 is `OnchainTinySynth`, with the interface `IOnchainTinySynth` and its dispatchers named after it.
 
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#the-base64-encoder)).
 
 ```cairo
-use onchain_midi_player::interface::{IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher};
+use onchain_midi_player::interface::{ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher};
 
-let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
+let synth = ITinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
 ```
 
 ## 2. Change your `token_uri`
@@ -98,7 +98,7 @@ Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is 
 ```cairo
 fn set_sound_config(ref self: ContractState, class_hash: ClassHash) {
     // ...access control...
-    let synth = IOnchainTinySynthLibraryDispatcher { class_hash };
+    let synth = ITinySynthLibraryDispatcher { class_hash };
     assert(synth.engine() == 'tinysynth', 'not a TinySynth class');
     self.tinysynth_class_hash.write(class_hash);
 }
@@ -133,7 +133,7 @@ use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 
 // Declare the class (thanks to build-external-contracts) and never deploy it.
 // On edition 2025_12 `class_hash` is a `ClassHash`; on 2024_07 prefix it with `*`.
-let tinysynth = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
+let tinysynth = declare("TinySynth").unwrap().contract_class().class_hash;
 let nft_class = declare("YourNft").unwrap().contract_class();
 let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 ```
@@ -155,7 +155,7 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 
 - Take it from [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json): `class.class_hash`, with its `version()` and the commit it was built from. A release has the tag `v<version>` (`release_tag`); `release_tag` `null` marks a test class, not for production. Today only a Sepolia test class exists; the release class is not declared yet.
 - `engine()` names the engine and `version()` is the class's SemVer: pre-release classes are `0.x.0`, and from `1.0.0` the major number promises call and settings-layout compatibility. Every declared class has its own version, so a new class hash always comes with a new `version()`.
-- The ABIs, for clients and indexers, are in [`abi/`](https://github.com/Provable-Games/onchain-midi-player/blob/main/abi): `OnchainTinySynth.json`, and `ISoundProvider.json` for providers.
+- The ABIs, for clients and indexers, are in [`abi/`](https://github.com/Provable-Games/onchain-midi-player/blob/main/abi): `TinySynth.json`, and `ISoundProvider.json` for providers.
 - Check a class before you use it: library-call `engine()`, `version()` and `script_sha256()` in a test, or run `verify_engine.mjs` on a token, and compare both with that version's record in [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json). [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md) also rebuilds the class hash from source.
 
 ## Checklist

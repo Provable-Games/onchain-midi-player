@@ -1,4 +1,4 @@
-//! End-to-end: the real class (`onchain_midi_player::contract::OnchainTinySynth`) is declared but
+//! End-to-end: the real class (`onchain_midi_player::contract::TinySynth`) is declared but
 //! never deployed, BeastLikeNft is deployed with its class hash, and token_uri (built with library
 //! calls) is checked byte for byte against (a) the independent JavaScript reference (golden.cairo)
 //! and (b) the in-Cairo naive reference. Token 4, a full-size Beast (about 132 KB), is checked
@@ -8,9 +8,7 @@ use beast_consumer::beast_like_nft::{
     IBeastLikeNftDispatcher, IBeastLikeNftDispatcherTrait, beast_image, render_svg, token_data,
 };
 use core::sha256::compute_sha256_byte_array;
-use onchain_midi_player::interface::{
-    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
-};
+use onchain_midi_player::interface::{ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher};
 use onchain_midi_player::page_data;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ClassHash;
@@ -19,7 +17,7 @@ use crate::naive::naive_token_uri;
 
 /// Declares the class (no deploy) and deploys the NFT with its class hash.
 pub fn setup() -> (IBeastLikeNftDispatcher, ClassHash) {
-    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
+    let class_hash = declare("TinySynth").unwrap().contract_class().class_hash;
     let nft_class = declare("BeastLikeNft").unwrap().contract_class();
     let (address, _) = nft_class.deploy(@array![class_hash.into()]).unwrap();
     (IBeastLikeNftDispatcher { contract_address: address }, class_hash)
@@ -120,7 +118,7 @@ fn library_call_without_deployment() {
     let (nft, class_hash) = setup();
     assert(nft.tinysynth_class_hash() == class_hash, 'class hash not stored');
 
-    let synth = IOnchainTinySynthLibraryDispatcher { class_hash };
+    let synth = ITinySynthLibraryDispatcher { class_hash };
     let segment = synth.animation_url_segment();
     assert(segment.len() == page_data::SEGMENT_LEN, 'segment length');
     assert(segment == page_data::animation_url_segment(), 'segment content');

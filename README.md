@@ -4,7 +4,7 @@ A Cairo class library for Starknet that gives an NFT's `token_uri` an onchain MI
 
 ## How it works
 
-Your contract holds the class hash and calls the class through `IOnchainTinySynthLibraryDispatcher`. Every function is a deterministic view, and the class touches none of your storage.
+Your contract holds the class hash and calls the class through `ITinySynthLibraryDispatcher`. Every function is a deterministic view, and the class touches none of your storage.
 
 `token_uri` is nested base64 data URIs. The JSON is `data:application/json;base64,…`, and its `animation_url` is `data:text/html;base64,…`, the player page. The engine and player are the same for every token, so the class stores them already encoded and never encodes them at call time. Your contract encodes only per-token data, in pieces that are each a multiple of 3 bytes long, and joins them. That works because `b64(X ++ Y) == b64(X) ++ b64(Y)` when `len(X) % 3 == 0`.
 
@@ -37,7 +37,7 @@ onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-pl
 [[target.starknet-contract]]
 sierra = true
 # Builds the class from the dependency so your tests can declare it.
-build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
+build-external-contracts = ["onchain_midi_player::contract::TinySynth"]
 ```
 
 **2. Hold a class hash.** Store it in your NFT, or in a small renderer contract the NFT calls, and let the owner change it. Take it from [`deployments/<network>.json`](deployments/sepolia.json) (`class.class_hash`). A class hash fixes the engine and the player, so tokens keep their sound until you switch. When you store or change it, check that `engine()` returns `'tinysynth'`: another engine's class shares the `midi_segment` selector and could render the wrong thing without an error.
@@ -48,10 +48,10 @@ build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
 
 ```cairo
 use onchain_midi_player::interface::{
-    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
+    ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher,
 };
 
-let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
+let synth = ITinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
 ```
 
 The interface, in [`src/interface.cairo`](src/interface.cairo):
@@ -63,7 +63,7 @@ The interface, in [`src/interface.cairo`](src/interface.cairo):
 | `base64(data)` | Standard RFC 4648 base64, for your own JSON pieces. |
 | `script_sha256()` | SHA-256 of the engine script. |
 | `engine()` | The engine's name: `'tinysynth'`. |
-| `version()` | The class's SemVer version, such as `'0.1.0'`. |
+| `version()` | The class's SemVer version, such as `'0.2.0'`. |
 | `license()` | The license notices for the class and the code it embeds. |
 
 **3. Assemble `token_uri`** in the layout above. [Building `token_uri` in Cairo](docs/token-uri-layout.md#building-token_uri-in-cairo) has the full function. The rules:
@@ -115,7 +115,7 @@ npm run check-midi -- song.mid other.mid
 
 **Sound settings.** Each `midi_segment` call takes a `TinySynthSettings` value, declared in [`src/types.cairo`](src/types.cairo):
 
-- `quality`: TinySynth's built-in sounds, 0 chip-tune or 1 FM.
+- `quality`: the TinySynth engine's built-in sounds, 0 chip-tune or 1 FM.
 - `reverb`, `master_vol` and `voices`: the mix and the polyphony.
 - `timbres`: custom sounds. Each replaces a General MIDI program (0–127) or a drum note (35–81), so the MIDI selects it as usual.
 - `waves`: custom waveforms (sample tables or harmonics) that timbres can use. Operators can also carry a fixed low-, high- or band-pass filter.
@@ -131,7 +131,7 @@ pub trait ISoundProvider<T> {
 }
 ```
 
-`get_sound` takes the token ID as minted, returns a raw MIDI file and valid settings, and is deterministic and view-only. Each engine has its own typed settings struct, with no enum, and the layouts of `TinySynthSettings` and `TinySynthSound` are fixed at release. A later engine's providers will implement `get_<engine>_sound`; `get_sound` belongs to TinySynth. The rules, and a safe way to call a provider, are in [Sound provider interface](docs/sound-provider.md).
+`get_sound` takes the token ID as minted, returns a raw MIDI file and valid settings, and is deterministic and view-only. Each engine has its own typed settings struct, with no enum, and the layouts of `TinySynthSettings` and `TinySynthSound` are fixed at release. A later engine's providers will implement `get_<engine>_sound`; `get_sound` belongs to the TinySynth engine. The rules, and a safe way to call a provider, are in [Sound provider interface](docs/sound-provider.md).
 
 AI agents can use the [`midi-guide`](plugins/onchain-midi-player/skills/midi-guide/SKILL.md) and [`sound-design`](plugins/onchain-midi-player/skills/sound-design/SKILL.md) skills.
 

@@ -3,7 +3,7 @@
 // This module is a deliberately independent JavaScript re-implementation of everything the Cairo
 // side of the example produces:
 //
-//   - the OnchainTinySynth class: animation_url_segment, D and midi_segment, from the repository's
+//   - the TinySynth class: animation_url_segment, D and midi_segment, from the repository's
 //     JS reference (scripts/page.mjs): the real PAGE, built by scripts/build_page.mjs into
 //     tests/fixtures/page.html, and SETTINGS from player/encode.js, which the root parity tests tie
 //     to Cairo
@@ -59,7 +59,7 @@ export const TOKENS = {
 };
 
 export const DESCRIPTION =
-  'A Beast-like example token. Its animation_url plays the onchain MIDI with the onchain TinySynth class.';
+  'A Beast-like example token. Its animation_url plays the onchain MIDI with the TinySynth class.';
 
 // ---------------------------------------------------------------------------------------------
 // Token 4: a full-size Beast (mirrors src/beast_data.cairo, which gen_fixtures.mjs writes from these)
