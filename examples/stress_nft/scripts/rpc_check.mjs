@@ -27,6 +27,9 @@ import { fileURLToPath } from 'node:url';
 import { decodeByteArray, defaultRepetitions, rpcResponseBytes, tokenUri } from './reference.mjs';
 import { pageHtml, sha256 } from '../../../scripts/page.mjs';
 
+/** The most bars a reference is built for (64 MB of MIDI): a larger count is a malformed reply, not a token. */
+export const MAX_BARS = 1_000_000n;
+
 /**
  * Public Sepolia endpoints, checked live on 2026-10-05 (starknet_specVersion). Discontinued, so
  * left out: Lava (rpc.starknet-testnet.lava.build) and BlastAPI (public.blastapi.io) answer that
@@ -285,7 +288,7 @@ async function main() {
   for (const name of names) {
     for (const t of tokens.filter((t) => !(t in live))) {
       const n = scalar(await call(providers[name], redact, 30, opt.address, 'repetitions', [`0x${t.toString(16)}`, '0x0']));
-      if (n === undefined) break;
+      if (n === undefined || n < 1n || n > MAX_BARS) break; // not a count the contract can hold: try the next provider
       live[t] = Number(n);
     }
     if (Object.keys(live).length === tokens.length) break;
