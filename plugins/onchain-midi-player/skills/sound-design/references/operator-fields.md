@@ -19,4 +19,4 @@
 | `key_scale` | `k` | `i32` | 0 | Level × 2^((note − 60) / 12 × `key_scale`). Negative softens high notes. *Can overflow.* |
 | `filter` | `fl`, `ff`, `fq`, `fk` | `Option<Filter>` | `None` | A fixed filter on an audio output (`route` 0 only): `kind` `LowPass`, `HighPass` or `BandPass`; `cutoff` in Hz, or a multiple of the note frequency when `key_track` is set; `q` a linear Q (7,071 is flat). `cutoff` and `q` are fixed point and must be above 0. |
 
-The envelope ramps up linearly over `attack`, holds for `hold`, then approaches `sustain` × `volume` with time constant `decay`. After note-off it decays to zero with time constant `release`.
+The envelope ramps up linearly over `attack`, holds for `hold`, then approaches `sustain` × `volume` with time constant `decay`. After note-off it decays to zero with time constant `release`, from the level it has reached: a note-off during the attack releases it from part of the way up, so a note shorter than `attack` sounds more quietly, and a zero-length note sounds only the release of operators with `attack` 0.

@@ -34,7 +34,7 @@ export const PAGE_PATH = new URL("../tests/fixtures/page.html", import.meta.url)
  * length, and the build fails when any of them changes under a recorded VERSION: bump VERSION,
  * then record it with `npm run gen:page -- --record`.
  */
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 /** Revision of the page (player, markup and styles): bump it when the page changes. */
 export const PAGE_VERSION = 10;
 export const PAGE_VERSIONS_PATH = new URL("./page_versions.json", import.meta.url);

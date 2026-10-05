@@ -116,7 +116,7 @@ pub trait ITinySynth<T> {
     ///
     /// Cost: a constant, stored in the class at build time (a string literal). Nothing is
     /// base64-encoded at call time. Materializing it costs about 0.35M L2 gas; through a library
-    /// call about 7.8M, most of it returning the 53,476-byte result.
+    /// call about 7.8M, most of it returning the 53,508-byte result.
     fn animation_url_segment(self: @T) -> ByteArray;
 
     /// Returns the per-token settings and MIDI piece, encoded at both layers, to follow
@@ -206,7 +206,7 @@ pub trait ITinySynth<T> {
     fn engine(self: @T) -> felt252;
 
     /// The class's version: a SemVer short string, `MAJOR.MINOR.PATCH` with an optional
-    /// pre-release tag (at most 31 bytes), e.g. `'0.2.0'`. Every declared class has its own:
+    /// pre-release tag (at most 31 bytes), e.g. `'0.3.0'`. Every declared class has its own:
     /// interim builds are `0.x.0`, and `1.0.0` comes at release, when the call and settings
     /// layouts freeze. From then on the major number promises call and settings-layout
     /// compatibility. A release has the git tag `v<version>`; a class without one is a test

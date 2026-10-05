@@ -1,14 +1,14 @@
 # Vendored engine and licenses
 
 The pinned TinySynth engine, from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>,
-at commit `fc04dbe7d78bd0a4de5eb80887756f31c2c373f2` on the fork's `improve/integration` branch (the fork CI's rebuild of
-`webaudio-tinysynth.min.js` for `b89fc4e`):
+at commit `4bf982994dc3d1187661385726fed2e6595fafbe` on the fork's `improve/integration` branch (the fork CI's rebuild of
+`webaudio-tinysynth.min.js` for `68782fa`):
 
-- `webaudio-tinysynth-fc04dbe.min.js`: the commit's own `webaudio-tinysynth.min.js` (46,488 bytes), byte-identical to
+- `webaudio-tinysynth-4bf9829.min.js`: the commit's own `webaudio-tinysynth.min.js` (46,504 bytes), byte-identical to
   rebuilding that commit's `webaudio-tinysynth.js` with its pinned build (`npm ci && npm run verify`, Terser 5.51.2).
-  SHA-256 `4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c`.
-- `webaudio-tinysynth-fc04dbe.NOTICE`: the commit's `NOTICE` (the fork's list of modifications), which goes into the
-  class's `license()` text. SHA-256 `2e665c7b0308cce61a694bc7ab9633d141e53b93cf283f09c5d873e0a6ae7322`.
+  SHA-256 `8ad79ab8214e45a601e7d929e676b34b78e3f2b4200fd751d6548cf2b7df7749`.
+- `webaudio-tinysynth-4bf9829.NOTICE`: the commit's `NOTICE` (the fork's list of modifications), which goes into the
+  class's `license()` text. SHA-256 `29b1e003f554d943972c538fd2fc173b2515a5320033016a7fdf938a0181b698`.
 - License: Apache License 2.0. Copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games (see the fork's NOTICE
   and this repository's [NOTICE](../../NOTICE)).
 
@@ -22,7 +22,7 @@ bytes. The engine tests and the render and page checks run the same file. The pi
 the one line `ENGINE_PIN` in [`scripts/engine.mjs`](../../scripts/engine.mjs), which checks both hashes on every load,
 so a mismatch fails before anything is generated. Nothing needs network access.
 
-To verify: `git -C <fork> show fc04dbe:webaudio-tinysynth.min.js | sha256sum`.
+To verify: `git -C <fork> show 4bf9829:webaudio-tinysynth.min.js | sha256sum`.
 
 ## Re-pinning
 

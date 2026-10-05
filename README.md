@@ -63,7 +63,7 @@ The interface, in [`src/interface.cairo`](src/interface.cairo):
 | `base64(data)` | Standard RFC 4648 base64, for your own JSON pieces. |
 | `script_sha256()` | SHA-256 of the engine script. |
 | `engine()` | The engine's name: `'tinysynth'`. |
-| `version()` | The class's SemVer version, such as `'0.2.0'`. |
+| `version()` | The class's SemVer version, such as `'0.3.0'`. |
 | `license()` | The license notices for the class and the code it embeds. |
 
 **3. Assemble `token_uri`** in the layout above. [Building `token_uri` in Cairo](docs/token-uri-layout.md#building-token_uri-in-cairo) has the full function. The rules:

@@ -41,19 +41,19 @@ What a class hash fixes, and what the consumer supplies:
    node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256()>
    ```
 
-   For the current version, all three print the gzip payload's SHA-256 `3a0f61485f5ac3bd723566adbcdb595da7a7bfa93f9d28fd29c22f0408270310` (14,056 bytes) and the engine's `4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c` (46,488 bytes).
+   For the current version, all three print the gzip payload's SHA-256 `61b365e518ad022c344cb60d99ae4d43aa640c6a2121d9605a75f75b28da0b64` (14,074 bytes) and the engine's `8ad79ab8214e45a601e7d929e676b34b78e3f2b4200fd751d6548cf2b7df7749` (46,504 bytes).
 3. **Compare.** The engine's SHA-256 must equal the class's `script_sha256()` (the hex form of the `u256` is the `sha256sum` string; a consumer contract or its tests can read it) and the `script_sha256` of the class's record in [`scripts/page_versions.json`](../scripts/page_versions.json). The gzip payload's SHA-256 and length must match the record's `gzip_sha256` and `gzip_len`.
 4. **Optionally, rebuild the engine** from the fork commit in that record (`engine_commit`). The fork commits its minified build, and rebuilding it from the source reproduces it:
 
    ```sh
    git clone https://github.com/Provable-Games/webaudio-tinysynth && cd webaudio-tinysynth
-   git checkout <engine fork commit>       # engine_commit, for example fc04dbe7d78bd0a4de5eb80887756f31c2c373f2
+   git checkout <engine fork commit>       # engine_commit, for example 4bf982994dc3d1187661385726fed2e6595fafbe
    sha256sum webaudio-tinysynth.min.js   # the committed build
    npm ci && npm run verify              # rebuilds it and compares the bytes
    ```
 
    The fork pins its build: Terser 5.51.2 exactly, in its `package.json` and `package-lock.json`, with every option in `scripts/build.js`. `npm run verify` rebuilds the minified file and its source map into a temporary directory, fails on any byte difference from the committed files, and prints their SHA-256 (`npm run build` rebuilds them in place instead).
-5. **Optionally, check the rest of the page and the class.** `verify_engine.mjs` also prints the SHA-256 and length of the fixed page `PAGE` (the decoded page up to the opening tag of the settings block and its alignment spaces), which [`scripts/page_versions.json`](../scripts/page_versions.json) records for every `version()`. A matching `PAGE` also proves that the payload you hashed sits in the page's own engine tag, the one that runs, and that the shim and the player around it are the class's. To check the class itself, check out this repository at the tag `v<version>` of a released class (for a test class, the `built_from` commit in [`deployments/<network>.json`](../deployments/sepolia.json); a superseded class's entry is in that file's history, `git log -p deployments/<network>.json`), rebuild the page with `npm ci && npm run check:page` (the pinned Terser and fflate; it fails on any difference from the committed `PAGE` and `src/page_data.cairo`), run `scarb build`, compute the class hash (for example with `sncast utils class-hash --contract-name <contract>`, where `<contract>` is the deployment file's `contract` field: `TinySynth` from 0.2.0, `OnchainTinySynth` for the 0.1.0 class), and compare it with the deployment file's `class_hash`.
+5. **Optionally, check the rest of the page and the class.** `verify_engine.mjs` also prints the SHA-256 and length of the fixed page `PAGE` (the decoded page up to the opening tag of the settings block and its alignment spaces), which [`scripts/page_versions.json`](../scripts/page_versions.json) records for every `version()`. A matching `PAGE` also proves that the payload you hashed sits in the page's own engine tag, the one that runs, and that the shim and the player around it are the class's. To check the class itself, check out this repository at the tag `v<version>` of a released class (for a test class, the `built_from` commit in [`deployments/<network>.json`](../deployments/sepolia.json); a superseded class's entry is in that file's history, `git log -p deployments/<network>.json`), rebuild the page with `npm ci && npm run check:page` (the pinned Terser and fflate; it fails on any difference from the committed `PAGE` and `src/page_data.cairo`), run `scarb build`, compute the class hash (for example with `sncast utils class-hash --contract-name <contract>`, where `<contract>` is the deployment file's `contract` field: `TinySynth`, or `OnchainTinySynth` for the 0.1.0 class), and compare it with the deployment file's `class_hash`.
 
 ## Engine provenance
 
@@ -64,6 +64,6 @@ What a class hash fixes, and what the consumer supplies:
 
 | Hash (SHA-256) | Of | Where |
 | --- | --- | --- |
-| `4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c` | the engine, decompressed: the fork's `webaudio-tinysynth.min.js` at `fc04dbe` (46,488 bytes) | `script_sha256()`, `page_data::ENGINE_SHA256` |
-| `3a0f61485f5ac3bd723566adbcdb595da7a7bfa93f9d28fd29c22f0408270310` | the gzip payload in `PAGE` (14,056 bytes) | `page_data::GZIP_SHA256`, `page_data::GZIP_LEN` |
+| `8ad79ab8214e45a601e7d929e676b34b78e3f2b4200fd751d6548cf2b7df7749` | the engine, decompressed: the fork's `webaudio-tinysynth.min.js` at `4bf9829` (46,504 bytes) | `script_sha256()`, `page_data::ENGINE_SHA256` |
+| `61b365e518ad022c344cb60d99ae4d43aa640c6a2121d9605a75f75b28da0b64` | the gzip payload in `PAGE` (14,074 bytes) | `page_data::GZIP_SHA256`, `page_data::GZIP_LEN` |
 | `bf6316a818dc7519afafa5af7bf826af5280c9950d208f0a2822f4295ab0d4df` | the minified gunzip shim | `SHIM_PIN` in [`scripts/page.mjs`](../scripts/page.mjs) |
