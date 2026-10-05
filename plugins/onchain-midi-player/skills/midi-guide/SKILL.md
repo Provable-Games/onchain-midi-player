@@ -27,7 +27,7 @@ Open the printed URL and press ▶. If it plays right there, it plays the same f
 ### Get the tools
 
 - Node 22 or later. `check-midi` and `preview` need no `npm ci`.
-- Use a clone whose `PAGE` is your class's: `grep 'pub const VERSION' src/page_data.cairo` must print the class's `version()` (`preview` prints it too). The same `VERSION` always means the same `PAGE` bytes, so the newest commit with it has both the tools and the right page: `main` while its `VERSION` matches, otherwise the last commit before `VERSION` changed (`git log --oneline -- src/page_data.cairo`). A class's "Built from" commit in [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#deployments) can predate the tools. Details: README, [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills).
+- Use a clone whose `PAGE` is your class's: `grep 'pub const VERSION' src/page_data.cairo` must print the class's `version()` (`preview` prints it too). The same `VERSION` always means the same `PAGE` bytes, so the newest commit with it has both the tools and the right page: `main` while its `VERSION` matches, otherwise the last commit before `VERSION` changed (`git log --oneline -- src/page_data.cairo`). Details: README, [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills).
 
 ## What the offline check guarantees
 

@@ -73,7 +73,7 @@ The crate exports:
 | The 3 Beast reference sounds, no custom wave (`beast_reference`) | 334 | 60.7M |
 | One wave: the reference lead on the 64-sample stepped triangle (`one_wave`) | 365 | 61.3M |
 | The six short reference waves on eight timbres (`reference_waves`) | 1,356 | 77.2M |
-| The long LFSR, 32,767 samples, on one drum timbre (`longLfsr`) | 147,532 | 2,192.8M |
+| The long LFSR, 32,767 samples, on one drum timbre (`longLfsr`), net of the 277.9M that builds the table | 147,532 | 2,192.8M |
 
 The long LFSR adds about 2.1B to a `token_uri`, which fits Pathfinder's 10B call cap but not every RPC provider's (see [Node limits](gas.md#node-limits)). `WhiteNoise` needs no table and is the cheap alternative.
 

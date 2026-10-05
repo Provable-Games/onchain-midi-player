@@ -19,7 +19,7 @@ The class is declared on Starknet but never deployed. Your contract reaches it w
 ```toml
 [dependencies]
 onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "<release tag>" }
-# Until a release is tagged: rev = "<commit>", a commit of this repository whose VERSION in src/page_data.cairo is the version() of the class you test against
+# Until a release is tagged: rev = "<commit>" (see below)
 
 [[target.starknet-contract]]
 sierra = true
@@ -27,7 +27,7 @@ sierra = true
 build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
 ```
 
-**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. `VERSION` is SemVer only from the rename to onchain-midi-player on, so a commit that matches already has the package and type names used here. Pin that commit, not a branch.
+**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch.
 
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#the-base64-encoder)).
 
