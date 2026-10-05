@@ -1,4 +1,4 @@
-//! `SETTINGS`: validation and ASCII encoding of `SynthSettings` (format version 1).
+//! `SETTINGS`: validation and ASCII encoding of `TinySynthSettings` (format version 1).
 //!
 //! Specified in issue #1 (spec and shared-wave-table amendment):
 //! <https://github.com/Provable-Games/onchain-midi-player/issues/1>. The JavaScript
@@ -94,7 +94,7 @@
 //! version.
 
 use core::num::traits::Pow;
-use crate::types::{Filter, FilterKind, Operator, SynthSettings, Timbre, WaveDef, Waveform};
+use crate::types::{Filter, FilterKind, Operator, Timbre, TinySynthSettings, WaveDef, Waveform};
 
 /// First token of `SETTINGS`.
 pub const SETTINGS_FORMAT_VERSION: u32 = 1;
@@ -105,9 +105,9 @@ pub const SETTINGS_FORMAT_VERSION: u32 = 1;
 // one harmonic or one sample, with no upper bound. There is no byte cap on `SETTINGS` either: the
 // network prices its size in gas (README, "Gas and limits").
 
-/// Maximum entries in `SynthSettings::waves`: all that `Waveform::Custom(u8)` can index.
+/// Maximum entries in `TinySynthSettings::waves`: all that `Waveform::Custom(u8)` can index.
 pub const MAX_WAVES: u32 = 256;
-/// Maximum entries in `SynthSettings::timbres`: every slot reachable from MIDI, 128 programs
+/// Maximum entries in `TinySynthSettings::timbres`: every slot reachable from MIDI, 128 programs
 /// (0..=127) plus 47 drum notes (35..=81). Each `(drum, slot)` pair may appear once (check 8), so
 /// no valid input has more; checking the count first bounds the loop before any per-timbre work.
 pub const MAX_TIMBRES: u32 = 175;
@@ -130,8 +130,8 @@ pub const MIN_VOICES: u32 = 1;
 
 /// Default engine settings: quality 1, reverb 30 %, master volume 40 %, 64 voices, no custom
 /// waves or timbres. Encodes as `1,1,30,40,64,0,0`.
-pub fn default_settings() -> SynthSettings {
-    SynthSettings {
+pub fn default_settings() -> TinySynthSettings {
+    TinySynthSettings {
         quality: 1, reverb: 30, master_vol: 40, voices: 64, waves: [].span(), timbres: [].span(),
     }
 }
@@ -158,7 +158,7 @@ pub fn default_operator() -> Operator {
 }
 
 /// Applies the checks above to `settings`, in order, and reverts on the first failure.
-pub fn validate(settings: @SynthSettings) {
+pub fn validate(settings: @TinySynthSettings) {
     assert(settings.quality.into() <= 1_u32, 'TS: quality out of range');
     assert(settings.voices.into() >= MIN_VOICES, 'TS: voices out of range');
 
@@ -196,7 +196,7 @@ pub fn validate(settings: @SynthSettings) {
 }
 
 /// Validates, then encodes. This is what `midi_segment` writes into the page.
-pub fn validate_and_encode(settings: @SynthSettings) -> ByteArray {
+pub fn validate_and_encode(settings: @TinySynthSettings) -> ByteArray {
     validate(settings);
     encode(settings)
 }
@@ -279,7 +279,7 @@ fn fail_at_op(msg: felt252, t: u32, o: u32) -> core::never {
 
 /// Encodes `settings` as `SETTINGS` (the grammar above), covering every variant. Does not
 /// range-check fields (call `validate` first).
-pub fn encode(settings: @SynthSettings) -> ByteArray {
+pub fn encode(settings: @TinySynthSettings) -> ByteArray {
     let mut out: ByteArray = "";
     put_u(ref out, SETTINGS_FORMAT_VERSION);
     comma(ref out);
@@ -500,10 +500,10 @@ mod tests {
         assert_eq!(encode(@default_settings()), "1,1,30,40,64,0,0");
     }
 
-    fn with_custom(index: u8, waves: Span<WaveDef>) -> super::SynthSettings {
+    fn with_custom(index: u8, waves: Span<WaveDef>) -> super::TinySynthSettings {
         let op = super::Operator { wave: Waveform::Custom(index), ..default_operator() };
         let timbre = Timbre { drum: false, slot: 0, operators: [op].span() };
-        super::SynthSettings { waves, timbres: [timbre].span(), ..default_settings() }
+        super::TinySynthSettings { waves, timbres: [timbre].span(), ..default_settings() }
     }
 
     #[test]

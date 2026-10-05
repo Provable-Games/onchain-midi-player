@@ -1,15 +1,15 @@
 ---
 name: sound-design
-description: Design the sound of an NFT that uses the onchain MIDI player (Provable-Games/onchain-midi-player) through the SynthSettings value its contract passes to midi_segment - quality, reverb, master volume, voices, custom waveforms (single-cycle sample tables and harmonic waves), fixed low-, high- and band-pass filters, and custom FM or chip timbres that replace General MIDI programs or drum notes. Use when choosing or tuning instruments and drums, defining chip waves such as stepped triangles, pulses or LFSR noise, filtering a voice (chip hi-hats, filtered leads and basses), converting a TinySynth soundedit timbre to Cairo fixed point, choosing the per-token subset a sound provider returns, fixing a settings revert from midi_segment (the TS errors), or previewing settings offline before deploying.
+description: Design the sound of an NFT that uses the onchain MIDI player (Provable-Games/onchain-midi-player) through the TinySynthSettings value its contract passes to midi_segment - quality, reverb, master volume, voices, custom waveforms (single-cycle sample tables and harmonic waves), fixed low-, high- and band-pass filters, and custom FM or chip timbres that replace General MIDI programs or drum notes. Use when choosing or tuning instruments and drums, defining chip waves such as stepped triangles, pulses or LFSR noise, filtering a voice (chip hi-hats, filtered leads and basses), converting a TinySynth soundedit timbre to Cairo fixed point, choosing the per-token subset a sound provider returns, fixing a settings revert from midi_segment (the TS errors), or previewing settings offline before deploying.
 license: Apache-2.0
 compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-midi-player whose VERSION in src/page_data.cairo equals the class's version(); Cairo steps need the Scarb version in its .tool-versions.
 ---
 
-# Sound design with `SynthSettings`
+# Sound design with `TinySynthSettings`
 
-The contract passes a `SynthSettings` value to `midi_segment` on every `token_uri` call. It sets the built-in sound set, reverb, master volume, voices, custom waves and custom timbres, whose outputs can carry a fixed filter. The source of truth is the README's [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#sound-settings-and-custom-sounds) and [`src/types.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/types.cairo).
+The contract passes a `TinySynthSettings` value to `midi_segment` on every `token_uri` call. It sets the built-in sound set, reverb, master volume, voices, custom waves and custom timbres, whose outputs can carry a fixed filter. The source of truth is the README's [Sound settings and custom sounds](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#sound-settings-and-custom-sounds) and [`src/types.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/types.cairo).
 
-Boundary: the [midi-guide](../midi-guide/SKILL.md) skill covers what goes in the `.mid` (notes, program changes, controllers). This skill covers what the contract passes in `SynthSettings`, including a composer's contract that serves it with the MIDI ([Settings from a sound provider](#settings-from-a-sound-provider)). Wiring it into `token_uri` is the [integrator-guide](../integrator-guide/SKILL.md) skill.
+Boundary: the [midi-guide](../midi-guide/SKILL.md) skill covers what goes in the `.mid` (notes, program changes, controllers). This skill covers what the contract passes in `TinySynthSettings`, including a composer's contract that serves it with the MIDI ([Settings from a sound provider](#settings-from-a-sound-provider)). Wiring it into `token_uri` is the [integrator-guide](../integrator-guide/SKILL.md) skill.
 
 ## Workflow
 
@@ -69,7 +69,7 @@ The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MA
 
 From `page.9` (issue [#2](https://github.com/Provable-Games/onchain-midi-player/issues/2)). README: [Custom waves](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#custom-waves), the source of truth for this section.
 
-- **Define each wave once** in `SynthSettings.waves`, shared by every timbre, and select it in an operator with `wave: Waveform::Custom(index)`, 0-based. An index past the table reverts `'TS: wave index out of range'`. Up to `MAX_WAVES` entries; unused and repeated entries are allowed.
+- **Define each wave once** in `TinySynthSettings.waves`, shared by every timbre, and select it in an operator with `wave: Waveform::Custom(index)`, 0-based. An index past the table reverts `'TS: wave index out of range'`. Up to `MAX_WAVES` entries; unused and repeated entries are allowed.
 - **`WaveDef::Samples(Span<i8>)`** is one cycle of a chip wave, played sample-and-hold: sample `s` is `s / 128` (−128 is −1.0, 127 is 0.9921875). The note sets the cycle rate, whatever the table's length, so a melodic wave keeps the usual `ratio` and `offset_hz`. The engine holds each sample for the same number of frames, so steps stay sharp.
 - **`WaveDef::Harmonics(Span<u16>)`** is a band-limited wave: element `i` is the amplitude of harmonic `i + 1`, as a sine term. The browser normalizes the peak, so only the ratios matter; all zeros is silent.
 - **Porting a TinySynth wave** (soundedit, or a page that calls the engine directly): `setSampleWave` floats `x` become `i8` samples `clamp(round(x × 128), −128, 127)`. From `setHarmonicWave(name, real, imag)` only non-negative sine amplitudes `imag[1..]` carry over, scaled to `u16`; cosine (`real`) terms, DC and negative amplitudes have no `Harmonics` form, so sample one cycle of such a wave into a `Samples` table instead. Nothing fails if you get this wrong: the wave just sounds different, so preview it. README: [Designing a custom sound](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#designing-a-custom-sound).
@@ -142,9 +142,9 @@ let hat = Operator {
 
 ```cairo
 use onchain_midi_player::settings::{default_operator, default_settings};
-use onchain_midi_player::types::{Operator, SynthSettings, Timbre, Waveform};
+use onchain_midi_player::types::{Operator, Timbre, TinySynthSettings, Waveform};
 
-fn token_settings() -> SynthSettings {
+fn token_settings() -> TinySynthSettings {
     // Triangle carrier, 3 ms attack, full sustain, 10 ms release.
     let carrier = Operator {
         wave: Waveform::Triangle, volume: 3_000, attack: 30, hold: 0, sustain: 10_000, release: 100,
@@ -156,7 +156,7 @@ fn token_settings() -> SynthSettings {
         hold: 0, sustain: 10_000, release: 100, ..default_operator()
     };
     let lead = Timbre { drum: false, slot: 0, operators: [carrier, lfo].span() };
-    SynthSettings { reverb: 0, timbres: [lead].span(), ..default_settings() }
+    TinySynthSettings { reverb: 0, timbres: [lead].span(), ..default_settings() }
 }
 ```
 
@@ -164,7 +164,7 @@ Fixed or live: for a given class hash, the same settings and MIDI always give th
 
 ## Settings from a sound provider
 
-A composer's contract that implements the sound provider interface (`onchain_midi_player::interface::ISoundProvider`; README [Sound provider interface](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#sound-provider-interface)) returns each token's `SynthSettings` with its MIDI, in `get_sound(token_id) -> onchain_midi_player::types::TokenSound { midi, settings }`, the interface's only function; a tool that needs only the settings calls it and takes `.settings`. The per-token subset below depends on the programs the token's MIDI uses, so work the settings out from the same score the MIDI returns (and if the contract also exposes either through its own interfaces, they should equal the fields of `get_sound`). A MIDI file can select an instrument but not define one, so the definitions travel in the settings, and they must pass `settings::validate` in the class version the NFT calls.
+A composer's contract that implements the sound provider interface (`onchain_midi_player::interface::ISoundProvider`; README [Sound provider interface](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#sound-provider-interface)) returns each token's `TinySynthSettings` with its MIDI, in `get_sound(token_id) -> onchain_midi_player::types::TinySynthSound { midi, settings }`, the interface's only function; a tool that needs only the settings calls it and takes `.settings`. The per-token subset below depends on the programs the token's MIDI uses, so work the settings out from the same score the MIDI returns (and if the contract also exposes either through its own interfaces, they should equal the fields of `get_sound`). A MIDI file can select an instrument but not define one, so the definitions travel in the settings, and they must pass `settings::validate` in the class version the NFT calls.
 
 - **Return a per-token subset:** only the timbres for the programs and drum notes this token's MIDI plays, and only the waves those timbres select. A Beast's subset is about 0.9–1.4 KB of `SETTINGS`, against about 3.9 KB for a full chip bank, and `SETTINGS` costs about 14.5M L2 gas per 1,000 bytes through `midi_segment`, on every `token_uri` call.
 - **Renumber the waves in a subset.** `Waveform::Custom(index)` points into the `waves` you return, not into your bank: when you drop unused waves, remap each operator's index to the wave's new position.

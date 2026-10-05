@@ -16,7 +16,7 @@
 use onchain_midi_player::base64::bytes_base64_encode;
 use onchain_midi_player::interface::IOnchainTinySynthDispatcherTrait;
 use onchain_midi_player::segment::{d_fragment, midi_segment};
-use onchain_midi_player::types::SynthSettings;
+use onchain_midi_player::types::TinySynthSettings;
 use crate::class_fixtures::{
     beast_midi_genesis, beast_midi_heaviest, beast_midi_threshold_1, beast_midi_threshold_3,
     beast_midi_veteran, seq_bytes,
@@ -38,7 +38,7 @@ fn midi(i: u32) -> ByteArray {
     }
 }
 
-fn settings(j: u32) -> SynthSettings {
+fn settings(j: u32) -> TinySynthSettings {
     match j {
         0 => valid_default(),
         1 => valid_beast_reference(),

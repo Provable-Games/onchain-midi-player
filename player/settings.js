@@ -3,7 +3,7 @@
  * The page's SETTINGS handling: a strict parser and the TinySynth installer. This module ships in
  * the page.
  *
- * `SETTINGS` (format version 1) is the ASCII encoding of the Cairo `SynthSettings` value that the
+ * `SETTINGS` (format version 1) is the ASCII encoding of the Cairo `TinySynthSettings` value that the
  * class writes into the page, after `settings::validate` has checked it (counts, slots, routes, wave
  * indices, filters only on outputs with a cutoff and Q above 0; every other field may take any value
  * of its type). The page parses it strictly (the
@@ -81,7 +81,7 @@ export const TYPE_BOUNDS = {
  *   pitch_ratio: number, pitch_time: number, key_scale: number, filter: Filter | null}} Operator
  * @typedef {{drum: boolean, slot: number, operators: Operator[]}} Timbre
  * @typedef {{quality: number, reverb: number, master_vol: number, voices: number,
- *   waves: WaveDef[], timbres: Timbre[]}} SynthSettings
+ *   waves: WaveDef[], timbres: Timbre[]}} TinySynthSettings
  */
 
 /**
@@ -106,7 +106,7 @@ export class SettingsError extends Error {
 const CANONICAL = /^(0|-?[1-9][0-9]*)$/;
 
 /**
- * Decodes SETTINGS text into a `SynthSettings` object, following the grammar strictly: format
+ * Decodes SETTINGS text into a `TinySynthSettings` object, following the grammar strictly: format
  * version 1, canonical integers only, every value within its Cairo type, counts read and checked
  * against the parse bounds and the tokens left before their items (so a corrupt count can never
  * make the page loop or allocate past the input), known tags only, every token consumed. Leading
@@ -118,7 +118,7 @@ const CANONICAL = /^(0|-?[1-9][0-9]*)$/;
  * in player/validate.js): the class validates the settings before writing them.
  * A count beyond its parse bound is reported with the message of the Cairo check, which fails too.
  * @param {string} text
- * @returns {SynthSettings}
+ * @returns {TinySynthSettings}
  */
 export function decodeSettings(text) {
   const tokens = text.replace(/^ +| +$/g, "").split(",");
@@ -151,7 +151,7 @@ export function decodeSettings(text) {
   };
 
   if (read("u32") !== SETTINGS_FORMAT_VERSION) throw malformed();
-  /** @type {SynthSettings} */
+  /** @type {TinySynthSettings} */
   const s = {
     quality: read("u8"),
     reverb: read("u8"),
@@ -211,7 +211,7 @@ export function decodeSettings(text) {
 const fx = (x) => x / FIXED_POINT_SCALE; // one IEEE division: the same double in every engine
 
 /**
- * The name custom wave `i` of `SynthSettings.waves` is registered under (issue #2): `nS<i>` for
+ * The name custom wave `i` of `TinySynthSettings.waves` is registered under (issue #2): `nS<i>` for
  * `Samples`, `wH<i>` for `Harmonics`. The engine's names (fork #26, D-006) start with `n` (a sample
  * wave) or `w` (a harmonic wave), then a letter or `_`: a digit there is reserved for built-ins such
  * as `n0` and `w9999`.
@@ -265,7 +265,7 @@ export function toTinySynthOps(timbre, waves = []) {
  * Constructs TinySynth for these settings. `useReverb` must be a constructor option: TinySynth
  * reads it only when its AudioContext is set up, inside the constructor.
  * @param {any} WebAudioTinySynth the engine's constructor
- * @param {SynthSettings} s
+ * @param {TinySynthSettings} s
  */
 export function createSynth(WebAudioTinySynth, s) {
   const synth = new WebAudioTinySynth({ quality: s.quality, useReverb: s.reverb > 0 ? 1 : 0, voices: s.voices });
@@ -279,7 +279,7 @@ export function createSynth(WebAudioTinySynth, s) {
  * waves), engine settings, then every custom timbre in order, filters included. Idempotent; call it
  * again after anything that changes the quality.
  * @param {any} synth
- * @param {SynthSettings} s
+ * @param {TinySynthSettings} s
  */
 export function installSettings(synth, s) {
   registerWaves(synth, s.waves);

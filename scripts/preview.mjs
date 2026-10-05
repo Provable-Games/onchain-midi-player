@@ -10,7 +10,7 @@
 //
 //   <midi>      one score, in any form scripts/check_midi.mjs reads: a .mid file, a base64 file or
 //               string, a JSON file with one "midi_b64" string, or "-" for standard input
-//   --settings  a SynthSettings value as JSON, in the shape of player/settings.js and the "settings"
+//   --settings  a TinySynthSettings value as JSON, in the shape of player/settings.js and the "settings"
 //               objects of tests/fixtures/settings.json (a whole fixture entry also works), or the
 //               SETTINGS text of a page (to rebuild a token's page from its blocks). Default: the
 //               class's default settings, as default_settings() in src/settings.cairo
@@ -42,7 +42,7 @@ import { InputError, checkScore, formatResult, scoresFromArg } from "./check_mid
 import { VERSION, dFragment, pageHtml } from "./page.mjs";
 import { DEFAULT_SETTINGS } from "./settings_fixtures.mjs";
 
-/** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
+/** @typedef {import("../player/settings.js").TinySynthSettings} TinySynthSettings */
 
 const USAGE =
   "usage: node scripts/preview.mjs <file.mid | base64 file | file.json | - | base64 string> " +
@@ -104,10 +104,10 @@ function array(value, at) {
 }
 
 /**
- * Checks that a parsed JSON value has the shape and the Cairo types of `SynthSettings` (what Cairo's
+ * Checks that a parsed JSON value has the shape and the Cairo types of `TinySynthSettings` (what Cairo's
  * Serde would require before `validate` runs), and returns it. Throws a TypeError naming the field.
  * @param {unknown} value
- * @returns {SynthSettings}
+ * @returns {TinySynthSettings}
  */
 export function settingsShape(value) {
   const s = exactKeys(value, SETTINGS_KEYS, "settings");
@@ -130,20 +130,20 @@ export function settingsShape(value) {
   // The scalar types (u8, u32, i32, bool, the enum names), with the encoder's own messages. A
   // SettingsError here is a check of the class (such as a length limit), reported by buildPreview.
   try {
-    encodeSettings(/** @type {SynthSettings} */ (value));
+    encodeSettings(/** @type {TinySynthSettings} */ (value));
   } catch (e) {
     if (!(e instanceof SettingsError)) throw e;
   }
-  return /** @type {SynthSettings} */ (value);
+  return /** @type {TinySynthSettings} */ (value);
 }
 
 /**
- * The settings in a file's text: a `SynthSettings` object as JSON, a fixture entry holding one under
+ * The settings in a file's text: a `TinySynthSettings` object as JSON, a fixture entry holding one under
  * "settings" (as in tests/fixtures/settings.json), or SETTINGS text as a page carries it (digits,
  * `-` and `,`), parsed strictly by the page's own decodeSettings.
  * @param {string} label
  * @param {string} text
- * @returns {SynthSettings}
+ * @returns {TinySynthSettings}
  */
 export function settingsFromText(label, text) {
   if (/^ *-?[0-9]+(,-?[0-9]+)+ *$/.test(text.trim())) {
@@ -176,7 +176,7 @@ export const panicData = (e) => `('${e.code}'${e.indices.map((i) => `, ${i}`).jo
 /**
  * Builds the page for one score, settings and SVG, after the checks the class and the page run on
  * them. Returns the page and the report; throws a PreviewError with the report of the first failure.
- * @param {{midiArg: string, settings?: SynthSettings, settingsLabel?: string, svg?: Uint8Array, svgLabel?: string}} input
+ * @param {{midiArg: string, settings?: TinySynthSettings, settingsLabel?: string, svg?: Uint8Array, svgLabel?: string}} input
  * @returns {{html: Buffer, lines: string[]}}
  */
 export function buildPreview({ midiArg, settings = DEFAULT_SETTINGS, settingsLabel = "default settings", svg, svgLabel = "placeholder SVG" }) {

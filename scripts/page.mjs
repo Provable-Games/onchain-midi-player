@@ -20,7 +20,7 @@ import { encodeSettings } from "../player/encode.js";
 import { validateSettings } from "../player/validate.js";
 import { ENGINE_PIN, engineNotice } from "./engine.mjs";
 
-/** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
+/** @typedef {import("../player/settings.js").TinySynthSettings} TinySynthSettings */
 
 export const PAGE_PATH = new URL("../tests/fixtures/page.html", import.meta.url);
 
@@ -259,7 +259,7 @@ export function segmentFor(page) {
  * SETTINGS: validated and encoded by the JS reference (player/settings.js, player/encode.js),
  * which mirror src/settings.cairo check for check. Throws a SettingsError on invalid settings,
  * where midi_segment reverts.
- * @param {SynthSettings} settings
+ * @param {TinySynthSettings} settings
  */
 export function settingsText(settings) {
   const text = encodeSettings(validateSettings(settings));
@@ -270,7 +270,7 @@ export function settingsText(settings) {
 /**
  * D = SETTINGS MIDI_OPEN b64(midi) <pad> ART_OPEN, with 0..8 pad spaces so len(D) % 9 == 0.
  * @param {Uint8Array} midi
- * @param {SynthSettings} settings
+ * @param {TinySynthSettings} settings
  */
 export function dFragment(midi, settings) {
   const head = settingsText(settings) + MIDI_OPEN + b64(midi);
@@ -281,7 +281,7 @@ export function dFragment(midi, settings) {
 }
 
 /** midi_segment(midi, settings) = b64(b64(D)). */
-export const midiSegment = (/** @type {Uint8Array} */ midi, /** @type {SynthSettings} */ settings) => b64(b64(dFragment(midi, settings).d));
+export const midiSegment = (/** @type {Uint8Array} */ midi, /** @type {TinySynthSettings} */ settings) => b64(b64(dFragment(midi, settings).d));
 
 // ---------------------------------------------------------------------------------------------
 // The consumer's token_uri (the consumer layout)

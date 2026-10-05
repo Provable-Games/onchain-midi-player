@@ -8,7 +8,7 @@ use onchain_midi_player::interface::{
     IOnchainTinySynthSafeDispatcherTrait, IOnchainTinySynthSafeLibraryDispatcher,
 };
 use onchain_midi_player::types::{
-    Filter, FilterKind, Operator, SynthSettings, Timbre, WaveDef, Waveform,
+    Filter, FilterKind, Operator, Timbre, TinySynthSettings, WaveDef, Waveform,
 };
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 
@@ -22,7 +22,7 @@ fn synth() -> IOnchainTinySynthSafeLibraryDispatcher {
 /// string, then the 0-based wave, timbre or (timbre, operator) indices. The library call appends
 /// `'ENTRYPOINT_FAILED'` after them.
 #[feature("safe_dispatcher")]
-fn assert_midi_segment_reverts(settings: SynthSettings, expected: Span<felt252>) {
+fn assert_midi_segment_reverts(settings: TinySynthSettings, expected: Span<felt252>) {
     match synth().midi_segment(sound::midi(), settings) {
         Result::Ok(_) => panic_with_felt252('should have reverted'),
         Result::Err(panic_data) => {
@@ -149,7 +149,7 @@ fn custom_waves_are_accepted() {
 }
 
 /// The kick of `settings_for(1)`, its first operator given `filter` and `route`.
-fn with_kick_filter(route: u8, filter: Filter) -> SynthSettings {
+fn with_kick_filter(route: u8, filter: Filter) -> TinySynthSettings {
     let mut s = sound::settings_for(1);
     let mut kick = *s.timbres.at(1);
     let first = *kick.operators.at(0);

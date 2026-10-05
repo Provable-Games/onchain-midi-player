@@ -16,7 +16,7 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   the final stream may end with it. Check pad lengths, the placement of pad
   spaces (insignificant positions only), and every residue class, not only the
   sample token.
-- **SETTINGS wire format:** the ASCII encoding of `SynthSettings` that the
+- **SETTINGS wire format:** the ASCII encoding of `TinySynthSettings` that the
   class writes and the player parses. Range checks, separators, field order,
   signs and fixed-point scales must agree between the Cairo encoder, the JS
   reference encoder and the player parser. The text must never be able to
@@ -53,7 +53,7 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   splicing, the art rule, `examples/beast_consumer`, snforge tests, gas and RPC
   caps), `midi-guide` (the MIDI contract, `check-midi` and `preview`, player
   and pinned-engine playback quirks, looping, art sync), `sound-design`
-  (`SynthSettings`, the SETTINGS format, settings validation and its `'TS: …'`
+  (`TinySynthSettings`, the SETTINGS format, settings validation and its `'TS: …'`
   reverts, custom timbres and operator fields) and `token-uri-inspector`
   (decoding and rebuilding a `token_uri`, engine verification,
   `scripts/page_versions.json`, RPC call caps). Each has a `SKILL.md` and may

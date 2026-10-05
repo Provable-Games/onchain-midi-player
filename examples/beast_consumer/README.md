@@ -15,7 +15,7 @@ examples/beast_consumer/
 │                                  builds its OnchainTinySynth class (build-external-contracts)
 ├── src/
 │   ├── beast_like_nft.cairo       BeastLikeNft: render_svg, members, word-aligned token_uri assembly
-│   ├── sound.cairo                the tokens' MIDI files and SynthSettings
+│   ├── sound.cairo                the tokens' MIDI files and TinySynthSettings
 │   └── beast_data.cairo           generated: token 4's real Beast SVG and synthetic score
 ├── tests/
 │   ├── golden.cairo               generated: expected token_uri / SVG per sample token, token 4's
@@ -23,7 +23,7 @@ examples/beast_consumer/
 │   ├── naive.cairo                naive reference: plain JSON, base64-encoded once
 │   ├── test_token_uri.cairo       golden parity, naive parity, library call without deployment
 │   ├── test_art_safety.cairo      the art rule on the rendered SVG (no `</script`)
-│   ├── test_reverts.cairo         invalid SynthSettings and unknown tokens revert
+│   ├── test_reverts.cairo         invalid TinySynthSettings and unknown tokens revert
 │   └── test_gas.cairo             token 4's token_uri, piece by piece
 ├── scripts/
 │   ├── reference.mjs              independent JS reference of everything above
@@ -173,7 +173,7 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromiu
 - [ ] **Key order**: members, then `image`, then `animation_url` last, because the art closes the `animation_url` string.
 - [ ] **`animation_url_segment` and `midi_segment` come from library calls** on the stored class hash (`IOnchainTinySynthLibraryDispatcher`). The class is declared, never deployed. Store the class hash; updating it is how you opt into a new engine or page.
 - [ ] **No change to the renderer.** It keeps returning raw SVG.
-- [ ] Pass `SynthSettings` that are constants or derived from permanent traits, so each token's sound stays fixed. Invalid settings revert the whole `token_uri`.
+- [ ] Pass `TinySynthSettings` that are constants or derived from permanent traits, so each token's sound stays fixed. Invalid settings revert the whole `token_uri`.
 - [ ] Use the class's `base64` or your own encoder, as long as it is standard RFC 4648.
 
 ## Gas

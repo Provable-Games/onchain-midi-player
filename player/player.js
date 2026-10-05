@@ -282,7 +282,7 @@ export function startPlayer() {
     };
 
     // 2. The engine, settings and MIDI; on failure ▶ stays disabled and no synth is created.
-    /** @type {import("./settings.js").SynthSettings} */
+    /** @type {import("./settings.js").TinySynthSettings} */
     let settings;
     /** @type {Uint8Array} */
     let midi;

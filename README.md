@@ -12,8 +12,8 @@ Implemented:
 - **The offline build pipeline (issue #9):** the pinned engine, the page build, the generated [`src/page_data.cairo`](src/page_data.cairo) and the golden fixtures for the class. See [Build pipeline](#build-pipeline).
 - **The gzipped engine (issue #14):** `PAGE` carries the engine gzipped, with a small gunzip shim, which nearly halves the segment and its gas. See [The gzipped engine](#the-gzipped-engine).
 - **The class (issue #10):** `OnchainTinySynth` in [`src/contract.cairo`](src/contract.cairo), with `midi_segment` in [`src/segment.cairo`](src/segment.cairo). It matches every golden fixture byte for byte, directly and through a library call. See [Gas and limits](#gas-and-limits).
-- **Custom waves (issue #2):** `SynthSettings.waves`, sample and harmonic waveforms that the player registers with the engine before installing the timbres, from `page.9`. See [Custom waves](#custom-waves).
-- **The sound provider interface:** `ISoundProvider` in [`src/interface.cairo`](src/interface.cairo) and `TokenSound` in [`src/types.cairo`](src/types.cairo): a composer's contract implements the single function `get_sound` to serve a token's MIDI and `SynthSettings` in one call, and an NFT calls it. The class does not implement or call it. See [Sound provider interface](#sound-provider-interface).
+- **Custom waves (issue #2):** `TinySynthSettings.waves`, sample and harmonic waveforms that the player registers with the engine before installing the timbres, from `page.9`. See [Custom waves](#custom-waves).
+- **The sound provider interface:** `ISoundProvider` in [`src/interface.cairo`](src/interface.cairo) and `TinySynthSound` in [`src/types.cairo`](src/types.cairo): a composer's contract implements the single function `get_sound` to serve a token's MIDI and `TinySynthSettings` in one call, and an NFT calls it. The class does not implement or call it. See [Sound provider interface](#sound-provider-interface).
 - **Filters (issue #3):** an optional fixed low-, high- or band-pass filter on each audio-output operator, which the player passes to the engine's operator filter, from `page.10`. See [Filters](#filters).
 - **The optimized base64 encoder:** the maintainer's `game_components_encoding` package, from the game-components release `v3.1.0`, which [`src/base64.cairo`](src/base64.cairo) re-exports. A full-size Beast `token_uri` costs 0.29B L2 gas. See [The base64 encoder](#the-base64-encoder).
 
@@ -72,7 +72,7 @@ Where:
 
 - `PAGE` is the fixed HTML page. It ends by opening the settings text block (`<script type="text/plain" id="settings">`).
 - `animation_url_segment()` = `b64('"animation_url":"data:text/html;base64,' ++ b64(PAGE))`.
-- `midi_segment(midi, settings)` = `b64(b64(D))`, with `D = SETTINGS '</script><script type="text/plain" id="midi">' b64(midi) <pad> '</script><script type="text/plain" id="art">'`. `SETTINGS` is an ASCII encoding of the `SynthSettings` value (digits, `-` and separators only); its exact format is specified with issue #1.
+- `midi_segment(midi, settings)` = `b64(b64(D))`, with `D = SETTINGS '</script><script type="text/plain" id="midi">' b64(midi) <pad> '</script><script type="text/plain" id="art">'`. `SETTINGS` is an ASCII encoding of the `TinySynthSettings` value (digits, `-` and separators only); its exact format is specified with issue #1.
 - `S = svg_b64 '"' <pad>` is encoded once and used twice. The first time it is the `image` value. The second time, at the HTML layer, it is the tail of the `animation_url` base64 stream: `svg_b64` decodes to the raw SVG, which becomes the contents of the open art block, and the `"` closes the `animation_url` string. The SVG must therefore never contain `</script` (see [Art (SVG) requirements](#art-svg-requirements)).
 
 Decoded, the `animation_url` value after its `data:text/html;base64,` prefix is `b64(PAGE) ++ b64(D) ++ svg_b64`, which is standard base64 of `PAGE ++ D ++ SVG`. Since `svg_b64` ends that stream, it may end with `=` padding. `b64(PAGE)` and `b64(D)` are mid-stream and must be unpadded.
@@ -142,13 +142,13 @@ Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`.
 | Function | Returns |
 | --- | --- |
 | `animation_url_segment() -> ByteArray` | Fixed `"animation_url":"data:text/html;base64,<page>` JSON member, pre-encoded at both layers. No encoding at call time. |
-| `midi_segment(midi: ByteArray, settings: SynthSettings) -> ByteArray` | `b64(b64(D))`: the token's settings and MIDI blocks, then opens the art block. Validates `settings` and encodes only per-token data. |
+| `midi_segment(midi: ByteArray, settings: TinySynthSettings) -> ByteArray` | `b64(b64(D))`: the token's settings and MIDI blocks, then opens the art block. Validates `settings` and encodes only per-token data. |
 | `base64(data: ByteArray) -> ByteArray` | Standard RFC 4648 base64 with `=` padding, for consumers encoding their own JSON pieces. The same encoder `midi_segment` uses. |
 | `script_sha256() -> u256` | Constant SHA-256 of the embedded engine JS, decompressed (big-endian). |
 | `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-fc04dbe+page.10'`, an interim build (see [Versions](#versions) and [Build pipeline](#build-pipeline)). |
 | `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice, then the MIT licenses of fflate, from which the page's gunzip shim derives, and of game-components, whose base64 encoder the class embeds. |
 
-The same file also declares `ISoundProvider`, the interface composers implement to serve a token's MIDI and `SynthSettings` (see [Sound provider interface](#sound-provider-interface)). The class does not implement or call it.
+The same file also declares `ISoundProvider`, the interface composers implement to serve a token's MIDI and `TinySynthSettings` (see [Sound provider interface](#sound-provider-interface)). The class does not implement or call it.
 
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
 
@@ -171,7 +171,7 @@ How a consumer builds its `token_uri` (the layout above), with the word alignmen
 use onchain_midi_player::interface::{
     IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
 };
-use onchain_midi_player::types::SynthSettings;
+use onchain_midi_player::types::TinySynthSettings;
 
 /// Appends spaces (between JSON tokens) until `(s.len() + extra) % 3 == 0`.
 fn pad3(ref s: ByteArray, extra: u32) {
@@ -193,7 +193,7 @@ fn token_uri(
     members: ByteArray, // "name":...,"attributes":[...]   (no braces)
     svg: ByteArray, // raw SVG; must never contain `</script`
     midi: ByteArray,
-    settings: SynthSettings,
+    settings: TinySynthSettings,
 ) -> ByteArray {
     let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth };
 
@@ -252,23 +252,23 @@ At most 30 groups are needed in each place (120 characters), and the decoded JSO
 
 ## Sound provider interface
 
-The class plays a token's MIDI with its `SynthSettings`; it does not know where they come from. [`ISoundProvider`](src/interface.cairo) (`onchain_midi_player::interface::ISoundProvider`) and [`TokenSound`](src/types.cairo) (`onchain_midi_player::types::TokenSound`) fix how a composer's contract serves them, so any NFT can call any composer, and an NFT can change composers without changing its code. **The class does not implement or call `ISoundProvider`**: it is a convention between composers and NFTs, declared in this crate so that both compile against the same types. It changes neither the class hash nor `PAGE`.
+The class plays a token's MIDI with its `TinySynthSettings`; it does not know where they come from. [`ISoundProvider`](src/interface.cairo) (`onchain_midi_player::interface::ISoundProvider`) and [`TinySynthSound`](src/types.cairo) (`onchain_midi_player::types::TinySynthSound`) fix how a composer's contract serves them, so any NFT can call any composer, and an NFT can change composers without changing its code. **The class does not implement or call `ISoundProvider`**: it is a convention between composers and NFTs, declared in this crate so that both compile against the same types. It changes neither the class hash nor `PAGE`.
 
-A Standard MIDI File can select an instrument, with a program change or a note on channel 10, but it cannot define one. So the composer's contract owns both the score and the instrument definitions it plays, as `SynthSettings`. The NFT, or its renderer, calls `get_sound` and passes both straight to `midi_segment`:
+A Standard MIDI File can select an instrument, with a program change or a note on channel 10, but it cannot define one. So the composer's contract owns both the score and the instrument definitions it plays, as `TinySynthSettings`. The NFT, or its renderer, calls `get_sound` and passes both straight to `midi_segment`:
 
 ```cairo
 // onchain_midi_player::types
 #[derive(Drop, Clone, Serde, PartialEq, Debug)]
-pub struct TokenSound {
+pub struct TinySynthSound {
     pub midi: ByteArray, // a raw Standard MIDI File
-    pub settings: SynthSettings, // the instruments it plays
+    pub settings: TinySynthSettings, // the instruments it plays
 }
 
 // onchain_midi_player::interface
 #[starknet::interface]
 pub trait ISoundProvider<T> {
     /// The score and the instruments in one call: what NFTs call.
-    fn get_sound(self: @T, token_id: u256) -> TokenSound;
+    fn get_sound(self: @T, token_id: u256) -> TinySynthSound;
 }
 ```
 
@@ -293,9 +293,9 @@ A contract that implements `ISoundProvider` must honour all of these:
 
 Recommended:
 
-- **Keep the provider's other interfaces consistent with `get_sound`.** If the provider also exposes the MIDI or the settings through its own interfaces, they should equal `get_sound(id).midi` and `get_sound(id).settings`, for every token, at every state. One internal function that builds the `TokenSound` for all of them keeps that true by construction. Sharing it also matters because a per-token subset of the settings depends on the programs the token's MIDI uses: the settings have to be worked out from the same score the MIDI returns.
+- **Keep the provider's other interfaces consistent with `get_sound`.** If the provider also exposes the MIDI or the settings through its own interfaces, they should equal `get_sound(id).midi` and `get_sound(id).settings`, for every token, at every state. One internal function that builds the `TinySynthSound` for all of them keeps that true by construction. Sharing it also matters because a per-token subset of the settings depends on the programs the token's MIDI uses: the settings have to be worked out from the same score the MIDI returns.
 - **Return only what the token's MIDI uses:** the timbres of the programs and drum notes it plays, and the waves those timbres select. `SETTINGS` costs about 14.5M L2 gas per 1,000 bytes through `midi_segment` ([The size of `SETTINGS`](#the-size-of-settings-no-byte-cap)). A Beast's subset is about 0.9–1.4 KB, against about 3.9 KB for a full chip bank: about 13–20M L2 gas against about 57M, on every `token_uri` call.
-- **Hold the preset bank as constants in the provider's code,** and pick each token's subset from them. Storage reads cost about 24K L2 gas per felt, and a `SynthSettings` stored field by field takes a felt per field.
+- **Hold the preset bank as constants in the provider's code,** and pick each token's subset from them. Storage reads cost about 24K L2 gas per felt, and a `TinySynthSettings` stored field by field takes a felt per field.
 - **Keep sample tables short.** Each sample is 2 to 6 bytes of `SETTINGS`. The 32,767-step reference LFSR (147,532 bytes) adds about 2.1B L2 gas to `midi_segment`, more than many RPC nodes serve ([Network and node limits](#network-and-node-limits)), and the provider pays again to hold or build it (277.9M to build it in a Cairo loop). `WhiteNoise` and `MetallicNoise` need no table.
 - **Keep the provider's class at Sierra 1.7 or later,** like every class in the `token_uri` call chain ([Network and node limits](#network-and-node-limits)).
 
@@ -305,7 +305,7 @@ The crate has no helper for the call: copy this one into your NFT or renderer. I
 
 ```cairo
 use core::num::traits::Zero;
-use onchain_midi_player::types::TokenSound;
+use onchain_midi_player::types::TinySynthSound;
 use starknet::ContractAddress;
 use starknet::syscalls::call_contract_syscall;
 
@@ -313,7 +313,7 @@ use starknet::syscalls::call_contract_syscall;
 const MAX_REPLY_FELTS: u32 = 4_000;
 
 /// `provider.get_sound(token_id)`, or `None` when the token should play without sound.
-fn fetch_sound(provider: ContractAddress, token_id: u256) -> Option<TokenSound> {
+fn fetch_sound(provider: ContractAddress, token_id: u256) -> Option<TinySynthSound> {
     if provider.is_zero() {
         return Option::None; // no provider set: sound is off, and no call is made
     }
@@ -323,9 +323,9 @@ fn fetch_sound(provider: ContractAddress, token_id: u256) -> Option<TokenSound> 
     if reply.len() > MAX_REPLY_FELTS {
         return Option::None; // larger than this renderer decodes
     }
-    let sound: TokenSound = Serde::deserialize(ref reply)?; // `None` if truncated or malformed
+    let sound: TinySynthSound = Serde::deserialize(ref reply)?; // `None` if truncated or malformed
     if !reply.is_empty() {
-        return Option::None; // it starts like a `TokenSound` but carries more
+        return Option::None; // it starts like a `TinySynthSound` but carries more
     }
     Option::Some(sound)
 }
@@ -334,7 +334,7 @@ fn fetch_sound(provider: ContractAddress, token_id: u256) -> Option<TokenSound> 
 Set `MAX_REPLY_FELTS` from your own gas budget, taking your largest real token's reply with some headroom (the golden `beast_140bpm` fixture's reply is 106 felts). The check reads only the reply's length and runs before the decoding, which is where the gas goes.
 
 - **Why a raw syscall and `Serde::deserialize`, not the generated "safe" dispatcher.** `call_contract_syscall` returns a provider's panic, or a missing `get_sound` entry point, as an `Err` instead of reverting the caller (since Starknet 0.13.4). The safe dispatcher decodes the reply itself, and a malformed reply makes it panic in the caller's frame. Decoding the reply yourself turns that into `None`.
-- **What decoding rejects.** The derived `Serde` rejects a truncated reply, an integer out of its type's range, an unknown enum tag (a `WaveDef`, `Waveform` or `FilterKind` tag, or an `Option` tag), and a `ByteArray` with a full word wider than 31 bytes, a pending length over 30, or a pending word wider than its length. The last check, `reply.is_empty()`, rejects a reply that merely starts like a `TokenSound` and carries more felts.
+- **What decoding rejects.** The derived `Serde` rejects a truncated reply, an integer out of its type's range, an unknown enum tag (a `WaveDef`, `Waveform` or `FilterKind` tag, or an `Option` tag), and a `ByteArray` with a full word wider than 31 bytes, a pending length over 30, or a pending word wider than its length. The last check, `reply.is_empty()`, rejects a reply that merely starts like a `TinySynthSound` and carries more felts.
 - **What cannot be caught.** Two failures revert the whole call, uncatchably: calling an undeployed address, and running out of gas. Call `get_sound` once in the setter that changes the provider, so an undeployed address reverts the setter rather than every `token_uri`, and keep a kill switch: the zero address, as in the snippet, turns sound off without a call.
 - **Settings are not validated by the snippet.** `midi_segment` validates them anyway; the class version the NFT calls is the authority on what is valid, and this crate's `settings::validate` may be another version's; and `validate` reverts rather than returning a result. To fall back on invalid settings too, test the provider's output against the class in CI, or call `midi_segment` through `library_call_syscall` and treat an error as no sound.
 
@@ -342,7 +342,7 @@ The generated `ISoundProviderDispatcher` suits callers that should revert when t
 
 **The call path.** Have the NFT's renderer call the provider itself: the NFT `call_contract`s its renderer, the renderer calls `get_sound` and library-calls the class with the result. An NFT that fetches the sound and passes it on to its renderer moves the MIDI and settings through one more calldata hop.
 
-**Tests.** [`tests/test_provider.cairo`](tests/test_provider.cairo) holds a mock provider that implements only `get_sound`. It checks the sound, passed to `midi_segment` through the class, against a golden fixture byte for byte, for a 180-bit token ID, and a Serde round trip of a `TokenSound` with custom waves and filters. The same file holds a copy of the snippet above, so CI type-checks it, and runs it against a zero address, a panicking provider, a provider without `get_sound`, truncated, trailing and malformed replies, and a reply one felt over the cap. The copy is a test helper, not part of the crate: keep it identical to the snippet when you change either. snforge 0.64.0 cannot test the failure paths of a safe *library* call (catching its panic replaces the caller's class hash for the rest of the test), so test them, as these tests do, with `call_contract` into mock contracts.
+**Tests.** [`tests/test_provider.cairo`](tests/test_provider.cairo) holds a mock provider that implements only `get_sound`. It checks the sound, passed to `midi_segment` through the class, against a golden fixture byte for byte, for a 180-bit token ID, and a Serde round trip of a `TinySynthSound` with custom waves and filters. The same file holds a copy of the snippet above, so CI type-checks it, and runs it against a zero address, a panicking provider, a provider without `get_sound`, truncated, trailing and malformed replies, and a reply one felt over the cap. The copy is a test helper, not part of the crate: keep it identical to the snippet when you change either. snforge 0.64.0 cannot test the failure paths of a safe *library* call (catching its panic replaces the caller's class hash for the rest of the test), so test them, as these tests do, with `call_contract` into mock contracts.
 
 ## Gas and limits
 
@@ -444,7 +444,7 @@ The full Beast `token_uri` above, token 4 of the example, with `SETTINGS` of eac
 
 - **With filters (issue #3, from `page.10`) and without the interim operator bounds (from `fc04dbe+page.10`)** every operator can carry a filter and every field can take its type's extreme, which makes the largest input without custom waves 218,264 bytes. With the largest Beast score, `midi_segment` through the library call costs 3,162.7M (`snforge test gas_lc_midi_segment_max_heaviest`), about 13.9M per 1,000 bytes more than the 156,489-byte input above; it was not measured in a whole `token_uri`.
 - **Where the limits fall.** A full Beast `token_uri` passes the 1B target at about 48 KB of `SETTINGS`, and 1.11B at about 56 KB. Whether a larger one renders depends on the RPC node that serves the call (next section).
-- **How these were measured.** With snforge, through the example's NFT (`--gas-report`, the `token_uri` call itself). The calldata is the `SynthSettings` and the score.
+- **How these were measured.** With snforge, through the example's NFT (`--gas-report`, the `token_uri` call itself). The calldata is the `TinySynthSettings` and the score.
   - Every size runs. The 1.5 MB input takes 174M Cairo steps through `token_uri`, and the 5.4 MB input takes 73 s through `midi_segment`.
   - The library call moves the calldata in and the result out. It costs 1,468M more than calling `midi_segment` directly at 1.5 MB (284,309 felts in and 86,382 out), and 101M at the 156,489-byte input.
   - The repository's tests go up to the largest v1 input (`structural_max()` in [`tests/settings_fixtures.cairo`](tests/settings_fixtures.cairo), built in a loop and checked against the JS reference's length and SHA-256). With every operator filtered and every field at its type's extreme (218,264 bytes) it takes about 22M steps through `midi_segment`, so [`Scarb.toml`](Scarb.toml) raises snforge's step limit to 100M. The larger sizes were measured once, outside CI.
@@ -479,14 +479,14 @@ A consumer's `token_uri` is a view call (`starknet_call`), so what limits it is 
 
 ## Sound settings and custom sounds
 
-Declared in [`src/types.cairo`](src/types.cairo). The consumer passes a typed `SynthSettings` value with every `midi_segment` call:
+Declared in [`src/types.cairo`](src/types.cairo). The consumer passes a typed `TinySynthSettings` value with every `midi_segment` call:
 
 | Type | Contents |
 | --- | --- |
-| `SynthSettings` | `quality` (0 chip-tune, 1 FM), `reverb` (`u8` percent, 0 off), `master_vol` (`u8` percent), `voices` (`u8`, at least 1), `waves: Span<WaveDef>` (custom waveforms shared by all timbres, 0–256) and `timbres: Span<Timbre>` (0–175: each program and drum slot at most once) |
+| `TinySynthSettings` | `quality` (0 chip-tune, 1 FM), `reverb` (`u8` percent, 0 off), `master_vol` (`u8` percent), `voices` (`u8`, at least 1), `waves: Span<WaveDef>` (custom waveforms shared by all timbres, 0–256) and `timbres: Span<Timbre>` (0–175: each program and drum slot at most once) |
 | `Timbre` | A custom sound replacing General MIDI program `slot` (0–127), or drum note `slot` (35–81) when `drum` is true. Holds 1–8 operators |
 | `Operator` | One oscillator, using TinySynth's 13-parameter model: `route` (output, FM or AM target), `wave`, `volume`, `ratio`, `offset_hz`, `attack`, `hold`, `decay`, `sustain`, `release`, `pitch_ratio`, `pitch_time`, `key_scale`, plus an optional `filter`. The values after `wave` are `u32` (`offset_hz` and `key_scale`: `i32`), fixed point ÷10,000, with no limit: a note whose computed values overflow is skipped (see [Engine limits](#engine-limits-on-operator-values)) |
-| `Waveform` | `Sine`, `Square`, `Sawtooth`, `Triangle`, `WhiteNoise`, `MetallicNoise`, or `Custom(index)`: entry `index` of `SynthSettings.waves` |
+| `Waveform` | `Sine`, `Square`, `Sawtooth`, `Triangle`, `WhiteNoise`, `MetallicNoise`, or `Custom(index)`: entry `index` of `TinySynthSettings.waves` |
 | `WaveDef` | `Harmonics(Span<u16>)` (band-limited custom wave, at least 1 harmonic) or `Samples(Span<i8>)` (one cycle of a chip wave, played sample-and-hold, at least 1 sample). The engine takes any length: see [Custom waves](#custom-waves) |
 | `Filter` | `LowPass`, `HighPass` or `BandPass`, with a cutoff (in Hz, or a multiple of the note frequency when `key_track` is set) and a linear Q, on an audio-output operator. Fixed, with no envelope: see [Filters](#filters) |
 
@@ -504,7 +504,7 @@ Declared in [`src/types.cairo`](src/types.cairo). The consumer passes a typed `S
 
 ### Custom waves
 
-Issue #2, from `page.9`. `SynthSettings.waves` holds up to 256 wave definitions (`MAX_WAVES`), shared by every timbre; an operator plays entry `i` with `wave: Waveform::Custom(i)` (`'TS: wave index out of range'` past the end). Unused and repeated entries are allowed.
+Issue #2, from `page.9`. `TinySynthSettings.waves` holds up to 256 wave definitions (`MAX_WAVES`), shared by every timbre; an operator plays entry `i` with `wave: Waveform::Custom(i)` (`'TS: wave index out of range'` past the end). Unused and repeated entries are allowed.
 
 - **`Samples(Span<i8>)`: one cycle, played sample-and-hold.** Each sample `s` is `s / 128`: −128 is −1.0, 0 is 0 and 127 is 0.9921875. The player registers the table with the engine's `setSampleWave`, which holds each of its `N` samples for `k = max(1, round(sampleRate / (440 × N)))` frames, so its home pitch `sampleRate / (N × k)` is near 440 Hz and notes play near rate 1, with sharp steps (fork decisions D-027 and D-031). The note's frequency is the cycle rate, whatever `N`: a 64-sample stepped triangle at A4 plays at 440 Hz (measured within 0.01 cent), stepping 64 × 440 times a second. The table's data is the same at every load at a given sample rate; `k` depends on the sample rate.
 - **`Harmonics(Span<u16>)`: a band-limited wave.** Element `i` is the amplitude of harmonic `i + 1`, as a sine term. The player passes `imag = [0, h…]` and `real` all zeros to `setHarmonicWave`; the browser normalizes the peak to full scale, so only the ratios matter (`[2, 1]` sounds like `[65_535, 32_767]`), and all zeros is silent (measured in Chromium, Firefox and WebKit).
@@ -544,9 +544,9 @@ Issue #2, from `page.9`. `SynthSettings.waves` holds up to 256 wave definitions 
 
 ```cairo
 use onchain_midi_player::settings::{default_operator, default_settings};
-use onchain_midi_player::types::{Operator, SynthSettings, Timbre, WaveDef, Waveform};
+use onchain_midi_player::types::{Operator, Timbre, TinySynthSettings, WaveDef, Waveform};
 
-fn chip_settings() -> SynthSettings {
+fn chip_settings() -> TinySynthSettings {
     let waves = [
         WaveDef::Samples([127, -128, -128, -128, -128, -128, -128, -128].span()), // 0: 12.5% pulse
         WaveDef::Harmonics([100, 0, 50, 0, 25].span()), // 1: harmonics 1, 3 and 5
@@ -558,7 +558,7 @@ fn chip_settings() -> SynthSettings {
     };
     let lead = Timbre { drum: false, slot: 80, operators: [voice(0)].span() };
     let organ = Timbre { drum: false, slot: 16, operators: [voice(1)].span() };
-    SynthSettings { waves, timbres: [lead, organ].span(), ..default_settings() }
+    TinySynthSettings { waves, timbres: [lead, organ].span(), ..default_settings() }
 }
 ```
 
@@ -610,9 +610,9 @@ Issue #3, from `page.10`. An audio-output operator (`route` 0) can carry a fixed
 
 ```cairo
 use onchain_midi_player::settings::{default_operator, default_settings};
-use onchain_midi_player::types::{Filter, FilterKind, Operator, SynthSettings, Timbre, Waveform};
+use onchain_midi_player::types::{Filter, FilterKind, Operator, Timbre, TinySynthSettings, Waveform};
 
-fn filtered_settings() -> SynthSettings {
+fn filtered_settings() -> TinySynthSettings {
     // Metallic noise at playback rate 390 / 440 through a flat 3 kHz high-pass.
     let hat = Operator {
         wave: Waveform::MetallicNoise, volume: 2_000, ratio: 0, offset_hz: 3_900_000, hold: 0,
@@ -635,7 +635,7 @@ fn filtered_settings() -> SynthSettings {
         Timbre { drum: false, slot: 80, operators: [lead].span() },
     ]
         .span();
-    SynthSettings { timbres, ..default_settings() }
+    TinySynthSettings { timbres, ..default_settings() }
 }
 ```
 
@@ -796,8 +796,8 @@ The rules follow from how TinySynth reads a file: it stops reading a track at En
 - **16 channels.** Port and channel-prefix meta events are ignored.
 - **Channel 10 (index 9) is percussion.** A note-on from 35 to 81 plays that drum; other notes are silent. Note-offs are ignored: a hit lasts 3.5 × the decay of its sound's first operator. Program changes on channel 10 have no effect.
 - **The other channels are melodic.** Program changes 0–127 select the General MIDI instrument, and notes 0–127 all play. Bank select (CC0, CC32) is ignored, so there are 128 programs.
-- **Built-in sounds.** `SynthSettings.quality` picks TinySynth's built-in set: 0 chip-tune (one oscillator per note), 1 FM.
-- **Custom sounds.** Each entry of `SynthSettings.timbres` replaces program `slot` (0–127) or drum note `slot` (35–81) for the whole song. The MIDI selects it the ordinary way: a program change to the slot, or that drum note on channel 10.
+- **Built-in sounds.** `TinySynthSettings.quality` picks TinySynth's built-in set: 0 chip-tune (one oscillator per note), 1 FM.
+- **Custom sounds.** Each entry of `TinySynthSettings.timbres` replaces program `slot` (0–127) or drum note `slot` (35–81) for the whole song. The MIDI selects it the ordinary way: a program change to the slot, or that drum note on channel 10.
 
 ### Messages TinySynth honours
 
@@ -820,20 +820,20 @@ The rules follow from how TinySynth reads a file: it stops reading a track at En
 | GS SysEx `F0 41 dd 42 12`, address, data, checksum, `F7`, at its standard length (device ID and checksum are not checked) | `40 00 00`: master tune, four data nibbles n, (n − 0x400) × 0.1 cent. `40 00 05`: master key-shift, data − 64 semitones. `40 1x 40` to `40 1x 4B`: scale tuning of C to B, data − 64 cents. `40 1x 15`: use for rhythm part, which makes part x's channel a drum channel (data not 0) or melodic (0); notes on a melodic channel 10 skip their release envelope. Part x: 0 is channel 10, 1–9 are channels 1–9, A–F channels 11–16. |
 | Meta `FF 51` (tempo), `FF 2F` (End-of-Track) | See [Playback](#playback). |
 
-Ignored, with no effect: every other controller, including bank select (CC0, CC32), CC91 reverb send (reverb is engine-wide: `SynthSettings.reverb`), CC93 chorus, portamento (CC5, CC65), CC66 sostenuto, CC67 soft pedal, the sound controllers (CC70–79) and CC122 local control; polyphonic aftertouch (`An`) and channel pressure (`Dn`); every other SysEx, including GM System On, GS Reset and GM Master Volume (master volume is `SynthSettings.master_vol`); and every other meta event (text, markers, lyrics, time and key signatures).
+Ignored, with no effect: every other controller, including bank select (CC0, CC32), CC91 reverb send (reverb is engine-wide: `TinySynthSettings.reverb`), CC93 chorus, portamento (CC5, CC65), CC66 sostenuto, CC67 soft pedal, the sound controllers (CC70–79) and CC122 local control; polyphonic aftertouch (`An`) and channel pressure (`Dn`); every other SysEx, including GM System On, GS Reset and GM Master Volume (master volume is `TinySynthSettings.master_vol`); and every other meta event (text, markers, lyrics, time and key signatures).
 
 ### Limits
 
-- **Polyphony:** at most `SynthSettings.voices` (at least 1) melodic notes at once, across all channels. A note beyond that cuts a released note first (the one ending soonest), otherwise the held note that started earliest (of notes that started together, the one latest in the file). The cut happens when the new note is scheduled, up to about 0.2 s before it sounds, so the cut note ends early. A drum hit takes no voice and is never cut, but it applies the limit too: right after one, at most `voices` − 1 melodic notes remain, so with `voices` 1 every drum hit cuts the melody.
+- **Polyphony:** at most `TinySynthSettings.voices` (at least 1) melodic notes at once, across all channels. A note beyond that cuts a released note first (the one ending soonest), otherwise the held note that started earliest (of notes that started together, the one latest in the file). The cut happens when the new note is scheduled, up to about 0.2 s before it sounds, so the cut note ends early. A drum hit takes no voice and is never cut, but it applies the limit too: right after one, at most `voices` − 1 melodic notes remain, so with `voices` 1 every drum hit cuts the melody.
 - **Range:** 16 channels, programs 0–127, notes 0–127 (drum notes 35–81), and velocity 1–127, with loudness following its square.
 - **Timing:** 1–32,767 ticks per quarter note, tempo 1–16,777,215 µs per quarter note, and a pass of at least 50 ms.
 - **Size:** text events at most 4,096 bytes. Nothing else in the page limits the size; gas does (see the recommendations).
-- **Mix:** master volume and reverb are `SynthSettings.master_vol` and `SynthSettings.reverb`, the same for the whole song. MIDI cannot change them.
+- **Mix:** master volume and reverb are `TinySynthSettings.master_vol` and `TinySynthSettings.reverb`, the same for the whole song. MIDI cannot change them.
 
 ### What's fixed and what's driven
 
 - **Fixed per class hash:** the engine, the player and the page, and so every rule in this section. A new engine or page means a new class hash and `version()`.
-- **Driven on each call:** the MIDI (by the composer), and the `SynthSettings` and the art (by the consumer).
+- **Driven on each call:** the MIDI (by the composer), and the `TinySynthSettings` and the art (by the consumer).
 
 The full list is in [Verifying the engine](#verifying-the-engine).
 
@@ -899,7 +899,7 @@ npm run preview -- song.mid --serve                                # also serve 
 ```
 
 - **Checks first.** It runs the MIDI through `checkMidi` and reports it as `check_midi.mjs` does; the settings through `player/validate.js` and `player/encode.js`, the JS reference of `settings::validate` and the encoder, printing the panic data `midi_segment` would revert with; and the SVG through the [art rule](#art-svg-requirements). Any failure exits 1 and writes nothing.
-- **Inputs.** The MIDI in any form `check_midi.mjs` reads (one score). `--settings` takes a `SynthSettings` value as JSON, in the shape of the `settings` objects in [`tests/fixtures/settings.json`](tests/fixtures/settings.json) (a whole fixture entry also works; every field is required and unknown fields are rejected), or a page's `SETTINGS` text, so a deployed token's page can be rebuilt from its blocks. `--out` defaults to `preview.html`; `--serve` takes an optional port (0 picks a free one).
+- **Inputs.** The MIDI in any form `check_midi.mjs` reads (one score). `--settings` takes a `TinySynthSettings` value as JSON, in the shape of the `settings` objects in [`tests/fixtures/settings.json`](tests/fixtures/settings.json) (a whole fixture entry also works; every field is required and unknown fields are rejected), or a page's `SETTINGS` text, so a deployed token's page can be rebuilt from its blocks. `--out` defaults to `preview.html`; `--serve` takes an optional port (0 picks a free one).
 - **Identity.** `npm test` checks that, for the example's token 1, the output equals [`examples/beast_consumer/fixtures/animation.html`](examples/beast_consumer/fixtures/animation.html), decoded from the golden `token_uri` the contract matches byte for byte, and that the `token_uri` around token 4's page has the digest the contract's is tested against.
 - **Playback** is the same engine and player code as in every token. Audio can still differ slightly across browsers and sample rates. Noise and reverb are generated from a fixed seed (fork #7), so they are the same on every load at a given sample rate.
 
@@ -929,7 +929,7 @@ The class is declared but never deployed, so an explorer cannot call `script_sha
 What a class hash fixes, and what the consumer supplies:
 
 - **Fixed per class hash:** the engine (gzipped in the page), the gunzip shim, the player, and with them the whole fixed page `PAGE`, plus `version()`, `script_sha256()` and `license()`. The class hash also covers the class's Cairo code (its base64 encoder and settings validation), so it changes when that code changes, even if the page does not.
-- **Supplied by the consumer on each call:** the MIDI and the `SynthSettings` (through `midi_segment`), and the SVG art and the other JSON members (which the class never sees).
+- **Supplied by the consumer on each call:** the MIDI and the `TinySynthSettings` (through `midi_segment`), and the SVG art and the other JSON members (which the class never sees).
 
 1. **Get the `token_uri`.** Read it from the collection's contract, which is deployed: in an explorer's read tab, with `sncast call`, or from a marketplace's metadata view. Save the string, `data:application/json;base64,...`, to `token_uri.txt`.
 2. **Decode it and hash the engine.** The JSON layer, then the `animation_url` HTML layer, then the gzip payload of the page's `<script type="text/javascript+gzip" src="data:text/javascript;base64,...">` tag, base64-decoded and gunzipped. With a shell (GNU coreutils, grep and gzip):
@@ -981,7 +981,7 @@ What a class hash fixes, and what the consumer supplies:
 
 ## Versioning
 
-Class hashes are immutable. The engine and the player page are stored in the class when it is declared, so they are fixed per class version: a given class hash, called with the same MIDI and `SynthSettings`, always produces the same output and sound. Sound settings and custom sounds come from the consumer on each call, so they can change without a new class. A new engine or page means a new class hash and a new `version()` string. Consumers choose when to switch by updating the class hash they store; old tokens rendered with an old class hash keep working. The versions and their hashes are listed in [Versions](#versions).
+Class hashes are immutable. The engine and the player page are stored in the class when it is declared, so they are fixed per class version: a given class hash, called with the same MIDI and `TinySynthSettings`, always produces the same output and sound. Sound settings and custom sounds come from the consumer on each call, so they can change without a new class. A new engine or page means a new class hash and a new `version()` string. Consumers choose when to switch by updating the class hash they store; old tokens rendered with an old class hash keep working. The versions and their hashes are listed in [Versions](#versions).
 
 ## Versions
 
@@ -1004,7 +1004,7 @@ The class is declared but never deployed, so block explorers cannot call it (`st
 - `tinysynth-3d965d1+page.10`, the previous interim build, is superseded; it was never declared.
 - **Why `page.10`:** filters (issue #3). The player passes each operator's `Filter` to the engine as `fl`, `ff`, `fq` and `fk`, and the class accepts a filter on an audio output with a cutoff and a Q above 0 instead of reverting it. The engine (`3d965d1`) and everything else on the page are unchanged; settings without filters play exactly as with `page.9`.
 - `tinysynth-3d965d1+page.9`, the previous interim build, is superseded. It was declared on Sepolia only as an interim test class (see [Deployments](#deployments)), never as a release.
-- **Why `page.9`:** custom waves (issue #2). The player registers each entry of `SynthSettings.waves` with the engine's `setSampleWave` or `setHarmonicWave` before installing the timbres, and maps `Waveform::Custom(i)` to that wave; the class no longer reverts custom waves. The art restart also no longer fires early on a pass longer than about 24.8 days (`setTimeout`'s limit): such a pass is timed by a later poll. The engine is re-pinned to `3d965d1` (the fork's 2.0.0, untagged), which adds fork #7 (the reverb impulse and the `n0`/`n1` noise generated from a fixed seed), T5 (input validation) and the lazy-start leak fix.
+- **Why `page.9`:** custom waves (issue #2). The player registers each entry of `TinySynthSettings.waves` with the engine's `setSampleWave` or `setHarmonicWave` before installing the timbres, and maps `Waveform::Custom(i)` to that wave; the class no longer reverts custom waves. The art restart also no longer fires early on a pass longer than about 24.8 days (`setTimeout`'s limit): such a pass is timed by a later poll. The engine is re-pinned to `3d965d1` (the fork's 2.0.0, untagged), which adds fork #7 (the reverb impulse and the `n0`/`n1` noise generated from a fixed seed), T5 (input validation) and the lazy-start leak fix.
 - **Why `page.8`:** the `b198d6c` engine stops drum hits, notes scheduled ahead and queued controller changes itself on `stopMIDI`, keeps the leading rest on the first pass, and reports when each pass's tick 0 sounds (`getPlayStatus().startTime`). The player drops its two workarounds for the older engine (replacing the channels' volume nodes on ■, and rewriting `playTick` and `playTime` on ▶), times the art to `startTime`, and restarts the art at every pass, not only on ▶. Settings, MIDI checks and the class's Cairo code are unchanged.
 - `tinysynth-b198d6c+page.8`, the previous interim build, is superseded; it was never declared.
 - `tinysynth-4b29ff1+page.7`, the interim build before it, is superseded; it was never declared.
@@ -1183,7 +1183,7 @@ Known limitations:
 1. **Scaffold** (this): repository layout, toolchain, interface declarations, README.
 2. **Player page JS** (done, issue #8): MIDI decode, tap-to-start, play/stop, End-of-Track looping, latency-compensated art restart, offline only.
 3. **Offline build pipeline** (done, issue #9): verifies the pinned engine by SHA-256, gzips it (issue #14), assembles and aligns the page, and generates the pre-encoded Cairo constants plus golden fixtures (reference outputs for sample MIDI and art).
-4. **Cairo class implementation** (done, issue #10): the class, `midi_segment`, `SynthSettings` validation and encoding (issue #1), byte-for-byte parity with the JS reference fixtures directly and through `library_call`, the example ported to the class, the optimized base64 encoder (`game_components_encoding`), and gas and class-size measurements.
+4. **Cairo class implementation** (done, issue #10): the class, `midi_segment`, `TinySynthSettings` validation and encoding (issue #1), byte-for-byte parity with the JS reference fixtures directly and through `library_call`, the example ported to the class, the optimized base64 encoder (`game_components_encoding`), and gas and class-size measurements.
 5. **Browser validation** (issue #11): the automatable checks run in CI on Chromium, Firefox and WebKit; the art is re-synced at every pass from `page.8`, and the 10-minute drift check passes on WebKit (see [Browser validation](#browser-validation)). The marketplace survey, mobile, real hardware, and the service and RPC checks are manual.
 6. **Docs and declaration**: finalize docs, declare on Sepolia, then on mainnet, and publish the class hashes.
 
@@ -1209,7 +1209,7 @@ Four skills help AI agents working in other repositories, such as an NFT contrac
 | --- | --- |
 | [`integrator-guide`](plugins/onchain-midi-player/skills/integrator-guide/SKILL.md) | Adding the player to a contract's `token_uri`: the library dispatcher, holding the class hash, the `token_uri` layout, the art rule, calling a sound provider, snforge tests, gas and RPC caps |
 | [`midi-guide`](plugins/onchain-midi-player/skills/midi-guide/SKILL.md) | Writing MIDI for the player: previewing offline, where it differs from standard MIDI players, every `checkMidi` rule, keeping the music in sync with the art, serving scores from a sound provider |
-| [`sound-design`](plugins/onchain-midi-player/skills/sound-design/SKILL.md) | The `SynthSettings` a contract passes: engine settings, custom timbres, `'TS: …'` errors, building settings in Cairo, a sound provider's per-token subsets |
+| [`sound-design`](plugins/onchain-midi-player/skills/sound-design/SKILL.md) | The `TinySynthSettings` a contract passes: engine settings, custom timbres, `'TS: …'` errors, building settings in Cairo, a sound provider's per-token subsets |
 | [`token-uri-inspector`](plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) | Fetching, decoding, verifying, rebuilding and viewing a deployed or local `token_uri`, and checking RPC call caps |
 
 **Install in Claude Code.** The repository is a plugin marketplace ([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)) with one plugin, `onchain-midi-player`. In the other project:

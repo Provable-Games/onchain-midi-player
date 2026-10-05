@@ -1,6 +1,6 @@
 //! Consumer-supplied sound settings for `midi_segment`.
 //!
-//! `TokenSound` (at the end) pairs a score with these settings: what a sound provider returns
+//! `TinySynthSound` (at the end) pairs a score with these settings: what a sound provider returns
 //! (`crate::interface::ISoundProvider`).
 //!
 //! `crate::settings::validate` checks only what the format or the engine requires: `quality`
@@ -35,7 +35,7 @@
 //!
 //! # Consistency
 //!
-//! For a given class hash, the same `SynthSettings` and MIDI always produce the same
+//! For a given class hash, the same `TinySynthSettings` and MIDI always produce the same
 //! sound. Consumers that need a token's sound to stay fixed should pass constants, or
 //! values derived only from permanent token traits.
 
@@ -48,7 +48,7 @@ pub const FIXED_POINT_SCALE: u32 = 10_000;
 /// master_vol: 40, voices: 64, waves: [].span(), timbres: [].span()`. The volume default
 /// is below TinySynth's 50 because dense passages clipped at 50 in quality 1.
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
-pub struct SynthSettings {
+pub struct TinySynthSettings {
     /// Built-in timbre set: 0 = chip-tune (one oscillator per note), 1 = FM (two or more).
     /// Range: 0 or 1.
     pub quality: u8,
@@ -153,12 +153,12 @@ pub enum Waveform {
     WhiteNoise,
     /// Metallic noise (TinySynth `n1`), generated from a fixed seed (fork issue #7).
     MetallicNoise,
-    /// Entry `index` (0-based) of `SynthSettings::waves` (issue #2). `index` must be below
+    /// Entry `index` (0-based) of `TinySynthSettings::waves` (issue #2). `index` must be below
     /// `waves.len()` (`'TS: wave index out of range'`).
     Custom: u8,
 }
 
-/// A custom waveform definition, shared through `SynthSettings::waves` (issue #2).
+/// A custom waveform definition, shared through `TinySynthSettings::waves` (issue #2).
 #[derive(Copy, Drop, Serde, PartialEq, Debug)]
 pub enum WaveDef {
     /// Band-limited wave from harmonic amplitudes: element `i` is the relative amplitude of
@@ -212,10 +212,10 @@ pub enum FilterKind {
 /// A token's sound: its score and the instruments the score plays, the two arguments of
 /// `midi_segment`.
 #[derive(Drop, Clone, Serde, PartialEq, Debug)]
-pub struct TokenSound {
+pub struct TinySynthSound {
     /// The raw bytes of a Standard MIDI File that passes `checkMidi` (README, "MIDI contract").
     pub midi: ByteArray,
     /// The engine settings and the custom timbres and waves `midi` uses. Must pass
     /// `crate::settings::validate`.
-    pub settings: SynthSettings,
+    pub settings: TinySynthSettings,
 }

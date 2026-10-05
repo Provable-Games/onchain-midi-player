@@ -25,7 +25,7 @@
 //!   then falls inside the settings block and is ignored by the player). The gzip payload is
 //!   base64 text, which contains no `<`, `"` or `&`, so it can close neither its tag nor
 //!   its attribute.
-//! - `SETTINGS`: the ASCII encoding of a `SynthSettings` value (see `types.cairo`), format
+//! - `SETTINGS`: the ASCII encoding of a `TinySynthSettings` value (see `types.cairo`), format
 //!   version 1, as specified in `settings.cairo` (issue #1): comma-separated canonical
 //!   decimal integers, with no length cap: its cost grows with it (see the README). It
 //!   contains only digits, `-` and `,`, so it can never close its block. Example (default
@@ -75,16 +75,17 @@
 //! own tests (see "Art (SVG) requirements" in the README).
 //!
 //! This file also declares `ISoundProvider`, at the end: the interface a composer's contract
-//! implements to hand an NFT a token's MIDI and `SynthSettings`. The class does not implement it.
+//! implements to hand an NFT a token's MIDI and `TinySynthSettings`. The class does not implement
+//! it.
 
-use crate::types::{SynthSettings, TokenSound};
+use crate::types::{TinySynthSettings, TinySynthSound};
 
 /// The OnchainTinySynth class: the onchain-midi-player class library for the TinySynth engine.
 ///
 /// All functions are view-only and deterministic: for a given class hash, the same inputs
 /// always give the same output. The engine and the page are fixed per class version; a
 /// new engine or page means a new class hash and a new `version()`. Sound settings and
-/// custom sounds are supplied by the consumer on each call through `SynthSettings`.
+/// custom sounds are supplied by the consumer on each call through `TinySynthSettings`.
 ///
 /// Intended to be invoked with `library_call` via `IOnchainTinySynthLibraryDispatcher`.
 /// The class holds no state, so executing it in the caller's context reads and writes
@@ -159,7 +160,7 @@ pub trait IOnchainTinySynth<T> {
     /// largest Beast score (3,716 bytes) with the reference sounds, about 14M more per 1,000 bytes
     /// of `SETTINGS`, and about 3.2B with that largest `SETTINGS` (measurements in the README).
     /// There is no byte cap: the gas limit of the call decides.
-    fn midi_segment(self: @T, midi: ByteArray, settings: SynthSettings) -> ByteArray;
+    fn midi_segment(self: @T, midi: ByteArray, settings: TinySynthSettings) -> ByteArray;
 
     // ------------------------------------------------------------------------------------
     // Helpers and verification.
@@ -214,7 +215,7 @@ pub trait IOnchainTinySynth<T> {
 // ----------------------------------------------------------------------------------------------
 // Interfaces implemented by other contracts (sound providers). The TinySynth class does NOT
 // implement the interface below: it is a convention between composers and NFTs, declared here so
-// that both compile against the same `ISoundProvider` and `TokenSound`.
+// that both compile against the same `ISoundProvider` and `TinySynthSound`.
 // ----------------------------------------------------------------------------------------------
 
 /// What a composer's contract implements to hand an NFT the sound of a token, and what the NFT, or
@@ -223,7 +224,7 @@ pub trait IOnchainTinySynth<T> {
 ///
 /// A Standard MIDI File can select an instrument (a program change, or a note on the percussion
 /// channel) but cannot define one. So the provider owns both the score, as a raw Standard MIDI
-/// File, and the instruments it plays, as a `SynthSettings`.
+/// File, and the instruments it plays, as a `TinySynthSettings`.
 ///
 /// The interface is one function, because the player needs one thing from a provider: the token's
 /// sound, the MIDI and its instruments, in one call that reads the token's state once. Its reply
@@ -266,7 +267,7 @@ pub trait IOnchainTinySynth<T> {
 /// - **Keep the other interfaces consistent.** If the provider also exposes the MIDI or the
 ///   settings through its own interfaces, they should equal `get_sound(id).midi` and
 ///   `get_sound(id).settings`, for every token, at every state. One internal function that builds
-///   the `TokenSound` for all of them keeps that true by construction. Sharing it also matters
+///   the `TinySynthSound` for all of them keeps that true by construction. Sharing it also matters
 ///   because a per-token subset of the settings depends on the programs the token's MIDI uses.
 /// - **Return only what the token's MIDI uses:** the timbres of the programs and drum notes it
 ///   plays, and the waves those timbres select. `SETTINGS` costs about 14.5M L2 gas per 1,000
@@ -282,5 +283,5 @@ pub trait ISoundProvider<T> {
     /// The sound of `token_id`: its score and its instruments, in one call that reads the token's
     /// state once. This is what an NFT calls. A view, deterministic for a given token and state.
     /// Reverts only for an unknown token.
-    fn get_sound(self: @T, token_id: u256) -> TokenSound;
+    fn get_sound(self: @T, token_id: u256) -> TinySynthSound;
 }
