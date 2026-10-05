@@ -19,13 +19,15 @@ The class is declared on Starknet but never deployed. Your contract reaches it w
 ```toml
 [dependencies]
 onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "<release tag>" }
-# Until a release is tagged: rev = "<commit>", the built_from commit of the class you use (deployments/<network>.json)
+# Until a release is tagged: rev = "<commit>" (see below)
 
 [[target.starknet-contract]]
 sierra = true
 # Builds the class from the dependency, so your tests can declare it (never deploy it).
 build-external-contracts = ["onchain_midi_player::contract::TinySynth"]
 ```
+
+**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch. For the deployed class, that is its `built_from` commit in [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json).
 
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#the-base64-encoder)).
 
@@ -110,7 +112,7 @@ fn set_sound_config(ref self: ContractState, class_hash: ClassHash) {
   - Pass token IDs exactly as minted; the provider ignores the bits it does not use.
   - Store the provider address with a setter that calls `get_sound` once (an undeployed address reverts uncatchably), and let zero turn sound off: the snippet makes no call for it.
 - **MIDI:** the bytes of a Standard MIDI File. The class embeds it without parsing it, so a bad file never reverts: the page shows an error instead. Check every score with `check-midi` in your CI ([Checking MIDI files](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/midi-contract.md#checking-midi-files) has a CI snippet). See the [midi-guide](../midi-guide/SKILL.md).
-- **`TinySynthSettings`:** checked by `midi_segment`; an invalid value reverts the call. The class bounds no operator value, because its engine skips a note whose computed values overflow, silently. The rules are in sound-design's [What the class checks](../sound-design/SKILL.md#what-the-class-checks); the check table in `src/settings.cairo`, in the checkout whose `VERSION` matches your class, is the authority. Do not copy ranges or clamps into your contract.
+- **`TinySynthSettings`:** checked by `midi_segment`; an invalid value reverts the call. It bounds no operator value, because the engine skips a note whose computed values overflow, silently. What it checks is in sound-design's [What the class checks](../sound-design/SKILL.md#what-the-class-checks); the check table in `src/settings.cairo`, in the checkout whose `VERSION` matches your class, is the authority. Do not copy ranges or clamps into your contract.
 - **Fixed or live sound.** For a given class hash, the same MIDI and settings always give the same sound. Fixed: pass constants or values from permanent traits, and a token sounds the same forever. Live: derive the MIDI and settings from state that changes (a level, a season, an onchain composer), and the sound follows it. When state changes what `token_uri` returns, emit an ERC-4906 `MetadataUpdate` (or `BatchMetadataUpdate`) so marketplaces refetch; the same applies when you switch the class hash or the renderer.
 
 ## 6. Handle failures
@@ -142,7 +144,7 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 
 ## 8. Gas and RPC caps
 
-- **Worst case = your largest art plus your largest MIDI and settings.** Base64 over the SVG dominates (it is encoded twice); MIDI and settings add about 14.5M L2 gas per 1,000 bytes, custom wave tables included (a long noise table can add billions: [Custom waves](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#custom-waves)); `SETTINGS` has no length cap ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#the-size-of-settings)), and no operator value is bounded: a note whose computed values overflow the 32-bit float range is skipped silently ([engine limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#engine-limits-on-operator-values). Figures: [Gas and limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md), including [a full-size example `token_uri`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#a-full-size-token). Measure your own worst token.
+- **Worst case = your largest art plus your largest MIDI and settings.** Base64 over the SVG dominates (it is encoded twice); the MIDI adds about 14M L2 gas per 1,000 bytes ([table](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#midi_segment-by-midi-and-settings-size)) and `SETTINGS` about 14.5M, custom wave tables included (a long noise table can add billions: [Custom waves](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#custom-waves)). `SETTINGS` has no length cap ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#the-size-of-settings)), and no operator value is bounded: a note whose computed values overflow the 32-bit float range is skipped silently ([engine limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#engine-limits-on-operator-values)). Figures: [Gas and limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md), including [a full-size example `token_uri`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#a-full-size-token). Measure your own worst token.
 - **The measurement method changes the number about 2.5×.** Measured on the example's full-size token (`snforge test gas_t4_token_uri`): about 301M with `--tracked-resource sierra-gas`, about 765M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M: that account's class is Sierra 1.6, which forces cairo-steps (VM) accounting for the whole transaction.
   - Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
   - Treat devnet estimates through the predeployed accounts as inflated by about 2.0–2.6×.

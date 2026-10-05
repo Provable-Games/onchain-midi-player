@@ -38,6 +38,8 @@ Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`)
 
 The rest is validating and encoding `SETTINGS` and assembling the page fragment. The library call adds the cost of passing the inputs: 2.8M for the 3,716-byte score with the reference sounds, about 110M with the largest `SETTINGS`.
 
+**The MIDI costs about 14M L2 gas per 1,000 bytes:** (53.5M − 1.4M) / 3,716 bytes in the 16-byte column, and 13.9M to 14.0M in the other columns. It is base64-encoded once on its own and twice inside the page fragment. `SETTINGS` costs 13.7M to 14.7M per 1,000 bytes depending on its size, so it is budgeted at 14.5M (see [The size of `SETTINGS`](#the-size-of-settings)).
+
 ## A full-size token
 
 Token 4 of the example ([`examples/beast_consumer`](../examples/beast_consumer/README.md#gas)) is a full-size Beast:
@@ -67,7 +69,7 @@ Its `token_uri` is 144,357 characters. The whole call is from `snforge test toke
 `SETTINGS` has no length limit. The class checks only what the format and the engine require (see [Sound settings](sound-settings.md)). The rest is priced in gas, and served or refused by the RPC node.
 
 - **Counts are bounded:** at most 175 timbres (each program and drum slot once), 8 operators each, and 256 waves. A wave's length is not bounded, and numbers take any value of their integer type. So without custom waves the largest valid input is 218,264 bytes, and with custom waves there is no largest input.
-- **Cost is linear,** over every size measured, from 23 KB to 5.4 MB: about 14.5M L2 gas per KB through `midi_segment`. About 5–6M of that is encoding; the rest is base64, because `SETTINGS` is encoded twice. Validation never exceeds about 23M, because it checks counts, slots, routes, wave indices and filters, not samples.
+- **Cost is linear,** over every size measured (the table below): 13.7M to 14.7M L2 gas per 1,000 bytes through `midi_segment` across the tables here (14.3M from 23 KB to 92 KB), so budget 14.5M L2 gas per 1,000 bytes. About 5–6M of that is encoding; the rest is base64, because `SETTINGS` is encoded twice. Validation never exceeds about 23M, because it checks counts, slots, routes, wave indices and filters, not samples.
 - **Realistic settings are cheap.** The 3 reference sounds (334 bytes) or 6 timbres (504 bytes) add 4–7M over the defaults, about 2% of a full-size token. A full pack of about 20 two- or three-operator timbres is about 2.6 KB, which adds about 40M.
 
 `midi_segment` through the library call, with a 3,716-byte score:
@@ -78,11 +80,11 @@ Its `token_uri` is 144,357 characters. The whole call is from `snforge test toke
 | 22 timbres × 8 operators | 23,022 | 2,658 | 385.2M |
 | 44 timbres × 8 operators | 46,034 | 5,188 | 715.0M |
 | 88 timbres × 8 operators | 92,058 | 10,248 | 1,375.3M |
-| The long reference LFSR (32,767 samples) and one drum timbre | 147,532 | | 2,192.8M |
+| The long reference LFSR (32,767 samples) and one drum timbre (net of the 277.9M that builds the table) | 147,532 | | 2,192.8M |
 | The largest input without custom waves: 175 timbres × 8 filtered operators, every field at its type's extreme | 218,264 | | 3,162.7M |
 | 175 timbres × 8 operators, plus 256 waves of 1,024 samples | 1,501,203 | 284,309 | 21,163.3M |
 
-- **Where the limits fall.** A full-size token passes 1B at about 48 KB of `SETTINGS`, and the 1.11B transaction cap at about 56 KB. It reaches 10B at about 670 KB.
+- **Where the limits fall.** A full-size token passes 1B at about 49 KB of `SETTINGS`, and the 1.11B transaction cap at about 56 KB. It reaches 10B at about 670 KB.
 - **Every size runs.** The 1.5 MB input takes 174M Cairo steps through `token_uri`. The repository's tests go up to the largest input without custom waves, which takes about 22M steps through `midi_segment`, so [`Scarb.toml`](../Scarb.toml) raises snforge's step limit to 100M.
 
 ## Node limits

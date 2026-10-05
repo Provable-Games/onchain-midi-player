@@ -101,7 +101,7 @@ Nothing checks these; a file that ignores them still plays.
 - **Release every note by End-of-Track:** a note still held there sounds into the next pass.
 - **Put the note-off first:** at one tick, put a note's note-off before the next note-on of the same pitch on that channel. The other way round, the note-off releases the new note too.
 - **Prefer note-offs to CC120–127, and avoid CC121** (see the table).
-- **Keep the file small:** `midi_segment` base64-encodes the MIDI at call time, once on its own and twice inside `D`, so gas grows with its length. That is about 14.5M L2 gas per KB (1.4M with no MIDI and 53.5M with 3,716 bytes, in [the `midi_segment` table](gas.md#midi_segment-by-midi-and-settings-size)).
+- **Keep the file small:** `midi_segment` base64-encodes the MIDI at call time, once on its own and twice inside `D`, so gas grows with its length. That is about 14M L2 gas per 1,000 bytes (1.4M with no MIDI and 53.5M with 3,716 bytes, in [the `midi_segment` table](gas.md#midi_segment-by-midi-and-settings-size)).
 
 ## Checking MIDI files
 
