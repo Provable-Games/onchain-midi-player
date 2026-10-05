@@ -91,7 +91,16 @@ A `library_call` runs the class's code with your contract's storage. This class 
 | In the NFT, per token | Store the hash at mint. | Each token keeps the version it was minted with. | A storage write per mint and a read per `token_uri`. |
 | **In a small renderer contract** | A deployed contract with no storage of value holds the layout, the `TinySynthSettings` and the class hash (or receives it), and library-calls the class. The NFT `call_contract`s the renderer. | The NFT's storage is never exposed to the class. The renderer, its sounds and the layout are replaceable without redeploying the NFT. Its CASM stays out of the NFT. | One more contract and call. |
 
-Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is settable. beasts-v3 does this ([PR #124](https://github.com/Provable-Games/beasts-v3/pull/124)). In any setter, check the new value before storing it: library-call `version()` on a new hash and compare it with the version you expect, or have the renderer render a probe token.
+Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is settable. beasts-v3 does this ([PR #124](https://github.com/Provable-Games/beasts-v3/pull/124)). In any setter, check the new value before storing it: library-call `engine()` on a new hash and require `'tinysynth'`, then `version()` and compare it with the version you expect, or have the renderer render a probe token. Engine classes share the `midi_segment` selector, so without the `engine()` check another engine's class could take your calls without reverting and render the wrong thing. The interim Sepolia classes predate `engine()`: the call fails on them.
+
+```cairo
+fn set_sound_config(ref self: ContractState, class_hash: ClassHash) {
+    // ...access control...
+    let synth = IOnchainTinySynthLibraryDispatcher { class_hash };
+    assert(synth.engine() == 'tinysynth', 'not a TinySynth class');
+    self.tinysynth_class_hash.write(class_hash);
+}
+```
 
 ## 5. MIDI and `TinySynthSettings`
 
@@ -143,7 +152,7 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 ## 9. Choose the class hash
 
 - Take it from the README's [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#deployments) table. Today only interim test classes exist there; the release class is not declared yet. Do not ship the interim class to production.
-- Check a class before you use it: library-call `version()` and `script_sha256()` in a test, or run `verify_engine.mjs` on a token, and compare both with that version's row in [Versions](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#versions). The README's [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#verifying-the-engine) also rebuilds the class hash from source.
+- Check a class before you use it: library-call `engine()`, `version()` and `script_sha256()` in a test, or run `verify_engine.mjs` on a token, and compare both with that version's row in [Versions](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#versions). The README's [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#verifying-the-engine) also rebuilds the class hash from source.
 
 ## Checklist
 

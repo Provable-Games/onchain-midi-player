@@ -197,6 +197,14 @@ pub trait IOnchainTinySynth<T> {
     /// at the pinned commit or release (see the README).
     fn script_sha256(self: @T) -> u256;
 
+    /// Short string naming the synthesis engine this class embeds: always `'tinysynth'` for
+    /// `OnchainTinySynth`. Each engine gets its own class, and engine classes share the
+    /// `midi_segment` selector, so a class hash of another engine's class could take a call meant
+    /// for this one, decode it without error and render the wrong thing. A consumer that checks
+    /// `engine()` when it stores or changes the class hash rejects such a hash at configuration
+    /// time. It was added before the first release, so every released class answers it.
+    fn engine(self: @T) -> felt252;
+
     /// Short-string (at most 31 ASCII bytes) identifying the engine and page versions of
     /// this class: `'tinysynth-<engine ref>+page.<n>'`, e.g. `'tinysynth-b70ba90+page.1'`, where
     /// the engine ref is the pinned fork commit (short SHA) or release tag. Changes whenever the

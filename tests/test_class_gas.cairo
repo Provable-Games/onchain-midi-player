@@ -158,6 +158,11 @@ fn gas_lc_script_sha256() {
 }
 
 #[test]
+fn gas_lc_engine() {
+    assert(class().engine() == 'tinysynth', 'engine');
+}
+
+#[test]
 fn gas_lc_version() {
     assert(class().version() != 0, 'version');
 }

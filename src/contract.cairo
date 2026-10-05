@@ -38,6 +38,10 @@ pub mod OnchainTinySynth {
             page_data::ENGINE_SHA256
         }
 
+        fn engine(self: @ContractState) -> felt252 {
+            'tinysynth'
+        }
+
         fn version(self: @ContractState) -> felt252 {
             page_data::VERSION
         }
