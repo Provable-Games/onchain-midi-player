@@ -204,6 +204,27 @@ The skills then run as `/onchain-midi-player:midi-guide` and so on. `claude plug
 }
 ```
 
+**Install in Codex.** Ask the built-in [`$skill-installer`](https://learn.chatgpt.com/docs/build-skills#install-curated-skills-for-local-use) to install all four skills. Send this prompt in Codex:
+
+```text
+$skill-installer Install these skills from Provable-Games/onchain-midi-player:
+- plugins/onchain-midi-player/skills/integrator-guide
+- plugins/onchain-midi-player/skills/midi-guide
+- plugins/onchain-midi-player/skills/sound-design
+- plugins/onchain-midi-player/skills/token-uri-inspector
+```
+
+For a pinned version, add `Use ref <tag-or-commit> for all four skills` to the prompt. The installer adds them to your user skills directory, available across projects. Open `/skills` to check they appear; restart Codex if needed. Invoke them as `$integrator-guide`, `$midi-guide`, `$sound-design` or `$token-uri-inspector`.
+
+For a project-local installation, run this from your project's root, using the path to your clone of this repository:
+
+```sh
+mkdir -p .agents/skills
+cp -R /path/to/onchain-midi-player/plugins/onchain-midi-player/skills/. .agents/skills/
+```
+
+Copy all four folders, including their scripts and references, to preserve links between skills. Commit `.agents/skills/` to share them with your team. To update a project-local installation, repeat the copy from an updated clone. For an installer-managed update, remove the installed skill folders before asking `$skill-installer` to install them again from the desired ref.
+
 **Other agents.** Each `SKILL.md` follows the open [Agent Skills](https://agentskills.io/specification) format. Copy the whole `skills/` folder into your agent's skills directory to keep the links between skills.
 
 The tools the skills use need Node 22 or later and a clone whose `VERSION` matches your class (see [Quick start for composers](#quick-start-for-composers)). Every commit with the same `VERSION` has the same `PAGE`, so use `main` while its `VERSION` matches, otherwise the last commit before it changed (`git log --oneline -- src/page_data.cairo`). A released class's tag, `v<version>`, works too.
