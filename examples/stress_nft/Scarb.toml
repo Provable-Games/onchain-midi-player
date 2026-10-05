@@ -1,0 +1,31 @@
+[package]
+name = "stress_nft"
+version = "0.1.0"
+edition = "2025_12"
+description = "A stress-test NFT: twenty tokens whose token_uri costs from tens of millions to over 10 billion Sierra gas, to find where RPC providers, wallets and explorers stop serving a large onchain MIDI token."
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+onchain_midi_player = { path = "../.." }
+starknet = "2.20.1"
+
+[dev-dependencies]
+snforge_std = "0.64.0"
+assert_macros = "2.20.0"
+
+[[target.starknet-contract]]
+sierra = true
+# The class itself, compiled from the root crate, so the tests can declare it (never deploy it).
+build-external-contracts = ["onchain_midi_player::contract::TinySynth"]
+
+[scripts]
+test = "snforge test"
+
+[tool.scarb]
+allow-prebuilt-plugins = ["snforge_std"]
+
+# The largest tokens run about 90M Cairo steps through `token_uri`, and `token_uri_12_matches_js_digest`
+# also hashes a 0.5 MB token in Cairo.
+[tool.snforge]
+max_n_steps = 400000000
