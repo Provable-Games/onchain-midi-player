@@ -1,13 +1,14 @@
 # Vendored engine and licenses
 
 The pinned TinySynth engine, from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>,
-at commit `3d965d1cef4756bb85b9dd307b85511fd543afbf` on the fork's `improve/integration` branch:
+at commit `fc04dbe7d78bd0a4de5eb80887756f31c2c373f2` on the fork's `improve/integration` branch (the fork CI's rebuild of
+`webaudio-tinysynth.min.js` for `b89fc4e`):
 
-- `webaudio-tinysynth-3d965d1.min.js`: the commit's own `webaudio-tinysynth.min.js` (46,409 bytes), byte-identical to
+- `webaudio-tinysynth-fc04dbe.min.js`: the commit's own `webaudio-tinysynth.min.js` (46,488 bytes), byte-identical to
   rebuilding that commit's `webaudio-tinysynth.js` with its pinned build (`npm ci && npm run verify`, Terser 5.51.2).
-  SHA-256 `95d8947a460a2e3ca410a285822668c76b65493b88094b9c83a0207311206c31`.
-- `webaudio-tinysynth-3d965d1.NOTICE`: the commit's `NOTICE` (the fork's list of modifications), which goes into the
-  class's `license()` text. SHA-256 `1fc730e7cc6c4df49d23a1dfce210ef6a6c78b6047b35b6e558b758c68edb223`.
+  SHA-256 `4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c`.
+- `webaudio-tinysynth-fc04dbe.NOTICE`: the commit's `NOTICE` (the fork's list of modifications), which goes into the
+  class's `license()` text. SHA-256 `2e665c7b0308cce61a694bc7ab9633d141e53b93cf283f09c5d873e0a6ae7322`.
 - License: Apache License 2.0. Copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games (see the fork's NOTICE
   and this repository's [NOTICE](../../NOTICE)).
 
@@ -21,15 +22,18 @@ bytes. The engine tests and the render and page checks run the same file. The pi
 the one line `ENGINE_PIN` in [`scripts/engine.mjs`](../../scripts/engine.mjs), which checks both hashes on every load,
 so a mismatch fails before anything is generated. Nothing needs network access.
 
-To verify: `git -C <fork> show 3d965d1:webaudio-tinysynth.min.js | sha256sum`.
+To verify: `git -C <fork> show fc04dbe:webaudio-tinysynth.min.js | sha256sum`.
 
 ## Re-pinning
 
 To a later commit, or to a tagged fork release once the fork publishes them:
 
-1. Check that the fork's `webaudio-tinysynth.min.js` at the new ref is its reproducible build: check out the ref in a
-   clone, then `npm ci && npm run verify` (it rebuilds the file with the fork's pinned Terser and compares the bytes;
-   commits before `npm run verify` existed: `npm ci && npm run build`, then compare).
+1. Pick the ref. On `improve/integration`, pin a commit the fork's CI made after a merge, "Rebuild
+   webaudio-tinysynth.min.js for `<sha>`" (by github-actions[bot]), not the merge commit: pull requests no longer carry
+   the minified build, so a merge commit can carry a stale one. Check that the fork's `webaudio-tinysynth.min.js` at the
+   ref is its reproducible build: check out the ref in a clone, then `npm ci && npm run verify` (it rebuilds the file
+   with the fork's pinned Terser and compares the bytes; commits before `npm run verify` existed: `npm ci && npm run
+   build`, then compare).
 2. `node scripts/vendor_engine.mjs <fork checkout> <commit or tag>` copies the two files here (named after the short
    commit or the tag) and prints the new `ENGINE_PIN` line. It only reads the checkout.
 3. Replace the `ENGINE_PIN` line in `scripts/engine.mjs`, delete the old files here, and run
