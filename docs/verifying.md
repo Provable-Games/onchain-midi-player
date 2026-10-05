@@ -41,7 +41,7 @@ What a class hash fixes, and what the consumer supplies:
    node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256()>
    ```
 
-   For a given `version()`, all three print the gzip payload's SHA-256 and length and the engine's SHA-256 and length that its record holds (`gzip_sha256`, `gzip_len`, `script_sha256`).
+   For a given `version()`, all three print the gzip payload's SHA-256 and length, which must equal the record's `gzip_sha256` and `gzip_len`, and the engine's SHA-256, which must equal `script_sha256`.
 3. **Compare.** The engine's SHA-256 must equal the class's `script_sha256()` (the hex form of the `u256` is the `sha256sum` string; a consumer contract or its tests can read it) and the `script_sha256` of the class's record in [`scripts/page_versions.json`](../scripts/page_versions.json). The gzip payload's SHA-256 and length must match the record's `gzip_sha256` and `gzip_len`.
 4. **Check the engine against the fork.** When `engine_ref` in the record is a fork release tag, the [release](https://github.com/Provable-Games/webaudio-tinysynth/releases)'s `SHA256SUMS` lists the SHA-256 of `webaudio-tinysynth.min.js`, which must equal `script_sha256`. To rebuild it, use the fork commit in the record (`engine_commit`; a release tag points at it). The fork commits its minified build, and rebuilding it from the source reproduces it:
 

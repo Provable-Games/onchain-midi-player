@@ -121,7 +121,7 @@ npm run check-midi -- song.mid other.mid
 | `quality` | The engine's built-in sounds: 0 chip-tune, 1 FM | 0 or 1 |
 | `reverb` | Reverb level in percent, 0 is off | any `u8` |
 | `master_vol` | Master volume in percent; above 100 can clip | any `u8` |
-| `voices` | Simultaneous notes; the oldest is cut beyond this | at least 1 |
+| `voices` | Simultaneous melodic notes (drums take none); a note beyond it cuts a released note first, then the earliest held one ([rules](docs/midi-contract.md)) | at least 1 |
 | `timbres` | Custom sounds. Each replaces a General MIDI program (0–127) or a drum note (35–81), so the MIDI selects it as usual | up to 175, each slot at most once; 1 to 8 operators each |
 | `waves` | Custom waveforms (sample tables or harmonics) that timbres can use. Operators can also carry a fixed low-, high- or band-pass filter | up to 256 |
 
