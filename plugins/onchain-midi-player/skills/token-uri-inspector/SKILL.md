@@ -11,7 +11,7 @@ A `token_uri` from this player is `data:application/json;base64,` + JSON whose `
 
 The class's `engine()` names its engine, and so the format of the `SETTINGS` block: `'tinysynth'` is the format these tools decode. RPC can call it only on a deployed instance (such as an inspection instance in [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#deployments)) or through a getter of the NFT; classes from before `engine()` existed are all TinySynth.
 
-Run everything from a clone whose `grep 'pub const VERSION' src/page_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed (README [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills)). The same `VERSION` always means the same page bytes, and newer commits have the tools. Node 22 or later; no `npm ci`. `I=plugins/onchain-midi-player/skills/token-uri-inspector/scripts` below.
+Run everything from a clone whose `grep 'pub const VERSION' src/page_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed (README [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills)). The same `VERSION` always means the same page bytes, and newer commits have the tools. Node 22 or later; no `npm ci`. `I=plugins/onchain-midi-player/skills/token-uri-inspector/scripts` below. In checkouts from before the rename to onchain-midi-player, the plugin directory is `plugins/onchain-tinysynth/`, so there set `I=plugins/onchain-tinysynth/skills/token-uri-inspector/scripts`.
 
 ## 1. Fetch
 

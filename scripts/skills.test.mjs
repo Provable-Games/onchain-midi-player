@@ -205,7 +205,10 @@ describe("links and paths", () => {
       const skillDir = join(SKILLS, relative(SKILLS, file).split("/")[0]);
       for (const [, path] of readFileSync(file, "utf8").matchAll(PATH)) {
         if (path.includes("*")) continue;
-        assert.ok(existsSync(join(ROOT, path)) || existsSync(join(skillDir, path)), `${relative(ROOT, file)}: ${path}`);
+        // Checkouts from before the rename have the plugin at plugins/onchain-tinysynth/: check
+        // the path that directory has now.
+        const now = path.replace(/^plugins\/onchain-tinysynth(?=\/|$)/, "plugins/onchain-midi-player");
+        assert.ok(existsSync(join(ROOT, now)) || existsSync(join(skillDir, now)), `${relative(ROOT, file)}: ${path}`);
         checked++;
       }
     }

@@ -18,6 +18,8 @@ From the checkout root:
 node plugins/onchain-midi-player/skills/midi-guide/scripts/art_periods.mjs art.svg
 ```
 
+In checkouts from before the rename to onchain-midi-player, the plugin directory is `plugins/onchain-tinysynth/`.
+
 For the full-size Beast fixture, [`tests/fixtures/beasts/warlock_shiny_animated.svg`](https://github.com/Provable-Games/onchain-midi-player/blob/main/tests/fixtures/beasts/warlock_shiny_animated.svg), it prints:
 
 ```text
