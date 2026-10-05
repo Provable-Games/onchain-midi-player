@@ -156,9 +156,9 @@ pub trait IOnchainTinySynth<T> {
     /// 3.2M L2 gas, and the largest valid `SETTINGS` in v1 without custom waves (175 timbres of 8
     /// filtered operators, every field at its type's extreme, 218,264 bytes) about 1.32B. Base64 is
     /// the rest. Through a library call, the whole call costs about 61M for a score the size of the
-    /// largest Beast score (3,716 bytes) with the reference sounds, about 14M more per 1,000 bytes of
-    /// `SETTINGS`, and about 3.2B with that largest `SETTINGS` (measurements in the README). There is no byte cap: the gas limit of
-    /// the call decides.
+    /// largest Beast score (3,716 bytes) with the reference sounds, about 14M more per 1,000 bytes
+    /// of `SETTINGS`, and about 3.2B with that largest `SETTINGS` (measurements in the README).
+    /// There is no byte cap: the gas limit of the call decides.
     fn midi_segment(self: @T, midi: ByteArray, settings: SynthSettings) -> ByteArray;
 
     // ------------------------------------------------------------------------------------
