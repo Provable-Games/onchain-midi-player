@@ -163,6 +163,9 @@ export const selector = (/** @type {string} */ name) => "0x" + (BigInt("0x" + ke
 // A small XML well-formedness check for the SVG (no dependencies)
 // ---------------------------------------------------------------------------------------------
 
+/** The grammar of an XML declaration (XML 1.0, production 23). */
+const XML_DECL = /^<\?xml[ \t\r\n]+version[ \t\r\n]*=[ \t\r\n]*(["'])1\.[0-9]+\1([ \t\r\n]+encoding[ \t\r\n]*=[ \t\r\n]*(["'])[A-Za-z][A-Za-z0-9._-]*\3)?([ \t\r\n]+standalone[ \t\r\n]*=[ \t\r\n]*(["'])(yes|no)\5)?[ \t\r\n]*\?>$/;
+
 /** Whether a code point is an XML 1.0 Char. */
 const xmlChar = (/** @type {number} */ cp) => cp === 9 || cp === 10 || cp === 13 || (cp >= 0x20 && cp <= 0xd7ff) || (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff);
 
@@ -203,7 +206,7 @@ export function parseXml(s) {
   const styles = [];
   /** @type {string[]} */
   const elements = [];
-  /** @type {{name: string, scope: Map<string, string>}[]} */
+  /** @type {{name: string, local: string, scope: Map<string, string>}[]} */
   const stack = [];
   /** @type {{local: string, ns: string | undefined} | null} */
   let root = null;
@@ -243,7 +246,7 @@ export function parseXml(s) {
       } else {
         text(t, i);
         if (t.includes("]]>")) throw new XmlError('"]]>" in text', i + t.indexOf("]]>"));
-        if (stack[stack.length - 1].name === "style") styles.push({ text: expandRefs(t), at: i });
+        if (stack[stack.length - 1].local === "style") styles.push({ text: expandRefs(t), at: i });
       }
       i = j;
     } else if (s.startsWith("<!--", i)) {
@@ -255,12 +258,13 @@ export function parseXml(s) {
       const j = s.indexOf("]]>", i);
       if (!stack.length) throw new XmlError("CDATA outside the root element", i);
       if (j < 0) throw new XmlError("unterminated CDATA section", i);
-      if (stack[stack.length - 1].name === "style") styles.push({ text: s.slice(i + 9, j), at: i });
+      if (stack[stack.length - 1].local === "style") styles.push({ text: s.slice(i + 9, j), at: i });
       i = j + 3;
     } else if (s.startsWith("<?", i)) {
       const j = s.indexOf("?>", i);
       if (j < 0) throw new XmlError("unterminated processing instruction", i);
       if (!/^<\?xml[ \t\r\n]/.test(s.slice(i, i + 7)) || i > (s.charCodeAt(0) === 0xfeff ? 1 : 0)) throw new XmlError("processing instruction (only a leading XML declaration is allowed)", i);
+      if (!XML_DECL.test(s.slice(i, j + 2))) throw new XmlError('malformed XML declaration (expected <?xml version="1.0" [encoding="..."] [standalone="yes|no"]?>)', i);
       i = j + 2;
     } else if (s.startsWith("<!DOCTYPE", i)) {
       if (root || doctype) throw new XmlError("DOCTYPE after the root element or a second DOCTYPE", i);
@@ -339,7 +343,7 @@ export function parseXml(s) {
       if (!root) root = { local: nm.slice(nm.indexOf(":") + 1), ns: scope.get(prefix(nm)) };
       if (selfClosed) {
         if (!stack.length) rootClosed = true;
-      } else stack.push({ name: nm, scope });
+      } else stack.push({ name: nm, local: nm.slice(nm.indexOf(":") + 1), scope });
       i = k;
     }
   }
@@ -763,8 +767,8 @@ export function validateTokenUri(input, opts = {}) {
           if (bytes.length > IMAGE_WARN) r.warn("image.size", `the SVG is ${bytes.length} bytes: OpenSea rasterizes it and every marketplace fetches it through the same capped response`, "validator");
         }
       }
-    } else if (/^data:image\/(png|jpeg|gif|webp)/i.test(image)) {
-      r.warn("image.type", "the image is a raster data URI: the SVG checks are skipped", "OpenSea media-and-traits");
+    } else if (/^data:image\//i.test(image)) {
+      r.warn("image.type", `the image is a ${JSON.stringify(image.slice(0, image.indexOf(",") >= 0 ? image.indexOf(",") : 40))} data URI, not "${SVG_PREFIX}": the image checks are skipped (the art block is still checked)`, "OpenSea media-and-traits");
     } else if (/^(https?|ipfs|ar):\/\//i.test(image)) {
       r.warn("image.type", "the image is an external URL, not an onchain SVG: the SVG checks are skipped and the token is not self-contained", "OpenSea media-and-traits");
     } else r.fail("image.type", `the image ${JSON.stringify(image.slice(0, 40))} is neither an image data URI nor a URL`, "OpenSea media-and-traits");

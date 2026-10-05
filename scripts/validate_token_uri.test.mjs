@@ -165,6 +165,22 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   const ok = svg("<defs><linearGradient id='g'/></defs><rect fill='url(#g)'/><use href='#g'/><image href='data:image/png;base64,AAAA'/>");
   assert.ok(!failing(ok).some((i) => i.startsWith("image.")), failing(ok).join());
   assert.ok(failing("<svg xmlns='http://www.w3.org/2000/svg'><g></svg>").includes("image.xml"));
+  // Prefixed <style> elements are style elements, in text and in CDATA.
+  const prefixed = "<svg xmlns='http://www.w3.org/2000/svg' xmlns:s='http://www.w3.org/2000/svg'>";
+  assert.ok(failing(`${prefixed}<s:style>@import "https://example.com/a.css";</s:style></svg>`).includes("image.self_contained"));
+  assert.ok(failing(`${prefixed}<s:style><![CDATA[rect{fill:url(https://example.com/p)}]]></s:style></svg>`).includes("image.self_contained"));
+  // XML declarations follow their grammar.
+  const body = "<svg xmlns='http://www.w3.org/2000/svg'/>";
+  for (const bad of ["<?xml bogus?>", "<?xml version='1.0' bogus='1'?>", "<?xml encoding='utf-8'?>", "<?xml version=\"2.0\"?>", "<?xml version='1.0' standalone='maybe'?>"]) {
+    assert.ok(failing(bad + body).includes("image.xml"), bad);
+    // The same malformed SVG as the image and as the art block, which therefore agree.
+    const html = goldenHtml();
+    const art = bad + body;
+    const same = { ...withHtml(html.slice(0, html.indexOf(ART_OPEN) + ART_OPEN.length) + art), image: SVG_PREFIX + b64(art) };
+    assert.ok(ids(check({ uri: toUri(same) }), "fail").includes("image.xml"), bad);
+    assert.equal(check({ uri: toUri(same) }).toJSON().ok, false, bad);
+  }
+  for (const good of ['<?xml version="1.0"?>', "<?xml version='1.1' encoding='UTF-8' standalone='yes'?>"]) assert.deepEqual(failing(good + body).filter((i) => i.startsWith("image.")), [], good);
   // A DOCTYPE, as SVG tools write it, is well-formed; an internal subset (entities) is refused by rule.
   const doctype = '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">';
   assert.deepEqual(failing(`<?xml version="1.0"?>${doctype}<svg xmlns='http://www.w3.org/2000/svg'><rect/></svg>`).filter((i) => i.startsWith("image.")), []);
@@ -182,6 +198,11 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   assert.match(check({ uri: toUri(withImage("<svg xmlns='x'>\n<rect></svg>")) }).checks.find((c) => c.id === "image.xml")?.message ?? "", /line 2/);
   assert.ok(ids(check({ uri: toUri({ ...goldenJson(), image: "https://example.com/1.png" }) }), "warn").includes("image.type"));
   assert.ok(ids(check({ uri: toUri({ ...goldenJson(), image: "nothing" }) }), "fail").includes("image.type"));
+  // Other image data URIs are valid for OpenSea: warn that the image checks are skipped, keep the art checks.
+  for (const image of ["data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'/>", "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%2F%3E", "data:image/svg+xml;charset=utf-8;base64,AAAA", "data:image/avif;base64,AAAA"]) {
+    const r = check({ uri: toUri({ ...goldenJson(), image }) });
+    assert.ok(ids(r, "warn").includes("image.type") && !ids(r, "fail").includes("image.type"), image);
+  }
 });
 
 test("the XML parser accepts well-formed documents and rejects malformed ones", () => {
