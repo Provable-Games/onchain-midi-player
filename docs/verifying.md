@@ -16,6 +16,7 @@ What a class hash fixes, and what the consumer supplies:
      | grep -o 'type="text/javascript+gzip" src="data:text/javascript;base64,[^"]*' | head -n 1 \
      | cut -d, -f2- | base64 -d > engine.js.gz
    sha256sum engine.js.gz              # the gzip payload
+   wc -c < engine.js.gz                # its length: gzip_len
    gunzip -c engine.js.gz | sha256sum  # the engine: script_sha256()
    ```
 
