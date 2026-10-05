@@ -32,6 +32,7 @@ Details: [`token_uri` layout and the player page](docs/token-uri-layout.md).
 ```toml
 [dependencies]
 onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "v<version>" }
+# For a build without a release tag: rev = "<commit>", from "Built from" in docs/versions.md
 
 [[target.starknet-contract]]
 sierra = true

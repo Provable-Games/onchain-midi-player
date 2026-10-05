@@ -100,6 +100,7 @@ The checks run on Playwright's Chromium, Firefox and WebKit. They load the class
 | Settings at their extremes play without an error | `checkExtremes` |
 | Marketplaces, mobile browsers, real audio hardware, indexers, wallets and RPC providers | manual |
 
+- **Drift.** The drift check allows the art to drift at most 20 ms from the sound. CI runs it for 1 minute and only prints the drift, because in a minute one stall of a headless audio clock can exceed the limit while the page does nothing wrong. Longer runs check it: with the player that restarts the art at every pass (from `page.8`), WebKit drifted +2.3 ms over 10 minutes and Chromium +5.5 ms over 5 minutes. A 10-minute Firefox run needs a real audio device.
 - **Firefox needs an audio output device.** Without one, its `AudioContext` never leaves `suspended`. On a machine without one, start PulseAudio with a null sink first, as CI does: `pulseaudio --start --exit-idle-time=-1 && pactl load-module module-null-sink && pactl set-default-sink null`.
 - **`data:` requests** show directly only through Chromium's DevTools protocol, so on Firefox and WebKit the checks print `skip` for that one check. The strict-CSP load proves it on every engine instead.
 - `PLAYWRIGHT_BROWSER` is `chromium` when unset. To use a Chromium you already have, set `CHROME=/path/to/chrome-headless-shell` instead of installing one.
