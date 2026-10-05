@@ -20,7 +20,7 @@
 // read from the contract (`repetitions`), so a retuned token is still compared with the right
 // reference; if no provider answers that, repetitions.json is used.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -96,25 +96,38 @@ export const selector = (name) => '0x' + (keccak256(Buffer.from(name)) & ((1n <<
 // Calls
 // --------------------------------------------------------------------------------------------
 
-/** Redacts every URL, host and key-like path segment of `urls` from a message. */
+/**
+ * Redacts everything in `urls` that could carry a credential from a message: each URL, its host,
+ * user and password, every path segment of at least 3 characters (a key may be any string,
+ * including letters only or digits only) and every query value, also percent-decoded. Pass only
+ * the URLs of providers whose URL is a secret: the built-in public ones are not.
+ */
 export function redactor(urls) {
   const secrets = new Set();
+  const add = (part) => {
+    if (!part) return;
+    secrets.add(part);
+    try {
+      secrets.add(decodeURIComponent(part));
+    } catch {
+      /* not percent-encoded */
+    }
+  };
   for (const u of urls) {
-    secrets.add(u);
+    add(u);
     try {
       const url = new URL(u);
-      secrets.add(url.host);
-      // Keys are long and mixed letters and digits; path words such as `starknet-sepolia` are not.
-      const keyLike = (part) => part.length >= 16 && /\d/.test(part) && /[a-z]/i.test(part);
-      for (const part of url.pathname.split('/')) if (keyLike(part)) secrets.add(part);
-      for (const [, v] of url.searchParams) if (v.length >= 8) secrets.add(v);
-      if (url.username) secrets.add(url.username);
-      if (url.password) secrets.add(url.password);
+      add(url.host);
+      add(url.hostname);
+      add(url.username);
+      add(url.password);
+      for (const part of url.pathname.split('/')) if (part.length >= 3) add(part);
+      for (const [, v] of url.searchParams) add(v);
     } catch {
       /* not a URL: redacted whole */
     }
   }
-  const list = [...secrets].sort((a, b) => b.length - a.length);
+  const list = [...secrets].filter(Boolean).sort((a, b) => b.length - a.length);
   return (msg) => list.reduce((m, s) => m.split(s).join('<redacted>'), String(msg)).replace(/https?:\/\/\S+/g, '<url>');
 }
 
@@ -150,14 +163,14 @@ async function call(url, redact, timeoutS, address, name, calldata) {
     try {
       json = JSON.parse(text.toString('utf8'));
     } catch {
-      return { ok: false, error: `HTTP ${res.status}: ${redact(text.toString('utf8').slice(0, 200).replace(/\s+/g, ' '))}`, bytes, ms };
+      return { ok: false, error: `HTTP ${res.status}: ${redact(text.toString('utf8').replace(/\s+/g, ' ')).slice(0, 200)}`, bytes, ms };
     }
     if (json.error) {
       const data = json.error.data;
       let detail = data?.execution_error ?? data?.revert_error ?? data ?? '';
       while (detail && typeof detail === 'object' && 'error' in detail) detail = detail.error; // the innermost frame
       const msg = `${json.error.code}: ${json.error.message}${detail ? ` | ${typeof detail === 'string' ? detail : JSON.stringify(detail)}` : ''}`;
-      return { ok: false, error: redact(withText(msg).replace(/\s+/g, ' ').slice(0, 300)), bytes, ms };
+      return { ok: false, error: redact(withText(msg).replace(/\s+/g, ' ')).slice(0, 300), bytes, ms };
     }
     if (!res.ok || !Array.isArray(json.result)) return { ok: false, error: `HTTP ${res.status}: no result`, bytes, ms };
     return { ok: true, felts: json.result, bytes, ms };
@@ -231,8 +244,26 @@ async function main() {
   const names = Object.keys(providers);
   if (!names.length) throw new Error('no providers: pass an env file of NAME=URL lines, or drop --no-public');
   const tokens = parseTokens(opt.tokens);
-  const redact = redactor(Object.values(providers));
+  // Only the providers from the env file have secret URLs.
+  const redact = redactor(Object.keys(providers).filter((n) => !(n in PUBLIC_ENDPOINTS) || providers[n] !== PUBLIC_ENDPOINTS[n]).map((n) => providers[n]));
   console.log(`providers: ${names.join(', ')}; tokens ${opt.tokens}; contract ${opt.address}`);
+
+  // The class the contract library-calls: the reference builds the page of this checkout, so it
+  // matches only while the contract pins a class with that page.
+  const known = new Set(
+    readdirSync(new URL('../../../deployments/', import.meta.url))
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => BigInt(JSON.parse(readFileSync(new URL(`../../../deployments/${f}`, import.meta.url), 'utf8')).class.class_hash)),
+  );
+  for (const name of names) {
+    const r = await call(providers[name], redact, 30, opt.address, 'tinysynth_class_hash', []);
+    if (!r.ok) continue;
+    const pinned = BigInt(r.felts[0]);
+    if (!known.has(pinned)) {
+      console.log(`warning: the contract pins class 0x${pinned.toString(16)}, which is not a class in deployments/; the reference is the page of this checkout, so ok cells need the same page and DIFF may be a page mismatch`);
+    }
+    break;
+  }
 
   // The number of bars per token, from the contract, through the first provider that answers.
   const bars = Object.fromEntries(tokens.map((t) => [t, defaultRepetitions()[t - 1]]));

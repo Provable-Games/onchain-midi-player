@@ -90,7 +90,7 @@ If the page plays here but not inside a marketplace's frame, the host is withhol
 
 Marketplaces read `token_uri` with `starknet_call`, and each provider caps call gas. Call the token through several providers and compare: an `Out of gas` revert is that provider's cap, not a bug in the token.
 
-To find where each provider stops, the [stress NFT](https://github.com/Provable-Games/onchain-midi-player/blob/main/examples/stress_nft/README.md) has twenty tokens from 30M to 10B gas, and its `examples/stress_nft/scripts/rpc_check.mjs` calls them through a list of providers and compares each result with a JS reference.
+To find where each provider stops, the [stress NFT](https://github.com/Provable-Games/onchain-midi-player/blob/main/examples/stress_nft/README.md) has twenty tokens from 30M to 10B gas, and its `examples/stress_nft/scripts/rpc_check.mjs` calls them through a list of providers and compares each result with a JS reference built from the checked-out page, so it matches only a stress NFT that pins the class of that page (the script warns when it does not).
 
 ```sh
 # The providers your marketplaces and indexers use, on the network you deploy to

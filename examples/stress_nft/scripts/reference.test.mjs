@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { checkMidi } from '../../../player/player.js';
 import { byteArrayFelts, decodeTokenUri } from '../../../scripts/page.mjs';
 import { TOKEN_COUNT, decodeByteArray, defaultRepetitions, rpcResponseBytes, stressMidi, tokenUri } from './reference.mjs';
-import { PUBLIC_ENDPOINTS, label, redactor, selector, withText } from './rpc_check.mjs';
+import { label, redactor, selector, withText } from './rpc_check.mjs';
 
 test('the table has one growing, positive count per token', () => {
   const bars = defaultRepetitions();
@@ -55,14 +55,17 @@ test('entry point selectors are starknet_keccak', () => {
   assert.equal(selector('transfer'), '0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e');
 });
 
-test('errors never carry a provider URL, host or key', () => {
-  const url = 'https://rpc.example.com/v2/0123456789abcdef?key=secretsecret';
-  const redact = redactor([url, ...Object.values(PUBLIC_ENDPOINTS)]);
-  assert.equal(redact('the method starknet_call does not exist'), 'the method starknet_call does not exist');
-  for (const msg of [`fetch to ${url} failed`, 'getaddrinfo ENOTFOUND rpc.example.com', 'bad path /v2/0123456789abcdef', 'see https://other.example/x']) {
-    const out = redact(msg);
-    assert.ok(!/example|0123456789abcdef|secretsecret/.test(out), out);
+test('errors never carry a provider URL, host or key, however the key looks', () => {
+  for (const key of ['0123456789abcdef', 'abcdefghijklmnopqrstuvwxyz', '1234567890123', 'Ab-Cd_Ef.Gh%2Fij']) {
+    const url = `https://rpc.example.com/v2/${key}/starknet?token=${key}x`;
+    const redact = redactor([url]);
+    for (const msg of [`fetch to ${url} failed`, 'getaddrinfo ENOTFOUND rpc.example.com', `Invalid API key ${key}`, `bad path /v2/${key}`, `${'x'.repeat(190)} ${key}`]) {
+      const out = redact(msg).slice(0, 200);
+      assert.ok(!out.includes(key) && !out.includes('example'), out);
+    }
+    assert.ok(!redact(`${'x'.repeat(190)} ${key}`).includes(key.slice(0, 4)), 'a cut through a key leaves no prefix');
   }
+  assert.equal(redactor([])('the method starknet_call does not exist, see https://other.example/x'), 'the method starknet_call does not exist, see <url>');
 });
 
 test('revert reasons are shown as text', () => {
