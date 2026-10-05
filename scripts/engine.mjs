@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ENGINE_PIN = { ref: "fc04dbe", commit: "fc04dbe7d78bd0a4de5eb80887756f31c2c373f2", sha256: "4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c", noticeSha256: "2e665c7b0308cce61a694bc7ab9633d141e53b93cf283f09c5d873e0a6ae7322" };
+export const ENGINE_PIN = { ref: "4bf9829", commit: "4bf982994dc3d1187661385726fed2e6595fafbe", sha256: "8ad79ab8214e45a601e7d929e676b34b78e3f2b4200fd751d6548cf2b7df7749", noticeSha256: "29b1e003f554d943972c538fd2fc173b2515a5320033016a7fdf938a0181b698" };
 
 export const ENGINE_COMMIT = ENGINE_PIN.commit;
 export const ENGINE_SHA256 = ENGINE_PIN.sha256;

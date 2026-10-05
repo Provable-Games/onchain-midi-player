@@ -15,7 +15,7 @@ Through `ITinySynthLibraryDispatcher` on the declared class, as a consumer calls
 
 | Entry point | L2 gas |
 | --- | --- |
-| `animation_url_segment()` | 7.8M: 0.35M to materialize the constant, the rest to return its 53,476 bytes |
+| `animation_url_segment()` | 7.8M: 0.35M to materialize the constant, the rest to return its 53,508 bytes |
 | `midi_segment(midi, settings)` | 1.6M with no MIDI and the default settings; 60.7M with a 3,716-byte score and the 3 reference sounds (334 bytes of `SETTINGS`); 3,162.7M with that score and the largest valid `SETTINGS` without custom waves (218,264 bytes) |
 | `base64(data)` | 0.2M for 3 bytes, 3.8M for 1,023 bytes, and about 3.6K per input byte for large inputs |
 | `script_sha256()` | 0.1M |
@@ -49,7 +49,7 @@ Token 4 of the example ([`examples/beast_consumer`](../examples/beast_consumer/R
 - **sounds:** the 3 reference sounds, 334 bytes of `SETTINGS`;
 - **layout:** word-aligned.
 
-Its `token_uri` is 144,357 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
+Its `token_uri` is 144,389 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
 
 | Piece | L2 gas | Of which base64 |
 | --- | --- | --- |

@@ -58,7 +58,7 @@ The rules follow from how the TinySynth engine reads a file: it stops reading a 
 | Message | Effect |
 | --- | --- |
 | Note on (`9n`) | Velocity 1–127; velocity 0 is a note-off. Loudness follows velocity squared, (velocity / 128)²; FM depth does not change with velocity. |
-| Note off (`8n`) | Releases every note of that pitch on the channel that started at or before it and has had no note-off yet. Its velocity is ignored. |
+| Note off (`8n`) | Releases every note of that pitch on the channel that started at or before it and has had no note-off yet. Its velocity is ignored. Each operator is released from the level it has reached: one still in its attack fades out from part of the way up, so a note shorter than its timbre's attack still sounds, more quietly. A note-off at the note-on's own time leaves only the release of the operators with no attack. |
 | Program change (`Cn`) | Selects the instrument for the channel's following notes. |
 | Pitch bend (`En`) | Bends the channel by (value − 8192) / 8192 × the bend range. Every note that starts later takes the new bend, drum hits included. Of the notes already sounding, it retunes only the oscillator operators of melodic notes: noise operators (`WhiteNoise`, `MetallicNoise` and the built-in noise sounds), custom `Samples` waves (which play from a buffer, as noise does) and drum hits keep the bend they started with. A filter's cutoff never follows the bend: a key-tracked one is set from the note-on frequency before bend (see [Filters](sound-settings.md#filters)). |
 | CC1 modulation | Vibrato of ±(value × 100 / 127) cents from one 5 Hz sine LFO, shared by all channels. |

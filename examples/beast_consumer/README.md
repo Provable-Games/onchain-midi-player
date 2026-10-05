@@ -79,10 +79,10 @@ The tokens:
 
 | token | name | head spaces | comma piece | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 58,417 |
-| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 58,425 |
-| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 58,421 |
-| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 144,357 |
+| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 58,449 |
+| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 58,457 |
+| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 58,453 |
+| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 144,389 |
 
 Tokens 1-3 cover every pad length: `len('{' members ',')` and `len(S)` take every remainder mod 3, and `D` three different pads. Only `reverb` varies between them (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding. The head spaces include the alignment groups.
 
@@ -114,7 +114,7 @@ snforge test matches_js --gas-report   # token_uri gas, per contract and selecto
 snforge test gas_                      # token 4 piece by piece (see Gas)
 ```
 
-The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~44 KB token JSON byte by byte, and the token 4 test computes the SHA-256 of its 144,357-character `token_uri` in Cairo, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
+The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~44 KB token JSON byte by byte, and the token 4 test computes the SHA-256 of its 144,389-character `token_uri` in Cairo, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
 
 To decode the actual contract output rather than the JS reference:
 

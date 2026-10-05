@@ -16,7 +16,8 @@ const PPQ = 96; // at the default 120 BPM, 96 ticks are 0.5 s
 
 /**
  * The engine on a fresh WebAudio mock, with every note it plays recorded: its time, channel, note,
- * timbre and the frequency of its first oscillator.
+ * timbre, the frequency of its first oscillator, and its nodes (oscillators, buffer sources and
+ * the operators' gains, in operator order).
  */
 function engine({ voices = 64 } = {}) {
   const { AudioContext, log, nodes, contexts } = webAudioMock();
@@ -27,7 +28,7 @@ function engine({ voices = 64 } = {}) {
   vm.runInContext(engineSource(), sandbox);
   const synth = /** @type {any} */ (new /** @type {any} */ (sandbox).WebAudioTinySynth({ quality: 1, useReverb: 0, voices }));
   const ctx = contexts[0];
-  /** @type {Array<{t: number, ch: number, n: number, p: any, freq: number, made: number, oscs: string[], srcs: string[]}>} */
+  /** @type {Array<{t: number, ch: number, n: number, p: any, freq: number, made: number, oscs: string[], srcs: string[], gains: string[]}>} */
   const notes = [];
   const note = synth._note;
   synth._note = (/** @type {number} */ t, /** @type {number} */ ch, /** @type {number} */ n, /** @type {number} */ v, /** @type {any} */ p) => {
@@ -36,7 +37,8 @@ function engine({ voices = 64 } = {}) {
     const created = log.slice(from).filter((c) => c[1] === "create").map((c) => c[0]);
     const oscs = created.filter((name) => name.startsWith("osc")); // oscillator operators
     const srcs = created.filter((name) => name.startsWith("src")); // noise operators (buffer sources)
-    notes.push({ t, ch, n, p, freq: oscs.length ? nodes[oscs[0]].frequency.value : NaN, made: created.length, oscs, srcs });
+    const gains = created.filter((name) => name.startsWith("gain")); // one per operator
+    notes.push({ t, ch, n, p, freq: oscs.length ? nodes[oscs[0]].frequency.value : NaN, made: created.length, oscs, srcs, gains });
   };
   /** @type {number[]} */
   const offs = [];
@@ -275,6 +277,37 @@ describe("the pinned engine behaves as the MIDI contract says", () => {
     const max = 4294967295 / 10000;
     e.synth.setTimbre(0, 1, [{ a: max, h: max, d: max, r: max, q: max }]);
     assert.throws(() => e.synth.setTimbre(0, 2, [{ d: 1e39 }]), { name: "RangeError" });
+  });
+
+  test("a note-off releases each operator from the level it has reached: during its attack, from part-way up; a zero-length note plays the release of its operators with no attack", () => {
+    const e = engine();
+    e.ctx.currentTime = 1; // past the constructor's warm-up note
+    // Program 0: two audio outputs at full sustain, one with no attack and one with a 0.4 s attack.
+    e.synth.setTimbre(0, 0, [{ v: 0.5, a: 0, d: 1, s: 1, r: 0.1 }, { v: 0.5, a: 0.4, d: 1, s: 1, r: 0.2 }]);
+    /** Plays one note from `on` to `off`; returns each operator's gain calls at its note-on and at its note-off. */
+    const play = (/** @type {number} */ n, /** @type {number} */ on, /** @type {number} */ off) => {
+      const from = e.log.length;
+      e.synth.send([0x90, n, 100], on);
+      const { gains } = /** @type {{gains: string[]}} */ (e.notes.at(-1));
+      const mid = e.log.length;
+      e.synth.send([0x80, n, 0], off);
+      const calls = (/** @type {number} */ a, /** @type {number} */ b) => gains.map((g) => e.log.slice(a, b).filter((c) => c[0] === `${g}.gain`).map((c) => c.slice(1)));
+      return { atOn: calls(from, mid), atOff: calls(mid, e.log.length) };
+    };
+    // Each operator's level: (velocity / 128)^2 x volume. The first is set at once, the second ramped to it over its attack.
+    const level = (100 * 100 / 16384) * 0.5;
+    const held = play(60, 1.5, 3); // both attacks over by the note-off
+    assert.deepEqual(held.atOn[0].slice(0, 1), [["set", level, 1.5]]);
+    assert.deepEqual(held.atOn[1].slice(0, 2), [["set", 0, 1.5], ["ramp", level, 1.9]]);
+    assert.deepEqual(held.atOff, [[["cancel", 3], ["target", 0, 3, 0.1]], [["cancel", 3], ["target", 0, 3, 0.2]]], "after its attacks, a note is released from where its envelopes are, as before");
+    const short = play(62, 1.5, 1.6); // a quarter of the way into the second operator's attack
+    assert.equal(short.atOff[1].length, 3);
+    assert.deepEqual([short.atOff[1][0], short.atOff[1][2]], [["cancel", 1.6], ["target", 0, 1.6, 0.2]]);
+    const [kind, reached, at] = short.atOff[1][1];
+    assert.ok(kind === "ramp" && near(reached, level * 0.25) && at === 1.6, `the second operator ramps on to the level it reached, ${reached} at ${at}, and is released from there`);
+    assert.deepEqual(short.atOff[0], [["cancel", 1.6], ["target", 0, 1.6, 0.1]], "the first operator, its attack over, is released from its own level, not the second's");
+    const zero = play(64, 2, 2); // note-on and note-off at once
+    assert.deepEqual(zero.atOff, [[["cancel", 2], ["set", level, 2], ["target", 0, 2, 0.1]], [["cancel", 2], ["ramp", 0, 2], ["target", 0, 2, 0.2]]], "a zero-length note plays the release of its operator with no attack");
   });
 
   test("GM Master Volume SysEx, bank select and CC91 are ignored", () => {
