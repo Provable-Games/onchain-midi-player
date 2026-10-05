@@ -7,7 +7,7 @@
 //
 // Re-pinning is a one-line change to ENGINE_PIN, after vendoring the new files with
 //   node scripts/vendor_engine.mjs <fork checkout> <commit or tag>
-// which prints the new line. `ref` names the vendored files and is recorded with each VERSION in
+// which prints the new line. `ref` names the vendored files and is recorded with the VERSION in
 // scripts/page_versions.json; it is the short commit SHA or, once the fork publishes tagged releases,
 // the tag. A re-pin needs a new VERSION (scripts/page.mjs).
 

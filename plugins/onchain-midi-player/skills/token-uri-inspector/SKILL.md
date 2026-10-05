@@ -51,7 +51,7 @@ It writes `out/image.svg` only when the `image` is a base64 SVG data URI, as whe
 node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256() of the class>
 ```
 
-It prints the SHA-256 and length of the gzip payload, the engine and the fixed `PAGE`, and exits 1 unless the engine matches `--expect`. Compare all three with the class's record in [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json), keyed by its `version()`: `gzip_sha256` and `gzip_len`, `script_sha256`, and `page_sha256`. A matching `PAGE` also proves the shim and the player around the engine are the class's.
+It prints the SHA-256 and length of the gzip payload, the engine and the fixed `PAGE`, and exits 1 unless the engine matches `--expect`. Compare all three with the class's record in [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json), keyed by its `version()`: `gzip_sha256` and `gzip_len`, `script_sha256`, and `page_sha256`. A matching `PAGE` also proves the shim and the player around the engine are the class's. If the token's `version()` has no record, report the version as unknown rather than as a mismatch, and look its record up with `git log -p scripts/page_versions.json`.
 
 ## 4. Split the page, check the MIDI and the art
 

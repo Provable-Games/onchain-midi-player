@@ -29,7 +29,7 @@ export const PAGE_PATH = new URL("../tests/fixtures/page.html", import.meta.url)
  * pre-release tag, at most 31 bytes. Bump it for every class that is declared: interim builds are
  * `0.x.0` while pre-release, and `1.0.0` comes at release, when the call and settings layouts
  * freeze; from then on the major number promises call and settings-layout compatibility.
- * `engine()` names the engine. scripts/page_versions.json records, for every VERSION, the SHA-256
+ * `engine()` names the engine. scripts/page_versions.json records, for the current VERSION, the SHA-256
  * of its PAGE, the engine pin, PAGE_VERSION, script_sha256() and the gzip payload's SHA-256 and
  * length, and the build fails when any of them changes under a recorded VERSION: bump VERSION,
  * then record it with `npm run gen:page -- --record`.

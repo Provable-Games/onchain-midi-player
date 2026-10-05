@@ -211,8 +211,8 @@ pub trait ITinySynth<T> {
     /// layouts freeze. From then on the major number promises call and settings-layout
     /// compatibility. A release has the git tag `v<version>`; a class without one is a test
     /// class, not for production. `engine()` names the engine; `scripts/page_versions.json` maps
-    /// each version to its engine commit, page revision and hashes, and `deployments/` lists
-    /// where each class is declared.
+    /// the current version to its engine commit, page revision and hashes (earlier versions are
+    /// in its git history), and `deployments/` lists where the current class is declared.
     fn version(self: @T) -> felt252;
 
     /// Returns the license notice for this class: Apache License 2.0, covering both this
