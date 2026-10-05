@@ -1,8 +1,8 @@
 // @ts-check
-// Node tests for scripts/check_midi.mjs, the composer's MIDI check (README: "MIDI contract"): it
+// Node tests for scripts/check_midi.mjs, the composer's MIDI check (docs/midi-contract.md): it
 // passes valid files and the repository's fixtures, fails each class of invalid file with the page's
-// own error, reads every form of input, and exits 0, 1 or 2. Also checks that the README's MIDI
-// contract lists every error that checkMidi and decodeMidi can throw.
+// own error, reads every form of input, and exits 0, 1 or 2. Also checks that the MIDI contract
+// lists every error that checkMidi and decodeMidi can throw.
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -191,16 +191,14 @@ describe("each failure class: FAIL with the page's error", () => {
     assert.deepEqual(formatResult(r), ["FAIL b64", "  midi: running status without a channel status (byte 24)", "  32 bytes"]);
   });
 
-  test("the cases cover every error checkMidi and decodeMidi throw, and the README's MIDI contract lists each", () => {
+  test("the cases cover every error checkMidi and decodeMidi throw, and docs/midi-contract.md lists each", () => {
     const src = read("player/player.js").toString("utf8");
     // fail("...") in checkMidi: a whole message, or the literal start of a computed one.
     const thrown = new Set([...src.matchAll(/fail\("([^"]*)"/g)].map((m) => m[1]));
     for (const m of src.matchAll(/new Error\("midi: ([^"]*)"\)/g)) thrown.add(m[1]);
     assert.ok(thrown.size >= 19, `found ${thrown.size} messages`);
-    const readme = read("README.md").toString("utf8");
-    const start = readme.indexOf("\n## MIDI contract\n");
-    assert.ok(start >= 0, "README has a MIDI contract section");
-    const contract = readme.slice(start, readme.indexOf("\n## ", start + 1));
+    const contract = read("docs/midi-contract.md").toString("utf8");
+    assert.ok(contract.startsWith("# MIDI contract\n"), "docs/midi-contract.md is the MIDI contract");
     for (const text of thrown) {
       assert.ok(cases.some(([, , message]) => message.startsWith(text)), `a failure case throws "${text}"`);
       assert.ok(contract.includes("`" + text) || contract.includes("`midi: " + text + "`"), `the MIDI contract lists "${text}"`);

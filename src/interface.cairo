@@ -27,7 +27,7 @@
 //!   its attribute.
 //! - `SETTINGS`: the ASCII encoding of a `SynthSettings` value (see `types.cairo`), format
 //!   version 1, as specified in `settings.cairo` (issue #1): comma-separated canonical
-//!   decimal integers, with no length cap: its cost grows with it (see the README). It
+//!   decimal integers, with no length cap: its cost grows with it (see docs/gas.md). It
 //!   contains only digits, `-` and `,`, so it can never close its block. Example (default
 //!   settings): `1,1,30,40,64,0,0`.
 //! - `D`: the per-token HTML fragment
@@ -72,7 +72,7 @@
 //!
 //! The HTML parser ends the art element at the first `</script`, so the SVG must never contain
 //! `</script` in any letter case. The class never sees the SVG: the consumer checks this in its
-//! own tests (see "Art (SVG) requirements" in the README).
+//! own tests (see "Art (SVG) requirements" in docs/token-uri-layout.md).
 //!
 //! This file also declares `ISoundProvider`, at the end: the interface a composer's contract
 //! implements to hand an NFT a token's MIDI and `SynthSettings`. The class does not implement it.
@@ -122,7 +122,7 @@ pub trait IOnchainMidiPlayer<T> {
     /// `animation_url_segment()`.
     ///
     /// Inputs:
-    /// - `midi`: a Standard MIDI File (see "MIDI contract" in the README). The bytes
+    /// - `midi`: a Standard MIDI File (see docs/midi-contract.md). The bytes
     ///   are embedded verbatim (as base64 text); this function does not parse or validate
     ///   them.
     /// - `settings`: engine settings and optional custom sounds (see `types.cairo`).
@@ -157,7 +157,7 @@ pub trait IOnchainMidiPlayer<T> {
     /// filtered operators, every field at its type's extreme, 218,264 bytes) about 1.32B. Base64 is
     /// the rest. Through a library call, the whole call costs about 61M for a score the size of the
     /// largest Beast score (3,716 bytes) with the reference sounds, about 14M more per 1,000 bytes
-    /// of `SETTINGS`, and about 3.2B with that largest `SETTINGS` (measurements in the README).
+    /// of `SETTINGS`, and about 3.2B with that largest `SETTINGS` (measurements in docs/gas.md).
     /// There is no byte cap: the gas limit of the call decides.
     fn midi_segment(self: @T, midi: ByteArray, settings: SynthSettings) -> ByteArray;
 
@@ -193,7 +193,7 @@ pub trait IOnchainMidiPlayer<T> {
     /// `text/javascript+gzip` tag, base64-decode it after the `data:text/javascript;base64,`
     /// prefix (its SHA-256 is `page_data::GZIP_SHA256`), gunzip it, hash the result, and
     /// compare with this value and with `sha256sum` of the fork's `webaudio-tinysynth.min.js`
-    /// at the pinned commit or release (see the README).
+    /// at the pinned commit or release (see docs/verifying.md).
     fn script_sha256(self: @T) -> u256;
 
     /// Short-string (at most 31 ASCII bytes) identifying the engine and page versions of
@@ -219,7 +219,7 @@ pub trait IOnchainMidiPlayer<T> {
 
 /// What a composer's contract implements to hand an NFT the sound of a token, and what the NFT, or
 /// the renderer that builds its `token_uri`, calls. The player class does not implement it and
-/// never calls it. README: "Sound provider interface", which has the provider contract.
+/// never calls it. docs/sound-provider.md has the provider contract.
 ///
 /// A Standard MIDI File can select an instrument (a program change, or a note on the percussion
 /// channel) but cannot define one. So the provider owns both the score, as a raw Standard MIDI
@@ -230,7 +230,7 @@ pub trait IOnchainMidiPlayer<T> {
 /// goes straight to `midi_segment`:
 ///
 /// ```text
-/// let sound = <the README's snippet>(provider, token_id)?;
+/// let sound = fetch_sound(provider, token_id)?; // docs/sound-provider.md, "Calling a provider"
 /// let segment = synth.midi_segment(sound.midi, sound.settings);
 /// ```
 ///
@@ -250,7 +250,7 @@ pub trait IOnchainMidiPlayer<T> {
 ///   the whole `u256`. Decode only the bits you use and ignore the rest: a provider that rejects
 ///   unused bits breaks when the NFT's ID layout grows (Beasts' newer IDs are 180 bits).
 /// - **A raw Standard MIDI File.** `midi` is the file's bytes (not base64, not a data URI), and it
-///   passes the page's MIDI check, `checkMidi` (`npm run check-midi`; README "MIDI contract"). The
+///   passes the page's MIDI check, `checkMidi` (`npm run check-midi`; docs/midi-contract.md). The
 ///   class embeds the bytes without parsing them, so a bad file does not revert: the page shows an
 ///   error instead of playing.
 /// - **Valid settings.** `settings` passes `crate::settings::validate`, in the class version the

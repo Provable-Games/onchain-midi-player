@@ -75,8 +75,8 @@
 //! The operator values multiply into the gains and frequencies the engine passes to Web Audio,
 //! which requires them finite as 32-bit floats. When a product overflows at some note and tuning
 //! (a long FM chain, or a large `key_scale`), the pinned engine skips that note before making any
-//! node (fork task T5.2): the note is silent and the song plays on. README, "Engine limits on
-//! operator values".
+//! node (fork task T5.2): the note is silent and the song plays on. docs/sound-settings.md, "Engine
+//! limits on operator values".
 //!
 //! Custom waves (issue #2) need no check beyond the counts, lengths and index above: the player
 //! registers each wave with the engine's `setSampleWave` or `setHarmonicWave` (fork #26), which
@@ -103,7 +103,7 @@ pub const SETTINGS_FORMAT_VERSION: u32 = 1;
 // every wave `Waveform::Custom(u8)` can index, and per wave what the engine's custom-wave API takes
 // (webaudio-tinysynth #26, decision D-028 of the fork's docs/improvements/decisions.md): at least
 // one harmonic or one sample, with no upper bound. There is no byte cap on `SETTINGS` either: the
-// network prices its size in gas (README, "Gas and limits").
+// network prices its size in gas (docs/gas.md).
 
 /// Maximum entries in `SynthSettings::waves`: all that `Waveform::Custom(u8)` can index.
 pub const MAX_WAVES: u32 = 256;

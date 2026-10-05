@@ -1,5 +1,5 @@
 //! Gas of the class (`snforge test gas_`), in L2 gas, with the optimized encoder
-//! (`game_components_encoding`, see `src/base64.cairo`). Results are in the README.
+//! (`game_components_encoding`, see `src/base64.cairo`). Results are in docs/gas.md.
 //!
 //! - `gas_lc_*`: each entry point through the library dispatcher on the declared class, the way a
 //!   consumer calls it. `gas_lc_declare` is the baseline (declaring only). The figures include

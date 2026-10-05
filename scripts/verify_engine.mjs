@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @ts-check
-// Checks the TinySynth engine inside a token's animation_url page (README: "Verifying the engine").
+// Checks the TinySynth engine inside a token's animation_url page (docs/verifying.md).
 // Node built-ins only, and no imports from this repository, so a collector can copy this one file
 // and run it with Node 22 or later.
 //
@@ -22,7 +22,7 @@
 //   - the fixed page: scripts/page_versions.json. A matching fixed page proves the rest: that the
 //     tag is the page's own engine tag, not text in a comment, and that the shim and the player
 //     around it are the class's.
-// Compare them with the README's "Versions" table. With --expect, it exits 1 unless the engine's
+// Compare them with the Versions table in docs/versions.md. With --expect, it exits 1 unless the engine's
 // SHA-256 equals the given value: hex, with or without 0x, as script_sha256() prints it.
 
 import { createHash } from "node:crypto";

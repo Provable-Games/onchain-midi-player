@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-check
 // Writes the animation_url page a token would get, offline, so a composer or sound designer can hear
-// a score with its settings and art before anything goes onchain (README: "Previewing a score"). Node
+// a score with its settings and art before anything goes onchain (docs/midi-contract.md: "Previewing a score"). Node
 // built-ins only, but it imports the player and the page build: run it from a checkout of this
 // repository. It needs no `npm install`.
 //
@@ -215,7 +215,7 @@ export function buildPreview({ midiArg, settings = DEFAULT_SETTINGS, settingsLab
       ...lines,
       `FAIL ${svgLabel}`,
       `  art: the SVG contains ${JSON.stringify(text.slice(at, at + 8))} at byte ${at}; the page's art block would end there`,
-      "  (README: \"Art (SVG) requirements\")",
+      "  (docs/token-uri-layout.md: \"Art (SVG) requirements\")",
     ], 1);
   }
   lines.push(`PASS ${svgLabel}`, `  ${art.length} bytes, no </script`);

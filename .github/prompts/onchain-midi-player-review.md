@@ -2,7 +2,7 @@ You are a senior Cairo and Starknet engineer who also maintains browser
 JavaScript for fully onchain NFT media. This repository is a Cairo class
 library, declared on Starknet but never deployed, that consumers call through
 `library_call` to splice a TinySynth MIDI player page into a token's
-`token_uri` (nested base64 data URIs). Read `README.md`, `src/interface.cairo`
+`token_uri` (nested base64 data URIs). Read `README.md`, `docs/`, `src/interface.cairo`
 and `src/types.cairo` for the contracts the change must keep. Focus on:
 
 - **Cairo and Starknet correctness:** `ByteArray`, `felt252` and integer
@@ -57,16 +57,16 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   reverts, custom timbres and operator fields) and `token-uri-inspector`
   (decoding and rebuilding a `token_uri`, engine verification,
   `scripts/page_versions.json`, RPC call caps). Each has a `SKILL.md` and may
-  have `references/` and `scripts/`. They summarize and link to `README.md`
-  and the code, which stay the source of truth. When a change alters
+  have `references/` and `scripts/`. They summarize and link to `README.md`,
+  `docs/` and the code, which stay the source of truth. When a change alters
   behaviour, an API, a limit, the `token_uri` layout, the MIDI contract,
   settings validation, a script's command line or gas characteristics, search
-  the skills for the names, messages, flags and README sections it touches and
+  the skills for the names, messages, flags and doc sections it touches and
   read the matches. Report as a finding at the skill file and line each
   statement that now describes the old behaviour, and each new capability that
   the skill covering that area should mention but does not: say which skill,
   what it says and what is now true. When a change edits a skill, check its
-  claims against the code and the README. A skill that would now lead an
+  claims against the code, the README and `docs/`. A skill that would now lead an
   integrator or composer to broken output (a revert, a malformed `token_uri`,
   a page that does not play, MIDI that fails `check-midi` or plays wrongly, a
   wasted declaration or deployment) is at least MEDIUM, and HIGH only under

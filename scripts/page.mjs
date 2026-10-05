@@ -1,6 +1,6 @@
 // @ts-check
 // JavaScript reference for everything the class returns around the page, and for the consumer
-// layout that splices it ("Consumer `token_uri` layout" in README.md and src/interface.cairo).
+// layout that splices it ("Consumer `token_uri` layout" in docs/token-uri-layout.md and src/interface.cairo).
 // Node built-ins only: it reads the built PAGE from tests/fixtures/page.html (written by scripts/build_page.mjs)
 // and needs no `npm install`, so the beast_consumer example and the tests can use it directly.
 //
@@ -454,7 +454,7 @@ export function constFeltArray(name, felts) {
  * A ByteArray constant as a string literal in a function body. The compiler lowers a literal to
  * the ByteArray's words as constants, so materializing it costs a fraction of deserializing a
  * `const` felt array (0.28M against 3.70M L2 gas for the 42,644-byte segment), for a larger class
- * (about 130 KB and 2,700 CASM felts more for the page constants; README, "Class size"). Only for
+ * (about 130 KB and 2,700 CASM felts more for the page constants; docs/development.md, "Class size"). Only for
  * base64 text, which needs no escaping; `scarb fmt` leaves the long literal line alone.
  * @param {string} fnName
  * @param {string} text
