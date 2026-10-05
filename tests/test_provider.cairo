@@ -18,7 +18,7 @@ use crate::helpers::class;
 use crate::page_fixtures::{
     case_beast_140bpm_midi, case_beast_140bpm_midi_segment, case_beast_140bpm_settings,
 };
-use crate::settings_fixtures::{reserved_filters, valid_reference_waves};
+use crate::settings_fixtures::{valid_filter_extremes, valid_reference_waves};
 
 /// A composer's provider. It decodes only the low 16 bits of the token ID, ignoring the rest as a
 /// provider must, and knows one token, 1: the `beast_140bpm` golden fixture's MIDI and settings.
@@ -310,7 +310,7 @@ fn token_sound_serde_round_trip() {
     }
     waves.append(WaveDef::Harmonics([65_535, 0, 32_767, 0, 1].span()));
     let settings = SynthSettings {
-        waves: waves.span(), timbres: reserved_filters().timbres, ..valid_reference_waves(),
+        waves: waves.span(), timbres: valid_filter_extremes().timbres, ..valid_reference_waves(),
     };
     let sound = TokenSound { midi: case_beast_140bpm_midi(), settings };
     let mut felts = array![];

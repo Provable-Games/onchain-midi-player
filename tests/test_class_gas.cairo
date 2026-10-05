@@ -6,7 +6,7 @@
 //!   serializing the arguments and the result, which a consumer pays too.
 //! - `gas_ms_*`: `midi_segment` across MIDI sizes (no MIDI, then the synthetic scores of 816 to
 //!   3,716 bytes, the sizes of the production Beast scores) and `SETTINGS` sizes (16, 334, 504 and
-//!   9,836 bytes, and the largest valid input, 156,489 bytes, with no MIDI and with the largest
+//!   9,836 bytes, and the largest valid input, 191,664 bytes, with no MIDI and with the largest
 //!   score only), called directly. Per cell, `build` only builds the inputs (the baseline), `d`
 //!   builds `D` (validation, `SETTINGS`, `b64(midi)` and the appends), and `full` is the whole
 //!   `midi_segment`; `full - d` is the two outer base64 passes. `gas_b64_midi_*` is `b64(midi)`
@@ -24,7 +24,7 @@ use crate::class_fixtures::{
 use crate::helpers::{class, declare_class};
 use crate::settings_fixtures::{
     long_lfsr, structural_max, valid_beast_reference, valid_default, valid_every_slot,
-    valid_one_wave, valid_reference_waves, valid_six_timbres,
+    valid_filters, valid_one_filter, valid_one_wave, valid_reference_waves, valid_six_timbres,
 };
 
 fn midi(i: u32) -> ByteArray {
@@ -77,7 +77,7 @@ fn gas_lc_declare() {
 
 #[test]
 fn gas_lc_animation_url_segment() {
-    assert(class().animation_url_segment().len() == 53140, 'segment');
+    assert(class().animation_url_segment().len() == 53316, 'segment');
 }
 
 #[test]
@@ -104,6 +104,20 @@ fn gas_lc_midi_segment_one_wave_heaviest() {
 fn gas_lc_midi_segment_reference_waves_heaviest() {
     let m = beast_midi_heaviest();
     let s = valid_reference_waves();
+    assert(class().midi_segment(m, s).len() > 0, 'midi_segment');
+}
+
+#[test]
+fn gas_lc_midi_segment_one_filter_heaviest() {
+    let m = beast_midi_heaviest();
+    let s = valid_one_filter();
+    assert(class().midi_segment(m, s).len() > 0, 'midi_segment');
+}
+
+#[test]
+fn gas_lc_midi_segment_filters_heaviest() {
+    let m = beast_midi_heaviest();
+    let s = valid_filters();
     assert(class().midi_segment(m, s).len() > 0, 'midi_segment');
 }
 
@@ -150,7 +164,7 @@ fn gas_lc_version() {
 
 #[test]
 fn gas_lc_license() {
-    assert(class().license().len() == 8783, 'license');
+    assert(class().license().len() == 8784, 'license');
 }
 
 // ------------------------------------------------------------------------------------------------

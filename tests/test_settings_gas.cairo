@@ -5,7 +5,8 @@
 use onchain_tinysynth::settings::{encode, validate};
 use crate::settings_fixtures::{
     LONG_LFSR_LEN, STRUCTURAL_MAX_LEN, long_lfsr, structural_max, valid_default, valid_every_slot,
-    valid_one_wave, valid_reference_waves, valid_six_timbres, valid_waves_256,
+    valid_filters, valid_one_filter, valid_one_wave, valid_reference_waves, valid_six_timbres,
+    valid_waves_256,
 };
 
 
@@ -153,4 +154,43 @@ fn gas_long_lfsr_validate() {
 fn gas_long_lfsr_encode() {
     let settings = long_lfsr();
     assert(encode(@settings).len() == LONG_LFSR_LEN, 'length');
+}
+
+// Filters (issue #3): one (the reference lead's carrier low-passed) and several (six filtered
+// outputs).
+
+#[test]
+fn gas_one_filter_build() {
+    let settings = valid_one_filter();
+    assert(settings.timbres.len() == 3, 'timbres');
+}
+
+#[test]
+fn gas_one_filter_validate() {
+    let settings = valid_one_filter();
+    validate(@settings);
+}
+
+#[test]
+fn gas_one_filter_encode() {
+    let settings = valid_one_filter();
+    assert(encode(@settings).len() == 349, 'length');
+}
+
+#[test]
+fn gas_filters_build() {
+    let settings = valid_filters();
+    assert(settings.timbres.len() == 6, 'timbres');
+}
+
+#[test]
+fn gas_filters_validate() {
+    let settings = valid_filters();
+    validate(@settings);
+}
+
+#[test]
+fn gas_filters_encode() {
+    let settings = valid_filters();
+    assert(encode(@settings).len() == 465, 'length');
 }

@@ -95,8 +95,8 @@ describe("checks", () => {
     assert.equal(r.stdout, check.stdout);
   });
 
-  test("every invalid and reserved settings fixture fails with the class's revert", () => {
-    const cases = [...settingsFixtures.invalid, ...settingsFixtures.reserved];
+  test("every invalid settings fixture fails with the class's revert", () => {
+    const cases = settingsFixtures.invalid;
     assert.ok(cases.length >= 10, `${cases.length} cases`);
     for (const { name, settings, error } of cases) {
       assert.throws(

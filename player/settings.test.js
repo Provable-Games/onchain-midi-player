@@ -38,15 +38,6 @@ describe("shared fixtures", () => {
       assert.match(f.settings_text, /^[0-9,-]+$/);
     });
   }
-  for (const f of fixtures.reserved) {
-    test(`reserved ${f.name}: encodes, rejected until issue #3`, () => {
-      assert.equal(encodeSettings(f.settings), f.settings_text);
-      assert.deepEqual(decodeSettings(f.settings_text), f.settings);
-      assert.deepEqual(errorOf(() => validateSettings(f.settings)), f.error);
-      assert.deepEqual(errorOf(() => decodeAndValidate(f.settings_text)), f.error);
-      assert.deepEqual(decodeSettings(f.settings_text), f.settings, "the page's decoder accepts it: validation is Cairo's job");
-    });
-  }
   for (const f of fixtures.invalid) {
     test(`invalid ${f.name}: ${f.error.join(", ")}`, () => {
       assert.deepEqual(errorOf(() => encodeSettings(validateSettings(f.settings))), f.error);
@@ -259,6 +250,22 @@ describe("installer", () => {
     malformedText(text.replace("2147483647", "2147483648"));
     malformedText(text.replace("-2147483648", "-2147483649"));
     malformedText(text.replace(/^1,1,255/, "1,1,256"));
+  });
+
+  test("filters: fl, ff, fq and fk from the kind, the fixed-point cutoff and Q, and key_track; none without a filter", () => {
+    const s = fixtures.valid.find((/** @type {any} */ f) => f.name === "filters").settings;
+    const ops = s.timbres.map((/** @type {any} */ t) => toTinySynthOps(t)[0]);
+    assert.deepEqual(ops.map((/** @type {any} */ o) => [o.fl, o.ff, o.fq, o.fk]), [
+      ["lowpass", 1000, 0.7071, 0], ["highpass", 1000, 0.7071, 0], ["bandpass", 1000, 4, 0], ["lowpass", 4, 0.7071, 1],
+      ["highpass", 3000, 0.7071, 0], ["highpass", 3000, 0.7071, 0],
+    ]);
+    assert.deepEqual(Object.keys(ops[0]), ["g", "w", "v", "t", "f", "a", "h", "d", "s", "r", "p", "q", "k", "fl", "ff", "fq", "fk"]);
+    // Extremes: the smallest non-zero value (0.0001, far above the engine's 2^-126) and the u32 maximum.
+    const ext = fixtures.valid.find((/** @type {any} */ f) => f.name === "filter_extremes").settings;
+    const all = ext.timbres.flatMap((/** @type {any} */ t) => toTinySynthOps(t)).filter((/** @type {any} */ o) => o.fl);
+    assert.deepEqual([...new Set(all.flatMap((/** @type {any} */ o) => [o.ff, o.fq]))].sort((a, b) => a - b), [0.0001, 429496.7295]);
+    // Without a filter, the operator has exactly the 13 keys it had before filters were accepted.
+    for (const t of beast.timbres) for (const o of toTinySynthOps(t)) assert.equal(Object.keys(o).join(), "g,w,v,t,f,a,h,d,s,r,p,q,k");
   });
 
   test("custom waves: each registered under its index's name, before the quality and the timbres; Custom(i) names it", () => {

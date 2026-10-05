@@ -5,7 +5,8 @@
  *
  * `SETTINGS` (format version 1) is the ASCII encoding of the Cairo `SynthSettings` value that the
  * class writes into the page, after `settings::validate` has checked it (counts, slots, routes, wave
- * indices and the filter gate; every other field may take any value of its type). The page parses it strictly (the
+ * indices, filters only on outputs with a cutoff and Q above 0; every other field may take any value
+ * of its type). The page parses it strictly (the
  * grammar, canonical integers, Cairo type bounds, count bounds, known tags, every token consumed)
  * and installs it; it does not repeat Cairo's checks. The JS
  * reference of those checks, for tooling and the parity tests, is `player/validate.js`; the
@@ -39,7 +40,7 @@ export const PARSE_MAX_OPERATORS = 8;
 export const WAVEFORMS = ["Sine", "Square", "Sawtooth", "Triangle", "WhiteNoise", "MetallicNoise"];
 /** TinySynth `w` names for the built-in waveforms, by tag. */
 const TINYSYNTH_WAVES = ["sine", "square", "sawtooth", "triangle", "n0", "n1"];
-/** `FilterKind` variants in declaration order. */
+/** `FilterKind` variants in declaration order. Lowercased, they are TinySynth's `fl` names. */
 export const FILTER_KINDS = ["LowPass", "HighPass", "BandPass"];
 
 /**
@@ -240,8 +241,11 @@ export function registerWaves(synth, waves) {
 
 /**
  * Converts a timbre's operators to TinySynth's `setTimbre` format: a built-in waveform by its
- * TinySynth name, `Custom(i)` by the name wave `i` of `waves` is registered under. Builds fresh
- * objects every time.
+ * TinySynth name, `Custom(i)` by the name wave `i` of `waves` is registered under. A filter (issue
+ * #3) becomes the engine's operator filter fields (fork #27): `fl` the kind (`lowpass`, `highpass`,
+ * `bandpass`), `ff` the cutoff and `fq` the Q (both fixed point), `fk` 1 for a key-tracked cutoff,
+ * else 0. An operator without a filter gets none of these keys, so the engine builds no filter node
+ * and plays it as before. Builds fresh objects every time.
  * @param {Timbre} timbre
  * @param {WaveDef[]} [waves]
  */
@@ -251,6 +255,8 @@ export function toTinySynthOps(timbre, waves = []) {
     /** @type {Record<string, any>} */
     const p = { g: o.route, w: typeof w == "object" ? waveName(waves[w.Custom], w.Custom) : TINYSYNTH_WAVES[WAVEFORMS.indexOf(w)] };
     for (const [name, , key] of OPERATOR_FIELDS) p[key] = fx(/** @type {any} */ (o)[name]);
+    const f = o.filter;
+    if (f) Object.assign(p, { fl: f.kind.toLowerCase(), ff: fx(f.cutoff), fq: fx(f.q), fk: f.key_track ? 1 : 0 });
     return p;
   });
 }
@@ -270,9 +276,8 @@ export function createSynth(WebAudioTinySynth, s) {
 /**
  * Applies settings to a constructed TinySynth: the custom waves (registered before any timbre
  * names them), quality (which resets programs 0–127 and drums 35–81 to the built-ins, but keeps the
- * waves), engine settings, then every custom timbre in order. Idempotent; call it again after
- * anything that changes the quality. Filters, which validation rejects until issue #3, get their
- * player side with that issue.
+ * waves), engine settings, then every custom timbre in order, filters included. Idempotent; call it
+ * again after anything that changes the quality.
  * @param {any} synth
  * @param {SynthSettings} s
  */
