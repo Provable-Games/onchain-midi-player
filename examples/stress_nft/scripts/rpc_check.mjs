@@ -22,6 +22,8 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { decodeByteArray, defaultRepetitions, rpcResponseBytes, tokenUri } from './reference.mjs';
 
 /**
@@ -306,7 +308,7 @@ async function main() {
   console.log(`\nresults written to ${opt.out}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((e) => {
     console.error(`rpc_check: ${e.message}`);
     process.exit(1);
