@@ -255,7 +255,7 @@ describe("filters in the real engine (issue #3)", () => {
 
   test("the engine rejects every filter settings::validate rejects, and the filter is released with the voice", () => {
     // Validation bypassed: T5's setTimbre throws on a filter on a modulator and on a cutoff or Q of 0,
-    // the shapes checks 20-22 reject (the engine's own rules, mirrored).
+    // the shapes checks 15-17 reject (the engine's own rules, mirrored).
     const rejected = INVALID.filter((f) => f.error[0].startsWith("TS: filter"));
     assert.ok(rejected.length >= 5);
     for (const f of rejected) {
