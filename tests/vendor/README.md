@@ -12,9 +12,8 @@ at commit `4bf982994dc3d1187661385726fed2e6595fafbe` on the fork's `improve/inte
 - License: Apache License 2.0. Copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games (see the fork's NOTICE
   and this repository's [NOTICE](../../NOTICE)).
 
-**This pin is not a fork release**: it tracks the fork's `improve/integration` branch. Classes built from it are test
-classes, without a `v<version>` release tag. A release needs the engine re-pinned to a tagged fork release with a
-published SHA-256 (the release gate, issue #12).
+A class whose engine pin is not a tagged fork release is a test class, without a `v<version>` release tag. A release
+pins a tagged fork release with a published SHA-256.
 
 This is the engine the class embeds: `scripts/build_page.mjs` gzips the minified file's exact bytes into the page (the
 page's gunzip shim inflates them back in the browser), and `script_sha256()` returns the SHA-256 of the decompressed
@@ -29,7 +28,7 @@ To verify: `git -C <fork> show 4bf9829:webaudio-tinysynth.min.js | sha256sum`.
 To a later commit, or to a tagged fork release once the fork publishes them:
 
 1. Pick the ref. On `improve/integration`, pin a commit the fork's CI made after a merge, "Rebuild
-   webaudio-tinysynth.min.js for `<sha>`" (by github-actions[bot]), not the merge commit: pull requests no longer carry
+   webaudio-tinysynth.min.js for `<sha>`" (by github-actions[bot]), not the merge commit: pull requests do not carry
    the minified build, so a merge commit can carry a stale one. Check that the fork's `webaudio-tinysynth.min.js` at the
    ref is its reproducible build: check out the ref in a clone, then `npm ci && npm run verify` (it rebuilds the file
    with the fork's pinned Terser and compares the bytes; commits before `npm run verify` existed: `npm ci && npm run

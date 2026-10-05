@@ -442,7 +442,7 @@ class PolicyTests(Workspace):
         self.assertEqual(completed.outputs["policy"], "no-changes")
 
 
-class BootstrapTests(Workspace):
+class ConfigSelectionTests(Workspace):
     def selection_script(self, workflow):
         text = (WORKFLOWS / workflow).read_text()
         match = re.search(r"\n( +)# begin trusted-config-selection\n(.*?)\n +# end trusted-config-selection",
@@ -462,37 +462,24 @@ class BootstrapTests(Workspace):
         workspace.mkdir()
         repo.rename(workspace / "src")
         output = self.dir / f"selection-{with_config}"
+        output.touch()
         completed = subprocess.run(["bash", "-c", self.selection_script("codex-review.yml")], cwd=workspace,
-                                   env=self.base_env | {"BASE_SHA": base, "HEAD_SHA": head, "BASE_REF": "main",
-                                                        "BOOTSTRAP_BASE_BRANCHES": "main",
+                                   env=self.base_env | {"BASE_SHA": base, "BASE_REF": "main",
                                                         "GITHUB_OUTPUT": str(output)},
                                    capture_output=True, text=True)
-        self.assertEqual(completed.returncode, 0, completed.stderr)
         values = dict(line.split("=", 1) for line in output.read_text().split())
-        return values, base, head, completed.stdout
+        return completed, values, base
 
     def test_base_configuration_is_trusted(self):
-        values, base, _, stdout = self.run_selection(True)
-        self.assertEqual(values, {"config_sha": base, "bootstrap": "false"})
-        self.assertNotIn("bootstrap", stdout.lower())
+        completed, values, base = self.run_selection(True)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(values, {"config_sha": base})
 
-    def test_bootstrap_uses_the_head_loudly(self):
-        values, _, head, stdout = self.run_selection(False)
-        self.assertEqual(values, {"config_sha": head, "bootstrap": "true"})
-        self.assertIn("::warning title=AI review bootstrap::", stdout)
-        record = self.result_record(bootstrap=True)
-        comment = lib.render_comment(record, "", "Codex")
-        self.assertIn("**BOOTSTRAP:**", comment)
-        visible = [line for line in comment.splitlines() if line and not line.startswith("<!--")]
-        self.assertEqual(visible[0], lib.heading(record, "Codex"))
-        self.assertTrue(visible[1].startswith("> **BOOTSTRAP:**"))
-        self.assertEqual(visible[2:], ["lgtm"])
-        passed, messages = lib.evaluate_gate(
-            policy="review", upstream=dict.fromkeys(("prepare", "review", "publish"), "success"),
-            expected=[("codex", "onchain-midi-player")], results={("codex", "onchain-midi-player"): record},
-            event_head="b" * 40, event_base="a" * 40, blocking_severities=["HIGH"])
-        self.assertTrue(passed)
-        self.assertTrue(any("BOOTSTRAP" in m for m in messages))
+    def test_base_without_configuration_fails_setup(self):
+        completed, values, _ = self.run_selection(False)
+        self.assertEqual(completed.returncode, 1)
+        self.assertEqual(values, {})
+        self.assertIn("has no .github/review-agents.json", completed.stdout)
 
 
 class PromptTests(Workspace):
@@ -1414,38 +1401,6 @@ class TrustedScriptTests(Workspace):
         text = (WORKFLOWS / workflow).read_text()
         blocks = re.findall(rf"\n( +)# begin {name}\n(.*?)\n +# end {name}", text, re.S)
         return [textwrap.dedent(indent + "#\n" + body) for indent, body in blocks]
-
-    def run_selection(self, base_ref, with_config):
-        files = {"lib.js": "1\n"} | ({".github/review-agents.json": "{}\n"} if with_config else {})
-        repo, base, head = self.make_repo(files, {"lib.js": "2\n", ".github/review-agents.json": "{}\n"},
-                                          name=f"repo-{base_ref.replace('/', '-')}-{with_config}")
-        workspace = self.dir / f"ws-{base_ref.replace('/', '-')}-{with_config}"
-        workspace.mkdir()
-        repo.rename(workspace / "src")
-        output = workspace / "output"
-        output.touch()
-        completed = subprocess.run(["bash", "-c", self.snippet("codex-review.yml", "trusted-config-selection")[0]],
-                                   cwd=workspace, capture_output=True, text=True,
-                                   env=self.base_env | {"BASE_SHA": base, "HEAD_SHA": head, "BASE_REF": base_ref,
-                                                        "BOOTSTRAP_BASE_BRANCHES": "main",
-                                                        "GITHUB_OUTPUT": str(output)})
-        values = dict(line.split("=", 1) for line in output.read_text().split())
-        return completed, values, base, head
-
-    def test_bootstrap_is_allowed_only_for_listed_bases(self):
-        completed, values, _, head = self.run_selection("main", False)
-        self.assertEqual((completed.returncode, values), (0, {"config_sha": head, "bootstrap": "true"}))
-        for base_ref in ("develop", "feature"):
-            with self.subTest(base_ref=base_ref):
-                completed, values, _, _ = self.run_selection(base_ref, False)
-                self.assertEqual(completed.returncode, 1)
-                self.assertEqual(values, {})
-                self.assertIn(f"Base branch '{base_ref}'", completed.stdout)
-                self.assertIn("allowed only for: main", completed.stdout)
-        completed, values, base, _ = self.run_selection("develop", True)
-        self.assertEqual(values, {"config_sha": base, "bootstrap": "false"})
-        for workflow in ("codex-review.yml", "claude-review.yml"):
-            self.assertIn("BOOTSTRAP_BASE_BRANCHES: main\n", (WORKFLOWS / workflow).read_text())
 
     def test_trusted_configuration_is_fingerprinted_and_verified(self):
         snippets = {w: self.snippet(w, "trusted-fingerprint") for w in ("codex-review.yml", "claude-review.yml")}

@@ -86,10 +86,6 @@ The tokens:
 
 Tokens 1-3 cover every pad length: `len('{' members ',')` and `len(S)` take every remainder mod 3, and `D` three different pads. Only `reverb` varies between them (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding. The head spaces include the alignment groups.
 
-### Compared with today's Beasts
-
-Today, Beasts renders the SVG, base64-encodes it for `image`, builds the whole JSON, then base64-encodes the whole JSON in one more pass, including the already-encoded image. With sound, the NFT stops encoding the whole JSON: it encodes only its own small pieces and the SVG (once), and splices in the class's pieces. The renderer does not change.
-
 ## What is real
 
 Everything the NFT calls is the real class: the page (the gzipped engine, the gunzip shim and the player, from the crate's generated `page_data`), `animation_url_segment`, `script_sha256`, `version`, `license`, `midi_segment` with the real validation and `SETTINGS`, and `base64`. Custom waves (issue #2) and filters (issue #3) are accepted. Two things differ from a production Beasts deployment:

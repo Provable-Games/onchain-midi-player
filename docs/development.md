@@ -60,7 +60,7 @@ All base64 in the class goes through `onchain_midi_player::base64::bytes_base64_
 
 - To change the page, bump `PAGE_VERSION` and `VERSION` in [`scripts/page.mjs`](../scripts/page.mjs) (a re-pin needs a new `VERSION` too), and run `npm run gen:page -- --record`.
 - Bump `VERSION` for every class that is declared, even when only its Cairo code changed.
-- When you declare a class or deploy the example, record it in [`deployments/<network>.json`](../deployments/sepolia.json), replacing the previous entry (git history keeps superseded entries: `git log -p deployments/<network>.json`): `class` (its `version()`, class hash, declare transaction, the full commit it was built from, `release_tag`, `null` for a test class, and its inspection instance) and `example`. Hashes and addresses are `0x` and 64 lowercase hex digits. `scripts/deployments.test.mjs` checks the shape, that the version is in `scripts/page_versions.json`, and that the example's `player_class_hash` is the class beside it.
+- When you declare a class or deploy the example, record it in [`deployments/<network>.json`](../deployments), replacing the previous entry (git history keeps superseded entries: `git log -p deployments/<network>.json`): `class` (its `version()`, class hash, declare transaction, the full commit it was built from, `release_tag`, `null` for a test class, and its inspection instance) and `example` (`null` when none is deployed). Hashes and addresses are `0x` and 64 lowercase hex digits. `scripts/deployments.test.mjs` checks the shape, that the version is in `scripts/page_versions.json`, that `release_tag` is `null` or `v<version>`, that `mainnet.json` holds a release (a `release_tag`) and that the example's `player_class_hash` is the class beside it. The file names are `sepolia.json` and `mainnet.json`, with the `chain_id`s `SN_SEPOLIA` and `SN_MAIN`.
 
 **Golden fixtures.** The JS reference ([`scripts/page.mjs`](../scripts/page.mjs)) computes them from the inputs in [`scripts/page_fixtures.mjs`](../scripts/page_fixtures.mjs). The valid cases cover every `D` padding length and every consumer padding length, and include custom waves and filters; the invalid cases cover settings reverts. snforge checks `midi_segment` byte for byte against each, directly and through the library call, and the decoded page and consumer-layout `token_uri` against their length and SHA-256.
 
@@ -84,7 +84,7 @@ Shared fixtures keep Cairo and JavaScript byte-for-byte identical: [`scripts/set
 
 ## Class size
 
-The class compiled with Scarb 2.20.1, at `0.3.0`, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info):
+The class compiled with the Scarb version above, at the current `VERSION`, against [Starknet's current limits](https://docs.starknet.io/learn/cheatsheets/chain-info):
 
 | | The class | Limit |
 | --- | --- | --- |
@@ -163,3 +163,31 @@ done
 # Review helpers
 python3 -I -B -m unittest discover -s .github/scripts -p 'test_*.py'
 ```
+
+## Releasing
+
+A release is a tagged commit whose class is declared on Sepolia, then on mainnet. A declared class is permanent, so declaring needs the maintainer's explicit go-ahead at the time. Every step before it can be redone.
+
+1. **Re-pin the engine to a tagged fork release.** The fork publishes a signed tag with `webaudio-tinysynth.min.js`, its source map, `SHA256SUMS` and the `npm run verify` output in the release notes.
+   - Check the tag (`git tag -v`) and that the release's `webaudio-tinysynth.min.js` matches `SHA256SUMS` (`sha256sum -c`) and the file in the tag.
+   - Run `node scripts/vendor_engine.mjs <fork checkout> <tag>`, put the printed `ENGINE_PIN` in [`scripts/engine.mjs`](../scripts/engine.mjs), delete the old vendored files, and update [`tests/vendor/README.md`](../tests/vendor/README.md).
+2. **Bump the version and regenerate.** Set `VERSION` in [`scripts/page.mjs`](../scripts/page.mjs) to the release's SemVer version, run `npm run gen:page -- --record`, then the generators and checks under [CI](#ci), and commit what they change, including the [Class size](#class-size) table. `git diff --exit-code` must be clean afterwards.
+3. **Validate in three browsers.** Run `render-check`, `page-check`, `hosting-check` and a 10-minute `drift-check` on Chromium, Firefox and WebKit (CI runs the first three per pull request and [`drift.yml`](../.github/workflows/drift.yml) the last). The rows marked manual in [Browser validation](#browser-validation) are still checked by hand.
+4. **Tag.** After the pull request merges, tag the merged commit `v<version>` (signed) and push the tag.
+5. **Build the class from the tag.** In a clean checkout of the tag, with the versions in [`.tool-versions`](../.tool-versions): `scarb --release build` (the profile the ABIs and earlier declarations use), then `sncast --scarb-profile release utils class-hash --contract-name TinySynth`. Repeat on a second machine; the hashes must agree, and `npm ci && npm run check:page && npm run check:abi` must pass.
+6. **Declare on Sepolia, then mainnet.** Declare the same build on each network, and check that the hash `sncast` prints equals step 5's:
+
+   ```sh
+   sncast --account <account> declare --url <rpc url> --contract-name TinySynth
+   ```
+7. **Deploy the inspection instance** on each network: a deployment of the class with no constructor, so explorers and RPC calls can read `version()`, `engine()`, `script_sha256()` and `license()`. Consumers never call it.
+
+   ```sh
+   sncast --account <account> deploy --url <rpc url> --class-hash <class hash> --salt <salt>
+   ```
+
+   The address depends on the class hash, the salt and, with `--unique`, the deploying account. Once the final class hash is known, a vanity address can be mined offline: compute the address for many salts and deploy with the best one.
+8. **Deploy the example,** if wanted: declare and deploy `BeastLikeNft` from [`examples/beast_consumer`](../examples/beast_consumer) with the class hash as its constructor argument.
+9. **Record each network** in `deployments/<network>.json`: `version`, `release_tag` `v<version>`, class hash, declare and deploy transactions, `built_from` (the tagged commit's full SHA), the inspection instance and the example (`null` if none). Remove the superseded record from `scripts/page_versions.json` (step 2 added the new one beside it). `npm test` checks the files.
+10. **Verify the declared class.** Call `version()`, `engine()` and `script_sha256()` on the inspection instance, and compare them with [`scripts/page_versions.json`](../scripts/page_versions.json). Call a real consumer's `token_uri` (the example's, or the NFT's) through several RPC providers (the [`token-uri-inspector`](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill has the commands) and compare each result byte for byte with the JS reference ([`gen_fixtures.mjs`](../examples/beast_consumer/scripts/gen_fixtures.mjs)). Record any provider that fails, such as an `Out of gas` revert.
+11. **Publish a GitHub release** for the tag. List the class hash and declare transaction per network, the inspection instances, the engine's fork tag and SHA-256, the toolchain versions, and how to reproduce the build: check out the tag, install the versions in `.tool-versions`, run `scarb --release build` and `sncast --scarb-profile release utils class-hash --contract-name TinySynth`, and compare with the class hash. Link [Verifying the engine](verifying.md).

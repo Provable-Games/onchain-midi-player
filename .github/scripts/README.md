@@ -153,7 +153,7 @@ All jobs run on `ubuntu-24.04-arm`. Both CLIs publish linux-arm64 builds.
 | Dependabot pull request (author or sender `dependabot[bot]`) | Fails with "AI review unavailable for Dependabot PRs". Dependabot runs receive no Actions secrets, so a maintainer reviews the update manually. Giving Dependabot review credentials (Dependabot secrets) is an organization decision. |
 | Title or body edit | No review and no required check (see Events) |
 | Secret or model/effort variable not set | Passes with "Review skipped: not configured for this repository (…)" and a setup warning naming the missing secret or variable. Checked after the fork, Dependabot and draft rules. |
-| Base without review configuration | Fails setup, unless the base is `main` (see Bootstrap) |
+| Base without review configuration | Fails setup |
 | No changed files (git and GitHub agree) | Passes with an explicit skip notice |
 | Git finds no changes but GitHub reports some | Fails: a detection failure is not an empty diff |
 | Invalid variable value, or a secret that disappears after setup | Fails, naming the variable or secret |
@@ -322,8 +322,7 @@ result record, for example:
 ```
 
 It shows the requested model and effort, and adds `(resolved …)` when the
-provider reported a different model ID (which also fails the review). A
-bootstrap review shows a BOOTSTRAP notice below the heading. A clean review's
+provider reported a different model ID (which also fails the review). A clean review's
 body is then `lgtm`; findings and failures follow the same heading. A completed
 review's Skill opportunities follow its verdict or findings, as one line
 `**Skill opportunities** (non-blocking): none` or a short list. The heading is
@@ -403,11 +402,11 @@ completed", so an old `lgtm` never stays under a new head.
 - The setup job fetches the head's Scarb dependency sources for the reviewer,
   without building anything or loading a procedural macro (see Static review
   and dependency sources).
-- This repository is private. If the base commit is missing from the full-history
-  checkout (the base moved after the event), the trusted-configuration step's
-  fallback `git fetch` runs without credentials (`persist-credentials: false`)
-  and fails. That fails setup and the gate; it never selects other code. Re-run
-  the workflow.
+- If the base commit is missing from the full-history checkout (the base moved
+  after the event), the trusted-configuration step's fallback `git fetch` runs
+  without credentials (`persist-credentials: false`). A public repository
+  serves it anonymously; if the fetch fails, setup and the gate fail and it
+  never selects other code. Re-run the workflow.
 
 Under `pull_request`, GitHub runs the workflow YAML from the pull request merge
 commit. A same-repository author can therefore change these workflows, but such
@@ -424,21 +423,6 @@ these workflows do not change:
   expected source.
 - Require code-owner review of `.github/**` (a `CODEOWNERS` entry plus a
   ruleset rule).
-
-## Bootstrap
-
-A base revision without `.github/review-agents.json` normally fails setup with
-"Base branch '…' has no .github/review-agents.json. Bootstrap from the pull
-request head is allowed only for: main." The one exception
-(`BOOTSTRAP_BASE_BRANCHES: main` in both workflows) is the one-time path by
-which the review configuration reaches `main`: a pull request into `main`
-while `main` lacks it uses the configuration from the pull request head. The
-run emits a `::warning::`, the step summary says BOOTSTRAP, the result records
-`bootstrap: true`, and the comment shows a BOOTSTRAP notice. The normal
-completion and severity rules still apply. Once `main` carries the
-configuration, the exception no longer applies and can be removed. A base
-revision that has `review-agents.json` but lacks a prompt or helper fails setup;
-it never falls back to the head.
 
 ## Tests
 

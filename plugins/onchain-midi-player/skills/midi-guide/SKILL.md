@@ -31,7 +31,7 @@ Open the printed URL and press ▶. If it plays right there, it plays the same f
 
 ## What the offline check guarantees
 
-- **Bytes.** `preview` writes exactly the decoded `animation_url` page (`PAGE ++ D ++ SVG`) that the class and a consumer produce for the same MIDI, settings and SVG. `npm test` checks this against the example contract's golden output, and on Sepolia the deployed example's `token_uri` came back byte-identical through several RPC providers (issue [#11](https://github.com/Provable-Games/onchain-midi-player/issues/11)).
+- **Bytes.** `preview` writes exactly the decoded `animation_url` page (`PAGE ++ D ++ SVG`) that the class and a consumer produce for the same MIDI, settings and SVG. `npm test` checks this against the example contract's golden output and the deployed example's `token_uri` is checked against it through several RPC providers.
 - **Playback.** Every browser runs the same engine and player code, but audio can differ slightly across browsers and sample rates (see [The player page](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#the-player-page)).
 - **Noise and reverb** are generated from a fixed seed in the pinned engine, so they are the same on every load at a given sample rate.
 - **A bad file does not revert.** The class embeds the MIDI without parsing it. The page shows the error, ▶ stays disabled and the art still shows. Only an offline check catches it before mint.
@@ -76,7 +76,7 @@ The full list of honoured and ignored messages is in the MIDI contract: [Message
 The player restarts the art when tick 0 is heard: on ▶, and again at every pass. When the pass is a whole multiple of every period of the art's animation, the art is back at its start at each loop point anyway, so the restart does not show, and music and art stay in step for the whole session. When it is not, the art jumps back to its start at every loop point, and an animation longer than the pass never finishes. Within a pass, the music's beat and the art's frames line up only if their periods match.
 
 1. **Measure the art's periods:** GIF frame delays (in 10 ms units), SMIL `dur` (one repeat of the animation's `values`), and CSS animation durations (one iteration; with `alternate` or `alternate-reverse` the art repeats every two iterations). From the checkout, `node plugins/onchain-midi-player/skills/midi-guide/scripts/art_periods.mjs art.svg` prints them. Ignore animations that change nothing visible.
-2. **Choose the tempo:** make the beat, or a subdivision of it, a whole number of frames.
+2. **Choose the tempo:** make the beat, or a subdivision of it, a whole number of frames: for a frame period `F`, a tempo of `n × F` µs per quarter puts `n` frames in a beat (`n = 2` is one frame per eighth), and a tempo that is a multiple of 20,000 µs gives whole-centisecond eighths ([details](references/art-sync.md#3-choose)).
 3. **Choose the pass length:** make it (the `loop` that `check-midi` prints, `maxTick` × the tick time) a whole multiple of every visible art period, so every pass starts in phase.
 
 A beat of `b` ms (tempo in µs per quarter / 1000) lines up with an art loop of `P` ms every lcm(`b`, `P`) ms. With 200 ms GIF frames:

@@ -7,9 +7,9 @@ compatibility: Needs the Scarb and Starknet Foundry versions in the repository's
 
 # Integrating the onchain MIDI player into `token_uri`
 
-The class is declared on Starknet but never deployed. Your contract reaches it with `library_call` and gets back the pieces of a `token_uri` whose `animation_url` is an offline HTML page: the TinySynth engine gzipped, the player, then the token's settings, MIDI and SVG art.
+The class is declared on Starknet, and your contract reaches it by class hash with `library_call`, never through a deployed instance. It gets back the pieces of a `token_uri` whose `animation_url` is an offline HTML page: the TinySynth engine gzipped, the player, then the token's settings, MIDI and SVG art.
 
-- **Supported today:** `token_uri`s that are base64 JSON data URIs (`data:application/json;base64,…`). Plain-JSON `token_uri`s are issue [#29](https://github.com/Provable-Games/onchain-midi-player/issues/29).
+- **Supported:** `token_uri`s that are base64 JSON data URIs (`data:application/json;base64,…`). Plain-JSON `token_uri`s are not supported.
 - **Source of truth:** [Building `token_uri` in Cairo](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#building-token_uri-in-cairo) and [Consumer `token_uri` layout](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#consumer-token_uri-layout). The interface and its byte formats: [`src/interface.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/interface.cairo).
 - **Reference implementation:** [`examples/beast_consumer/src/beast_like_nft.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/examples/beast_consumer/src/beast_like_nft.cairo), commented step by step, with golden tests.
 - **Related skills:** the MIDI comes from the [midi-guide](../midi-guide/SKILL.md), the `TinySynthSettings` from [sound-design](../sound-design/SKILL.md) (both often from a composer's contract through the sound provider interface, step 5), and checking a deployed token is the [token-uri-inspector](../token-uri-inspector/SKILL.md).
@@ -19,7 +19,7 @@ The class is declared on Starknet but never deployed. Your contract reaches it w
 ```toml
 [dependencies]
 onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "<release tag>" }
-# Until a release is tagged: rev = "<commit>" (see below)
+# A class without a release tag: rev = "<commit>" (see below)
 
 [[target.starknet-contract]]
 sierra = true
@@ -27,7 +27,7 @@ sierra = true
 build-external-contracts = ["onchain_midi_player::contract::TinySynth"]
 ```
 
-**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch. For the deployed class, that is its `built_from` commit in [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json).
+**Choosing a `rev` for a class without a release tag.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch. For the deployed class, that is its `built_from` commit in [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json).
 
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#the-base64-encoder)).
 
@@ -93,7 +93,7 @@ A `library_call` runs the class's code with your contract's storage. This class 
 | In the NFT, per token | Store the hash at mint. | Each token keeps the version it was minted with. | A storage write per mint and a read per `token_uri`. |
 | **In a small renderer contract** | A deployed contract with no storage of value holds the layout, the `TinySynthSettings` and the class hash (or receives it), and library-calls the class. The NFT `call_contract`s the renderer. | The NFT's storage is never exposed to the class. The renderer, its sounds and the layout are replaceable without redeploying the NFT. Its CASM stays out of the NFT. | One more contract and call. |
 
-Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is settable. beasts-v3 does this ([PR #124](https://github.com/Provable-Games/beasts-v3/pull/124)). In any setter, check the new value before storing it: library-call `engine()` on a new hash and require `'tinysynth'`, then `version()` and compare it with the version you expect, or have the renderer render a probe token. Engine classes share the `midi_segment` selector, so without the `engine()` check another engine's class could take your calls without reverting and render the wrong thing.
+Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is settable. In any setter, check the new value before storing it: library-call `engine()` on a new hash and require `'tinysynth'`, then `version()` and compare it with the version you expect, or have the renderer render a probe token. Engine classes share the `midi_segment` selector, so without the `engine()` check another engine's class could take your calls without reverting and render the wrong thing.
 
 ```cairo
 fn set_sound_config(ref self: ContractState, class_hash: ClassHash) {
@@ -124,8 +124,6 @@ Decide what `token_uri` returns when the sound path fails: usually the token wit
 - **What cannot.** An undeployed address, an undeclared class and running out of gas still revert the whole call. Probe them in your setters (step 4) and keep a kill switch, such as a zero value that turns sound off.
 - **snforge 0.64.0 bug:** catching a panic from a safe *library* call leaves the caller's class hash replaced for the rest of the test, so later calls fail with `ENTRYPOINT_NOT_FOUND`. Test the failure paths with `call_contract` into mock contracts.
 
-These findings come from the beasts-v3 integration ([PR #124](https://github.com/Provable-Games/beasts-v3/pull/124)).
-
 ## 7. Test with snforge
 
 ```cairo
@@ -149,19 +147,19 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
   - Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
   - Treat devnet estimates through the predeployed accounts as inflated by about 2.0–2.6×.
 - **Keep every class in the `token_uri` call chain at Sierra 1.7 or later:** the NFT, any proxy, the renderer, the sound provider and this class. A Cairo 0 or older-Sierra frame switches itself and every call below it to Cairo-steps accounting, which is sticky downward and has its own step cap.
-- **Providers' call caps decide who can read a full token, not the protocol.** Node software caps `starknet_call` differently, and hosted providers do not document their caps ([Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits)). On Sepolia, one public provider reverted `Out of gas` on the example's full-size token while others served it ([Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits), issue [#11](https://github.com/Provable-Games/onchain-midi-player/issues/11)). Call your worst token through the providers your marketplaces and indexers use; the token-uri-inspector shows how.
+- **Providers' call caps decide who can read a full token, not the protocol.** Node software caps `starknet_call` differently, and hosted providers do not document their caps ([Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits)). A provider can revert `Out of gas` on a full-size token that another serves. Call your worst token through the providers your marketplaces and indexers use; the token-uri-inspector shows how.
 
 ## 9. Choose the class hash
 
-- Take it from [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json): `class.class_hash`, with its `version()` and the commit it was built from. A release has the tag `v<version>` (`release_tag`); `release_tag` `null` marks a test class, not for production. Today only a Sepolia test class exists; the release class is not declared yet.
-- `engine()` names the engine and `version()` is the class's SemVer: pre-release classes are `0.x.0`, and from `1.0.0` the major number promises call and settings-layout compatibility. Every declared class has its own version, so a new class hash always comes with a new `version()`.
+- Take it from [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json): `class.class_hash`, with its `version()` and the commit it was built from. A release has the tag `v<version>` (`release_tag`), and its class is built from that tag; `release_tag` `null` marks a test class, not for production. Use the file of the network your NFT lives on.
+- `engine()` names the engine and `version()` is the class's SemVer. Every declared class has its own version and never changes, so a new class hash always comes with a new `version()`. From `1.0.0`, the major number changes only when the call or `TinySynthSettings` layout does; a later minor or patch class keeps your calls and settings working (it may change the engine, the page or the sound).
 - The ABIs, for clients and indexers, are in [`abi/`](https://github.com/Provable-Games/onchain-midi-player/blob/main/abi): `TinySynth.json`, and `ISoundProvider.json` for providers.
-- Check a class before you use it: library-call `engine()`, `version()` and `script_sha256()` in a test, or run `verify_engine.mjs` on a token, and compare both with that version's record in [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json) (it holds the current version; earlier ones are in `git log -p scripts/page_versions.json`). [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md) also rebuilds the class hash from source.
+- Check a class before you use it: confirm it is declared on your network (`starknet_getClass`), library-call `engine()`, `version()` and `script_sha256()` in a test, or run `verify_engine.mjs` on a token, and compare both with that version's record in [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json) (it holds the current version; earlier ones are in `git log -p scripts/page_versions.json`). [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md) also rebuilds the class hash from source.
 
 ## Checklist
 
 - [ ] `token_uri` is a base64 JSON data URI; strict key-order validators are not in your pipeline.
-- [ ] Crate dependency pinned to the tag or commit of the class you use; `build-external-contracts` for tests.
+- [ ] Class hash from a release (`release_tag` set) in the deployment file of your network, and declared there. Crate dependency pinned to its tag (or, for a test class, its commit); `build-external-contracts` for tests.
 - [ ] Your pieces padded to multiples of 3; class pieces appended untouched; `animation_url` last.
 - [ ] The art is an SVG (raster art wrapped in `<image>`) that never contains `</script`; tested on real renderer output.
 - [ ] Class hash placement chosen (NFT or renderer), with setters that probe the new value.
