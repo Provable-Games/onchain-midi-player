@@ -225,6 +225,10 @@ pub mod BeastLikeNft {
     #[constructor]
     fn constructor(ref self: ContractState, tinysynth_class_hash: ClassHash) {
         assert(tinysynth_class_hash.is_non_zero(), 'zero tinysynth class hash');
+        // Engine classes share the midi_segment selector: reject another engine's class here,
+        // rather than render the wrong page later.
+        let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
+        assert(synth.engine() == 'tinysynth', 'not a TinySynth class');
         self.tinysynth_class_hash.write(tinysynth_class_hash);
     }
 

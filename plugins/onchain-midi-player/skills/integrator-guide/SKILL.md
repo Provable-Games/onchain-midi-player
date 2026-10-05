@@ -27,6 +27,8 @@ sierra = true
 build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
 ```
 
+Commits from before the rename to onchain-midi-player, including the "Built from" commits of the Sepolia classes in [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#deployments), name the package `onchain_tinysynth` (dependency key, `use` paths and `build-external-contracts`) and the types `SynthSettings` and `TokenSound`, and their class has no `engine()`; the class and interface names are the same. The Cairo in these skills uses the current names.
+
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#the-base64-encoder)).
 
 ```cairo
@@ -86,7 +88,7 @@ A `library_call` runs the class's code with your contract's storage. This class 
 
 | Option | How | For | Against |
 | --- | --- | --- | --- |
-| In the NFT, fixed | Constructor argument, non-zero check, no setter (the reference implementation). | No admin to trust. | Engine fixes, new sounds and layout changes never reach the collection. `TinySynthSettings` compiled into an immutable NFT are frozen too. |
+| In the NFT, fixed | Constructor argument, non-zero and `engine()` checks, no setter (the reference implementation). | No admin to trust. | Engine fixes, new sounds and layout changes never reach the collection. `TinySynthSettings` compiled into an immutable NFT are frozen too. |
 | In the NFT, settable | Owner-only setter. | One hash to opt into a new engine or page. | Every token changes at once, and the owner can run any class with the NFT's storage. |
 | In the NFT, per token | Store the hash at mint. | Each token keeps the version it was minted with. | A storage write per mint and a read per `token_uri`. |
 | **In a small renderer contract** | A deployed contract with no storage of value holds the layout, the `TinySynthSettings` and the class hash (or receives it), and library-calls the class. The NFT `call_contract`s the renderer. | The NFT's storage is never exposed to the class. The renderer, its sounds and the layout are replaceable without redeploying the NFT. Its CASM stays out of the NFT. | One more contract and call. |

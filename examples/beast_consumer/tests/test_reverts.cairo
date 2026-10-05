@@ -196,6 +196,29 @@ fn filter_cutoff_or_q_of_zero_reverts() {
     );
 }
 
+/// A class of another engine: it answers `engine()`, but not with `'tinysynth'`.
+#[starknet::contract]
+mod OtherEngineClass {
+    #[storage]
+    struct Storage {}
+
+    #[external(v0)]
+    fn engine(self: @ContractState) -> felt252 {
+        'other'
+    }
+}
+
+#[test]
+fn constructor_rejects_another_engines_class() {
+    let other = declare("OtherEngineClass").unwrap().contract_class().class_hash;
+    match declare("BeastLikeNft").unwrap().contract_class().deploy(@array![other.into()]) {
+        Result::Ok(_) => panic_with_felt252('should have reverted'),
+        Result::Err(panic_data) => assert(
+            *panic_data.at(0) == 'not a TinySynth class', 'wrong error',
+        ),
+    }
+}
+
 #[test]
 #[feature("safe_dispatcher")]
 fn unknown_token_reverts() {
