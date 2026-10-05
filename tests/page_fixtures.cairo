@@ -12,7 +12,7 @@
 
 use core::sha256::compute_sha256_byte_array;
 use onchain_midi_player::interface::{
-    IOnchainMidiPlayerDispatcherTrait, IOnchainMidiPlayerSafeDispatcherTrait,
+    IOnchainTinySynthDispatcherTrait, IOnchainTinySynthSafeDispatcherTrait,
 };
 use onchain_midi_player::settings::{encode, validate};
 use onchain_midi_player::types::SynthSettings;

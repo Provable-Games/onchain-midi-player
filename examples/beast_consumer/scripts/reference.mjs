@@ -3,7 +3,7 @@
 // This module is a deliberately independent JavaScript re-implementation of everything the Cairo
 // side of the example produces:
 //
-//   - the OnchainMidiPlayer class: animation_url_segment, D and midi_segment, from the repository's
+//   - the OnchainTinySynth class: animation_url_segment, D and midi_segment, from the repository's
 //     JS reference (scripts/page.mjs): the real PAGE, built by scripts/build_page.mjs into
 //     tests/fixtures/page.html, and SETTINGS from player/encode.js, which the root parity tests tie
 //     to Cairo

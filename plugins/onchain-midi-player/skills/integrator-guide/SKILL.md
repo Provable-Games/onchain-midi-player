@@ -24,15 +24,15 @@ onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-pl
 [[target.starknet-contract]]
 sierra = true
 # Builds the class from the dependency, so your tests can declare it (never deploy it).
-build-external-contracts = ["onchain_midi_player::contract::OnchainMidiPlayer"]
+build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
 ```
 
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#the-base64-encoder)).
 
 ```cairo
-use onchain_midi_player::interface::{IOnchainMidiPlayerDispatcherTrait, IOnchainMidiPlayerLibraryDispatcher};
+use onchain_midi_player::interface::{IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher};
 
-let synth = IOnchainMidiPlayerLibraryDispatcher { class_hash: midi_player_class_hash };
+let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
 ```
 
 ## 2. Change your `token_uri`
@@ -122,9 +122,9 @@ use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 
 // Declare the class (thanks to build-external-contracts) and never deploy it.
 // On edition 2025_12 `class_hash` is a `ClassHash`; on 2024_07 prefix it with `*`.
-let midi_player = declare("OnchainMidiPlayer").unwrap().contract_class().class_hash;
+let tinysynth = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
 let nft_class = declare("YourNft").unwrap().contract_class();
-let (address, _) = nft_class.deploy(@array![midi_player.into()]).unwrap();
+let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 ```
 
 - **Golden comparison.** Build the expected `token_uri` in JS and assert byte equality in Cairo, as the reference implementation does: [`examples/beast_consumer/scripts/reference.mjs`](https://github.com/Provable-Games/onchain-midi-player/blob/main/examples/beast_consumer/scripts/reference.mjs) mirrors the contract on top of the repository's [`scripts/page.mjs`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page.mjs) (`consumerPieces`, `spliceTokenUri`, `dFragment`), and [`gen_fixtures.mjs`](https://github.com/Provable-Games/onchain-midi-player/blob/main/examples/beast_consumer/scripts/gen_fixtures.mjs) writes the Cairo golden file. For large tokens, compare length and SHA-256 (`compute_sha256_byte_array`) instead of the bytes.

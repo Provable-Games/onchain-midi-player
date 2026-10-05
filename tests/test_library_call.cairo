@@ -1,8 +1,8 @@
-//! Every entry point through `IOnchainMidiPlayerLibraryDispatcher`, with the class declared and
+//! Every entry point through `IOnchainTinySynthLibraryDispatcher`, with the class declared and
 //! never deployed: the way a consumer reaches it. `midi_segment` against every golden fixture, and
 //! its reverts with their exact panic data, are in the generated `page_fixtures.cairo`.
 
-use onchain_midi_player::interface::IOnchainMidiPlayerDispatcherTrait;
+use onchain_midi_player::interface::IOnchainTinySynthDispatcherTrait;
 use onchain_midi_player::page_data;
 use crate::helpers::class;
 use crate::page_fixtures::{

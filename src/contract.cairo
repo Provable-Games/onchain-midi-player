@@ -1,14 +1,14 @@
-//! The class: `OnchainMidiPlayer`, implementing `IOnchainMidiPlayer`.
+//! The class: `OnchainTinySynth`, implementing `IOnchainTinySynth`.
 //!
 //! Declared, never deployed: consumers call it with `library_call` through
-//! `IOnchainMidiPlayerLibraryDispatcher`. It has an empty storage struct and no constructor, so
+//! `IOnchainTinySynthLibraryDispatcher`. It has an empty storage struct and no constructor, so
 //! running it in the caller's context reads and writes nothing on the caller's storage. Every entry
 //! point is a view: the page constants come from the generated `page_data`, and `midi_segment` and
 //! `base64` encode only their arguments.
 
 #[starknet::contract]
-pub mod OnchainMidiPlayer {
-    use crate::interface::IOnchainMidiPlayer;
+pub mod OnchainTinySynth {
+    use crate::interface::IOnchainTinySynth;
     use crate::types::SynthSettings;
     use crate::{base64, page_data, segment};
 
@@ -16,7 +16,7 @@ pub mod OnchainMidiPlayer {
     struct Storage {}
 
     #[abi(embed_v0)]
-    impl OnchainMidiPlayerImpl of IOnchainMidiPlayer<ContractState> {
+    impl OnchainTinySynthImpl of IOnchainTinySynth<ContractState> {
         /// The generated constant (`page_data::animation_url_segment`). Nothing is encoded.
         fn animation_url_segment(self: @ContractState) -> ByteArray {
             page_data::animation_url_segment()

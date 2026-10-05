@@ -1,10 +1,10 @@
 //! onchain_midi_player: a Starknet class library that serves a fully onchain,
 //! offline-playable TinySynth MIDI player for NFTs.
 //!
-//! The class (`contract::OnchainMidiPlayer`) is declared but never deployed. It has no storage and
+//! The class (`contract::OnchainTinySynth`) is declared but never deployed. It has no storage and
 //! no constructor, and consumers call it with `library_call` while building their own `token_uri`.
 //!
-//! - `interface`: `IOnchainMidiPlayer`, the public interface, with the exact byte formats, and
+//! - `interface`: `IOnchainTinySynth`, the public interface, with the exact byte formats, and
 //!   `ISoundProvider`, the interface a composer's contract implements to hand an NFT a token's MIDI
 //!   and `SynthSettings`. The class does not implement or call `ISoundProvider`.
 //! - `contract`: the class.

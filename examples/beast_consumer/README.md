@@ -1,6 +1,6 @@
 # Example: a Beasts-style NFT with the onchain MIDI player
 
-A runnable end-to-end example of how an NFT that already renders its own SVG (modelled on the Beasts NFT) adds the onchain MIDI player to its `token_uri`. It calls the real class, `onchain_midi_player::contract::OnchainMidiPlayer`, which the tests declare and never deploy: the NFT stores its class hash and reaches it with library calls. The class's base64 encoder is the maintainer's optimized encoder, `game_components_encoding` (see the root [README](../../README.md#the-base64-encoder)).
+A runnable end-to-end example of how an NFT that already renders its own SVG (modelled on the Beasts NFT) adds the onchain MIDI player to its `token_uri`. It calls the real class, `onchain_midi_player::contract::OnchainTinySynth`, which the tests declare and never deploy: the NFT stores its class hash and reaches it with library calls. The class's base64 encoder is the maintainer's optimized encoder, `game_components_encoding` (see the root [README](../../README.md#the-base64-encoder)).
 
 Tokens 1-3 are small samples that together cover every padding length. Token 4 is a full-size Beast, for a full-size measurement:
 - **art:** the Beasts renderer's SVG for a shiny, animated Warlock, 22,733 bytes;
@@ -12,7 +12,7 @@ Token 4's art and score are Apache-2.0, like the rest of the repository: Provabl
 ```
 examples/beast_consumer/
 ├── Scarb.toml                     separate package; depends on the root crate (path = "../..") and
-│                                  builds its OnchainMidiPlayer class (build-external-contracts)
+│                                  builds its OnchainTinySynth class (build-external-contracts)
 ├── src/
 │   ├── beast_like_nft.cairo       BeastLikeNft: render_svg, members, word-aligned token_uri assembly
 │   ├── sound.cairo                the tokens' MIDI files and SynthSettings
@@ -43,8 +43,8 @@ examples/beast_consumer/
 2. BeastLikeNft, exactly as without sound:
      token data -> render_svg(name, tier, png)  -> raw SVG
                 -> members(...)                 -> "name":...,"description":...,"attributes":[...]
-3. BeastLikeNft, new: library calls to the declared player class (never deployed)
-     IOnchainMidiPlayerLibraryDispatcher { class_hash }   class hash stored at construction
+3. BeastLikeNft, new: library calls to the declared TinySynth class (never deployed)
+     IOnchainTinySynthLibraryDispatcher { class_hash }   class hash stored at construction
        .base64(svg)                       svg_b64, computed once
        .base64(open), .base64(S), .base64("}")
        .animation_url_segment()           constant: the page, encoded offline at both layers
@@ -171,7 +171,7 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromiu
 - [ ] **Pad your pieces to multiples of 3** with spaces between JSON tokens: `'{' members ',' <pad>`, then the image key, then `svg_b64 '"' <pad>`, then `',  '`. Only the final `'}'` may produce `=`.
 - [ ] **Word-align the large appends** (optional, saves gas): add `'ICAg'` (3 spaces) before the constant image key until `b64(S)` starts at a multiple of 31 bytes, and after `'LCAg'` until the segment does (see `align_to_word` in `beast_like_nft.cairo`).
 - [ ] **Key order**: members, then `image`, then `animation_url` last, because the art closes the `animation_url` string.
-- [ ] **`animation_url_segment` and `midi_segment` come from library calls** on the stored class hash (`IOnchainMidiPlayerLibraryDispatcher`). The class is declared, never deployed. Store the class hash; updating it is how you opt into a new engine or page.
+- [ ] **`animation_url_segment` and `midi_segment` come from library calls** on the stored class hash (`IOnchainTinySynthLibraryDispatcher`). The class is declared, never deployed. Store the class hash; updating it is how you opt into a new engine or page.
 - [ ] **No change to the renderer.** It keeps returning raw SVG.
 - [ ] Pass `SynthSettings` that are constants or derived from permanent traits, so each token's sound stays fixed. Invalid settings revert the whole `token_uri`.
 - [ ] Use the class's `base64` or your own encoder, as long as it is standard RFC 4648.
