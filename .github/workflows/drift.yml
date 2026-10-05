@@ -1,0 +1,113 @@
+name: Drift
+
+# The 10-minute session of scripts/drift_check.mjs on Chromium, Firefox and WebKit: the art's
+# offset from the sound may not drift, over 61 checkpoints, by more than the limits in
+# scripts/drift.mjs (the CI browser job runs 1 minute and only prints it). Too slow for every
+# pull request, so it runs weekly, on demand, and on a pull request that changes the check or this
+# file.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: Session length in minutes
+        default: "10"
+  pull_request:
+    paths:
+      - .github/workflows/drift.yml
+      - scripts/drift_check.mjs
+      - scripts/drift.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NODE_VERSION: "24"
+  CI_TOOLS: .github/ci-tools
+
+jobs:
+  drift:
+    name: drift (${{ matrix.browser }})
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
+      PLAYWRIGHT_CORE: ${{ github.workspace }}/.github/ci-tools/node_modules/playwright-core
+      MINUTES: ${{ inputs.minutes || '10' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.CI_TOOLS }}/package-lock.json
+
+      - name: Install pinned Playwright
+        working-directory: ${{ env.CI_TOOLS }}
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # Same browsers, cache and system libraries as the browser job in ci.yml.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-v2-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}-${{ hashFiles('.github/ci-tools/package-lock.json') }}
+
+      - name: Install ${{ matrix.browser }} and its system libraries
+        working-directory: ${{ env.CI_TOOLS }}
+        run: |
+          shell=()
+          if [ "$PLAYWRIGHT_BROWSER" = chromium ]; then shell=(--only-shell); fi
+          npx --no-install playwright-core install --with-deps "${shell[@]}" "$PLAYWRIGHT_BROWSER"
+
+      # Firefox runs an AudioContext only with an audio output device (see ci.yml).
+      - name: Audio output for Firefox (PulseAudio null sink)
+        if: matrix.browser == 'firefox'
+        run: |
+          sudo apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
+          pactl info
+          pactl get-default-sink | grep -qx ci_null
+
+      - name: Drift check (art against sound; the loop schedule)
+        run: |
+          mkdir -p "$RUNNER_TEMP/drift"
+          npm run drift-check -- --minutes "$MINUTES" "$RUNNER_TEMP/drift" | tee "$RUNNER_TEMP/drift/drift_check.log"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Drift, ${{ matrix.browser }}, ${MINUTES} min"
+            echo '```'
+            grep -E "drifted|audio clock|passes,|restarted at|checks? (passed|failed)" "$RUNNER_TEMP/drift/drift_check.log" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: drift-${{ matrix.browser }}
+          path: ${{ runner.temp }}/drift
+          if-no-files-found: ignore
+          retention-days: 30

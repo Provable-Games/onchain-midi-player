@@ -32,6 +32,7 @@ npm run preview -- song.mid      # write (and optionally serve) the page a token
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromium \
   npm run render-check   # optional: render the reference timbres in a headless browser
 PLAYWRIGHT_CORE=... PLAYWRIGHT_BROWSER=firefox npm run page-check   # optional: the page; chromium, firefox or webkit
+PLAYWRIGHT_CORE=... PLAYWRIGHT_BROWSER=firefox npm run hosting-check   # optional: the page in a sandboxed iframe under a host CSP
 PLAYWRIGHT_CORE=... PLAYWRIGHT_BROWSER=webkit npm run drift-check -- --minutes 10   # optional: art against sound over a session
 ```
 
@@ -102,15 +103,16 @@ The checks run on Playwright's Chromium, Firefox and WebKit. They load the class
 | Playback starts only on a tap; ▶/■ toggles | [`page_check.mjs`](../scripts/page_check.mjs): `checkDataPage` (clicks), `checkTouch` (taps); the example's `browser_check.mjs` |
 | Seamless End-of-Track loop, correct tempo | `checkLoop`: passes start exactly one pass of the MIDI's own tempo map apart, to 1 µs |
 | The art restarts in sync on ▶ and at every pass | `checkDataPage`: screenshots of a probe animation, and each pass's restart timed against that pass's tick 0 |
-| Drift over a session | [`drift_check.mjs`](../scripts/drift_check.mjs) (`npm run drift-check -- --minutes 10`) |
+| Drift over a session | [`drift_check.mjs`](../scripts/drift_check.mjs) (`npm run drift-check -- --minutes 10`), run for 10 minutes by [`drift.yml`](../.github/workflows/drift.yml) |
 | Every failure path keeps the art, ▶ disabled | `checkFailures` (settings, MIDI), `checkEngineFailures` (gzip payload), `checkAudioFailures` (no Web Audio; `resume()` rejects) |
 | No network requests; offline from `data:` and `file://` | every load; `checkDataPage`, `checkFile` |
-| Sandboxed iframe, strict CSP, marketplace-style frames | `checkIframe`, `checkCsp` with `checkCspControl`, `checkEmbeds` |
+| Sandboxed iframe, strict CSP, marketplace-style frames | `page_check.mjs`: `checkIframe`, `checkCsp` with `checkCspControl`, `checkEmbeds`; [`hosting_check.mjs`](../scripts/hosting_check.mjs): `data:` and `srcdoc` frames in a host with a strict CSP, and the hosts where the page cannot run |
 | Offline renders of the reference timbres, custom waves and filters | [`render_check.mjs`](../scripts/render_check.mjs) |
 | Settings at their extremes play without an error | `checkExtremes` |
 | Marketplaces, mobile browsers, real audio hardware, indexers, wallets and RPC providers | manual |
 
-- **Drift.** The drift check allows the art's offset from the sound to change by at most 20 ms over a session. CI runs it for 1 minute and only prints the drift, because in a minute one stall of a headless audio clock can exceed the limit while the page does nothing wrong. Longer runs check it: WebKit drifted +2.3 ms over 10 minutes and Chromium +5.5 ms over 5 minutes. A 10-minute Firefox run needs a real audio device.
+- **Hosting.** `hosting_check.mjs` embeds the page in `<iframe sandbox="allow-scripts">`, as `src="data:..."` and as `srcdoc`, in a host with and without a CSP. The page plays in every one, with the same results on all three engines: the art is drawn, ▶ starts the `AudioContext` and ■ stops it, nothing is requested and nothing is logged or reported. A sandbox without `allow-same-origin` (an opaque origin) does not block audio. A host's CSP needs only `script-src 'unsafe-inline'`, `style-src 'unsafe-inline'` and `img-src data:`, because a `data:` or `srcdoc` frame inherits it; nothing else (`media-src`, `connect-src`, `worker-src`) is used. A `data:` frame also needs `frame-src data:` (or `child-src`) in the host's CSP, which a `srcdoc` frame does not. The page cannot run where the host withholds scripts: `<iframe sandbox>` without `allow-scripts`, or a host CSP without `'unsafe-inline'` for scripts. The art is drawn by the page's script, so the frame stays black (▶ is in the HTML, disabled), and a host CSP that blocks the `data:` frame shows nothing of the page. `hosting_check.mjs` checks each of these. Top-level `data:` and `file://` are `page_check.mjs`'s.
+- **Drift.** The drift check allows the art's offset from the sound to change by at most 20 ms over a session, and no checkpoint to be more than 20 ms off the trend. The art restarts at every pass, so the drift is bounded by one pass rather than accumulating. [`drift.yml`](../.github/workflows/drift.yml) runs 10 minutes on each engine weekly, on demand (Actions, "Drift", Run workflow, with the minutes) and on a pull request that changes the check, and fails past those limits. The browser job runs 1 minute and only prints the drift, because in a minute one stall of a headless audio clock can exceed the limit while the page does nothing wrong. Over 10 minutes on Linux (Firefox on a PulseAudio null sink) the art's offset drifted +0.9 ms on Chromium, -1.7 ms on Firefox and -1.4 ms on WebKit, no checkpoint more than 10, 16 and 6 ms off the trend. The audio clock ran +0.1 ms, +71.5 ms (114 ppm) and -0.2 ms against the page clock; the per-pass restart keeps that out of the art.
 - **Firefox needs an audio output device.** Without one, its `AudioContext` never leaves `suspended`. On a machine without one, start PulseAudio with a null sink first, as CI does: `pulseaudio --start --exit-idle-time=-1 && pactl load-module module-null-sink && pactl set-default-sink null`.
 - **`data:` requests** show directly only through Chromium's DevTools protocol, so on Firefox and WebKit the checks print `skip` for that one check. The strict-CSP load proves it on every engine instead.
 - `PLAYWRIGHT_BROWSER` is `chromium` when unset. To use a Chromium you already have, set `CHROME=/path/to/chrome-headless-shell` instead of installing one.
@@ -124,7 +126,9 @@ GitHub Actions runs on every pull request and on pushes to `main` ([`.github/wor
 | `cairo` | `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer`; the Scarb lockfiles stay unchanged |
 | `javascript` | The example's Node tests, `npm ci`, `npm test`, and `tsc --checkJs` on `player/` |
 | `generated` | Reruns the fixture generators, `npm run check:settings`, `npm run check:page` and the ABI generator, then fails on any diff |
-| `browser` | One leg per engine (Chromium, Firefox, WebKit): the example's `browser_check.mjs`, `render-check`, `page-check` and a 1-minute `drift-check` |
+| `browser` | One leg per engine (Chromium, Firefox, WebKit): the example's `browser_check.mjs`, `render-check`, `page-check`, `hosting-check` and a 1-minute `drift-check` |
+
+The 10-minute drift check is a separate workflow, [`drift.yml`](../.github/workflows/drift.yml), with one leg per engine: weekly (Mondays), on demand, and on a pull request that changes the check or the workflow. It is not a required check. Each leg uploads `drift_check_result.json` (every checkpoint and the summary) and the first and last screenshots.
 
 **Drift guards.** [`scripts/skills.test.mjs`](../scripts/skills.test.mjs), run by `npm test`, keeps the agent skills in step with the code and these docs. It checks the skills' frontmatter and the plugin manifests, that every link in the skills, the README and `docs/` resolves (files and anchors), that the MIDI reference lists every `checkMidi` message, that the operator table matches the validator, that every gas figure in the skills appears in the README or `docs/` and the MIDI and `SETTINGS` rates agree with [`docs/gas.md`](gas.md), that the skills name settings limits by their `src/settings.cairo` constants, and that they hardcode nothing a re-pin changes. `scripts/page.test.mjs` checks `scripts/page_versions.json` against the build, `scripts/deployments.test.mjs` checks `deployments/`, and `scripts/check_midi.test.mjs` checks that the [MIDI contract](midi-contract.md) lists every MIDI error.
 
@@ -152,6 +156,7 @@ for PLAYWRIGHT_BROWSER in chromium firefox webkit; do   # the browser checks, on
   (cd examples/beast_consumer && node scripts/browser_check.mjs)
   npm run render-check
   npm run page-check
+  npm run hosting-check
   npm run drift-check -- --minutes 1 --drift-info
 done
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // @ts-check
-// Long-session check, opt-in: does the art stay in sync with the sound over a whole session (issue
-// #11: drift over a 10-minute session, audio clock against image animation)? The player restarts
+// Long-session check (.github/workflows/drift.yml runs it for 10 minutes weekly and on demand):
+// does the art stay in sync with the sound over a whole session (issue #11: drift over a
+// 10-minute session, audio clock against image animation)? The player restarts
 // the art on ▶ and again at every pass, each time timed to the pass's tick 0 as heard (TinySynth's
 // startTime plus the output latency). Between restarts the art runs on the page's clock (the
 // image's animation timeline), the sound on the AudioContext's, and TinySynth loops on its own
