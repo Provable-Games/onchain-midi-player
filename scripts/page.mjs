@@ -40,8 +40,12 @@ export const VERSION = "0.1.0";
 export const PAGE_VERSION = 10;
 export const PAGE_VERSIONS_PATH = new URL("./page_versions.json", import.meta.url);
 
-/** SemVer 2.0.0 without build metadata: `MAJOR.MINOR.PATCH`, then an optional `-pre.release` tag. */
-const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+/**
+ * SemVer 2.0.0 without build metadata: `MAJOR.MINOR.PATCH`, then an optional `-pre.release` tag whose
+ * numeric identifiers have no leading zeros.
+ */
+const PRE_ID = "(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)";
+const SEMVER = new RegExp(`^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-${PRE_ID}(?:\\.${PRE_ID})*)?$`);
 
 /** Whether `v` is a valid VERSION: SemVer (see SEMVER) that fits a Cairo short string (31 bytes). */
 export function isSemVer(/** @type {string} */ v) {
@@ -115,6 +119,24 @@ export function encoderLicense() {
 }
 
 /** @typedef {{page_sha256: string, engine_ref: string, engine_commit: string, page: number}} VersionRecord */
+
+/**
+ * Problems with one record of scripts/page_versions.json, under `key` (none: an empty array). The
+ * engine ref is a short commit or a tag (vendor_engine.mjs's label); a short commit must be the
+ * start of the full one. A key from before SemVer must say what its record says.
+ * @param {string} key
+ * @param {VersionRecord} r
+ */
+export function versionRecordProblems(key, r) {
+  const problems = [];
+  if (JSON.stringify(Object.keys(r)) !== JSON.stringify(["page_sha256", "engine_ref", "engine_commit", "page"])) problems.push("fields");
+  if (!/^[0-9a-f]{64}$/.test(r.page_sha256)) problems.push("page_sha256");
+  if (!/^[0-9a-f]{40}$/.test(r.engine_commit)) problems.push("engine_commit");
+  if (!/^[0-9A-Za-z._-]{1,16}$/.test(r.engine_ref) || (/^[0-9a-f]{7}$/.test(r.engine_ref) && !r.engine_commit.startsWith(r.engine_ref))) problems.push("engine_ref");
+  if (!Number.isInteger(r.page) || r.page < 1) problems.push("page");
+  if (!isSemVer(key) && key !== `tinysynth-${r.engine_ref}+page.${r.page}`) problems.push("key");
+  return problems;
+}
 
 /** This build's record for VERSION in scripts/page_versions.json. */
 export function versionRecord(/** @type {string} */ pageSha256) {
