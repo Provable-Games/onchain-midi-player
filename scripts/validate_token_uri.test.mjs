@@ -198,6 +198,18 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   assert.deepEqual(failing(`<?xml version="1.0"?>${doctype}<svg xmlns='http://www.w3.org/2000/svg'><rect/></svg>`).filter((i) => i.startsWith("image.")), []);
   assert.deepEqual(failing(`<!DOCTYPE svg [<!ENTITY e "x">]><svg xmlns='http://www.w3.org/2000/svg'>&e;</svg>`).filter((i) => i.startsWith("image.")), ["image.xml"]);
   assert.ok(failing(`<!DOCTYPE svg [<!ENTITY e "x">]><svg xmlns='http://www.w3.org/2000/svg'/>`).includes("image.no_entities"));
+  for (const bad of ["<!DOCTYPE>", "<!DOCTYPE svg SYSTEM>", "<!DOCTYPE svg PUBLIC 'a'>", "<!DOCTYPE 1svg>", "<!DOCTYPE svg bogus>"]) {
+    assert.ok(failing(`${bad}<svg xmlns='http://www.w3.org/2000/svg'/>`).includes("image.xml"), bad);
+  }
+  assert.deepEqual(failing(`<!DOCTYPE svg SYSTEM "x.dtd"><svg xmlns='http://www.w3.org/2000/svg'/>`).filter((i) => i.startsWith("image.")), []);
+  // Prefixes bound to one namespace are the same attribute.
+  assert.ok(failing("<svg xmlns='http://www.w3.org/2000/svg' xmlns:a='urn:x' xmlns:b='urn:x' a:foo='1' b:foo='2'/>").includes("image.xml"));
+  assert.deepEqual(failing("<svg xmlns='http://www.w3.org/2000/svg' xmlns:a='urn:x' xmlns:b='urn:y' a:foo='1' b:foo='2' foo='3'/>").filter((i) => i.startsWith("image.")), []);
+  // CSS escapes are decoded before the reference checks.
+  for (const css of ["rect{fill:u\\72l(https://example.com/p)}", "@\\69mport 'https://example.com/a.css';", "rect{fill:\\75rl( 'https://e.com/p' )}"]) {
+    assert.ok(failing(svg(`<style>${css}</style>`)).includes("image.self_contained"), css);
+  }
+  assert.deepEqual(failing(svg("<defs><linearGradient id='g'/></defs><style>rect{fill:u\\72l(#g);b:\\75rl(data:image/png;base64,AAAA)}</style>")).filter((i) => i.startsWith("image.")), []);
   assert.ok(failing("<svg><rect/></svg>").includes("image.svg_root"));
   // Character references: only XML characters; and references are expanded before the checks, as a browser reads them.
   for (const bad of ["&#0;", "&#xD800;", "&#x110000;", "&#8;", "&#xFFFE;"]) assert.ok(failing(svg(`<text>${bad}</text>`)).includes("image.xml"), bad);
@@ -351,7 +363,12 @@ test("fetch: calls token_uri with the u256 split, falls back to tokenURI, and ne
   const urlFelt = "0x" + Buffer.from(rpc2).toString("hex");
   const redacted = await fetchTokenUri({ rpc: rpc2, contract: "0x1", token: "1", fetchImpl: /** @type {any} */ (async () => reply({ error: { code: 40, message: "Contract error", data: { revert_error: [urlFelt] } } })) }).catch((e) => e.message);
   assert.doesNotMatch(redacted, /rpc\.test|KEY/);
-  assert.match(redacted, /<rpc>/);
+  assert.doesNotMatch(redacted, new RegExp(urlFelt.slice(2, 14)), "no encoded URL either");
+  // The URL split across two felts: neither plain nor encoded.
+  const half = Buffer.from(rpc2).subarray(0, 10).toString("hex");
+  const rest = Buffer.from(rpc2).subarray(10).toString("hex");
+  const split = await fetchTokenUri({ rpc: rpc2, contract: "0x1", token: "1", fetchImpl: /** @type {any} */ (async () => reply({ error: { code: 40, message: "Contract error", data: { revert_error: ["0x" + half, "0x" + rest] } } })) }).catch((e) => e.message);
+  assert.doesNotMatch(split, new RegExp(`rpc\\.test|KEY|${half}|${rest}`));
   // A nested ENTRYPOINT_NOT_FOUND (a bad library_call) retries with tokenURI, and the first error stays in the message.
   const nested = "0x" + Buffer.from("ENTRYPOINT_NOT_FOUND").toString("hex");
   let n = 0;

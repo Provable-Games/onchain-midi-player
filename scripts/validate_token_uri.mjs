@@ -166,6 +166,9 @@ export const selector = (/** @type {string} */ name) => "0x" + (BigInt("0x" + ke
 /** The grammar of an XML declaration (XML 1.0, production 23). */
 const XML_DECL = /^<\?xml[ \t\r\n]+version[ \t\r\n]*=[ \t\r\n]*(["'])1\.[0-9]+\1([ \t\r\n]+encoding[ \t\r\n]*=[ \t\r\n]*(["'])[A-Za-z][A-Za-z0-9._-]*\3)?([ \t\r\n]+standalone[ \t\r\n]*=[ \t\r\n]*(["'])(yes|no)\5)?[ \t\r\n]*\?>$/;
 
+/** A DOCTYPE declaration (XML 1.0, production 28): a name, an optional external id, an optional internal subset. */
+const DOCTYPE = /<!DOCTYPE[ \t\r\n]+[A-Za-z_:][A-Za-z0-9_:.-]*(?:[ \t\r\n]+(?:SYSTEM[ \t\r\n]+(?:"[^"]*"|'[^']*')|PUBLIC[ \t\r\n]+(?:"[^"]*"|'[^']*')[ \t\r\n]+(?:"[^"]*"|'[^']*')))?[ \t\r\n]*(?:\[([^\]]*)\][ \t\r\n]*)?>/y;
+
 /** Whether a code point is an XML 1.0 Char. */
 const xmlChar = (/** @type {number} */ cp) => cp === 9 || cp === 10 || cp === 13 || (cp >= 0x20 && cp <= 0xd7ff) || (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff);
 
@@ -276,18 +279,13 @@ export function parseXml(s) {
       i = j + 2;
     } else if (s.startsWith("<!DOCTYPE", i)) {
       if (root || doctype) throw new XmlError("DOCTYPE after the root element or a second DOCTYPE", i);
+      DOCTYPE.lastIndex = i;
+      const m = DOCTYPE.exec(s);
+      if (!m) throw new XmlError('malformed DOCTYPE (expected <!DOCTYPE name [SYSTEM "id" | PUBLIC "id" "id"] [internal subset]>)', i);
       doctype = true;
-      const open = s.indexOf("[", i);
-      const gt = s.indexOf(">", i);
-      if (gt < 0) throw new XmlError("unterminated DOCTYPE", i);
-      if (open >= 0 && open < gt) {
-        // An internal subset can declare entities: it is skipped, and reported as its own rule.
-        internalSubset = true;
-        const end = s.indexOf("]", open);
-        const close = end < 0 ? -1 : s.indexOf(">", end);
-        if (close < 0) throw new XmlError("unterminated DOCTYPE internal subset", i);
-        i = close + 1;
-      } else i = gt + 1;
+      // An internal subset can declare entities: it is skipped, and reported as its own rule.
+      if (m[1] !== undefined) internalSubset = true;
+      i += m[0].length;
     } else if (s.startsWith("<!", i)) {
       throw new XmlError("markup declaration outside a DOCTYPE", i);
     } else if (s.startsWith("</", i)) {
@@ -341,7 +339,14 @@ export function parseXml(s) {
       }
       const prefix = (/** @type {string} */ q) => (q.includes(":") ? q.slice(0, q.indexOf(":")) : "");
       if (prefix(nm) && !scope.has(prefix(nm))) throw new XmlError(`unbound namespace prefix ${prefix(nm)}: in <${nm}>`, i);
+      /** @type {Set<string>} */
+      const expanded = new Set();
       for (const a of own) {
+        if (a.name !== "xmlns" && !a.name.startsWith("xmlns:")) {
+          const key = `${prefix(a.name) ? scope.get(prefix(a.name)) : ""}|${a.name.slice(a.name.indexOf(":") + 1)}`;
+          if (expanded.has(key)) throw new XmlError(`attribute ${a.name} repeats another attribute with the same namespace and local name`, a.at);
+          expanded.add(key);
+        }
         if (a.name !== "xmlns" && !a.name.startsWith("xmlns:") && prefix(a.name) && !scope.has(prefix(a.name))) {
           throw new XmlError(`unbound namespace prefix ${prefix(a.name)}: in attribute ${a.name} (declare xmlns:${prefix(a.name)})`, a.at);
         }
@@ -374,7 +379,11 @@ function svgReferenceProblems(xml) {
   /** @type {[string, number][]} */
   const out = [];
   const external = (/** @type {string} */ target) => !/^(#|data:)/i.test(target.trim());
-  const urls = (/** @type {string} */ css, /** @type {number} */ at, /** @type {string} */ where) => {
+  /** CSS escapes (\72 = r, \i = i) are decoded before the tokens are read. */
+  const unescape = (/** @type {string} */ css) =>
+    css.replace(/\\(?:([0-9a-fA-F]{1,6})[ \t\r\n\f]?|([^\n\r\f0-9a-fA-F]))/g, (_, hex, ch) => (hex ? String.fromCodePoint(Math.min(parseInt(hex, 16) || 0xfffd, 0x10ffff)) : ch));
+  const urls = (/** @type {string} */ raw, /** @type {number} */ at, /** @type {string} */ where) => {
+    const css = unescape(raw);
     for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, at]);
     if (/@import/i.test(css)) out.push([`${where} has @import`, at]);
   };
@@ -845,8 +854,17 @@ export async function fetchTokenUri({ rpc, contract, token, fetchImpl = fetch })
   const id = BigInt(token);
   if (id < 0n || id >= 1n << 256n) throw new Error("--token is not a u256");
   const calldata = ["0x" + (id & ((1n << 128n) - 1n)).toString(16), "0x" + (id >> 128n).toString(16)];
+  const hostOf = (/** @type {string} */ u) => {
+    try {
+      return new URL(u).host;
+    } catch {
+      return u;
+    }
+  };
   const clean = (/** @type {string} */ s) => {
-    let out = s.split(rpc).join("<rpc>");
+    // Long hex strings are felts, which can encode the URL (even split across felts): the decoded
+    // reasons are printed instead, redacted below.
+    let out = s.replace(/0x[0-9a-fA-F]{8,}/g, "0x\u2026").split(rpc).join("<rpc>");
     try {
       out = out.split(new URL(rpc).host).join("<rpc host>");
     } catch {
@@ -879,7 +897,9 @@ export async function fetchTokenUri({ rpc, contract, token, fetchImpl = fetch })
     }
     if (doc.error) {
       const raw = `${doc.error.message ?? "error"} (code ${doc.error.code}) ${doc.error.data ? JSON.stringify(doc.error.data) : ""}`.trim();
-      const reasons = shortStrings(doc.error);
+      let reasons = shortStrings(doc.error);
+      // A URL split across felts shows only in the reasons joined: then print none of them.
+      if (reasons.join("").includes(rpc) || reasons.join("").includes(hostOf(rpc))) reasons = ["<redacted: it holds the RPC URL>"];
       // Redact after assembling the whole message: a decoded revert reason can hold the URL too.
       last = clean(`${name}: starknet_call failed: ${raw}${reasons.length ? `\nrevert reason: ${reasons.join(", ")}` : ""}`);
       if (name === "token_uri" && (doc.error.code === 21 || reasons.includes("ENTRYPOINT_NOT_FOUND") || /ENTRYPOINT_NOT_FOUND/.test(raw))) {
