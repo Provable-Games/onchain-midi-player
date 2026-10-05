@@ -1,5 +1,5 @@
 {
-  "name": "onchain-midi-player-player",
+  "name": "onchain-midi-player-js",
   "private": true,
   "type": "module",
   "description": "Player-side JavaScript and tooling for onchain-midi-player (no runtime dependencies).",
