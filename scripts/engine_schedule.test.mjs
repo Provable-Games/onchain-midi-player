@@ -170,8 +170,8 @@ describe("custom waves in the real engine (issue #2)", () => {
     // a bad route, a non-finite value or a filter it does not take; it stores a copy. Whatever
     // settings::validate accepts must install unchanged: every fixture (the filters at their extremes
     // included), the long LFSR, the largest input without custom waves, and every operator and filter
-    // field at its type's extremes (validation bypassed: the engine's setTimbre takes the whole type;
-    // only playing past the interim limits fails).
+    // field at its type's extremes (the engine's setTimbre takes the whole type; when it plays, it
+    // skips a note whose computed values overflow float32).
     const u = 4294967295;
     const fields = (/** @type {number} */ i32) => [u, u, i32, u, u, u, u, u, u, u, i32].join(",");
     const extremes = `1,1,255,255,255,0,2,0,0,1,0,2,${fields(2147483647)},1,2,${u},1,${u},1,35,1,0,4,${fields(-2147483648)},1,0,1,0,1`;

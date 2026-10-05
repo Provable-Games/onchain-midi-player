@@ -202,7 +202,7 @@ export const CASES = [
 ];
 
 /** Invalid settings: midi_segment must revert with the same panic data as `settings::validate`. */
-export const INVALID_CASES = ["quality_2", "volume_max_plus_1", "duplicate_drum", "custom_wave", "filter_on_fm", "filter_q_0", "timbres_176"].map((name) => {
+export const INVALID_CASES = ["quality_2", "fm_on_itself", "duplicate_drum", "custom_wave", "filter_on_fm", "filter_q_0", "timbres_176"].map((name) => {
   const f = INVALID.find((v) => v.name === name);
   if (!f) throw new Error(`no invalid settings fixture ${name}`);
   return { name, settings: f.settings, error: f.error };

@@ -27,7 +27,7 @@ function engine({ voices = 64 } = {}) {
   vm.runInContext(engineSource(), sandbox);
   const synth = /** @type {any} */ (new /** @type {any} */ (sandbox).WebAudioTinySynth({ quality: 1, useReverb: 0, voices }));
   const ctx = contexts[0];
-  /** @type {Array<{t: number, ch: number, n: number, p: any, freq: number, oscs: string[], srcs: string[]}>} */
+  /** @type {Array<{t: number, ch: number, n: number, p: any, freq: number, made: number, oscs: string[], srcs: string[]}>} */
   const notes = [];
   const note = synth._note;
   synth._note = (/** @type {number} */ t, /** @type {number} */ ch, /** @type {number} */ n, /** @type {number} */ v, /** @type {any} */ p) => {
@@ -36,7 +36,7 @@ function engine({ voices = 64 } = {}) {
     const created = log.slice(from).filter((c) => c[1] === "create").map((c) => c[0]);
     const oscs = created.filter((name) => name.startsWith("osc")); // oscillator operators
     const srcs = created.filter((name) => name.startsWith("src")); // noise operators (buffer sources)
-    notes.push({ t, ch, n, p, freq: oscs.length ? nodes[oscs[0]].frequency.value : NaN, oscs, srcs });
+    notes.push({ t, ch, n, p, freq: oscs.length ? nodes[oscs[0]].frequency.value : NaN, made: created.length, oscs, srcs });
   };
   /** @type {number[]} */
   const offs = [];
@@ -252,6 +252,29 @@ describe("the pinned engine behaves as the README's MIDI contract says", () => {
     for (const n of e.notes.slice(4)) {
       for (const name of [...n.oscs, ...n.srcs]) assert.ok(near(e.nodes[name].detune.value, full), `new note on channel ${n.ch + 1}: ${name} starts bent`);
     }
+  });
+
+  test("a note whose computed values overflow float32 is skipped before any node is made; the next note plays, and the song goes on", () => {
+    // Program 0: one operator with key_scale at its i32 maximum, as the player passes it. Its level is
+    // 2^((note - 60) / 12 * k): about 2^1.2e6 at note 127, which overflows, and 1 at note 60.
+    const e = engine();
+    e.synth.setTimbre(0, 0, [{ v: 0.5, d: 1, s: 1, k: 2147483647 / 10000 }]);
+    // Note 127 at tick 0 and note 60 at tick 48 (0.25 s later); End-of-Track at 192: a 1 s pass.
+    const midi = smf({ ppq: PPQ, tracks: [[[0, 0x90, 127, 100], [48, 0x80, 127, 0], [0, 0x90, 60, 100], [48, 0x80, 60, 0], [96, ...EOT]]] });
+    e.play(midi);
+    e.run(1.5); // two passes scheduled, with no throw from the scheduler
+    const high = e.notes.filter((n) => n.n === 127), mid = e.notes.filter((n) => n.n === 60);
+    assert.deepEqual(high.map((n) => Math.round(n.t * 1e9) / 1e9), [0.1, 1.1], "note 127 reaches the engine once per pass: no re-send");
+    assert.ok(high.every((n) => n.made === 0), "note 127 is skipped before any node is made");
+    assert.deepEqual(mid.map((n) => Math.round(n.t * 1e9) / 1e9), [0.35, 1.35], "note 60 follows in each pass");
+    assert.ok(mid.every((n) => n.oscs.length === 1 && n.made > 0), "note 60 plays");
+    assert.ok(Array.from(e.synth.notetab, (/** @type {any} */ x) => x.n).every((n) => n !== 127), "the skipped note took no voice");
+    assert.ok(e.log.every((c) => !["set", "ramp", "target"].includes(c[1]) || Number.isFinite(Math.fround(c[2]))), "every AudioParam value written is finite as a 32-bit float");
+    // setTimbre takes every time field the class can pass (the u32 maximum / 10,000), and rejects a
+    // time past the 32-bit float range.
+    const max = 4294967295 / 10000;
+    e.synth.setTimbre(0, 1, [{ a: max, h: max, d: max, r: max, q: max }]);
+    assert.throws(() => e.synth.setTimbre(0, 2, [{ d: 1e39 }]), { name: "RangeError" });
   });
 
   test("GM Master Volume SysEx, bank select and CC91 are ignored", () => {

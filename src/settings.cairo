@@ -61,27 +61,22 @@
 //! | 12 | FM (`1..=10`): target is an earlier operator | `TS: FM target not earlier` |
 //! | 13 | AM (`11..`): target `route - 10` is an earlier operator | `TS: AM target not earlier` |
 //! | 14 | `Custom(i)`: `i < waves.len()` | `TS: wave index out of range` |
-//! | 15 | interim, engine limit: `volume <= 1_000_000` | `TS: volume out of range` |
-//! | 16 | interim, engine limit: `ratio <= 640_000` | `TS: ratio out of range` |
-//! | 17 | interim, engine limit: `pitch_ratio <= 160_000` | `TS: pitch_ratio out of range` |
-//! | 18 | interim, engine limit: `sustain <= 1_000_000` | `TS: sustain out of range` |
-//! | 19 | interim, engine limit: `-80_000 <= key_scale <= 80_000` | `TS: key_scale out of range` |
-//! | 20 | `Some(filter)`: `route == 0` (an audio output) | `TS: filter on modulator` |
-//! | 21 | `Some(filter)`: `cutoff > 0` | `TS: filter cutoff out of range` |
-//! | 22 | `Some(filter)`: `q > 0` | `TS: filter q out of range` |
+//! | 15 | `Some(filter)`: `route == 0` (an audio output) | `TS: filter on modulator` |
+//! | 16 | `Some(filter)`: `cutoff > 0` | `TS: filter cutoff out of range` |
+//! | 17 | `Some(filter)`: `q > 0` | `TS: filter q out of range` |
 //!
 //! Only what the format or the engine requires is checked, never a limit for gas or size: the
 //! network prices those. The other numeric fields (`reverb`, `master_vol`, the upper end of
-//! `voices`, the other operator values, and a filter's cutoff and Q above 0) take any value of
-//! their integer type: the engine takes them (`setMasterVol`, `setReverbLev` and `setVoices`
-//! assign them, Web Audio clamps frequencies, and the engine clamps a filter's cutoff).
+//! `voices`, every operator value, and a filter's cutoff and Q above 0) take any value of their
+//! integer type: the engine takes them (`setMasterVol`, `setReverbLev` and `setVoices` assign
+//! them, `setTimbre` takes any finite operator value and any time up to the 32-bit float range,
+//! Web Audio clamps frequencies, and the engine clamps a filter's cutoff).
 //!
-//! Checks 15-19 exist only because the pinned engine fails beyond them. These five fields multiply
-//! into the gains and frequencies the engine passes to Web Audio, which requires finite values:
-//! past the bounds an overflowing product throws, and the throwing note stalls the whole scheduler.
-//! They are interim, to be removed once the pinned engine guards non-finite computed values (fork
-//! issue #13, task T5.2; T5 checks the values `setTimbre` receives, not what they multiply into).
-//! README, "Engine limits on operator values".
+//! The operator values multiply into the gains and frequencies the engine passes to Web Audio,
+//! which requires them finite as 32-bit floats. When a product overflows at some note and tuning
+//! (a long FM chain, or a large `key_scale`), the pinned engine skips that note before making any
+//! node (fork task T5.2): the note is silent and the song plays on. README, "Engine limits on
+//! operator values".
 //!
 //! Custom waves (issue #2) need no check beyond the counts, lengths and index above: the player
 //! registers each wave with the engine's `setSampleWave` or `setHarmonicWave` (fork #26), which
@@ -89,7 +84,7 @@
 //! An all-zero wave is silent. Issue #2 removed v1's two `'TS: custom wave unsupported'` checks
 //! without changing the grammar or the format version.
 //!
-//! Filters (issue #3) need only checks 20-22, the engine's own rules for its fixed operator filter
+//! Filters (issue #3) need only checks 15-17, the engine's own rules for its fixed operator filter
 //! (fork #27, decisions D-007 and D-028): a filter only on an audio output, since FM and AM paths
 //! are never filtered and the engine rejects filter fields on a modulator; and a cutoff and a Q
 //! above 0, since the engine takes any finite value from 2^-126 and the smallest non-zero value,
@@ -132,14 +127,6 @@ pub const MAX_DRUM_SLOT: u32 = 81;
 pub const MAX_PROGRAM_SLOT: u32 = 127;
 /// Fewest `voices`: with none, every note would be cut.
 pub const MIN_VOICES: u32 = 1;
-/// Interim engine limits (checks 15-19), in fixed point: the largest values of the fields that
-/// multiply into the engine's gains and frequencies that the pinned engine plays without computing
-/// a non-finite value. To be removed once it guards them (fork #13, task T5.2).
-pub const MAX_VOLUME: u32 = 1_000_000;
-pub const MAX_RATIO: u32 = 640_000;
-pub const MAX_PITCH_RATIO: u32 = 160_000;
-pub const MAX_SUSTAIN: u32 = 1_000_000;
-pub const MAX_KEY_SCALE: i32 = 80_000;
 
 /// Default engine settings: quality 1, reverb 30 %, master volume 40 %, 64 voices, no custom
 /// waves or timbres. Encodes as `1,1,30,40,64,0,0`.
@@ -268,21 +255,6 @@ fn validate_operator(op: @Operator, t: u32, o: u32, n_waves: u32) {
         if i.into() >= n_waves {
             fail_at_op('TS: wave index out of range', t, o);
         }
-    }
-    if op.volume > MAX_VOLUME {
-        fail_at_op('TS: volume out of range', t, o);
-    }
-    if op.ratio > MAX_RATIO {
-        fail_at_op('TS: ratio out of range', t, o);
-    }
-    if op.pitch_ratio > MAX_PITCH_RATIO {
-        fail_at_op('TS: pitch_ratio out of range', t, o);
-    }
-    if op.sustain > MAX_SUSTAIN {
-        fail_at_op('TS: sustain out of range', t, o);
-    }
-    if op.key_scale < -MAX_KEY_SCALE || op.key_scale > MAX_KEY_SCALE {
-        fail_at_op('TS: key_scale out of range', t, o);
     }
     if let Option::Some(filter) = @op.filter {
         if route != 0 {

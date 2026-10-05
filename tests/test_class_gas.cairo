@@ -6,7 +6,7 @@
 //!   serializing the arguments and the result, which a consumer pays too.
 //! - `gas_ms_*`: `midi_segment` across MIDI sizes (no MIDI, then the synthetic scores of 816 to
 //!   3,716 bytes, the sizes of the production Beast scores) and `SETTINGS` sizes (16, 334, 504 and
-//!   9,836 bytes, and the largest valid input, 191,664 bytes, with no MIDI and with the largest
+//!   9,836 bytes, and the largest valid input, 218,264 bytes, with no MIDI and with the largest
 //!   score only), called directly. Per cell, `build` only builds the inputs (the baseline), `d`
 //!   builds `D` (validation, `SETTINGS`, `b64(midi)` and the appends), and `full` is the whole
 //!   `midi_segment`; `full - d` is the two outer base64 passes. `gas_b64_midi_*` is `b64(midi)`
@@ -77,7 +77,7 @@ fn gas_lc_declare() {
 
 #[test]
 fn gas_lc_animation_url_segment() {
-    assert(class().animation_url_segment().len() == 53316, 'segment');
+    assert(class().animation_url_segment().len() == 53476, 'segment');
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn gas_lc_version() {
 
 #[test]
 fn gas_lc_license() {
-    assert(class().license().len() == 8784, 'license');
+    assert(class().license().len() == 9062, 'license');
 }
 
 // ------------------------------------------------------------------------------------------------

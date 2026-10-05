@@ -31,12 +31,13 @@
 // the engine) must keep the art visible, keep ▶ disabled, show the exact error and construct no
 // synth. So must the failures ▶ can meet: no Web Audio at all, or an AudioContext whose resume()
 // rejects. Range checks are Cairo's: settings that only break a range rule must still play. The
-// settings fixtures with fields at their extremes (and the deepest FM chain at the engine limits),
-// the custom-wave fixtures (256 waves; the long-mode LFSR, 32,767 samples) and the filter fixtures
-// (every kind with its cutoff and Q at 0.0001 and the u32 maximum, fixed and key-tracked, at the
-// engine limits) play the lowest and highest notes on every custom timbre with no error: the engine
-// throws on a non-finite AudioParam value, or on a wave it cannot register, which only playing
-// shows.
+// settings fixtures with fields at their type's extremes (and the deepest FM chain at them), the
+// custom-wave fixtures (256 waves; the long-mode LFSR, 32,767 samples) and the filter fixtures
+// (every kind with its cutoff and Q at 0.0001 and the u32 maximum, fixed and key-tracked) play the
+// lowest and highest notes on every custom timbre with no error, then a plain note, which must
+// sound: the engine skips a note whose computed values overflow float32 (fork T5.2), and the song
+// must go on. Only playing shows that, and a wave the engine cannot register. The custom-wave and
+// filter fixtures must sound every note.
 //
 // Playwright is not a dependency of this repository; point the script at an existing install, and
 // pick the engine (scripts/browsers.mjs; Firefox plays audio only with an output device, which a
@@ -101,7 +102,7 @@ const NO_CDP = "Chromium-only (DevTools protocol): no other engine shows data: r
  */
 function instrument() {
   /** @type {any} */
-  const st = { constructed: 0, sends: [], plays: [], imgs: [], violations: [], readyDisabled: null, order: [], readyAt: null };
+  const st = { constructed: 0, sends: [], notes: [], plays: [], imgs: [], violations: [], readyDisabled: null, order: [], readyAt: null };
   /** @type {any} */ (window).__check = st;
   /** @type {any} */
   let Real;
@@ -114,6 +115,22 @@ function instrument() {
     synth.send = (/** @type {number[]} */ m, /** @type {number} */ t) => {
       if (t !== undefined) st.sends.push([m[0], m[1], m[2], t]);
       return send(m, t);
+    };
+    // Every note the engine voices or skips: [channel, note, sources made]. A note whose computed
+    // values overflow float32 makes none (fork T5.2).
+    let made = 0;
+    for (const name of ["createOscillator", "createBufferSource"]) {
+      const create = ctx[name].bind(ctx);
+      ctx[name] = (/** @type {any[]} */ ...args) => (made++, create(...args));
+    }
+    const note = synth._note;
+    synth._note = (/** @type {any[]} */ ...args) => {
+      const before = made;
+      try {
+        return note(...args);
+      } finally {
+        st.notes.push([args[1], args[2], made - before]);
+      }
     };
     const play = synth.playMIDI;
     synth.playMIDI = () => {
@@ -686,12 +703,12 @@ async function checkAudioFailures() {
 /** Range checks are Cairo's job: SETTINGS that parse but break a range rule (quality 2) still play. */
 async function checkRangeOnly() {
   const c = CASES.default_120bpm;
-  // Rules the engine does not enforce: a volume one past the interim engine limit, and program 0 twice
-  // (the second wins). Since fork T5 the engine itself rejects some values the class rejects, such as
-  // quality 2 (its constructor throws, so the page fails closed): those cannot show the page's part.
-  console.log("range-only violations (volume past its interim limit, a duplicate slot): not the page's to reject (data: URI, offline)");
+  // A rule the engine does not enforce: program 0 twice (the second wins). Since fork T5 the engine
+  // itself rejects most values the class rejects, such as quality 2 (its constructor throws, so the
+  // page fails closed): those cannot show the page's part.
+  console.log("range-only violation (a duplicate slot): not the page's to reject (data: URI, offline)");
   const op = (/** @type {number} */ volume) => `0,0,${volume},10000,0,0,100,100,0,500,10000,10000,0,0`;
-  const settings = ` 1,1,30,40,64,0,2,0,0,1,${op(1000001)},0,0,1,${op(5000)}`;
+  const settings = ` 1,1,30,40,64,0,2,0,0,1,${op(4000)},0,0,1,${op(5000)}`;
   const { context, page, logged } = await open({ offline: true });
   await page.goto(dataUrl(htmlOf(c, settings + c.d.slice(c.d.indexOf(MIDI_OPEN)))));
   await ready(page);
@@ -702,15 +719,20 @@ async function checkRangeOnly() {
 }
 
 /**
- * The fixtures with fields at their extremes play without an error. Every custom timbre sounds
- * notes 0 and 127 (a drum timbre, its own note), where key scaling and the frequency products are
- * largest. The engine throws on a non-finite AudioParam value while it plays, so only playing the
- * notes shows it: the page parses and enables ▶ either way.
+ * The fixtures with fields at their extremes play without an error. Every custom timbre gets notes
+ * 0 and 127 (a drum timbre, its own note), where key scaling and the frequency products are
+ * largest, then a plain note follows on another channel. The engine skips a note whose computed
+ * values overflow float32, before making any node (fork T5.2), so at type extremes notes can be
+ * silent; nothing may error, and the plain note after them must sound: the song goes on. The
+ * custom-wave and filter fixtures use values that play, so every one of their notes must sound. Only
+ * playing the notes shows any of this: the page parses and enables ▶ either way.
  */
 async function checkExtremes() {
   const settingsFixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/settings.json", import.meta.url), "utf8"));
+  /** The fixtures at type extremes, whose notes the engine may skip. */
+  const mayskip = ["max_fields", "min_fields", "max_chain"];
   /** @type {Array<[string, any]>} */
-  const cases = ["max_fields", "min_fields", "max_chain", "custom_waves", "reference_waves", "waves_256", "filters", "filter_extremes"]
+  const cases = [...mayskip, "custom_waves", "reference_waves", "waves_256", "filters", "filter_extremes"]
     .map((name) => [name, settingsFixtures.valid.find((/** @type {any} */ f) => f.name === name).settings]);
   cases.push(["long_lfsr", longLfsr()]);
   for (const [name, settings] of cases) {
@@ -728,18 +750,26 @@ async function checkExtremes() {
         notes.push([0x90, 0], [0x90, 127]);
       }
     }
-    ev.push([48, 0xff, 0x2f, 0x00]);
+    // Then a plain note on channel 2: a program with no custom timbre, its GM default, at note 60.
+    const plain = /** @type {number} */ (Array.from({ length: 128 }, (_, i) => i).find((p) => !c.settings.timbres.some((/** @type {any} */ t) => !t.drum && t.slot === p)));
+    ev.push([0, 0xc1, plain], [0, 0x91, 60, 100], [48, 0x81, 60, 0], [48, 0xff, 0x2f, 0x00]);
     const midi = smf({ ppq: 96, tracks: [ev] });
-    console.log(`extreme values (${name}): notes 0 and 127 on every custom timbre (data: URI, offline)`);
+    console.log(`extreme values (${name}): notes 0 and 127 on every custom timbre, then a plain note (data: URI, offline)`);
     const { context, page, logged } = await open({ offline: true });
     await page.goto(dataUrl(PAGE + dFragment(midi, c.settings).d + c.svg));
     await ready(page);
     await startPlayback(page);
-    await page.waitForTimeout(1000 + 250 * c.settings.timbres.length); // each timbre's notes last 0.25 s
+    await page.waitForTimeout(1250 + 250 * c.settings.timbres.length); // each timbre's notes last 0.25 s
     const st = await state(page);
-    const sends = await page.evaluate(() => /** @type {any} */ (window).__check.sends);
+    const { sends, voiced } = await page.evaluate(() => ({ sends: /** @type {any} */ (window).__check.sends, voiced: /** @type {any} */ (window).__check.notes }));
     const played = notes.every(([status, note]) => sends.some((/** @type {number[]} */ m) => m[0] === status && m[1] === note && m[2] > 0));
-    check(st.synth?.state === "running" && played, `▶ plays every note (${notes.map(([s, n]) => (s === 0x99 ? "drum " : "") + n).join(", ")})`);
+    check(st.synth?.state === "running" && played, `▶ sends every note (${notes.map(([s, n]) => (s === 0x99 ? "drum " : "") + n).join(", ")})`);
+    /** @type {Array<[number, number, number]>} [channel, note, sources made] of each note the engine voiced or skipped */
+    const extreme = voiced.filter((/** @type {number[]} */ v) => v[0] !== 1);
+    const skipped = extreme.filter((/** @type {number[]} */ v) => v[2] === 0).length;
+    if (mayskip.includes(name)) console.log(`    ${skipped} of ${extreme.length} notes skipped by the engine (computed values past float32)`);
+    else check(extreme.length > 0 && skipped === 0, `every note sounds (${extreme.length - skipped} of ${extreme.length})`);
+    check(voiced.some((/** @type {number[]} */ v) => v[0] === 1 && v[1] === 60 && v[2] > 0), `the plain note after them sounds (program ${plain}): the song goes on`);
     const errors = await logged();
     check(errors.length === 0, `no errors, including non-finite AudioParam values${errors.length ? `: ${errors.length}, ${[...new Set(errors)].join(" | ")}` : ""}`);
     await context.close();

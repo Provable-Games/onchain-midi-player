@@ -31,8 +31,8 @@ test = "snforge test"
 allow-prebuilt-plugins = ["snforge_std"]
 
 # Above snforge's default step limit: the largest valid SETTINGS without custom waves (175 timbres
-# of 8 operators, every field at its widest valid value and every operator filtered: 191,664 bytes)
-# takes about 21M steps through `midi_segment`, and 30M with its SHA-256 check; `case_every_slot`'s
+# of 8 operators, every field at its type's extreme and every operator filtered: 218,264 bytes)
+# takes about 22M steps through `midi_segment`, and 34M with its SHA-256 check; `case_every_slot`'s
 # digest test takes about 15M (measured with --tracked-resource cairo-steps). SETTINGS has no byte
 # cap: the network prices it.
 [tool.snforge]

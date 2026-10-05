@@ -352,17 +352,17 @@
        {
         "route": 0,
         "wave": "Sawtooth",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 2147483647,
         "attack": 4294967295,
         "hold": 4294967295,
         "decay": 4294967295,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 4294967295,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 4294967295,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": {
          "kind": "BandPass",
          "cutoff": 4294967295,
@@ -373,121 +373,121 @@
        {
         "route": 1,
         "wave": "Sawtooth",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 2147483647,
         "attack": 4294967295,
         "hold": 4294967295,
         "decay": 4294967295,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 4294967295,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 4294967295,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 2,
         "wave": "Sawtooth",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 2147483647,
         "attack": 4294967295,
         "hold": 4294967295,
         "decay": 4294967295,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 4294967295,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 4294967295,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 12,
         "wave": "Sawtooth",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 2147483647,
         "attack": 4294967295,
         "hold": 4294967295,
         "decay": 4294967295,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 4294967295,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 4294967295,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 4,
         "wave": "Sawtooth",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 2147483647,
         "attack": 4294967295,
         "hold": 4294967295,
         "decay": 4294967295,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 4294967295,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 4294967295,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 15,
         "wave": "Sawtooth",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 2147483647,
         "attack": 4294967295,
         "hold": 4294967295,
         "decay": 4294967295,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 4294967295,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 4294967295,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 6,
         "wave": "Sawtooth",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 2147483647,
         "attack": 4294967295,
         "hold": 4294967295,
         "decay": 4294967295,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 4294967295,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 4294967295,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 17,
         "wave": "Sawtooth",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 2147483647,
         "attack": 4294967295,
         "hold": 4294967295,
         "decay": 4294967295,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 4294967295,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 4294967295,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        }
       ]
      }
     ]
    },
-   "settings_text": "1,1,255,255,255,0,1,0,127,8,0,2,1000000,640000,2147483647,4294967295,4294967295,4294967295,1000000,4294967295,160000,4294967295,80000,1,2,4294967295,1,4294967295,1,2,1000000,640000,2147483647,4294967295,4294967295,4294967295,1000000,4294967295,160000,4294967295,80000,0,2,2,1000000,640000,2147483647,4294967295,4294967295,4294967295,1000000,4294967295,160000,4294967295,80000,0,12,2,1000000,640000,2147483647,4294967295,4294967295,4294967295,1000000,4294967295,160000,4294967295,80000,0,4,2,1000000,640000,2147483647,4294967295,4294967295,4294967295,1000000,4294967295,160000,4294967295,80000,0,15,2,1000000,640000,2147483647,4294967295,4294967295,4294967295,1000000,4294967295,160000,4294967295,80000,0,6,2,1000000,640000,2147483647,4294967295,4294967295,4294967295,1000000,4294967295,160000,4294967295,80000,0,17,2,1000000,640000,2147483647,4294967295,4294967295,4294967295,1000000,4294967295,160000,4294967295,80000,0",
-   "bytes": 920
+   "settings_text": "1,1,255,255,255,0,1,0,127,8,0,2,4294967295,4294967295,2147483647,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,2147483647,1,2,4294967295,1,4294967295,1,2,4294967295,4294967295,2147483647,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,2147483647,0,2,2,4294967295,4294967295,2147483647,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,2147483647,0,12,2,4294967295,4294967295,2147483647,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,2147483647,0,4,2,4294967295,4294967295,2147483647,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,2147483647,0,15,2,4294967295,4294967295,2147483647,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,2147483647,0,6,2,4294967295,4294967295,2147483647,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,2147483647,0,17,2,4294967295,4294967295,2147483647,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,2147483647,0",
+   "bytes": 1072
   },
   {
    "name": "max_chain",
@@ -505,137 +505,137 @@
        {
         "route": 0,
         "wave": "Sine",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 0,
         "attack": 0,
         "hold": 100,
         "decay": 100,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 500,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 10000,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 1,
         "wave": "Sine",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 0,
         "attack": 0,
         "hold": 100,
         "decay": 100,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 500,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 10000,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 2,
         "wave": "Sine",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 0,
         "attack": 0,
         "hold": 100,
         "decay": 100,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 500,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 10000,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 3,
         "wave": "Sine",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 0,
         "attack": 0,
         "hold": 100,
         "decay": 100,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 500,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 10000,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 4,
         "wave": "Sine",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 0,
         "attack": 0,
         "hold": 100,
         "decay": 100,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 500,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 10000,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 5,
         "wave": "Sine",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 0,
         "attack": 0,
         "hold": 100,
         "decay": 100,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 500,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 10000,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 6,
         "wave": "Sine",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 0,
         "attack": 0,
         "hold": 100,
         "decay": 100,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 500,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 10000,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        },
        {
         "route": 7,
         "wave": "Sine",
-        "volume": 1000000,
-        "ratio": 640000,
+        "volume": 4294967295,
+        "ratio": 4294967295,
         "offset_hz": 0,
         "attack": 0,
         "hold": 100,
         "decay": 100,
-        "sustain": 1000000,
+        "sustain": 4294967295,
         "release": 500,
-        "pitch_ratio": 160000,
+        "pitch_ratio": 4294967295,
         "pitch_time": 10000,
-        "key_scale": 80000,
+        "key_scale": 2147483647,
         "filter": null
        }
       ]
      }
     ]
    },
-   "settings_text": "1,1,30,40,64,0,1,0,0,8,0,0,1000000,640000,0,0,100,100,1000000,500,160000,10000,80000,0,1,0,1000000,640000,0,0,100,100,1000000,500,160000,10000,80000,0,2,0,1000000,640000,0,0,100,100,1000000,500,160000,10000,80000,0,3,0,1000000,640000,0,0,100,100,1000000,500,160000,10000,80000,0,4,0,1000000,640000,0,0,100,100,1000000,500,160000,10000,80000,0,5,0,1000000,640000,0,0,100,100,1000000,500,160000,10000,80000,0,6,0,1000000,640000,0,0,100,100,1000000,500,160000,10000,80000,0,7,0,1000000,640000,0,0,100,100,1000000,500,160000,10000,80000,0",
-   "bytes": 534
+   "settings_text": "1,1,30,40,64,0,1,0,0,8,0,0,4294967295,4294967295,0,0,100,100,4294967295,500,4294967295,10000,2147483647,0,1,0,4294967295,4294967295,0,0,100,100,4294967295,500,4294967295,10000,2147483647,0,2,0,4294967295,4294967295,0,0,100,100,4294967295,500,4294967295,10000,2147483647,0,3,0,4294967295,4294967295,0,0,100,100,4294967295,500,4294967295,10000,2147483647,0,4,0,4294967295,4294967295,0,0,100,100,4294967295,500,4294967295,10000,2147483647,0,5,0,4294967295,4294967295,0,0,100,100,4294967295,500,4294967295,10000,2147483647,0,6,0,4294967295,4294967295,0,0,100,100,4294967295,500,4294967295,10000,2147483647,0,7,0,4294967295,4294967295,0,0,100,100,4294967295,500,4294967295,10000,2147483647,0",
+   "bytes": 686
   },
   {
    "name": "min_fields",
@@ -663,15 +663,15 @@
         "release": 0,
         "pitch_ratio": 0,
         "pitch_time": 0,
-        "key_scale": -80000,
+        "key_scale": -2147483648,
         "filter": null
        }
       ]
      }
     ]
    },
-   "settings_text": "1,0,0,0,1,0,1,1,35,1,0,0,0,0,-2147483648,0,0,0,0,0,0,0,-80000,0",
-   "bytes": 63
+   "settings_text": "1,0,0,0,1,0,1,1,35,1,0,0,0,0,-2147483648,0,0,0,0,0,0,0,-2147483648,0",
+   "bytes": 68
   },
   {
    "name": "slot_edges",
@@ -16906,318 +16906,6 @@
    ]
   },
   {
-   "name": "volume_max_plus_1",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 1000001,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": 0,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: volume out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "ratio_max_plus_1",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 640001,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": 0,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: ratio out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "pitch_ratio_max_plus_1",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 160001,
-        "pitch_time": 10000,
-        "key_scale": 0,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: pitch_ratio out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "sustain_max_plus_1",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 1000001,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": 0,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: sustain out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "key_scale_max_plus_1",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": 80001,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: key_scale out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "key_scale_min_minus_1",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": -80001,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: key_scale out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "u32_max_ratio",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 4294967295,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": 0,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: ratio out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "i32_max_key_scale",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": 2147483647,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: key_scale out of range",
-    0,
-    0
-   ]
-  },
-  {
    "name": "filter_on_fm",
    "settings": {
     "quality": 1,
@@ -22977,247 +22665,6 @@
    ]
   },
   {
-   "name": "order_wave_index_before_volume",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": {
-         "Custom": 0
-        },
-        "volume": 1000001,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": 0,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: wave index out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "order_volume_before_ratio",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 1000001,
-        "ratio": 640001,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": 0,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: volume out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "order_ratio_before_pitch_ratio",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 640001,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 160001,
-        "pitch_time": 10000,
-        "key_scale": 0,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: ratio out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "order_pitch_ratio_before_sustain",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 1000001,
-        "release": 500,
-        "pitch_ratio": 160001,
-        "pitch_time": 10000,
-        "key_scale": 0,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: pitch_ratio out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "order_sustain_before_key_scale",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 1000001,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": -80001,
-        "filter": null
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: sustain out of range",
-    0,
-    0
-   ]
-  },
-  {
-   "name": "order_key_scale_before_filter",
-   "settings": {
-    "quality": 1,
-    "reverb": 30,
-    "master_vol": 40,
-    "voices": 64,
-    "waves": [],
-    "timbres": [
-     {
-      "drum": false,
-      "slot": 0,
-      "operators": [
-       {
-        "route": 0,
-        "wave": "Sine",
-        "volume": 5000,
-        "ratio": 10000,
-        "offset_hz": 0,
-        "attack": 0,
-        "hold": 100,
-        "decay": 100,
-        "sustain": 0,
-        "release": 500,
-        "pitch_ratio": 10000,
-        "pitch_time": 10000,
-        "key_scale": 80001,
-        "filter": {
-         "kind": "LowPass",
-         "cutoff": 0,
-         "key_track": false,
-         "q": 0
-        }
-       }
-      ]
-     }
-    ]
-   },
-   "error": [
-    "TS: key_scale out of range",
-    0,
-    0
-   ]
-  },
-  {
    "name": "order_wave_index_before_filter",
    "settings": {
     "quality": 1,
@@ -23429,8 +22876,8 @@
   }
  ],
  "structural_max": {
-  "bytes": 191664,
-  "sha256": "602fcf213946065e652c9478ef1589a331001b5ac3b696d520c14ed3f10160e3"
+  "bytes": 218264,
+  "sha256": "ddd03d7f64acb74dea4160dddfb3880f0ba8006413171e62fcd8ee48774f279f"
  },
  "long_lfsr": {
   "bytes": 147532,
