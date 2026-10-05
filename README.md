@@ -1,6 +1,6 @@
 # onchain-midi-player
 
-A Cairo class library for Starknet that gives an NFT's `token_uri` an onchain MIDI player. The player is an HTML page in the token's `animation_url`. The page holds the synth engine, the player, the token's MIDI, its sound settings and its SVG art, and it plays offline in the browser with no network requests. Your NFT contract supplies the MIDI, settings and art, and calls the class with `library_call` to get the pieces of its `token_uri`. The class is declared, never deployed. It has no storage, no constructor and no collection-specific logic. The engine is currently [TinySynth](https://github.com/Provable-Games/webaudio-tinysynth), a General MIDI synthesizer (oscillators and FM, no samples).
+A Cairo class library for Starknet that gives an NFT's `token_uri` an onchain MIDI player. The player is an HTML page in the token's `animation_url`. The page holds the synth engine, the player, the token's MIDI, its sound settings and its SVG art, and it plays offline in the browser with no network requests. Your NFT contract supplies the MIDI, settings and art, and calls the class with `library_call` to get the pieces of its `token_uri`. The class is declared on Starknet, and your contract calls it by class hash, never through a deployed instance. It has no storage, no constructor and no collection-specific logic. The engine is currently [TinySynth](https://github.com/Provable-Games/webaudio-tinysynth), a General MIDI synthesizer (oscillators and FM, no samples).
 
 ## How it works
 
@@ -32,7 +32,7 @@ Details: [`token_uri` layout and the player page](docs/token-uri-layout.md).
 ```toml
 [dependencies]
 onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "v<version>" }
-# Before a release tag exists: rev = "<commit>", a commit of this repository
+# A class without a release tag: rev = "<commit>", its `built_from` commit
 
 [[target.starknet-contract]]
 sierra = true
@@ -40,10 +40,10 @@ sierra = true
 build-external-contracts = ["onchain_midi_player::contract::TinySynth"]
 ```
 
-**2. Hold a class hash.** Store it in your NFT, or in a small renderer contract the NFT calls, and let the owner change it. Take it from [`deployments/<network>.json`](deployments/sepolia.json) (`class.class_hash`). A class hash fixes the engine and the player, so tokens keep their sound until you switch. When you store or change it, check that `engine()` returns `'tinysynth'`: another engine's class shares the `midi_segment` selector and could render the wrong thing without an error.
+**2. Hold a class hash.** Store it in your NFT, or in a small renderer contract the NFT calls, and let the owner change it. Take it from the [`deployments/<network>.json`](deployments) of the network your NFT lives on (`class.class_hash`). The same build has the same class hash on every network. A class hash fixes the engine and the player, so tokens keep their sound until you switch. When you store or change it, check that `engine()` returns `'tinysynth'`: another engine's class shares the `midi_segment` selector and could render the wrong thing without an error.
 
-- `version()` is the class's [SemVer](https://semver.org) version. From `1.0.0`, the major number promises call and settings-layout compatibility.
-- A release has the tag `v<version>` (`release_tag` in the deployment file). A class without one is a test class: do not store its hash for production tokens. Only test classes exist so far.
+- `version()` is the class's [SemVer](https://semver.org) version. Every declared class has its own version, and a declared class never changes. From `1.0.0`, the major number changes only when the call or `TinySynthSettings` layout does, so a later minor or patch class keeps your calls and settings working (it may change the engine, the page or the sound).
+- A release has the tag `v<version>` (`release_tag` in the deployment file), and its class is built from that tag. A class without one is a test class: do not store its hash for production tokens.
 - The ABIs are in [`abi/`](abi): the class's, and `ISoundProvider`'s for providers.
 
 ```cairo
@@ -63,7 +63,7 @@ The interface, in [`src/interface.cairo`](src/interface.cairo):
 | `base64(data)` | Standard RFC 4648 base64, for your own JSON pieces. |
 | `script_sha256()` | SHA-256 of the engine script. |
 | `engine()` | The engine's name: `'tinysynth'`. |
-| `version()` | The class's SemVer version, such as `'0.3.0'`. |
+| `version()` | The class's SemVer version, such as `'1.2.3'`. |
 | `license()` | The license notices for the class and the code it embeds. |
 
 **3. Assemble `token_uri`** in the layout above. [Building `token_uri` in Cairo](docs/token-uri-layout.md#building-token_uri-in-cairo) has the full function. The rules:
@@ -77,6 +77,7 @@ The interface, in [`src/interface.cairo`](src/interface.cairo):
 
 - Decode your `token_uri` and compare it with a reference, as the example's golden tests do.
 - Check `engine()`, `version()` and `script_sha256()` against your class's record in [`scripts/page_versions.json`](scripts/page_versions.json), which holds the current version; for an earlier one, use `git log -p scripts/page_versions.json`.
+- Confirm the class hash is declared on the network you will use (`starknet_getClass`).
 - Test that your rendered SVGs never contain `</script`.
 - Run `check-midi` on every score in CI (see below).
 - Budget your largest token's gas (see [How much fits](#how-much-fits-gas-and-limits)).
@@ -115,10 +116,16 @@ npm run check-midi -- song.mid other.mid
 
 **Sound settings.** Each `midi_segment` call takes a `TinySynthSettings` value, declared in [`src/types.cairo`](src/types.cairo):
 
-- `quality`: the TinySynth engine's built-in sounds, 0 chip-tune or 1 FM.
-- `reverb`, `master_vol` and `voices`: the mix and the polyphony.
-- `timbres`: custom sounds. Each replaces a General MIDI program (0–127) or a drum note (35–81), so the MIDI selects it as usual.
-- `waves`: custom waveforms (sample tables or harmonics) that timbres can use. Operators can also carry a fixed low-, high- or band-pass filter.
+| Field | Meaning | Limits |
+| --- | --- | --- |
+| `quality` | The engine's built-in sounds: 0 chip-tune, 1 FM | 0 or 1 |
+| `reverb` | Reverb level in percent, 0 is off | any `u8` |
+| `master_vol` | Master volume in percent; above 100 can clip | any `u8` |
+| `voices` | Simultaneous notes; the oldest is cut beyond this | at least 1 |
+| `timbres` | Custom sounds. Each replaces a General MIDI program (0–127) or a drum note (35–81), so the MIDI selects it as usual | up to 175, each slot at most once; 1 to 8 operators each |
+| `waves` | Custom waveforms (sample tables or harmonics) that timbres can use. Operators can also carry a fixed low-, high- or band-pass filter | up to 256 |
+
+The defaults are `quality` 1, `reverb` 30, `master_vol` 40, `voices` 64 and no custom sounds.
 
 Fractional values are fixed point, in units of 1/10,000. Invalid settings revert with a `'TS: …'` message and the offending indices. The reference is [Sound settings](docs/sound-settings.md).
 
@@ -159,9 +166,9 @@ A marketplace or indexer reads `token_uri` with a view call (`starknet_call`). T
 | Madara | 10B |
 | Katana (development) | 1B by default |
 | Juno | 100M by default (`--rpc-call-max-gas`) |
-| Hosted providers | Undocumented. PublicNode refused the full-size example |
+| Hosted providers | Undocumented. On Sepolia, PublicNode refused the full-size example |
 
-- Check a full-size token through the providers your marketplaces and indexers use.
+- Check a full-size token through the providers your marketplaces and indexers use, on the network you deploy to. A provider's cap on one network says nothing about another.
 - At 10B, a token has room for about 670 KB of `SETTINGS`.
 - Nodes built on jsonrpsee cap responses at 10 MiB, a `token_uri` of about 4.85 MB.
 - If another contract calls `token_uri` inside a transaction, the transaction cap of 1.11B L2 gas applies.
@@ -176,7 +183,10 @@ Every token's `animation_url` carries the engine, so anyone can check it offline
 1. Save the collection's `token_uri` (from its contract, an explorer or a marketplace) to `token_uri.txt`.
 2. Run `node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256>`. It needs Node 22 or later and nothing else. It prints the SHA-256 of the engine, of its gzip payload and of the fixed page.
 3. Compare them with the record for the class's `version()` in [`scripts/page_versions.json`](scripts/page_versions.json) (`script_sha256`, `gzip_sha256`, `page_sha256`). For an earlier version, find its record with `git log -p scripts/page_versions.json`.
-4. Optionally, rebuild the engine from the fork commit in that record (`engine_commit`), and the page and class from this repository.
+4. When `engine_ref` in that record is a fork release tag, the release's `SHA256SUMS` lists the same SHA-256 for `webaudio-tinysynth.min.js`.
+5. Optionally, rebuild the engine from the fork ref in that record (`engine_commit`), and the page and class from this repository's tag `v<version>`: the class hash must equal `class.class_hash`.
+
+Each deployment file also lists an inspection instance: a deployment of the class with no constructor and no state, so an explorer or an RPC call can read `version()`, `engine()`, `script_sha256()` and `license()`. Your contract never calls it.
 
 Shell and Python versions of step 2, and the rebuild steps: [Verifying the engine](docs/verifying.md).
 

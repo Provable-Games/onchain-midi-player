@@ -7,7 +7,7 @@ compatibility: Needs the Scarb and Starknet Foundry versions in the repository's
 
 # Integrating the onchain MIDI player into `token_uri`
 
-The class is declared on Starknet but never deployed. Your contract reaches it with `library_call` and gets back the pieces of a `token_uri` whose `animation_url` is an offline HTML page: the TinySynth engine gzipped, the player, then the token's settings, MIDI and SVG art.
+The class is declared on Starknet, and your contract reaches it by class hash with `library_call`, never through a deployed instance. It gets back the pieces of a `token_uri` whose `animation_url` is an offline HTML page: the TinySynth engine gzipped, the player, then the token's settings, MIDI and SVG art.
 
 - **Supported today:** `token_uri`s that are base64 JSON data URIs (`data:application/json;base64,…`). Plain-JSON `token_uri`s are issue [#29](https://github.com/Provable-Games/onchain-midi-player/issues/29).
 - **Source of truth:** [Building `token_uri` in Cairo](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#building-token_uri-in-cairo) and [Consumer `token_uri` layout](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#consumer-token_uri-layout). The interface and its byte formats: [`src/interface.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/interface.cairo).
@@ -19,7 +19,7 @@ The class is declared on Starknet but never deployed. Your contract reaches it w
 ```toml
 [dependencies]
 onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "<release tag>" }
-# Until a release is tagged: rev = "<commit>" (see below)
+# A class without a release tag: rev = "<commit>" (see below)
 
 [[target.starknet-contract]]
 sierra = true
@@ -27,7 +27,7 @@ sierra = true
 build-external-contracts = ["onchain_midi_player::contract::TinySynth"]
 ```
 
-**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch. For the deployed class, that is its `built_from` commit in [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json).
+**Choosing a `rev` for a class without a release tag.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch. For the deployed class, that is its `built_from` commit in [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json).
 
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#the-base64-encoder)).
 
@@ -153,15 +153,15 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 
 ## 9. Choose the class hash
 
-- Take it from [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json): `class.class_hash`, with its `version()` and the commit it was built from. A release has the tag `v<version>` (`release_tag`); `release_tag` `null` marks a test class, not for production. Today only a Sepolia test class exists; the release class is not declared yet.
-- `engine()` names the engine and `version()` is the class's SemVer: pre-release classes are `0.x.0`, and from `1.0.0` the major number promises call and settings-layout compatibility. Every declared class has its own version, so a new class hash always comes with a new `version()`.
+- Take it from [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json): `class.class_hash`, with its `version()` and the commit it was built from. A release has the tag `v<version>` (`release_tag`), and its class is built from that tag; `release_tag` `null` marks a test class, not for production. Use the file of the network your NFT lives on.
+- `engine()` names the engine and `version()` is the class's SemVer. Every declared class has its own version and never changes, so a new class hash always comes with a new `version()`. From `1.0.0`, the major number changes only when the call or `TinySynthSettings` layout does; a later minor or patch class keeps your calls and settings working (it may change the engine, the page or the sound).
 - The ABIs, for clients and indexers, are in [`abi/`](https://github.com/Provable-Games/onchain-midi-player/blob/main/abi): `TinySynth.json`, and `ISoundProvider.json` for providers.
-- Check a class before you use it: library-call `engine()`, `version()` and `script_sha256()` in a test, or run `verify_engine.mjs` on a token, and compare both with that version's record in [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json) (it holds the current version; earlier ones are in `git log -p scripts/page_versions.json`). [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md) also rebuilds the class hash from source.
+- Check a class before you use it: confirm it is declared on your network (`starknet_getClass`), library-call `engine()`, `version()` and `script_sha256()` in a test, or run `verify_engine.mjs` on a token, and compare both with that version's record in [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json) (it holds the current version; earlier ones are in `git log -p scripts/page_versions.json`). [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md) also rebuilds the class hash from source.
 
 ## Checklist
 
 - [ ] `token_uri` is a base64 JSON data URI; strict key-order validators are not in your pipeline.
-- [ ] Crate dependency pinned to the tag or commit of the class you use; `build-external-contracts` for tests.
+- [ ] Class hash from a release (`release_tag` set) in the deployment file of your network, and declared there. Crate dependency pinned to its tag (or, for a test class, its commit); `build-external-contracts` for tests.
 - [ ] Your pieces padded to multiples of 3; class pieces appended untouched; `animation_url` last.
 - [ ] The art is an SVG (raster art wrapped in `<image>`) that never contains `</script`; tested on real renderer output.
 - [ ] Class hash placement chosen (NFT or renderer), with setters that probe the new value.

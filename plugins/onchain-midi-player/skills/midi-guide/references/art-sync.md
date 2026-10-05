@@ -44,6 +44,16 @@ Then look at what each animation does. In that SVG:
 
 ## 3. Choose
 
+**From the frame period to a tempo.** For art made of frames, with frame period `F` in µs (a GIF's delay, a sprite sheet's step), the tempo `Q` in µs per quarter note that puts `n` frames in each quarter is `Q = n × F`. This holds for any engine and any art.
+
+- One frame per eighth note is `n = 2` (`Q = 2F`), per triplet eighth `n = 3`, per sixteenth `n = 4`.
+- GIF delays are whole centiseconds (10,000 µs), so an eighth note is a whole number of them only when `Q` is a multiple of 20,000 µs (a sixteenth: 40,000 µs). That includes 60, 75, 100, 120, 125 and 150 BPM, but not 140 (428,571 µs) or 131.87 BPM (455,000 µs).
+- Write the tempo in the file as µs per quarter note (the Set Tempo event). An editor that takes BPM may round it.
+- Use ticks per quarter note that the subdivision divides evenly (480, for example), so every frame boundary lands on a tick.
+- Only the drift within one pass matters, because the player restarts the art at ▶ and at every pass.
+
+For Beast art, a GIF with 20 cs (200 ms) frames: 150 BPM (400,000 µs) is exactly one frame per eighth note, 75 BPM (800,000 µs) one per sixteenth, and 100 BPM (600,000 µs) one per triplet eighth. At 150 BPM a 4/4 bar is 1.6 s, two loops of the 4-frame GIF, so a whole number of bars keeps the GIF in phase.
+
 Pick a tempo whose beat, or a subdivision of it, is a whole number of frames. Then pick a pass length that is a whole number of bars and a multiple of the art's loops. For 200 ms frames and 0.4, 0.6, 0.8 or 1.2 s loops:
 
 - **100 BPM** (600,000 µs per quarter): the beat is 3 frames, and a 4/4 bar is 2.4 s, the lcm of all four loops. Any whole number of bars stays in phase with all of them.
