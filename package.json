@@ -17,6 +17,7 @@
     "check:abi": "scarb --release build && scarb --release build --test && node scripts/gen_abi.mjs --check",
     "render-check": "node scripts/render_check.mjs",
     "page-check": "node scripts/page_check.mjs",
+    "hosting-check": "node scripts/hosting_check.mjs",
     "drift-check": "node scripts/drift_check.mjs",
     "check-midi": "node scripts/check_midi.mjs",
     "preview": "node scripts/preview.mjs"
