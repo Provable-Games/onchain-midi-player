@@ -86,7 +86,7 @@ A `library_call` runs the class's code with your contract's storage. This class 
 
 | Option | How | For | Against |
 | --- | --- | --- | --- |
-| In the NFT, fixed | Constructor argument, non-zero check, no setter (the reference implementation). | No admin to trust. | Engine fixes, new sounds and layout changes never reach the collection. `TinySynthSettings` compiled into an immutable NFT are frozen too. |
+| In the NFT, fixed | Constructor argument, non-zero and `engine()` checks, no setter (the reference implementation). | No admin to trust. | Engine fixes, new sounds and layout changes never reach the collection. `TinySynthSettings` compiled into an immutable NFT are frozen too. |
 | In the NFT, settable | Owner-only setter. | One hash to opt into a new engine or page. | Every token changes at once, and the owner can run any class with the NFT's storage. |
 | In the NFT, per token | Store the hash at mint. | Each token keeps the version it was minted with. | A storage write per mint and a read per `token_uri`. |
 | **In a small renderer contract** | A deployed contract with no storage of value holds the layout, the `TinySynthSettings` and the class hash (or receives it), and library-calls the class. The NFT `call_contract`s the renderer. | The NFT's storage is never exposed to the class. The renderer, its sounds and the layout are replaceable without redeploying the NFT. Its CASM stays out of the NFT. | One more contract and call. |

@@ -171,7 +171,7 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromiu
 - [ ] **Pad your pieces to multiples of 3** with spaces between JSON tokens: `'{' members ',' <pad>`, then the image key, then `svg_b64 '"' <pad>`, then `',  '`. Only the final `'}'` may produce `=`.
 - [ ] **Word-align the large appends** (optional, saves gas): add `'ICAg'` (3 spaces) before the constant image key until `b64(S)` starts at a multiple of 31 bytes, and after `'LCAg'` until the segment does (see `align_to_word` in `beast_like_nft.cairo`).
 - [ ] **Key order**: members, then `image`, then `animation_url` last, because the art closes the `animation_url` string.
-- [ ] **`animation_url_segment` and `midi_segment` come from library calls** on the stored class hash (`IOnchainTinySynthLibraryDispatcher`). The class is declared, never deployed. Store the class hash; updating it is how you opt into a new engine or page.
+- [ ] **`animation_url_segment` and `midi_segment` come from library calls** on the stored class hash (`IOnchainTinySynthLibraryDispatcher`). The class is declared, never deployed. Store the class hash; updating it is how you opt into a new engine or page. When you store or change it, check that `engine()` is `'tinysynth'`, as the constructor does: engine classes share the `midi_segment` selector, so another engine's class would not revert, only render the wrong page.
 - [ ] **No change to the renderer.** It keeps returning raw SVG.
 - [ ] Pass `TinySynthSettings` that are constants or derived from permanent traits, so each token's sound stays fixed. Invalid settings revert the whole `token_uri`.
 - [ ] Use the class's `base64` or your own encoder, as long as it is standard RFC 4648.
