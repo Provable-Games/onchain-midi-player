@@ -26,8 +26,8 @@
 //   - the art rule: the SVG must never contain `</script`, in any letter case.
 // It then writes PAGE ++ D ++ SVG, the decoded animation_url of a token with these inputs, byte for
 // byte as the class and a consumer produce it (scripts/page.mjs: pageHtml, dFragment).
-// The page is this checkout's PAGE: check out the tag v<version> of a released class, or for an interim
-// class a commit whose VERSION equals its version() (docs/versions.md).
+// The page is this checkout's PAGE: check out the tag v<version> of a released class, or for a test
+// class a commit whose VERSION equals its version().
 //
 // Exit status: 0 when the page is written, 1 when the MIDI, the settings or the SVG fails its check,
 // 2 on a usage error or an input that cannot be read.

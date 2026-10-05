@@ -13,6 +13,8 @@
     "check:settings": "node scripts/gen_settings_fixtures.mjs --check",
     "gen:page": "node scripts/build_page.mjs",
     "check:page": "node scripts/build_page.mjs --check",
+    "gen:abi": "scarb --release build && scarb --release build --test && node scripts/gen_abi.mjs",
+    "check:abi": "scarb --release build && scarb --release build --test && node scripts/gen_abi.mjs --check",
     "render-check": "node scripts/render_check.mjs",
     "page-check": "node scripts/page_check.mjs",
     "drift-check": "node scripts/drift_check.mjs",

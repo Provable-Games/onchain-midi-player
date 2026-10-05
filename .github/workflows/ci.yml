@@ -1,7 +1,7 @@
 name: CI
 
 # Cairo (format, build, test), JavaScript tests and type checks, generated-file
-# drift (including the page build), and headless browser checks on Chromium,
+# drift (including the page build and the ABIs), and headless browser checks on Chromium,
 # Firefox and WebKit. Steps that need the root package.json,
 # its scripts or player/ (added by PR #5) are switched on by a detection step
 # after checkout, so this file needs no change when they land. A job-level
@@ -168,6 +168,26 @@ jobs:
       - name: Page build is byte-stable
         if: steps.detect.outputs.has_check_page == 'true'
         run: npm run check:page
+
+      # abi/ (scripts/gen_abi.mjs) comes from the release build's Sierra artifacts. Same Scarb
+      # download cache as the cairo job.
+      - name: Cache Scarb downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/scarb
+          key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'examples/beast_consumer/Scarb.lock') }}
+          restore-keys: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-
+
+      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
+        with:
+          tool-versions: .tool-versions
+          cache: false
+
+      - name: Regenerate the ABIs in abi/
+        run: |
+          scarb --release build
+          scarb --release build --test
+          node scripts/gen_abi.mjs
 
       - name: No drift from committed files
         run: |

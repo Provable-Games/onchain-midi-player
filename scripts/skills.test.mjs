@@ -10,7 +10,8 @@
 //     matches the JS reference of settings::validate;
 //   - every gas figure in the skills appears in the README or docs/;
 //   - the skills hardcode nothing a re-pin changes: VERSION, the engine commit, page and segment
-//     sizes, and long hex hashes (class hashes and SHA-256s belong in docs/versions.md);
+//     sizes, and long hex hashes (class hashes belong in deployments/, SHA-256s in
+//     scripts/page_versions.json);
 //   - the skills' helper scripts work on real fixtures.
 
 import assert from "node:assert/strict";
@@ -206,20 +207,17 @@ describe("links and paths", () => {
     const into = links(readme).filter((l) => l.startsWith("plugins/") || l.startsWith(".claude-plugin/"));
     assert.ok(into.length >= 5);
     for (const link of into) assert.ok(existsSync(join(ROOT, link.split("#")[0])), link);
-    assert.ok(anchorsOf(readme).has("agent-skills") && anchorsOf(read("docs/versions.md")).has("deployments"));
+    assert.ok(anchorsOf(readme).has("agent-skills"));
   });
 
   test("every repository path the skills name in code exists (from the root, or from the skill folder)", () => {
-    const PATH = /(?<![\w/.$-])((?:scripts|player|examples|tests|src|plugins|references|docs)\/[\w./-]*\w)/g;
+    const PATH = /(?<![\w/.$-])((?:scripts|player|examples|tests|src|plugins|references|docs|deployments|abi)\/[\w./-]*\w)/g;
     let checked = 0;
     for (const file of markdown) {
       const skillDir = join(SKILLS, relative(SKILLS, file).split("/")[0]);
       for (const [, path] of readFileSync(file, "utf8").matchAll(PATH)) {
         if (path.includes("*")) continue;
-        // Checkouts from before the rename have the plugin at plugins/onchain-tinysynth/: check
-        // the path that directory has now.
-        const now = path.replace(/^plugins\/onchain-tinysynth(?=\/|$)/, "plugins/onchain-midi-player");
-        assert.ok(existsSync(join(ROOT, now)) || existsSync(join(skillDir, now)), `${relative(ROOT, file)}: ${path}`);
+        assert.ok(existsSync(join(ROOT, path)) || existsSync(join(skillDir, path)), `${relative(ROOT, file)}: ${path}`);
         checked++;
       }
     }

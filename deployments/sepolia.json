@@ -1,0 +1,27 @@
+{
+  "network": "sepolia",
+  "chain_id": "SN_SEPOLIA",
+  "class": {
+    "package": "onchain_midi_player",
+    "contract": "OnchainTinySynth",
+    "version": "0.1.0",
+    "release_tag": null,
+    "class_hash": "0x00a02eabc2fdcd63b736228b03519bfbd9b259d50a50fc125c8d3bd8286401c9",
+    "declare_tx": "0x03f52c70811609f687ca25a657a43d352e4fc194210dfd59ffd81cc03e0149c6",
+    "built_from": "e1b0d54757d5545824fffb6c9913bc673f6c5a9e",
+    "inspection_instance": {
+      "address": "0x0003395155b5526d41f32ad26c7b1fa7ef38067643d7da0325a7cd115bc5abc9",
+      "deploy_tx": "0x01ce3fade874e3748496ceb4b483f11438063f7cdfb54a7364456e861b82a4e6"
+    }
+  },
+  "example": {
+    "package": "beast_consumer",
+    "contract": "BeastLikeNft",
+    "class_hash": "0x00985623e977c1570ae682f25688c083b07178de1f8b6d2124573948499bb913",
+    "declare_tx": "0x001f2cfecc30c437ebc6f43f2609b561365ce9e14d74e64b0193a4812e9b0fd1",
+    "address": "0x06a01505c95b5e5aa4de00e3b160135a887b475dae855eaf3c910a773af4bffa",
+    "deploy_tx": "0x060aa97ba8b1d9c56227b7f9f8fde380f91ebced6b480a2ec993ed08bc8736d6",
+    "player_class_hash": "0x00a02eabc2fdcd63b736228b03519bfbd9b259d50a50fc125c8d3bd8286401c9",
+    "built_from": "e1b0d54757d5545824fffb6c9913bc673f6c5a9e"
+  }
+}

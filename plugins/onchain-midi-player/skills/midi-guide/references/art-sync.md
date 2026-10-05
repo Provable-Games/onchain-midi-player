@@ -2,13 +2,11 @@
 
 ## How the player handles the art
 
-On ▶ the player reloads the MIDI from tick 0 and restarts the art when tick 0 is heard: at TinySynth's `startTime` (when tick 0 of the pass sounds) plus the audio output latency, it swaps in a fresh `<img>` with a distinct URL, so the browser starts a new animation timeline. From `page.8` it then does the same at every pass ([`player/player.js`](https://github.com/Provable-Games/onchain-midi-player/blob/main/player/player.js), steps 3–4 of its header; see [The player page](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#the-player-page)).
+On ▶ the player reloads the MIDI from tick 0 and restarts the art when tick 0 is heard: at TinySynth's `startTime` (when tick 0 of the pass sounds) plus the audio output latency, it swaps in a fresh `<img>` with a distinct URL, so the browser starts a new animation timeline. It then does the same at every pass ([`player/player.js`](https://github.com/Provable-Games/onchain-midi-player/blob/main/player/player.js), steps 3–4 of its header; see [The player page](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#the-player-page)).
 
 The [browser checks](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#browser-validation) prove the restarts with a probe SVG animation that sweeps once per pass; watch your own art (an embedded GIF, for example) restart in `npm run preview`.
 
 The restart at every pass keeps the art's clock from drifting away from the audio clock over a long session. Its cost is that a pass which is not a whole multiple of the art's periods makes the art jump back to its start at every loop point, and an animation longer than the pass never finishes. So make the pass a whole multiple of every visible period.
-
-The `page.6` class on Sepolia (see [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#deployments)) restarts the art only on ▶. On it, a pass that is not a whole multiple of the art's periods makes the art drift across its loop from pass to pass instead of jumping at the loop point. The fix is the same for both. Check the `version()` of the class you target.
 
 ## 1. Measure the art's periods
 
@@ -17,8 +15,6 @@ From the checkout root:
 ```sh
 node plugins/onchain-midi-player/skills/midi-guide/scripts/art_periods.mjs art.svg
 ```
-
-In checkouts from before the rename to onchain-midi-player, the plugin directory is `plugins/onchain-tinysynth/`.
 
 For the full-size Beast fixture, [`tests/fixtures/beasts/warlock_shiny_animated.svg`](https://github.com/Provable-Games/onchain-midi-player/blob/main/tests/fixtures/beasts/warlock_shiny_animated.svg), it prints:
 
@@ -57,12 +53,12 @@ Pick a tempo whose beat, or a subdivision of it, is a whole number of frames. Th
 
 ## The Beast worked example
 
-The example's token 4 is a full-size Beast on Sepolia (see [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#deployments)). Its synthetic score uses a production Beast tempo, 455,000 µs per quarter (131.87 BPM; the production tempos are in [`scripts/gen_midi_fixtures.mjs`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/gen_midi_fixtures.mjs)). `check-midi` reports `loop 55.510 s, maxTick 58560`.
+The example's token 4 is a full-size Beast on Sepolia (the example in [`deployments/sepolia.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json)). Its synthetic score uses a production Beast tempo, 455,000 µs per quarter (131.87 BPM; the production tempos are in [`scripts/gen_midi_fixtures.mjs`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/gen_midi_fixtures.mjs)). `check-midi` reports `loop 55.510 s, maxTick 58560`.
 
 - 55,510 ms / 800 ms = 69.39 GIF loops per pass, so a pass ends 0.39 of the way through a GIF loop.
 - The 455 ms beat and the 800 ms GIF loop line up every lcm(455, 800) = 72,800 ms, longer than the pass. Within a pass, the beat never lines up with the GIF again.
 
-From `page.8` the GIF therefore jumps from 0.39 of the way through its loop back to its first frame at every loop point. On the `page.6` token on Sepolia, which restarts the art only on ▶, each pass instead starts at a different point of the GIF. Either way, within a pass the beat drifts across the GIF's frames. The fix is the numbers, not the player:
+The GIF therefore jumps from 0.39 of the way through its loop back to its first frame at every loop point, and within a pass the beat drifts across the GIF's frames. The fix is the numbers, not the player:
 
 - At 100 BPM, a pass of whole bars keeps the GIF in phase (3 GIF loops per 2.4 s bar). Retune the wrapper's 3 s and 6 s animations to 2.4 s and 4.8 s, or keep them and make the pass a multiple of 12 s (5 bars), the lcm of 2.4, 3 and 6 s.
 - At 120 BPM (500,000 µs, the other production tempo), make the pass a multiple of 4 s for the GIF; 3 s and 6 s then need a multiple of 12 s (6 bars).

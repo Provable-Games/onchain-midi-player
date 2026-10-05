@@ -22,8 +22,9 @@
 //   - the fixed page: scripts/page_versions.json. A matching fixed page proves the rest: that the
 //     tag is the page's own engine tag, not text in a comment, and that the shim and the player
 //     around it are the class's.
-// Compare them with the Versions table in docs/versions.md. With --expect, it exits 1 unless the engine's
-// SHA-256 equals the given value: hex, with or without 0x, as script_sha256() prints it.
+// Compare them with the class's record in scripts/page_versions.json (gzip_sha256, gzip_len,
+// script_sha256, page_sha256). With --expect, it exits 1 unless the engine's SHA-256 equals the given
+// value: hex, with or without 0x, as script_sha256() prints it.
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";

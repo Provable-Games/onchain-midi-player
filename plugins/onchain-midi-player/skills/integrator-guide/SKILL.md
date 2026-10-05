@@ -19,15 +19,13 @@ The class is declared on Starknet but never deployed. Your contract reaches it w
 ```toml
 [dependencies]
 onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "<release tag>" }
-# Until a release is tagged: rev = "<commit>", a recent commit of this repository (not a Sepolia "Built from" commit, which predates the rename)
+# Until a release is tagged: rev = "<commit>", the built_from commit of the class you use (deployments/<network>.json)
 
 [[target.starknet-contract]]
 sierra = true
 # Builds the class from the dependency, so your tests can declare it (never deploy it).
 build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
 ```
-
-Commits from before the rename to onchain-midi-player, including the "Built from" commits of the Sepolia classes in [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#deployments), name the package `onchain_tinysynth` (dependency key, `use` paths and `build-external-contracts`) and the types `SynthSettings` and `TokenSound`, and their class has no `engine()`; the class and interface names are the same. The Cairo in these skills uses the current names.
 
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#the-base64-encoder)).
 
@@ -93,7 +91,7 @@ A `library_call` runs the class's code with your contract's storage. This class 
 | In the NFT, per token | Store the hash at mint. | Each token keeps the version it was minted with. | A storage write per mint and a read per `token_uri`. |
 | **In a small renderer contract** | A deployed contract with no storage of value holds the layout, the `TinySynthSettings` and the class hash (or receives it), and library-calls the class. The NFT `call_contract`s the renderer. | The NFT's storage is never exposed to the class. The renderer, its sounds and the layout are replaceable without redeploying the NFT. Its CASM stays out of the NFT. | One more contract and call. |
 
-Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is settable. beasts-v3 does this ([PR #124](https://github.com/Provable-Games/beasts-v3/pull/124)). In any setter, check the new value before storing it: library-call `engine()` on a new hash and require `'tinysynth'`, then `version()` and compare it with the version you expect, or have the renderer render a probe token. Engine classes share the `midi_segment` selector, so without the `engine()` check another engine's class could take your calls without reverting and render the wrong thing. The interim Sepolia classes predate `engine()`: the call fails on them.
+Prefer the renderer for an NFT that cannot be upgraded, or whenever the hash is settable. beasts-v3 does this ([PR #124](https://github.com/Provable-Games/beasts-v3/pull/124)). In any setter, check the new value before storing it: library-call `engine()` on a new hash and require `'tinysynth'`, then `version()` and compare it with the version you expect, or have the renderer render a probe token. Engine classes share the `midi_segment` selector, so without the `engine()` check another engine's class could take your calls without reverting and render the wrong thing.
 
 ```cairo
 fn set_sound_config(ref self: ContractState, class_hash: ClassHash) {
@@ -112,7 +110,7 @@ fn set_sound_config(ref self: ContractState, class_hash: ClassHash) {
   - Pass token IDs exactly as minted; the provider ignores the bits it does not use.
   - Store the provider address with a setter that calls `get_sound` once (an undeployed address reverts uncatchably), and let zero turn sound off: the snippet makes no call for it.
 - **MIDI:** the bytes of a Standard MIDI File. The class embeds it without parsing it, so a bad file never reverts: the page shows an error instead. Check every score with `check-midi` in your CI ([Checking MIDI files](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/midi-contract.md#checking-midi-files) has a CI snippet). See the [midi-guide](../midi-guide/SKILL.md).
-- **`TinySynthSettings`:** checked by `midi_segment`; an invalid value reverts the call. What it checks depends on the class version: classes up to `tinysynth-3d965d1+page.10` also bound five operator fields, and later classes bound no operator value, because their engine skips a note whose computed values overflow, silently. The rules per class version are in sound-design's [What the class checks](../sound-design/SKILL.md#what-the-class-checks); the check table in `src/settings.cairo`, in the checkout whose `VERSION` matches your class, is the authority. Do not copy ranges or clamps into your contract.
+- **`TinySynthSettings`:** checked by `midi_segment`; an invalid value reverts the call. The class bounds no operator value, because its engine skips a note whose computed values overflow, silently. The rules are in sound-design's [What the class checks](../sound-design/SKILL.md#what-the-class-checks); the check table in `src/settings.cairo`, in the checkout whose `VERSION` matches your class, is the authority. Do not copy ranges or clamps into your contract.
 - **Fixed or live sound.** For a given class hash, the same MIDI and settings always give the same sound. Fixed: pass constants or values from permanent traits, and a token sounds the same forever. Live: derive the MIDI and settings from state that changes (a level, a season, an onchain composer), and the sound follows it. When state changes what `token_uri` returns, emit an ERC-4906 `MetadataUpdate` (or `BatchMetadataUpdate`) so marketplaces refetch; the same applies when you switch the class hash or the renderer.
 
 ## 6. Handle failures
@@ -144,7 +142,7 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 
 ## 8. Gas and RPC caps
 
-- **Worst case = your largest art plus your largest MIDI and settings.** Base64 over the SVG dominates (it is encoded twice); MIDI and settings add about 14.5M L2 gas per 1,000 bytes, custom wave tables included (from `page.9`; a long noise table can add billions: [Custom waves](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#custom-waves)); from `page.7`, `SETTINGS` has no length cap ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#the-size-of-settings)), and no operator value is bounded: a note whose computed values overflow the 32-bit float range is skipped silently ([engine limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#engine-limits-on-operator-values); per class version, step 5). Figures: [Gas and limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md), including [a full-size example `token_uri`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#a-full-size-token). Measure your own worst token.
+- **Worst case = your largest art plus your largest MIDI and settings.** Base64 over the SVG dominates (it is encoded twice); MIDI and settings add about 14.5M L2 gas per 1,000 bytes, custom wave tables included (a long noise table can add billions: [Custom waves](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#custom-waves)); `SETTINGS` has no length cap ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#the-size-of-settings)), and no operator value is bounded: a note whose computed values overflow the 32-bit float range is skipped silently ([engine limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#engine-limits-on-operator-values). Figures: [Gas and limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md), including [a full-size example `token_uri`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#a-full-size-token). Measure your own worst token.
 - **The measurement method changes the number about 2.5×.** Measured on the example's full-size token (`snforge test gas_t4_token_uri`): about 301M with `--tracked-resource sierra-gas`, about 765M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M: that account's class is Sierra 1.6, which forces cairo-steps (VM) accounting for the whole transaction.
   - Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
   - Treat devnet estimates through the predeployed accounts as inflated by about 2.0–2.6×.
@@ -153,9 +151,10 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 
 ## 9. Choose the class hash
 
-- Take it from the [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#deployments) table. Today only interim test classes exist there; the release class is not declared yet. Do not ship the interim class to production.
-- `engine()` names the engine and `version()` is the class's SemVer: interim classes are `0.x.0`, and from `1.0.0` the major number promises call and settings-layout compatibility. Every declared class has its own version, so a new class hash always comes with a new `version()`.
-- Check a class before you use it: library-call `engine()`, `version()` and `script_sha256()` in a test, or run `verify_engine.mjs` on a token, and compare both with that version's row in [Versions](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#versions). [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md) also rebuilds the class hash from source.
+- Take it from [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json): `class.class_hash`, with its `version()` and the commit it was built from. A release has the tag `v<version>` (`release_tag`); `release_tag` `null` marks a test class, not for production. Today only a Sepolia test class exists; the release class is not declared yet.
+- `engine()` names the engine and `version()` is the class's SemVer: pre-release classes are `0.x.0`, and from `1.0.0` the major number promises call and settings-layout compatibility. Every declared class has its own version, so a new class hash always comes with a new `version()`.
+- The ABIs, for clients and indexers, are in [`abi/`](https://github.com/Provable-Games/onchain-midi-player/blob/main/abi): `OnchainTinySynth.json`, and `ISoundProvider.json` for providers.
+- Check a class before you use it: library-call `engine()`, `version()` and `script_sha256()` in a test, or run `verify_engine.mjs` on a token, and compare both with that version's record in [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json). [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md) also rebuilds the class hash from source.
 
 ## Checklist
 

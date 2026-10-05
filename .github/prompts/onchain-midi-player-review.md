@@ -35,9 +35,12 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   settings or MIDI must fail safely while the art stays visible.
 - **Byte-for-byte parity between Cairo and JS:** the JS reference, the
   generators (`gen_*.mjs`) and the golden fixtures must agree exactly with
-  the Cairo output. Generated files must match a fresh run of their
-  generator; flag hand edits to generated files, fixtures regenerated to fit a
-  bug, and tests that compare an output with itself.
+  the Cairo output. Generated files (including `abi/`, from
+  `scripts/gen_abi.mjs`) must match a fresh run of their generator; flag hand
+  edits to generated files, fixtures regenerated to fit a bug, and tests that
+  compare an output with itself. `deployments/<network>.json` records the
+  class and example declared on each network: check that a change to it is
+  consistent with `scripts/page_versions.json` and the stated deployment.
 - **Scarb dependencies:** a git dependency is pinned in `Scarb.toml` by a
   `tag` or `rev`, and each `Scarb.lock` (the root package's and
   `examples/beast_consumer`'s) records the commit it resolves to after the
