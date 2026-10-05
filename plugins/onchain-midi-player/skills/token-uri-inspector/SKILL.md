@@ -37,7 +37,7 @@ node $I/bytearray.mjs call.json > token_uri.txt
 
 For a local contract, print the `token_uri` from an snforge test instead, as the example's `print_sample_token_uri` does ([example README](https://github.com/Provable-Games/onchain-midi-player/blob/main/examples/beast_consumer/README.md#run-it)).
 
-To check the whole token in one run, including the OpenSea metadata fields and attributes and every check below, use `npm run validate-token-uri -- token_uri.txt` (or `--rpc "$RPC" --contract "$NFT" --token 4` instead of fetching: it reads `STARKNET_RPC_URL` too, and never prints the URL). It reports PASS, WARN and FAIL with the source of each; see [Validating a token_uri](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md#validating-a-token_uri). The steps below show each layer separately.
+To check the whole token in one run, including the OpenSea metadata fields and attributes and every check below, use `npm run validate-token-uri -- token_uri.txt` (or `--rpc "$RPC" --contract "$NFT" --token 4` instead of fetching: it reads `STARKNET_RPC_URL` too, and never prints the URL). It reports PASS, WARN and FAIL with the source of each; see [Validating a token_uri](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/verifying.md#validating-a-token_uri). It does not rebuild the page (step 5) or compare RPC providers (step 7), and `--expect <script_sha256>` replaces only its engine comparison: the gzip payload and `PAGE` are still compared with the record of `VERSION`, or of `--version`. The steps below show each layer separately.
 
 ## 2. Decode
 

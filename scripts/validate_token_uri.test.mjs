@@ -162,6 +162,11 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   const ok = svg("<defs><linearGradient id='g'/></defs><rect fill='url(#g)'/><use href='#g'/><image href='data:image/png;base64,AAAA'/>");
   assert.ok(!failing(ok).some((i) => i.startsWith("image.")), failing(ok).join());
   assert.ok(failing("<svg xmlns='http://www.w3.org/2000/svg'><g></svg>").includes("image.xml"));
+  // A DOCTYPE, as SVG tools write it, is well-formed; an internal subset (entities) is refused by rule.
+  const doctype = '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">';
+  assert.deepEqual(failing(`<?xml version="1.0"?>${doctype}<svg xmlns='http://www.w3.org/2000/svg'><rect/></svg>`).filter((i) => i.startsWith("image.")), []);
+  assert.deepEqual(failing(`<!DOCTYPE svg [<!ENTITY e "x">]><svg xmlns='http://www.w3.org/2000/svg'>&e;</svg>`).filter((i) => i.startsWith("image.")), ["image.xml"]);
+  assert.ok(failing(`<!DOCTYPE svg [<!ENTITY e "x">]><svg xmlns='http://www.w3.org/2000/svg'/>`).includes("image.no_entities"));
   assert.ok(failing("<svg><rect/></svg>").includes("image.svg_root"));
   assert.ok(failing("<svg xmlns='http://www.w3.org/2000/svg'><image xlink:href='#a'/></svg>").includes("image.xml"));
   assert.match(check({ uri: toUri(withImage("<svg xmlns='x'>\n<rect></svg>")) }).checks.find((c) => c.id === "image.xml")?.message ?? "", /line 2/);
@@ -170,8 +175,8 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
 });
 
 test("the XML parser accepts well-formed documents and rejects malformed ones", () => {
-  assert.doesNotThrow(() => parseXml('<?xml version="1.0"?><!-- c --><a x="1" y=\'2&amp;\'><b/><![CDATA[<]]>t&#65;</a>'));
-  for (const bad of ["", "<a>", "<a></b>", "<a/><b/>", "<a x=1/>", '<a x="1" x="2"/>', "<a>&nbsp;</a>", "<a>]]></a>", "<!DOCTYPE a><a/>", "<a/>text", "<a><!-- -- --></a>", '<a x="<"/>', "<a:b/>", "<?pi x?><a/>", "<a b='1'c='2'/>"]) {
+  assert.doesNotThrow(() => parseXml('<?xml version="1.0"?><!DOCTYPE a><!-- c --><a x="1" y=\'2&amp;\'><b/><![CDATA[<]]>t&#65;</a>'));
+  for (const bad of ["", "<a>", "<a></b>", "<a/><b/>", "<a x=1/>", '<a x="1" x="2"/>', "<a>&nbsp;</a>", "<a>]]></a>", "<a/><!DOCTYPE a>", "<!DOCTYPE a><!DOCTYPE a><a/>", "<!ELEMENT a>", "<a/>text", "<a><!-- -- --></a>", '<a x="<"/>', "<a:b/>", "<?pi x?><a/>", "<a b='1'c='2'/>"]) {
     assert.throws(() => parseXml(bad), undefined, JSON.stringify(bad));
   }
 });
@@ -190,6 +195,13 @@ test("the page: a wrong or unknown engine, a changed page, a wrong version, inva
   assert.deepEqual(ids(check({ uri: golden }, { expect: "0x" + real }), "fail"), []);
   assert.deepEqual(ids(check({ uri: golden }, { expect: "00".repeat(32) }), "fail"), ["player.engine_sha256"]);
   assert.deepEqual(ids(check({ uri: golden }, { version: "9.9.9" }), "fail"), ["player.engine_sha256"]);
+  // --expect replaces the engine comparison only: a changed player script or shim, with the genuine
+  // engine, still fails the PAGE record. Without a record, --expect warns that PAGE was not compared.
+  const tampered = html.replace("<title>TinySynth player</title>", "<title>TinySynth player!</title>");
+  assert.notEqual(tampered, html);
+  assert.deepEqual(fails(tampered, { expect: real }), ["player.page_sha256_record"]);
+  const noRecord = check({ uri: golden }, { expect: real, version: "9.9.9" });
+  assert.deepEqual([ids(noRecord, "fail"), ids(noRecord, "warn").filter((i) => i.startsWith("player."))], [[], ["player.page_sha256_record"]]);
   // Invalid MIDI: the magic bytes broken (the length is unchanged, so the page stays aligned).
   const midi = html.replace(/(id="midi">\s*)TVRoZA/, "$1AAAAAA");
   assert.notEqual(midi, html);

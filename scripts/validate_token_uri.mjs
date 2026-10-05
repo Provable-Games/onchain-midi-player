@@ -180,8 +180,9 @@ function lineCol(/** @type {string} */ s, /** @type {number} */ at) {
 
 /**
  * Parses XML for well-formedness (one root; matching, properly nested tags; quoted unique attributes;
- * known entities; bound namespace prefixes) and collects what the reference checks need. DOCTYPE
- * and processing instructions other than the XML declaration are rejected. Throws an `XmlError`.
+ * known entities; bound namespace prefixes) and collects what the reference checks need. A DOCTYPE
+ * is accepted (a browser does not fetch its DTD) and its internal subset reported; processing
+ * instructions other than the XML declaration are rejected. Throws an `XmlError`.
  * @param {string} s
  */
 export function parseXml(s) {
@@ -196,6 +197,8 @@ export function parseXml(s) {
   /** @type {{local: string, ns: string | undefined} | null} */
   let root = null;
   let rootClosed = false;
+  let doctype = false;
+  let internalSubset = false;
   const n = s.length;
   let i = s.charCodeAt(0) === 0xfeff ? 1 : 0;
   const NAME = /[A-Za-z_:À-￿][A-Za-z0-9_:.\-·À-￿]*/y;
@@ -244,8 +247,22 @@ export function parseXml(s) {
       if (j < 0) throw new XmlError("unterminated processing instruction", i);
       if (!/^<\?xml[ \t\r\n]/.test(s.slice(i, i + 7)) || i > (s.charCodeAt(0) === 0xfeff ? 1 : 0)) throw new XmlError("processing instruction (only a leading XML declaration is allowed)", i);
       i = j + 2;
+    } else if (s.startsWith("<!DOCTYPE", i)) {
+      if (root || doctype) throw new XmlError("DOCTYPE after the root element or a second DOCTYPE", i);
+      doctype = true;
+      const open = s.indexOf("[", i);
+      const gt = s.indexOf(">", i);
+      if (gt < 0) throw new XmlError("unterminated DOCTYPE", i);
+      if (open >= 0 && open < gt) {
+        // An internal subset can declare entities: it is skipped, and reported as its own rule.
+        internalSubset = true;
+        const end = s.indexOf("]", open);
+        const close = end < 0 ? -1 : s.indexOf(">", end);
+        if (close < 0) throw new XmlError("unterminated DOCTYPE internal subset", i);
+        i = close + 1;
+      } else i = gt + 1;
     } else if (s.startsWith("<!", i)) {
-      throw new XmlError("DOCTYPE or ENTITY declaration (not allowed)", i);
+      throw new XmlError("markup declaration outside a DOCTYPE", i);
     } else if (s.startsWith("</", i)) {
       const nm = name(i + 2, "closing tag");
       const top = stack.pop();
@@ -313,7 +330,7 @@ export function parseXml(s) {
   }
   if (stack.length) throw new XmlError(`<${stack[stack.length - 1].name}> is never closed`, n);
   if (!root) throw new XmlError("no root element", 0);
-  return { root, attrs, styles, elements };
+  return { root, attrs, styles, elements, internalSubset };
 }
 
 /**
@@ -516,6 +533,7 @@ function checkSvg(r, layer, svg, bytes) {
   }
   r.pass(`${layer}.xml`, "well-formed XML", "OpenSea media-and-traits");
   r.check(xml.root.local === "svg" && xml.root.ns === SVG_NS, `${layer}.svg_root`, `the root is <svg xmlns="${SVG_NS}">`, `the root must be <svg xmlns="${SVG_NS}">: browsers do not draw an <img> SVG without the namespace (found <${xml.root.local}> in ${JSON.stringify(xml.root.ns ?? "no namespace")})`, "OpenSea media-and-traits");
+  if (xml.internalSubset) r.fail(`${layer}.no_entities`, "the DOCTYPE has an internal subset, which can declare entities: this validator does not accept it (a rule of this validator, not of XML)", "validator");
   const problems = svgReferenceProblems(xml);
   const scriptLike = problems.filter(([m]) => /^(<script>|event handler)/.test(m));
   const refs = problems.filter((p) => !scriptLike.includes(p));
@@ -576,6 +594,8 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
     r.sizes.engine_bytes = engine.length;
     r.pass("player.engine_inflates", "the gzip payload is canonical base64 and inflates (gzip CRC and length checked)", "verifying");
     r.info("player.page_sha256", `PAGE sha256 ${page.sha256} (${page.length} bytes)`, "verifying");
+    // --expect replaces the engine comparison only; the gzip payload and PAGE are always compared
+    // with the record, because a matching PAGE is what proves the shim and the player are the class's.
     if (opts.expect) {
       const expect = normalizeSha256(opts.expect);
       r.check(engine.sha256 === expect, "player.engine_sha256", `the engine's SHA-256 equals --expect (${engine.sha256})`, `the engine's SHA-256 is ${engine.sha256}, not --expect ${expect}`, "verifying");
@@ -583,9 +603,13 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
       r.fail("player.engine_sha256", `scripts/page_versions.json has no record for version ${version}: pass --version or --expect`, "verifying");
     } else {
       r.check(engine.sha256 === record.script_sha256, "player.engine_sha256", `the engine's SHA-256 equals the record of ${version} (script_sha256)`, `the engine's SHA-256 is ${engine.sha256}, but the record of ${version} has ${record.script_sha256}`, "verifying");
+    }
+    if (record) {
       r.check(gzip.sha256 === record.gzip_sha256 && gzip.length === record.gzip_len, "player.gzip", `the gzip payload equals the record of ${version} (${gzip.length} bytes)`, `the gzip payload (${gzip.length} bytes, ${gzip.sha256}) differs from the record of ${version} (${record.gzip_len} bytes, ${record.gzip_sha256})`, "verifying");
       const other = Object.entries(versions).find(([, v]) => v.page_sha256 === page.sha256);
       r.check(page.sha256 === record.page_sha256, "player.page_sha256_record", `PAGE equals the record of ${version} (page_sha256)`, `PAGE sha256 ${page.sha256} differs from the record of ${version} (${record.page_sha256})${other ? `; it is the page of version ${other[0]}: pass --version ${other[0]}` : ""}`, "verifying");
+    } else if (opts.expect) {
+      r.warn("player.page_sha256_record", `scripts/page_versions.json has no record for version ${version}: the gzip payload and PAGE were not compared with any record (pass --version)`, "verifying");
     }
   } catch (e) {
     r.fail("player.page", `not this player's page: ${/** @type {Error} */ (e).message}`, "verifying");
