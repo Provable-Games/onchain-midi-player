@@ -27,7 +27,7 @@ sierra = true
 build-external-contracts = ["onchain_midi_player::contract::TinySynth"]
 ```
 
-**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch. For the deployed class, that is its `built_from` commit in [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json).
+**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch. For the deployed class, that is its `built_from` commit in [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json). The names in this guide are the current source's: the class with `version()` 0.1.0 is `OnchainTinySynth`, with the interface `IOnchainTinySynth` and its dispatchers named after it.
 
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#the-base64-encoder)).
 

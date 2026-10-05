@@ -3,7 +3,7 @@
   "chain_id": "SN_SEPOLIA",
   "class": {
     "package": "onchain_midi_player",
-    "contract": "TinySynth",
+    "contract": "OnchainTinySynth",
     "version": "0.1.0",
     "release_tag": null,
     "class_hash": "0x00a02eabc2fdcd63b736228b03519bfbd9b259d50a50fc125c8d3bd8286401c9",

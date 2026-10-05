@@ -13,6 +13,8 @@ const CHAIN_IDS = /** @type {Record<string, string>} */ ({ sepolia: "SN_SEPOLIA"
 /** A class hash, contract address or transaction hash: 0x and 64 lowercase hex digits. */
 const FELT = /^0x[0-9a-f]{64}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
+/** The class's contract name at a version; the 0.1.0 class was built before the rename to TinySynth. */
+const CONTRACT_NAMES = /** @type {Record<string, string>} */ ({ "0.1.0": "OnchainTinySynth" });
 
 const files = readdirSync(DIR).filter((name) => name.endsWith(".json"));
 const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
@@ -32,7 +34,7 @@ for (const name of files) {
     const c = d.class;
     assert.deepEqual(Object.keys(c), ["package", "contract", "version", "release_tag", "class_hash", "declare_tx", "built_from", "inspection_instance"]);
     assert.equal(c.package, "onchain_midi_player");
-    assert.equal(c.contract, "TinySynth");
+    assert.equal(c.contract, CONTRACT_NAMES[c.version] ?? "TinySynth", `contract name at ${c.version}`);
     assert.ok(versions[c.version], `${c.version} is recorded in scripts/page_versions.json`);
     // A release has the tag v<version>; null marks a test class, not for production.
     assert.ok(c.release_tag === null || c.release_tag === `v${c.version}`, `release_tag ${c.release_tag}`);
