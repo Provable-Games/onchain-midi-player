@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-check
 // Writes the animation_url page a token would get, offline, so a composer or sound designer can hear
-// a score with its settings and art before anything goes onchain (README: "Previewing a score"). Node
+// a score with its settings and art before anything goes onchain (docs/midi-contract.md: "Previewing a score"). Node
 // built-ins only, but it imports the player and the page build: run it from a checkout of this
 // repository. It needs no `npm install`.
 //
@@ -10,7 +10,7 @@
 //
 //   <midi>      one score, in any form scripts/check_midi.mjs reads: a .mid file, a base64 file or
 //               string, a JSON file with one "midi_b64" string, or "-" for standard input
-//   --settings  a SynthSettings value as JSON, in the shape of player/settings.js and the "settings"
+//   --settings  a TinySynthSettings value as JSON, in the shape of player/settings.js and the "settings"
 //               objects of tests/fixtures/settings.json (a whole fixture entry also works), or the
 //               SETTINGS text of a page (to rebuild a token's page from its blocks). Default: the
 //               class's default settings, as default_settings() in src/settings.cairo
@@ -26,7 +26,8 @@
 //   - the art rule: the SVG must never contain `</script`, in any letter case.
 // It then writes PAGE ++ D ++ SVG, the decoded animation_url of a token with these inputs, byte for
 // byte as the class and a consumer produce it (scripts/page.mjs: pageHtml, dFragment).
-// The page is this checkout's PAGE: check out the commit whose VERSION equals the class's version().
+// The page is this checkout's PAGE: check out the tag v<version> of a released class, or for an interim
+// class a commit whose VERSION equals its version() (docs/versions.md).
 //
 // Exit status: 0 when the page is written, 1 when the MIDI, the settings or the SVG fails its check,
 // 2 on a usage error or an input that cannot be read.
@@ -42,7 +43,7 @@ import { InputError, checkScore, formatResult, scoresFromArg } from "./check_mid
 import { VERSION, dFragment, pageHtml } from "./page.mjs";
 import { DEFAULT_SETTINGS } from "./settings_fixtures.mjs";
 
-/** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
+/** @typedef {import("../player/settings.js").TinySynthSettings} TinySynthSettings */
 
 const USAGE =
   "usage: node scripts/preview.mjs <file.mid | base64 file | file.json | - | base64 string> " +
@@ -104,10 +105,10 @@ function array(value, at) {
 }
 
 /**
- * Checks that a parsed JSON value has the shape and the Cairo types of `SynthSettings` (what Cairo's
+ * Checks that a parsed JSON value has the shape and the Cairo types of `TinySynthSettings` (what Cairo's
  * Serde would require before `validate` runs), and returns it. Throws a TypeError naming the field.
  * @param {unknown} value
- * @returns {SynthSettings}
+ * @returns {TinySynthSettings}
  */
 export function settingsShape(value) {
   const s = exactKeys(value, SETTINGS_KEYS, "settings");
@@ -130,20 +131,20 @@ export function settingsShape(value) {
   // The scalar types (u8, u32, i32, bool, the enum names), with the encoder's own messages. A
   // SettingsError here is a check of the class (such as a length limit), reported by buildPreview.
   try {
-    encodeSettings(/** @type {SynthSettings} */ (value));
+    encodeSettings(/** @type {TinySynthSettings} */ (value));
   } catch (e) {
     if (!(e instanceof SettingsError)) throw e;
   }
-  return /** @type {SynthSettings} */ (value);
+  return /** @type {TinySynthSettings} */ (value);
 }
 
 /**
- * The settings in a file's text: a `SynthSettings` object as JSON, a fixture entry holding one under
+ * The settings in a file's text: a `TinySynthSettings` object as JSON, a fixture entry holding one under
  * "settings" (as in tests/fixtures/settings.json), or SETTINGS text as a page carries it (digits,
  * `-` and `,`), parsed strictly by the page's own decodeSettings.
  * @param {string} label
  * @param {string} text
- * @returns {SynthSettings}
+ * @returns {TinySynthSettings}
  */
 export function settingsFromText(label, text) {
   if (/^ *-?[0-9]+(,-?[0-9]+)+ *$/.test(text.trim())) {
@@ -176,7 +177,7 @@ export const panicData = (e) => `('${e.code}'${e.indices.map((i) => `, ${i}`).jo
 /**
  * Builds the page for one score, settings and SVG, after the checks the class and the page run on
  * them. Returns the page and the report; throws a PreviewError with the report of the first failure.
- * @param {{midiArg: string, settings?: SynthSettings, settingsLabel?: string, svg?: Uint8Array, svgLabel?: string}} input
+ * @param {{midiArg: string, settings?: TinySynthSettings, settingsLabel?: string, svg?: Uint8Array, svgLabel?: string}} input
  * @returns {{html: Buffer, lines: string[]}}
  */
 export function buildPreview({ midiArg, settings = DEFAULT_SETTINGS, settingsLabel = "default settings", svg, svgLabel = "placeholder SVG" }) {
@@ -215,7 +216,7 @@ export function buildPreview({ midiArg, settings = DEFAULT_SETTINGS, settingsLab
       ...lines,
       `FAIL ${svgLabel}`,
       `  art: the SVG contains ${JSON.stringify(text.slice(at, at + 8))} at byte ${at}; the page's art block would end there`,
-      "  (README: \"Art (SVG) requirements\")",
+      "  (docs/token-uri-layout.md: \"Art (SVG) requirements\")",
     ], 1);
   }
   lines.push(`PASS ${svgLabel}`, `  ${art.length} bytes, no </script`);
@@ -288,7 +289,7 @@ export async function run(args, out = console.log, err = console.error) {
     for (const line of lines) out(line);
     writeFileSync(opts.out, html);
     out(`wrote ${opts.out}: ${html.length} bytes, PAGE ++ D ++ SVG`);
-    out(`  page ${VERSION}: it must equal the class's version()`);
+    out(`  page of version ${VERSION}: it must equal the class's version()`);
     const port = opts.serve;
     if (port === null) return 0;
     const name = `/${basename(opts.out)}`;

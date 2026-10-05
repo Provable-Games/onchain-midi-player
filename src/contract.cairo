@@ -9,7 +9,7 @@
 #[starknet::contract]
 pub mod OnchainTinySynth {
     use crate::interface::IOnchainTinySynth;
-    use crate::types::SynthSettings;
+    use crate::types::TinySynthSettings;
     use crate::{base64, page_data, segment};
 
     #[storage]
@@ -24,7 +24,7 @@ pub mod OnchainTinySynth {
 
         /// Validates and encodes `settings`, builds `D`, and returns `b64(b64(D))`.
         fn midi_segment(
-            self: @ContractState, midi: ByteArray, settings: SynthSettings,
+            self: @ContractState, midi: ByteArray, settings: TinySynthSettings,
         ) -> ByteArray {
             segment::midi_segment(midi, @settings)
         }
@@ -36,6 +36,10 @@ pub mod OnchainTinySynth {
 
         fn script_sha256(self: @ContractState) -> u256 {
             page_data::ENGINE_SHA256
+        }
+
+        fn engine(self: @ContractState) -> felt252 {
+            'tinysynth'
         }
 
         fn version(self: @ContractState) -> felt252 {

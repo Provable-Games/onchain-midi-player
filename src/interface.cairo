@@ -1,4 +1,4 @@
-//! Public interface of the onchain TinySynth class library.
+//! Public interface of the OnchainTinySynth class, onchain-midi-player's TinySynth player class.
 //!
 //! This class is meant to be **declared, never deployed**. It has no storage and no
 //! constructor. Consumers call it with `library_call` through the dispatcher that the
@@ -25,9 +25,9 @@
 //!   then falls inside the settings block and is ignored by the player). The gzip payload is
 //!   base64 text, which contains no `<`, `"` or `&`, so it can close neither its tag nor
 //!   its attribute.
-//! - `SETTINGS`: the ASCII encoding of a `SynthSettings` value (see `types.cairo`), format
+//! - `SETTINGS`: the ASCII encoding of a `TinySynthSettings` value (see `types.cairo`), format
 //!   version 1, as specified in `settings.cairo` (issue #1): comma-separated canonical
-//!   decimal integers, with no length cap: its cost grows with it (see the README). It
+//!   decimal integers, with no length cap: its cost grows with it (see docs/gas.md). It
 //!   contains only digits, `-` and `,`, so it can never close its block. Example (default
 //!   settings): `1,1,30,40,64,0,0`.
 //! - `D`: the per-token HTML fragment
@@ -72,19 +72,20 @@
 //!
 //! The HTML parser ends the art element at the first `</script`, so the SVG must never contain
 //! `</script` in any letter case. The class never sees the SVG: the consumer checks this in its
-//! own tests (see "Art (SVG) requirements" in the README).
+//! own tests (see "Art (SVG) requirements" in docs/token-uri-layout.md).
 //!
 //! This file also declares `ISoundProvider`, at the end: the interface a composer's contract
-//! implements to hand an NFT a token's MIDI and `SynthSettings`. The class does not implement it.
+//! implements to hand an NFT a token's MIDI and `TinySynthSettings`. The class does not implement
+//! it.
 
-use crate::types::{SynthSettings, TokenSound};
+use crate::types::{TinySynthSettings, TinySynthSound};
 
-/// Onchain TinySynth class library.
+/// The OnchainTinySynth class: the onchain-midi-player class library for the TinySynth engine.
 ///
 /// All functions are view-only and deterministic: for a given class hash, the same inputs
 /// always give the same output. The engine and the page are fixed per class version; a
 /// new engine or page means a new class hash and a new `version()`. Sound settings and
-/// custom sounds are supplied by the consumer on each call through `SynthSettings`.
+/// custom sounds are supplied by the consumer on each call through `TinySynthSettings`.
 ///
 /// Intended to be invoked with `library_call` via `IOnchainTinySynthLibraryDispatcher`.
 /// The class holds no state, so executing it in the caller's context reads and writes
@@ -122,7 +123,7 @@ pub trait IOnchainTinySynth<T> {
     /// `animation_url_segment()`.
     ///
     /// Inputs:
-    /// - `midi`: a Standard MIDI File (see "MIDI contract" in the README). The bytes
+    /// - `midi`: a Standard MIDI File (see docs/midi-contract.md). The bytes
     ///   are embedded verbatim (as base64 text); this function does not parse or validate
     ///   them.
     /// - `settings`: engine settings and optional custom sounds (see `types.cairo`).
@@ -157,9 +158,9 @@ pub trait IOnchainTinySynth<T> {
     /// filtered operators, every field at its type's extreme, 218,264 bytes) about 1.32B. Base64 is
     /// the rest. Through a library call, the whole call costs about 61M for a score the size of the
     /// largest Beast score (3,716 bytes) with the reference sounds, about 14M more per 1,000 bytes
-    /// of `SETTINGS`, and about 3.2B with that largest `SETTINGS` (measurements in the README).
+    /// of `SETTINGS`, and about 3.2B with that largest `SETTINGS` (measurements in docs/gas.md).
     /// There is no byte cap: the gas limit of the call decides.
-    fn midi_segment(self: @T, midi: ByteArray, settings: SynthSettings) -> ByteArray;
+    fn midi_segment(self: @T, midi: ByteArray, settings: TinySynthSettings) -> ByteArray;
 
     // ------------------------------------------------------------------------------------
     // Helpers and verification.
@@ -193,14 +194,25 @@ pub trait IOnchainTinySynth<T> {
     /// `text/javascript+gzip` tag, base64-decode it after the `data:text/javascript;base64,`
     /// prefix (its SHA-256 is `page_data::GZIP_SHA256`), gunzip it, hash the result, and
     /// compare with this value and with `sha256sum` of the fork's `webaudio-tinysynth.min.js`
-    /// at the pinned commit or release (see the README).
+    /// at the pinned commit or release (see docs/verifying.md).
     fn script_sha256(self: @T) -> u256;
 
-    /// Short-string (at most 31 ASCII bytes) identifying the engine and page versions of
-    /// this class: `'tinysynth-<engine ref>+page.<n>'`, e.g. `'tinysynth-b70ba90+page.1'`, where
-    /// the engine ref is the pinned fork commit (short SHA) or release tag. Changes whenever the
-    /// engine, page, or
-    /// built-in sound settings change, which always implies a new class hash.
+    /// Short string naming the synthesis engine this class embeds: always `'tinysynth'` for
+    /// `OnchainTinySynth`. Each engine gets its own class, and engine classes share the
+    /// `midi_segment` selector, so a class hash of another engine's class could take a call meant
+    /// for this one, decode it without error and render the wrong thing. A consumer that checks
+    /// `engine()` when it stores or changes the class hash rejects such a hash at configuration
+    /// time. It was added before the first release, so every released class answers it.
+    fn engine(self: @T) -> felt252;
+
+    /// The class's version: a SemVer short string, `MAJOR.MINOR.PATCH` with an optional
+    /// pre-release tag (at most 31 bytes), e.g. `'0.1.0'`. Every declared class has its own:
+    /// interim builds are `0.x.0`, and `1.0.0` comes at release, when the call and settings
+    /// layouts freeze. From then on the major number promises call and settings-layout
+    /// compatibility. `engine()` names the engine; the Versions table in docs/versions.md and
+    /// `scripts/page_versions.json` map each version to its engine commit, page revision and
+    /// `PAGE` SHA-256. Classes declared before this format return
+    /// `'tinysynth-<engine ref>+page.<n>'`.
     fn version(self: @T) -> felt252;
 
     /// Returns the license notice for this class: Apache License 2.0, covering both this
@@ -214,23 +226,23 @@ pub trait IOnchainTinySynth<T> {
 // ----------------------------------------------------------------------------------------------
 // Interfaces implemented by other contracts (sound providers). The TinySynth class does NOT
 // implement the interface below: it is a convention between composers and NFTs, declared here so
-// that both compile against the same `ISoundProvider` and `TokenSound`.
+// that both compile against the same `ISoundProvider` and `TinySynthSound`.
 // ----------------------------------------------------------------------------------------------
 
 /// What a composer's contract implements to hand an NFT the sound of a token, and what the NFT, or
 /// the renderer that builds its `token_uri`, calls. The TinySynth class does not implement it and
-/// never calls it. README: "Sound provider interface", which has the provider contract.
+/// never calls it. docs/sound-provider.md has the provider contract.
 ///
 /// A Standard MIDI File can select an instrument (a program change, or a note on the percussion
 /// channel) but cannot define one. So the provider owns both the score, as a raw Standard MIDI
-/// File, and the instruments it plays, as a `SynthSettings`.
+/// File, and the instruments it plays, as a `TinySynthSettings`.
 ///
 /// The interface is one function, because the player needs one thing from a provider: the token's
 /// sound, the MIDI and its instruments, in one call that reads the token's state once. Its reply
 /// goes straight to `midi_segment`:
 ///
 /// ```text
-/// let sound = <the README's snippet>(provider, token_id)?;
+/// let sound = fetch_sound(provider, token_id)?; // docs/sound-provider.md, "Calling a provider"
 /// let segment = synth.midi_segment(sound.midi, sound.settings);
 /// ```
 ///
@@ -242,6 +254,16 @@ pub trait IOnchainTinySynth<T> {
 /// that needs only the settings calls `get_sound` and takes `.settings`: that costs latency, not
 /// money, because views are free.
 ///
+/// # Data rules
+///
+/// - Each engine has its own typed settings struct, here `TinySynthSettings`. There is no settings
+///   enum and no opaque bytes.
+/// - The felt layouts of `TinySynthSettings` and `TinySynthSound` are fixed at release.
+/// - `Serde(TinySynthSound { midi, settings })` equals the calldata of `midi_segment(midi,
+///   settings)`. Keep it that way.
+/// - A later engine's provider function is `get_<engine>_sound`, returning `<Engine>Sound`.
+///   `get_sound` belongs to TinySynth permanently.
+///
 /// # The provider contract
 ///
 /// A contract implementing `ISoundProvider` must honour all of these:
@@ -250,7 +272,7 @@ pub trait IOnchainTinySynth<T> {
 ///   the whole `u256`. Decode only the bits you use and ignore the rest: a provider that rejects
 ///   unused bits breaks when the NFT's ID layout grows (Beasts' newer IDs are 180 bits).
 /// - **A raw Standard MIDI File.** `midi` is the file's bytes (not base64, not a data URI), and it
-///   passes the page's MIDI check, `checkMidi` (`npm run check-midi`; README "MIDI contract"). The
+///   passes the page's MIDI check, `checkMidi` (`npm run check-midi`; docs/midi-contract.md). The
 ///   class embeds the bytes without parsing them, so a bad file does not revert: the page shows an
 ///   error instead of playing.
 /// - **Valid settings.** `settings` passes `crate::settings::validate`, in the class version the
@@ -266,7 +288,7 @@ pub trait IOnchainTinySynth<T> {
 /// - **Keep the other interfaces consistent.** If the provider also exposes the MIDI or the
 ///   settings through its own interfaces, they should equal `get_sound(id).midi` and
 ///   `get_sound(id).settings`, for every token, at every state. One internal function that builds
-///   the `TokenSound` for all of them keeps that true by construction. Sharing it also matters
+///   the `TinySynthSound` for all of them keeps that true by construction. Sharing it also matters
 ///   because a per-token subset of the settings depends on the programs the token's MIDI uses.
 /// - **Return only what the token's MIDI uses:** the timbres of the programs and drum notes it
 ///   plays, and the waves those timbres select. `SETTINGS` costs about 14.5M L2 gas per 1,000
@@ -282,5 +304,5 @@ pub trait ISoundProvider<T> {
     /// The sound of `token_id`: its score and its instruments, in one call that reads the token's
     /// state once. This is what an NFT calls. A view, deterministic for a given token and state.
     /// Reverts only for an unknown token.
-    fn get_sound(self: @T, token_id: u256) -> TokenSound;
+    fn get_sound(self: @T, token_id: u256) -> TinySynthSound;
 }

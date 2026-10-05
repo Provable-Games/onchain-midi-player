@@ -41,7 +41,7 @@
 //
 // Playwright is not a dependency of this repository; point the script at an existing install, and
 // pick the engine (scripts/browsers.mjs; Firefox plays audio only with an output device, which a
-// PulseAudio null sink provides on a machine without one: see README, CI):
+// PulseAudio null sink provides on a machine without one: see docs/development.md, "Browser validation"):
 //
 //   PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core \
 //   PLAYWRIGHT_BROWSER=chromium|firefox|webkit \

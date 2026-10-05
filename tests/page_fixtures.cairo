@@ -11,12 +11,12 @@
 // the revert, directly and through the library dispatcher, with its exact panic data.
 
 use core::sha256::compute_sha256_byte_array;
-use onchain_tinysynth::interface::{
+use onchain_midi_player::interface::{
     IOnchainTinySynthDispatcherTrait, IOnchainTinySynthSafeDispatcherTrait,
 };
-use onchain_tinysynth::settings::{encode, validate};
-use onchain_tinysynth::types::SynthSettings;
-use onchain_tinysynth::{page_data, segment};
+use onchain_midi_player::settings::{encode, validate};
+use onchain_midi_player::types::TinySynthSettings;
+use onchain_midi_player::{page_data, segment};
 use crate::class_fixtures;
 use crate::helpers::{beasts_token_uri, class, safe_class};
 
@@ -37,9 +37,9 @@ pub const PAGE_SHA256: u256 = 0x6b6da50eafd9e9ef8ecf9891cd7c883440fa9d0340af2a58
 /// SHA-256 of `animation_url_segment()`, 53476 bytes.
 pub const SEGMENT_SHA256: u256 = 0xf3c6dbf17ec8e2985581b59e289fe9e90c98749a995df9cdcf4eb2dcc7ddce93;
 
-/// SHA-256 of `license()`, 9062 bytes.
-pub const LICENSE_SHA256: u256 = 0x95d85fb31795b8b08859bcdc78ea5fff2918f57e3178ac0d9333e28082be8a43;
-pub const LICENSE_LEN: u32 = 9062;
+/// SHA-256 of `license()`, 9054 bytes.
+pub const LICENSE_SHA256: u256 = 0xee0b3416119219b43fd20081ec5f0b01c257a9a296844505aee867cabcf866bf;
+pub const LICENSE_LEN: u32 = 9054;
 
 /// SHA-256 of the engine (the pinned fork build, commit fc04dbe).
 pub const ENGINE_SHA256: u256 = 0x4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c;
@@ -69,7 +69,7 @@ fn page_data_license_version_and_engine_hashes_match_the_build() {
     let license = page_data::license();
     assert_eq!(license.len(), LICENSE_LEN);
     assert(sha256(@license) == LICENSE_SHA256, 'license sha256');
-    assert(page_data::VERSION == 'tinysynth-fc04dbe+page.10', 'version');
+    assert(page_data::VERSION == '0.1.0', 'version');
     assert(page_data::ENGINE_SHA256 == ENGINE_SHA256, 'engine sha256');
     assert(page_data::GZIP_SHA256 == GZIP_SHA256, 'gzip sha256');
     assert_eq!(page_data::GZIP_LEN, GZIP_LEN);
@@ -92,7 +92,7 @@ const CASE_DEFAULT_120BPM_MIDI: [felt252; 7] = [
     0x905460009926641826003090540018ff2f00, 18,
 ];
 
-pub fn case_default_120bpm_settings() -> SynthSettings {
+pub fn case_default_120bpm_settings() -> TinySynthSettings {
     let mut felts = CASE_DEFAULT_120BPM_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -231,7 +231,7 @@ const CASE_BEAST_140BPM_MIDI: [felt252; 7] = [
     0x009926641826003090540018ff2f00, 15,
 ];
 
-pub fn case_beast_140bpm_settings() -> SynthSettings {
+pub fn case_beast_140bpm_settings() -> TinySynthSettings {
     let mut felts = CASE_BEAST_140BPM_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -390,7 +390,7 @@ const CASE_SIX_TIMBRES_FORMAT1_MIDI: [felt252; 8] = [
     0x008170904c0078904f60009924647824008170904f00789054600099266478, 0x2600817090540078ff2f00, 11,
 ];
 
-pub fn case_six_timbres_format1_settings() -> SynthSettings {
+pub fn case_six_timbres_format1_settings() -> TinySynthSettings {
     let mut felts = CASE_SIX_TIMBRES_FORMAT1_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -570,7 +570,7 @@ const CASE_UNICODE_ART_MIDI: [felt252; 7] = [
     0x6418240030904f0018905460009926641826003090540018ff2f00, 27,
 ];
 
-pub fn case_unicode_art_settings() -> SynthSettings {
+pub fn case_unicode_art_settings() -> TinySynthSettings {
     let mut felts = CASE_UNICODE_ART_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -726,7 +726,7 @@ const CASE_MIN_FIELDS_MIDI: [felt252; 7] = [
     0x009924640c240018904f000c905460009926640c2600189054000cff2f00, 30,
 ];
 
-pub fn case_min_fields_settings() -> SynthSettings {
+pub fn case_min_fields_settings() -> TinySynthSettings {
     let mut felts = CASE_MIN_FIELDS_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -871,7 +871,7 @@ const CASE_MAX_FIELDS_MIDI: [felt252; 7] = [
     12,
 ];
 
-pub fn case_max_fields_settings() -> SynthSettings {
+pub fn case_max_fields_settings() -> TinySynthSettings {
     let mut felts = CASE_MAX_FIELDS_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -1085,7 +1085,7 @@ const CASE_SLOT_EDGES_MIDI: [felt252; 7] = [
     0x905460009926643026006090540030ff2f00, 18,
 ];
 
-pub fn case_slot_edges_settings() -> SynthSettings {
+pub fn case_slot_edges_settings() -> TinySynthSettings {
     let mut felts = CASE_SLOT_EDGES_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -1252,7 +1252,7 @@ const CASE_ALL_BUILTIN_WAVES_MIDI: [felt252; 7] = [
     0x0030904f0018905460009926641826003090540018ff2f00, 24,
 ];
 
-pub fn case_all_builtin_waves_settings() -> SynthSettings {
+pub fn case_all_builtin_waves_settings() -> TinySynthSettings {
     let mut felts = CASE_ALL_BUILTIN_WAVES_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -1418,7 +1418,7 @@ const CASE_CHIP_WAVES_MIDI: [felt252; 7] = [
     12,
 ];
 
-pub fn case_chip_waves_settings() -> SynthSettings {
+pub fn case_chip_waves_settings() -> TinySynthSettings {
     let mut felts = CASE_CHIP_WAVES_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -1657,7 +1657,7 @@ const CASE_FILTERED_MIDI: [felt252; 7] = [
     0x905460009926641826003090540018ff2f00, 18,
 ];
 
-pub fn case_filtered_settings() -> SynthSettings {
+pub fn case_filtered_settings() -> TinySynthSettings {
     let mut felts = CASE_FILTERED_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -1833,7 +1833,7 @@ const CASE_EVERY_SLOT_MIDI: [felt252; 7] = [
     0x905460009926641826003090540018ff2f00, 18,
 ];
 
-pub fn case_every_slot_settings() -> SynthSettings {
+pub fn case_every_slot_settings() -> TinySynthSettings {
     let mut felts = CASE_EVERY_SLOT_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -2673,7 +2673,7 @@ const INVALID_MIDI: [felt252; 6] = [
 ];
 
 /// midi_segment must revert with ['TS: quality out of range'].
-pub fn invalid_quality_2_settings() -> SynthSettings {
+pub fn invalid_quality_2_settings() -> TinySynthSettings {
     let mut felts = INVALID_QUALITY_2_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -2717,7 +2717,7 @@ fn invalid_quality_2_library_call_reverts_with_the_panic_data() {
 }
 
 /// midi_segment must revert with ['TS: FM target not earlier',0,1].
-pub fn invalid_fm_on_itself_settings() -> SynthSettings {
+pub fn invalid_fm_on_itself_settings() -> TinySynthSettings {
     let mut felts = INVALID_FM_ON_ITSELF_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -2764,7 +2764,7 @@ fn invalid_fm_on_itself_library_call_reverts_with_the_panic_data() {
 }
 
 /// midi_segment must revert with ['TS: duplicate timbre slot',2].
-pub fn invalid_duplicate_drum_settings() -> SynthSettings {
+pub fn invalid_duplicate_drum_settings() -> TinySynthSettings {
     let mut felts = INVALID_DUPLICATE_DRUM_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -2814,7 +2814,7 @@ fn invalid_duplicate_drum_library_call_reverts_with_the_panic_data() {
 }
 
 /// midi_segment must revert with ['TS: wave index out of range',0,0].
-pub fn invalid_custom_wave_settings() -> SynthSettings {
+pub fn invalid_custom_wave_settings() -> TinySynthSettings {
     let mut felts = INVALID_CUSTOM_WAVE_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -2860,7 +2860,7 @@ fn invalid_custom_wave_library_call_reverts_with_the_panic_data() {
 }
 
 /// midi_segment must revert with ['TS: filter on modulator',0,1].
-pub fn invalid_filter_on_fm_settings() -> SynthSettings {
+pub fn invalid_filter_on_fm_settings() -> TinySynthSettings {
     let mut felts = INVALID_FILTER_ON_FM_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -2907,7 +2907,7 @@ fn invalid_filter_on_fm_library_call_reverts_with_the_panic_data() {
 }
 
 /// midi_segment must revert with ['TS: filter q out of range',0,0].
-pub fn invalid_filter_q_0_settings() -> SynthSettings {
+pub fn invalid_filter_q_0_settings() -> TinySynthSettings {
     let mut felts = INVALID_FILTER_Q_0_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');
@@ -2954,7 +2954,7 @@ fn invalid_filter_q_0_library_call_reverts_with_the_panic_data() {
 }
 
 /// midi_segment must revert with ['TS: too many timbres'].
-pub fn invalid_timbres_176_settings() -> SynthSettings {
+pub fn invalid_timbres_176_settings() -> TinySynthSettings {
     let mut felts = INVALID_TIMBRES_176_SETTINGS.span();
     let value = Serde::deserialize(ref felts).expect('fixture: bad Serde');
     assert(felts.len() == 0, 'fixture: trailing felts');

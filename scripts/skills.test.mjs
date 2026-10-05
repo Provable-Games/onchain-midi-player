@@ -1,14 +1,16 @@
 // @ts-check
-// Drift guards for the agent skills in plugins/onchain-tinysynth (README: "Agent skills"). The skills
-// summarise the README and link to it; these tests keep them from becoming a second copy that drifts:
+// Drift guards for the agent skills in plugins/onchain-midi-player (README: "Agent skills"). The skills
+// summarise the README and docs/ and link to them; these tests keep them from becoming a second copy
+// that drifts:
 //   - the plugin manifests and every SKILL.md frontmatter follow the formats (Claude Code plugin
 //     marketplaces and the open Agent Skills specification, https://agentskills.io/specification);
-//   - every README anchor and repository path the skills link to or name exists;
+//   - every anchor and repository path the skills link to or name exists, and every link in the
+//     README, docs/ and the example's README resolves;
 //   - the midi-guide reference lists every checkMidi message, and the sound-design operator table
 //     matches the JS reference of settings::validate;
-//   - every gas figure in the skills appears in the README;
+//   - every gas figure in the skills appears in the README or docs/;
 //   - the skills hardcode nothing a re-pin changes: VERSION, the engine commit, page and segment
-//     sizes, and long hex hashes (class hashes and SHA-256s belong in the README's tables);
+//     sizes, and long hex hashes (class hashes and SHA-256s belong in docs/versions.md);
 //   - the skills' helper scripts work on real fixtures.
 
 import assert from "node:assert/strict";
@@ -24,15 +26,16 @@ import { JSON_PREFIX, VERSION, b64, byteArrayFelts, dFragment, decodeTokenUri, d
 import { MIDI, renderSvg } from "../examples/beast_consumer/scripts/reference.mjs";
 import { buildPreview, settingsFromText } from "./preview.mjs";
 import { DEFAULT_OPERATOR, DEFAULT_SETTINGS } from "./settings_fixtures.mjs";
-import { artPeriods, cssDurations, gifDelays } from "../plugins/onchain-tinysynth/skills/midi-guide/scripts/art_periods.mjs";
-import { byteArrayFromFelts, tokenUriFromCall } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/bytearray.mjs";
-import { checkArt, run as splitRun, splitPage } from "../plugins/onchain-tinysynth/skills/token-uri-inspector/scripts/split_page.mjs";
+import { artPeriods, cssDurations, gifDelays } from "../plugins/onchain-midi-player/skills/midi-guide/scripts/art_periods.mjs";
+import { byteArrayFromFelts, tokenUriFromCall } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/bytearray.mjs";
+import { checkArt, run as splitRun, splitPage } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/split_page.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const PLUGIN = join(ROOT, "plugins/onchain-tinysynth");
+const PLUGIN = join(ROOT, "plugins/onchain-midi-player");
 const SKILLS = join(PLUGIN, "skills");
-const REPO_URL = "https://github.com/Provable-Games/onchain-tinysynth";
+const REPO_URL = "https://github.com/Provable-Games/onchain-midi-player";
 const read = (/** @type {string} */ p) => readFileSync(join(ROOT, p), "utf8");
+const DOCS = readdirSync(join(ROOT, "docs")).filter((n) => n.endsWith(".md")).map((n) => `docs/${n}`);
 
 /**
  * Every file under a directory, recursively.
@@ -81,7 +84,7 @@ describe("plugin and marketplace manifests", () => {
     assert.doesNotMatch(marketplace.name, /^(claude|anthropic)/, "reserved-looking marketplace name");
     assert.ok(marketplace.owner?.name, "owner.name");
     assert.ok(marketplace.description);
-    assert.deepEqual(marketplace.plugins.map((/** @type {{name: string}} */ p) => p.name), ["onchain-tinysynth"]);
+    assert.deepEqual(marketplace.plugins.map((/** @type {{name: string}} */ p) => p.name), ["onchain-midi-player"]);
     for (const entry of marketplace.plugins) {
       assert.match(entry.name, NAME);
       assert.match(entry.source, /^\.\/[\w./-]+$/, "a relative source from the marketplace root");
@@ -147,7 +150,7 @@ describe("links and paths", () => {
     return /** @type {Set<string>} */ (anchorCache.get(file));
   };
 
-  test("every link in the skills resolves: relative files, repository files and their README anchors", () => {
+  test("every link in the skills resolves: relative files, repository files and their anchors", () => {
     let checked = 0;
     for (const file of markdown) {
       for (const link of links(readFileSync(file, "utf8"))) {
@@ -177,17 +180,25 @@ describe("links and paths", () => {
     assert.ok(checked > 50, `${checked} links`);
   });
 
-  test("README anchors: every #link in the README and the example's README resolves", () => {
-    const readme = read("README.md");
-    const own = anchorsOf(readme);
-    for (const link of links(readme).filter((l) => l.startsWith("#"))) assert.ok(own.has(link.slice(1)), `README.md: ${link}`);
-    const example = read("examples/beast_consumer/README.md");
-    for (const link of links(example)) {
-      const m = link.match(/^\.\.\/\.\.\/README\.md#(.+)$/);
-      if (m) assert.ok(own.has(m[1]), `examples/beast_consumer/README.md: ${link}`);
+  test("every link in the README, docs/ and the example's README resolves: files and anchors", () => {
+    let checked = 0;
+    for (const doc of ["README.md", ...DOCS, "examples/beast_consumer/README.md"]) {
+      const file = join(ROOT, doc);
+      for (const link of links(read(doc))) {
+        if (/^[a-z]+:/.test(link)) continue; // another site
+        const [path, anchor] = link.split("#");
+        const target = path ? resolve(dirname(file), path) : file;
+        assert.ok(existsSync(target), `${doc}: ${link}: ${relative(ROOT, target)} exists`);
+        if (anchor && target.endsWith(".md")) assert.ok(anchors(target).has(anchor), `${doc}: ${link}: #${anchor} exists in ${relative(ROOT, target)}`);
+        checked++;
+      }
     }
+    assert.ok(checked > 100, `${checked} links`);
+    // The README links every doc.
+    const fromReadme = new Set(links(read("README.md")).map((l) => l.split("#")[0]));
+    for (const doc of DOCS) assert.ok(fromReadme.has(doc), `README.md links ${doc}`);
     // The layout headings are general, not named after one collection.
-    assert.ok(own.has("consumer-token_uri-layout") && own.has("a-full-size-example-token_uri-against-the-1b-target"));
+    assert.ok(anchors(join(ROOT, "docs/token-uri-layout.md")).has("consumer-token_uri-layout") && anchors(join(ROOT, "docs/gas.md")).has("a-full-size-token"));
   });
 
   test("README links into the plugin resolve", () => {
@@ -195,17 +206,20 @@ describe("links and paths", () => {
     const into = links(readme).filter((l) => l.startsWith("plugins/") || l.startsWith(".claude-plugin/"));
     assert.ok(into.length >= 5);
     for (const link of into) assert.ok(existsSync(join(ROOT, link.split("#")[0])), link);
-    assert.ok(anchorsOf(readme).has("agent-skills") && anchorsOf(readme).has("deployments"));
+    assert.ok(anchorsOf(readme).has("agent-skills") && anchorsOf(read("docs/versions.md")).has("deployments"));
   });
 
   test("every repository path the skills name in code exists (from the root, or from the skill folder)", () => {
-    const PATH = /(?<![\w/.$-])((?:scripts|player|examples|tests|src|plugins|references)\/[\w./-]*\w)/g;
+    const PATH = /(?<![\w/.$-])((?:scripts|player|examples|tests|src|plugins|references|docs)\/[\w./-]*\w)/g;
     let checked = 0;
     for (const file of markdown) {
       const skillDir = join(SKILLS, relative(SKILLS, file).split("/")[0]);
       for (const [, path] of readFileSync(file, "utf8").matchAll(PATH)) {
         if (path.includes("*")) continue;
-        assert.ok(existsSync(join(ROOT, path)) || existsSync(join(skillDir, path)), `${relative(ROOT, file)}: ${path}`);
+        // Checkouts from before the rename have the plugin at plugins/onchain-tinysynth/: check
+        // the path that directory has now.
+        const now = path.replace(/^plugins\/onchain-tinysynth(?=\/|$)/, "plugins/onchain-midi-player");
+        assert.ok(existsSync(join(ROOT, now)) || existsSync(join(skillDir, now)), `${relative(ROOT, file)}: ${path}`);
         checked++;
       }
     }
@@ -220,12 +234,12 @@ describe("content kept in step with the code", () => {
     const thrown = new Set([...src.matchAll(/fail\("([^"]*)"/g)].map((m) => m[1]));
     for (const m of src.matchAll(/new Error\("midi: ([^"]*)"\)/g)) thrown.add(m[1]);
     assert.ok(thrown.size >= 19, `found ${thrown.size} messages`);
-    const reference = read("plugins/onchain-tinysynth/skills/midi-guide/references/checkmidi-rules.md");
+    const reference = read("plugins/onchain-midi-player/skills/midi-guide/references/checkmidi-rules.md");
     for (const text of thrown) assert.ok(reference.includes("`" + text) || reference.includes("`midi: " + text + "`"), `the reference lists "${text}"`);
   });
 
   test("the sound-design operator table matches the operator fields, their types and default_operator()", () => {
-    const table = read("plugins/onchain-tinysynth/skills/sound-design/references/operator-fields.md");
+    const table = read("plugins/onchain-midi-player/skills/sound-design/references/operator-fields.md");
     const n = (/** @type {number} */ x) => x.toLocaleString("en-US");
     for (const [name, type, key] of OPERATOR_FIELDS) {
       const row = `| \`${name}\` | \`${key}\` | \`${type}\` | ${n(/** @type {any} */ (DEFAULT_OPERATOR)[name])} |`;
@@ -236,11 +250,11 @@ describe("content kept in step with the code", () => {
     assert.doesNotMatch(table, /\d to [\d,]+ \|/);
   });
 
-  test("every gas figure in the skills appears in the README", () => {
-    const readme = read("README.md");
+  test("every gas figure in the skills appears in the README or docs/", () => {
+    const docs = ["README.md", ...DOCS].map(read).join("\n");
     for (const file of markdown) {
       for (const [figure] of readFileSync(file, "utf8").matchAll(/(?<![\w.])\d+(?:\.\d+)?[MB](?!\w)/g)) {
-        assert.ok(readme.includes(figure), `${relative(ROOT, file)}: ${figure} is not in the README`);
+        assert.ok(docs.includes(figure), `${relative(ROOT, file)}: ${figure} is not in the README or docs/`);
       }
     }
   });
@@ -369,7 +383,7 @@ describe("the skills' helper scripts", () => {
     const unsafe = checkArt(Buffer.from("<svg><script></SCRIPT></svg>"), image);
     assert.equal(unsafe.ok, false);
     assert.match(unsafe.lines[0], /contains "<\/script" at byte 13/);
-    assert.throws(() => splitPage(Buffer.from("<html></html>")), /not an onchain TinySynth page/);
+    assert.throws(() => splitPage(Buffer.from("<html></html>")), /not an onchain-midi-player page/);
   });
 
   test("an external-image token: the integrator-guide's second layout is valid, and the inspector handles it", () => {

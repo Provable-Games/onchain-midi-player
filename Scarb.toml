@@ -1,9 +1,9 @@
 [package]
-name = "onchain_tinysynth"
+name = "onchain_midi_player"
 version = "0.1.0"
 edition = "2025_12"
 description = "Starknet class library that serves an onchain, offline-playable TinySynth MIDI player for NFTs via library_call."
-repository = "https://github.com/Provable-Games/onchain-tinysynth"
+repository = "https://github.com/Provable-Games/onchain-midi-player"
 license = "Apache-2.0"
 
 # See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html

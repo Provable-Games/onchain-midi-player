@@ -5,10 +5,10 @@
 // gives the same SETTINGS bytes, or the same panic data, as the JS reference.
 
 use core::sha256::compute_sha256_byte_array;
-use onchain_tinysynth::settings::{encode, validate};
-use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, WaveDef};
+use onchain_midi_player::settings::{encode, validate};
+use onchain_midi_player::types::{Operator, Timbre, TinySynthSettings, WaveDef};
 
-fn deserialize(felts: Array<felt252>) -> SynthSettings {
+fn deserialize(felts: Array<felt252>) -> TinySynthSettings {
     let mut span = felts.span();
     let settings = Serde::deserialize(ref span).expect('fixture: bad Serde');
     assert(span.len() == 0, 'fixture: trailing felts');
@@ -31,10 +31,11 @@ pub const STRUCTURAL_MAX_LEN: u32 = 218264;
 pub const STRUCTURAL_MAX_SHA256: u256 =
     0xddd03d7f64acb74dea4160dddfb3880f0ba8006413171e62fcd8ee48774f279f;
 
-/// The largest valid `SynthSettings` in v1 (`structuralMax` in scripts/settings_fixtures.mjs), the
-/// most validation and encoding work: every slot (programs 0..=127, then drums 35..=81), each with
-/// the same 8 operators with every field at its widest. Built in a loop: too large for a literal.
-pub fn structural_max() -> SynthSettings {
+/// The largest valid `TinySynthSettings` in v1 (`structuralMax` in scripts/settings_fixtures.mjs),
+/// the most validation and encoding work: every slot (programs 0..=127, then drums 35..=81), each
+/// with the same 8 operators with every field at its widest. Built in a loop: too large for a
+/// literal.
+pub fn structural_max() -> TinySynthSettings {
     let mut felts = array![
         8, 0, 5, 4294967295, 4294967295, -2147483648, 4294967295, 4294967295, 4294967295,
         4294967295, 4294967295, 4294967295, 4294967295, -2147483648, 0, 2, 4294967295, 1,
@@ -63,7 +64,7 @@ pub fn structural_max() -> SynthSettings {
     for slot in 35..82_u8 {
         timbres.append(Timbre { drum: true, slot, operators });
     }
-    SynthSettings {
+    TinySynthSettings {
         quality: 1,
         reverb: 255,
         master_vol: 255,
@@ -93,7 +94,7 @@ pub const LONG_LFSR_SHA256: u256 =
 /// from state 1, each step outputs bit 0 (1 is -128, 0 is 127), shifts right and feeds back bit 0
 /// XOR bit 1, for 32,767 steps. On a snare (`longLfsr` in scripts/settings_fixtures.mjs). Built in
 /// a loop: too large for a literal.
-pub fn long_lfsr() -> SynthSettings {
+pub fn long_lfsr() -> TinySynthSettings {
     let mut samples: Array<i8> = array![];
     let mut r: u32 = 1;
     loop {
@@ -110,7 +111,7 @@ pub fn long_lfsr() -> SynthSettings {
     let mut felts = array![1, 0, 6, 0, 3000, 0, 14649, 0, 0, 500, 0, 500, 10000, 10000, 0, 1]
         .span();
     let operators: Span<Operator> = Serde::deserialize(ref felts).expect('fixture: bad Serde');
-    SynthSettings {
+    TinySynthSettings {
         quality: 1,
         reverb: 30,
         master_vol: 40,
@@ -130,7 +131,7 @@ fn test_valid_long_lfsr() {
 }
 
 /// Valid: 16 bytes of SETTINGS.
-pub fn valid_default() -> SynthSettings {
+pub fn valid_default() -> TinySynthSettings {
     deserialize(array![1, 30, 40, 64, 0, 0])
 }
 
@@ -146,7 +147,7 @@ fn test_valid_default() {
 }
 
 /// Valid: 334 bytes of SETTINGS.
-pub fn valid_beast_reference() -> SynthSettings {
+pub fn valid_beast_reference() -> TinySynthSettings {
     deserialize(
         array![
             1, 0, 40, 64, 0, 3, 0, 0, 2, 0, 3, 3000, 10000, 0, 30, 0, 100, 10000, 100, 10000, 10000,
@@ -170,7 +171,7 @@ fn test_valid_beast_reference() {
 }
 
 /// Valid: 504 bytes of SETTINGS.
-pub fn valid_six_timbres() -> SynthSettings {
+pub fn valid_six_timbres() -> TinySynthSettings {
     deserialize(
         array![
             1, 0, 40, 64, 0, 6, 0, 0, 2, 0, 3, 3000, 10000, 0, 30, 0, 100, 10000, 100, 10000, 10000,
@@ -197,7 +198,7 @@ fn test_valid_six_timbres() {
 }
 
 /// Valid: 1072 bytes of SETTINGS.
-pub fn valid_max_fields() -> SynthSettings {
+pub fn valid_max_fields() -> TinySynthSettings {
     deserialize(
         array![
             1, 255, 255, 255, 0, 1, 0, 127, 8, 0, 2, 4294967295, 4294967295, 2147483647, 4294967295,
@@ -231,7 +232,7 @@ fn test_valid_max_fields() {
 }
 
 /// Valid: 686 bytes of SETTINGS.
-pub fn valid_max_chain() -> SynthSettings {
+pub fn valid_max_chain() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 8, 0, 0, 4294967295, 4294967295, 0, 0, 100, 100, 4294967295,
@@ -260,7 +261,7 @@ fn test_valid_max_chain() {
 }
 
 /// Valid: 68 bytes of SETTINGS.
-pub fn valid_min_fields() -> SynthSettings {
+pub fn valid_min_fields() -> TinySynthSettings {
     deserialize(
         array![
             0, 0, 0, 1, 0, 1, 1, 35, 1, 0, 0, 0, 0, -2147483648, 0, 0, 0, 0, 0, 0, 0, -2147483648,
@@ -281,7 +282,7 @@ fn test_valid_min_fields() {
 }
 
 /// Valid: 352 bytes of SETTINGS.
-pub fn valid_slot_edges() -> SynthSettings {
+pub fn valid_slot_edges() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 6, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -306,7 +307,7 @@ fn test_valid_slot_edges() {
 }
 
 /// Valid: 316 bytes of SETTINGS.
-pub fn valid_all_builtin_waves() -> SynthSettings {
+pub fn valid_all_builtin_waves() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 1, 6, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -330,7 +331,7 @@ fn test_valid_all_builtin_waves() {
 }
 
 /// Valid: 9836 bytes of SETTINGS.
-pub fn valid_every_slot() -> SynthSettings {
+pub fn valid_every_slot() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 175, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -496,7 +497,7 @@ fn test_valid_every_slot() {
 }
 
 /// Valid: 365 bytes of SETTINGS.
-pub fn valid_one_wave() -> SynthSettings {
+pub fn valid_one_wave() -> TinySynthSettings {
     deserialize(
         array![
             1, 0, 40, 64, 1, 1, 64, 127, 127, 110, 110, 93, 93, 76, 76, 59, 59, 42, 42, 25, 25, 8,
@@ -521,7 +522,7 @@ fn test_valid_one_wave() {
 }
 
 /// Valid: 1356 bytes of SETTINGS.
-pub fn valid_reference_waves() -> SynthSettings {
+pub fn valid_reference_waves() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 6, 1, 64, 127, 127, 110, 110, 93, 93, 76, 76, 59, 59, 42, 42, 25, 25, 8,
@@ -560,7 +561,7 @@ fn test_valid_reference_waves() {
 }
 
 /// Valid: 241 bytes of SETTINGS.
-pub fn valid_custom_waves() -> SynthSettings {
+pub fn valid_custom_waves() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 4, 0, 11, 100, 0, 55, 0, 32, 0, 18, 0, 10, 0, 6, 1, 16, -128, -96, -64,
@@ -583,7 +584,7 @@ fn test_valid_custom_waves() {
 }
 
 /// Valid: 9472 bytes of SETTINGS.
-pub fn valid_waves_256() -> SynthSettings {
+pub fn valid_waves_256() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 256, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1,
@@ -747,7 +748,7 @@ fn test_valid_waves_256() {
 }
 
 /// Valid: 349 bytes of SETTINGS.
-pub fn valid_one_filter() -> SynthSettings {
+pub fn valid_one_filter() -> TinySynthSettings {
     deserialize(
         array![
             1, 0, 40, 64, 0, 3, 0, 0, 2, 0, 3, 3000, 10000, 0, 30, 0, 100, 10000, 100, 10000, 10000,
@@ -772,7 +773,7 @@ fn test_valid_one_filter() {
 }
 
 /// Valid: 465 bytes of SETTINGS.
-pub fn valid_filters() -> SynthSettings {
+pub fn valid_filters() -> TinySynthSettings {
     deserialize(
         array![
             1, 0, 40, 64, 0, 6, 0, 0, 1, 0, 2, 3000, 10000, 0, 30, 0, 100, 10000, 100, 10000, 10000,
@@ -798,7 +799,7 @@ fn test_valid_filters() {
 }
 
 /// Valid: 2720 bytes of SETTINGS.
-pub fn valid_filter_extremes() -> SynthSettings {
+pub fn valid_filter_extremes() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 5, 0, 100, 8, 0, 2, 1000000, 640000, 0, 0, 100, 100, 1000000, 500,
@@ -856,7 +857,7 @@ fn test_valid_filter_extremes() {
 }
 
 /// Invalid: TS: quality out of range.
-pub fn invalid_quality_2() -> SynthSettings {
+pub fn invalid_quality_2() -> TinySynthSettings {
     deserialize(array![2, 30, 40, 64, 0, 0])
 }
 
@@ -869,7 +870,7 @@ fn test_invalid_quality_2() {
 }
 
 /// Invalid: TS: voices out of range.
-pub fn invalid_voices_0() -> SynthSettings {
+pub fn invalid_voices_0() -> TinySynthSettings {
     deserialize(array![1, 30, 40, 0, 0, 0])
 }
 
@@ -882,7 +883,7 @@ fn test_invalid_voices_0() {
 }
 
 /// Invalid: TS: too many waves.
-pub fn invalid_waves_257() -> SynthSettings {
+pub fn invalid_waves_257() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 257, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1,
@@ -925,7 +926,7 @@ fn test_invalid_waves_257() {
 }
 
 /// Invalid: TS: harmonics length.
-pub fn invalid_harmonics_0() -> SynthSettings {
+pub fn invalid_harmonics_0() -> TinySynthSettings {
     deserialize(array![1, 30, 40, 64, 2, 0, 1, 1, 0, 0, 0])
 }
 
@@ -938,7 +939,7 @@ fn test_invalid_harmonics_0() {
 }
 
 /// Invalid: TS: samples length.
-pub fn invalid_samples_0() -> SynthSettings {
+pub fn invalid_samples_0() -> TinySynthSettings {
     deserialize(array![1, 30, 40, 64, 3, 1, 1, 0, 0, 1, 1, 1, 0, 0])
 }
 
@@ -951,7 +952,7 @@ fn test_invalid_samples_0() {
 }
 
 /// Invalid: TS: too many timbres.
-pub fn invalid_timbres_176() -> SynthSettings {
+pub fn invalid_timbres_176() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 176, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1115,7 +1116,7 @@ fn test_invalid_timbres_176() {
 }
 
 /// Invalid: TS: program slot out of range.
-pub fn invalid_program_slot_128() -> SynthSettings {
+pub fn invalid_program_slot_128() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 128, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1133,7 +1134,7 @@ fn test_invalid_program_slot_128() {
 }
 
 /// Invalid: TS: drum slot out of range.
-pub fn invalid_drum_slot_34() -> SynthSettings {
+pub fn invalid_drum_slot_34() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 1, 34, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1151,7 +1152,7 @@ fn test_invalid_drum_slot_34() {
 }
 
 /// Invalid: TS: drum slot out of range.
-pub fn invalid_drum_slot_82() -> SynthSettings {
+pub fn invalid_drum_slot_82() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 1, 82, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1169,7 +1170,7 @@ fn test_invalid_drum_slot_82() {
 }
 
 /// Invalid: TS: drum slot out of range.
-pub fn invalid_drum_slot_0() -> SynthSettings {
+pub fn invalid_drum_slot_0() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 1, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1187,7 +1188,7 @@ fn test_invalid_drum_slot_0() {
 }
 
 /// Invalid: TS: duplicate timbre slot.
-pub fn invalid_duplicate_program() -> SynthSettings {
+pub fn invalid_duplicate_program() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 3, 0, 0, 2, 0, 3, 3000, 10000, 0, 30, 0, 100, 10000, 100, 10000,
@@ -1208,7 +1209,7 @@ fn test_invalid_duplicate_program() {
 }
 
 /// Invalid: TS: duplicate timbre slot.
-pub fn invalid_duplicate_drum() -> SynthSettings {
+pub fn invalid_duplicate_drum() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 3, 1, 36, 2, 0, 3, 4000, 0, 1600000, 30, 370, 500, 0, 500, 2813, 300,
@@ -1229,7 +1230,7 @@ fn test_invalid_duplicate_drum() {
 }
 
 /// Invalid: TS: no operators.
-pub fn invalid_no_operators() -> SynthSettings {
+pub fn invalid_no_operators() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 2, 0, 0, 2, 0, 3, 3000, 10000, 0, 30, 0, 100, 10000, 100, 10000,
@@ -1247,7 +1248,7 @@ fn test_invalid_no_operators() {
 }
 
 /// Invalid: TS: too many operators.
-pub fn invalid_operators_9() -> SynthSettings {
+pub fn invalid_operators_9() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 9, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1270,7 +1271,7 @@ fn test_invalid_operators_9() {
 }
 
 /// Invalid: TS: route out of range.
-pub fn invalid_route_19() -> SynthSettings {
+pub fn invalid_route_19() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 8, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1293,7 +1294,7 @@ fn test_invalid_route_19() {
 }
 
 /// Invalid: TS: route out of range.
-pub fn invalid_route_255() -> SynthSettings {
+pub fn invalid_route_255() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 255, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1311,7 +1312,7 @@ fn test_invalid_route_255() {
 }
 
 /// Invalid: TS: FM target not earlier.
-pub fn invalid_fm_on_first_operator() -> SynthSettings {
+pub fn invalid_fm_on_first_operator() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 1, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1329,7 +1330,7 @@ fn test_invalid_fm_on_first_operator() {
 }
 
 /// Invalid: TS: FM target not earlier.
-pub fn invalid_fm_on_itself() -> SynthSettings {
+pub fn invalid_fm_on_itself() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 2, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1347,7 +1348,7 @@ fn test_invalid_fm_on_itself() {
 }
 
 /// Invalid: TS: FM target not earlier.
-pub fn invalid_fm_on_later() -> SynthSettings {
+pub fn invalid_fm_on_later() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 3, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1366,7 +1367,7 @@ fn test_invalid_fm_on_later() {
 }
 
 /// Invalid: TS: AM target not earlier.
-pub fn invalid_am_on_first_operator() -> SynthSettings {
+pub fn invalid_am_on_first_operator() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 11, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1384,7 +1385,7 @@ fn test_invalid_am_on_first_operator() {
 }
 
 /// Invalid: TS: AM target not earlier.
-pub fn invalid_am_on_itself() -> SynthSettings {
+pub fn invalid_am_on_itself() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 2, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1402,7 +1403,7 @@ fn test_invalid_am_on_itself() {
 }
 
 /// Invalid: TS: AM target not earlier.
-pub fn invalid_am_route_18_at_8() -> SynthSettings {
+pub fn invalid_am_route_18_at_8() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 8, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1425,7 +1426,7 @@ fn test_invalid_am_route_18_at_8() {
 }
 
 /// Invalid: TS: wave index out of range.
-pub fn invalid_custom_wave() -> SynthSettings {
+pub fn invalid_custom_wave() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 6, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000,
@@ -1443,7 +1444,7 @@ fn test_invalid_custom_wave() {
 }
 
 /// Invalid: TS: wave index out of range.
-pub fn invalid_custom_wave_255_without_table() -> SynthSettings {
+pub fn invalid_custom_wave_255_without_table() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 6, 255, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000,
@@ -1461,7 +1462,7 @@ fn test_invalid_custom_wave_255_without_table() {
 }
 
 /// Invalid: TS: wave index out of range.
-pub fn invalid_custom_wave_past_table() -> SynthSettings {
+pub fn invalid_custom_wave_past_table() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 2, 1, 64, 127, 127, 110, 110, 93, 93, 76, 76, 59, 59, 42, 42, 25, 25, 8,
@@ -1485,7 +1486,7 @@ fn test_invalid_custom_wave_past_table() {
 }
 
 /// Invalid: TS: filter on modulator.
-pub fn invalid_filter_on_fm() -> SynthSettings {
+pub fn invalid_filter_on_fm() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 2, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1504,7 +1505,7 @@ fn test_invalid_filter_on_fm() {
 }
 
 /// Invalid: TS: filter on modulator.
-pub fn invalid_filter_on_am() -> SynthSettings {
+pub fn invalid_filter_on_am() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 3, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1523,7 +1524,7 @@ fn test_invalid_filter_on_am() {
 }
 
 /// Invalid: TS: filter cutoff out of range.
-pub fn invalid_filter_cutoff_0() -> SynthSettings {
+pub fn invalid_filter_cutoff_0() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1541,7 +1542,7 @@ fn test_invalid_filter_cutoff_0() {
 }
 
 /// Invalid: TS: filter cutoff out of range.
-pub fn invalid_filter_cutoff_0_key_tracked() -> SynthSettings {
+pub fn invalid_filter_cutoff_0_key_tracked() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1559,7 +1560,7 @@ fn test_invalid_filter_cutoff_0_key_tracked() {
 }
 
 /// Invalid: TS: filter q out of range.
-pub fn invalid_filter_q_0() -> SynthSettings {
+pub fn invalid_filter_q_0() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1577,7 +1578,7 @@ fn test_invalid_filter_q_0() {
 }
 
 /// Invalid: TS: quality out of range.
-pub fn invalid_order_quality_before_voices() -> SynthSettings {
+pub fn invalid_order_quality_before_voices() -> TinySynthSettings {
     deserialize(array![2, 30, 40, 0, 0, 0])
 }
 
@@ -1590,7 +1591,7 @@ fn test_invalid_order_quality_before_voices() {
 }
 
 /// Invalid: TS: voices out of range.
-pub fn invalid_order_voices_before_waves() -> SynthSettings {
+pub fn invalid_order_voices_before_waves() -> TinySynthSettings {
     deserialize(array![1, 30, 40, 0, 1, 0, 0, 0])
 }
 
@@ -1603,7 +1604,7 @@ fn test_invalid_order_voices_before_waves() {
 }
 
 /// Invalid: TS: too many waves.
-pub fn invalid_order_wave_count_before_timbres() -> SynthSettings {
+pub fn invalid_order_wave_count_before_timbres() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 257, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1,
@@ -1646,7 +1647,7 @@ fn test_invalid_order_wave_count_before_timbres() {
 }
 
 /// Invalid: TS: samples length.
-pub fn invalid_order_wave_length_before_timbres() -> SynthSettings {
+pub fn invalid_order_wave_length_before_timbres() -> TinySynthSettings {
     deserialize(array![1, 30, 40, 64, 2, 0, 1, 1, 1, 0, 1, 0, 200, 0])
 }
 
@@ -1659,7 +1660,7 @@ fn test_invalid_order_wave_length_before_timbres() {
 }
 
 /// Invalid: TS: too many timbres.
-pub fn invalid_order_timbre_count_before_slot() -> SynthSettings {
+pub fn invalid_order_timbre_count_before_slot() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 176, 0, 200, 0, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500,
@@ -1822,7 +1823,7 @@ fn test_invalid_order_timbre_count_before_slot() {
 }
 
 /// Invalid: TS: drum slot out of range.
-pub fn invalid_order_slot_before_operators() -> SynthSettings {
+pub fn invalid_order_slot_before_operators() -> TinySynthSettings {
     deserialize(array![1, 30, 40, 64, 0, 1, 1, 99, 0])
 }
 
@@ -1835,7 +1836,7 @@ fn test_invalid_order_slot_before_operators() {
 }
 
 /// Invalid: TS: duplicate timbre slot.
-pub fn invalid_order_duplicate_before_operators() -> SynthSettings {
+pub fn invalid_order_duplicate_before_operators() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 2, 0, 0, 2, 0, 3, 3000, 10000, 0, 30, 0, 100, 10000, 100, 10000,
@@ -1853,7 +1854,7 @@ fn test_invalid_order_duplicate_before_operators() {
 }
 
 /// Invalid: TS: FM target not earlier.
-pub fn invalid_order_timbre_0_before_timbre_1() -> SynthSettings {
+pub fn invalid_order_timbre_0_before_timbre_1() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 2, 0, 5, 2, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1872,7 +1873,7 @@ fn test_invalid_order_timbre_0_before_timbre_1() {
 }
 
 /// Invalid: TS: route out of range.
-pub fn invalid_order_operator_0_before_operator_1() -> SynthSettings {
+pub fn invalid_order_operator_0_before_operator_1() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 5, 2, 19, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1890,7 +1891,7 @@ fn test_invalid_order_operator_0_before_operator_1() {
 }
 
 /// Invalid: TS: FM target not earlier.
-pub fn invalid_order_route_before_wave() -> SynthSettings {
+pub fn invalid_order_route_before_wave() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 1, 6, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000,
@@ -1908,7 +1909,7 @@ fn test_invalid_order_route_before_wave() {
 }
 
 /// Invalid: TS: wave index out of range.
-pub fn invalid_order_wave_index_before_filter() -> SynthSettings {
+pub fn invalid_order_wave_index_before_filter() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 6, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000,
@@ -1926,7 +1927,7 @@ fn test_invalid_order_wave_index_before_filter() {
 }
 
 /// Invalid: TS: filter on modulator.
-pub fn invalid_order_filter_modulator_before_cutoff() -> SynthSettings {
+pub fn invalid_order_filter_modulator_before_cutoff() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 2, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1944,7 +1945,7 @@ fn test_invalid_order_filter_modulator_before_cutoff() {
 }
 
 /// Invalid: TS: filter cutoff out of range.
-pub fn invalid_order_filter_cutoff_before_q() -> SynthSettings {
+pub fn invalid_order_filter_cutoff_before_q() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 1, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,
@@ -1962,7 +1963,7 @@ fn test_invalid_order_filter_cutoff_before_q() {
 }
 
 /// Invalid: TS: filter q out of range.
-pub fn invalid_order_operator_0_filter_before_operator_1() -> SynthSettings {
+pub fn invalid_order_operator_0_filter_before_operator_1() -> TinySynthSettings {
     deserialize(
         array![
             1, 30, 40, 64, 0, 1, 0, 0, 2, 0, 0, 5000, 10000, 0, 0, 100, 100, 0, 500, 10000, 10000,

@@ -1,6 +1,7 @@
 //! Gas of token 4's token_uri (a full-size Beast: 22,733-byte SVG, 3,716-byte score, the reference
 //! sounds), piece by piece (`snforge test gas_`), in L2 gas, with the class's optimized encoder.
-//! Results are in the README. Each measurement has a baseline that builds its inputs; subtract it.
+//! Results are in the example's README and docs/gas.md. Each measurement has a baseline that builds
+//! its inputs; subtract it.
 //!
 //! - `gas_t4_token_uri` - `gas_t4_setup`: the whole token_uri, on the deployed NFT.
 //! - `gas_t4_segment` - `gas_t4_declare`: `animation_url_segment()` through the library call.
@@ -16,11 +17,11 @@
 use beast_consumer::beast_data::warlock_svg;
 use beast_consumer::beast_like_nft::{IBeastLikeNftDispatcherTrait, comma_b64, image_key_b64};
 use beast_consumer::sound;
-use onchain_tinysynth::base64::bytes_base64_encode;
-use onchain_tinysynth::interface::{
+use onchain_midi_player::base64::bytes_base64_encode;
+use onchain_midi_player::interface::{
     IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
 };
-use onchain_tinysynth::page_data;
+use onchain_midi_player::page_data;
 use snforge_std::{DeclareResultTrait, declare};
 use crate::test_token_uri::setup;
 

@@ -79,7 +79,7 @@ const controlText = encodeSettings({
 // Filters (issue #3): FILTER_SETTINGS at a master volume low enough for the engine's compressor to be
 // linear (FILTER_VOL percent, and twice that to show it), and the same timbres without their filters.
 const FILTER_VOL = 2;
-/** @param {Partial<import("../player/settings.js").SynthSettings>} fields @param {(o: any, t: any) => any} [edit] */
+/** @param {Partial<import("../player/settings.js").TinySynthSettings>} fields @param {(o: any, t: any) => any} [edit] */
 const filterText = (fields = {}, edit = (o) => o) => encodeSettings({
   ...FILTER_SETTINGS, master_vol: FILTER_VOL, ...fields,
   timbres: FILTER_SETTINGS.timbres.map((t) => ({ ...t, operators: t.operators.map((o) => edit(o, t)) })),

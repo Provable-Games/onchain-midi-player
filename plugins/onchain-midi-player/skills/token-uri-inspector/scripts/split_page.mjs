@@ -15,7 +15,7 @@
 // checks that the art contains no `</script`, where a browser would end the art block. It reads its
 // inputs before writing, and refuses an out_dir where an output would overwrite an input. Exit
 // status: 0 when every check passes, 1 when one fails, 2 for a usage error, an unreadable input, or a
-// page that is not an onchain TinySynth page.
+// page that is not an onchain-midi-player page.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -35,7 +35,7 @@ export function splitPage(page) {
   const s = html.indexOf(SETTINGS_OPEN);
   const m = html.indexOf(MIDI_OPEN, s);
   const a = html.indexOf(ART_OPEN, m);
-  if (s < 0 || m < 0 || a < 0) throw new Error("not an onchain TinySynth page: no settings, MIDI and art blocks in that order");
+  if (s < 0 || m < 0 || a < 0) throw new Error("not an onchain-midi-player page: no settings, MIDI and art blocks in that order");
   return {
     settings: html.slice(s + SETTINGS_OPEN.length, m).trim(),
     midiB64: html.slice(m + MIDI_OPEN.length, a).trim(),

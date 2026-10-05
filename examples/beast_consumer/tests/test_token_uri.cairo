@@ -1,4 +1,4 @@
-//! End-to-end: the real class (`onchain_tinysynth::contract::OnchainTinySynth`) is declared but
+//! End-to-end: the real class (`onchain_midi_player::contract::OnchainTinySynth`) is declared but
 //! never deployed, BeastLikeNft is deployed with its class hash, and token_uri (built with library
 //! calls) is checked byte for byte against (a) the independent JavaScript reference (golden.cairo)
 //! and (b) the in-Cairo naive reference. Token 4, a full-size Beast (about 132 KB), is checked
@@ -8,10 +8,10 @@ use beast_consumer::beast_like_nft::{
     IBeastLikeNftDispatcher, IBeastLikeNftDispatcherTrait, beast_image, render_svg, token_data,
 };
 use core::sha256::compute_sha256_byte_array;
-use onchain_tinysynth::interface::{
+use onchain_midi_player::interface::{
     IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
 };
-use onchain_tinysynth::page_data;
+use onchain_midi_player::page_data;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ClassHash;
 use crate::golden;

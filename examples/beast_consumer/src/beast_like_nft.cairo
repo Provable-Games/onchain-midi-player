@@ -1,5 +1,5 @@
 //! `BeastLikeNft`: a simplified Beasts-style collectible that renders its own SVG and injects the
-//! onchain TinySynth player into `token_uri`.
+//! onchain MIDI player into `token_uri`.
 //!
 //! # Today's Beasts approach (for contrast)
 //!
@@ -204,7 +204,7 @@ pub fn align_to_word(ref uri: ByteArray, extra: usize) {
 
 #[starknet::contract]
 pub mod BeastLikeNft {
-    use onchain_tinysynth::interface::{
+    use onchain_midi_player::interface::{
         IOnchainTinySynthDispatcherTrait, IOnchainTinySynthLibraryDispatcher,
     };
     use starknet::ClassHash;
@@ -225,6 +225,10 @@ pub mod BeastLikeNft {
     #[constructor]
     fn constructor(ref self: ContractState, tinysynth_class_hash: ClassHash) {
         assert(tinysynth_class_hash.is_non_zero(), 'zero tinysynth class hash');
+        // Engine classes share the midi_segment selector: reject another engine's class here,
+        // rather than render the wrong page later.
+        let synth = IOnchainTinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
+        assert(synth.engine() == 'tinysynth', 'not a TinySynth class');
         self.tinysynth_class_hash.write(tinysynth_class_hash);
     }
 

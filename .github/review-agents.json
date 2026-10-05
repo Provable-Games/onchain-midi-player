@@ -4,9 +4,9 @@
   "blocking_severities": ["CRITICAL", "HIGH"],
   "agents": [
     {
-      "agent_id": "onchain-tinysynth",
-      "agent_name": "Onchain TinySynth reviewer",
-      "prompt_file": ".github/prompts/onchain-tinysynth-review.md",
+      "agent_id": "onchain-midi-player",
+      "agent_name": "Onchain MIDI player reviewer",
+      "prompt_file": ".github/prompts/onchain-midi-player-review.md",
       "diff_paths": ["."]
     }
   ],

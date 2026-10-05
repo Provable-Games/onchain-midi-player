@@ -1,5 +1,5 @@
 //! Gas of the class (`snforge test gas_`), in L2 gas, with the optimized encoder
-//! (`game_components_encoding`, see `src/base64.cairo`). Results are in the README.
+//! (`game_components_encoding`, see `src/base64.cairo`). Results are in docs/gas.md.
 //!
 //! - `gas_lc_*`: each entry point through the library dispatcher on the declared class, the way a
 //!   consumer calls it. `gas_lc_declare` is the baseline (declaring only). The figures include
@@ -13,10 +13,10 @@
 //!   alone, net of building the MIDI. `validate` and `encode` alone are in
 //!   `test_settings_gas.cairo`.
 
-use onchain_tinysynth::base64::bytes_base64_encode;
-use onchain_tinysynth::interface::IOnchainTinySynthDispatcherTrait;
-use onchain_tinysynth::segment::{d_fragment, midi_segment};
-use onchain_tinysynth::types::SynthSettings;
+use onchain_midi_player::base64::bytes_base64_encode;
+use onchain_midi_player::interface::IOnchainTinySynthDispatcherTrait;
+use onchain_midi_player::segment::{d_fragment, midi_segment};
+use onchain_midi_player::types::TinySynthSettings;
 use crate::class_fixtures::{
     beast_midi_genesis, beast_midi_heaviest, beast_midi_threshold_1, beast_midi_threshold_3,
     beast_midi_veteran, seq_bytes,
@@ -38,7 +38,7 @@ fn midi(i: u32) -> ByteArray {
     }
 }
 
-fn settings(j: u32) -> SynthSettings {
+fn settings(j: u32) -> TinySynthSettings {
     match j {
         0 => valid_default(),
         1 => valid_beast_reference(),
@@ -158,13 +158,18 @@ fn gas_lc_script_sha256() {
 }
 
 #[test]
+fn gas_lc_engine() {
+    assert(class().engine() == 'tinysynth', 'engine');
+}
+
+#[test]
 fn gas_lc_version() {
     assert(class().version() != 0, 'version');
 }
 
 #[test]
 fn gas_lc_license() {
-    assert(class().license().len() == 9062, 'license');
+    assert(class().license().len() == 9054, 'license');
 }
 
 // ------------------------------------------------------------------------------------------------

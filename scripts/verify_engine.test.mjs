@@ -1,5 +1,5 @@
 // @ts-check
-// Node tests for scripts/verify_engine.mjs, the collector's engine check (README: "Verifying the
+// Node tests for scripts/verify_engine.mjs, the collector's engine check (docs/verifying.md: "Verifying the
 // engine"): on every form of input it reproduces the hashes the class carries in src/page_data.cairo.
 
 import assert from "node:assert/strict";
@@ -26,7 +26,7 @@ function pageData() {
   return {
     engine: { sha256: constant("ENGINE_SHA256").replace(/^0x/, ""), length: read(`tests/vendor/webaudio-tinysynth-${ENGINE_PIN.ref}.min.js`).length },
     gzip: { sha256: constant("GZIP_SHA256").replace(/^0x/, ""), length: Number(constant("GZIP_LEN")) },
-    page: { sha256: JSON.parse(read("scripts/page_versions.json").toString("utf8"))[constant("VERSION").slice(1, -1)], length: Number(constant("PAGE_LEN")) },
+    page: { sha256: JSON.parse(read("scripts/page_versions.json").toString("utf8"))[constant("VERSION").slice(1, -1)].page_sha256, length: Number(constant("PAGE_LEN")) },
   };
 }
 

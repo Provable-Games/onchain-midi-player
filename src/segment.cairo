@@ -17,7 +17,7 @@
 use core::panic_with_felt252;
 use crate::base64::bytes_base64_encode;
 use crate::settings::validate_and_encode;
-use crate::types::SynthSettings;
+use crate::types::TinySynthSettings;
 
 /// Length of `midi_open()`.
 pub const MIDI_OPEN_LEN: u32 = 45;
@@ -38,7 +38,7 @@ pub fn art_open() -> ByteArray {
 /// `D` for `midi` and `settings`: validates and encodes `settings` (reverting with the
 /// `'TS: ...'` panic data of `settings::validate` or `settings::encode`), then appends the MIDI
 /// block, the pad and the opening of the art block.
-pub fn d_fragment(midi: ByteArray, settings: @SynthSettings) -> ByteArray {
+pub fn d_fragment(midi: ByteArray, settings: @TinySynthSettings) -> ByteArray {
     let mut d = validate_and_encode(settings);
     d.append(@midi_open());
     d.append(@bytes_base64_encode(midi));
@@ -49,7 +49,7 @@ pub fn d_fragment(midi: ByteArray, settings: @SynthSettings) -> ByteArray {
 }
 
 /// `midi_segment(midi, settings) = b64(b64(D))`.
-pub fn midi_segment(midi: ByteArray, settings: @SynthSettings) -> ByteArray {
+pub fn midi_segment(midi: ByteArray, settings: @TinySynthSettings) -> ByteArray {
     bytes_base64_encode(bytes_base64_encode(d_fragment(midi, settings)))
 }
 

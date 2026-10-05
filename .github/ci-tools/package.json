@@ -1,5 +1,5 @@
 {
-  "name": "onchain-tinysynth-ci-tools",
+  "name": "onchain-midi-player-ci-tools",
   "version": "0.0.0",
   "private": true,
   "description": "Pins the tools CI installs for .github/workflows/ci.yml: TypeScript (tsc --checkJs on player/) and Playwright (headless browser checks on Chromium, Firefox and WebKit). Not a runtime dependency of the class or the page.",

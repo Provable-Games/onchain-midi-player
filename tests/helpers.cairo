@@ -1,11 +1,11 @@
 //! Test helpers: the class reached by library call, and a consumer's Beasts-layout `token_uri`.
 
-use onchain_tinysynth::base64::bytes_base64_encode;
-use onchain_tinysynth::interface::{
+use onchain_midi_player::base64::bytes_base64_encode;
+use onchain_midi_player::interface::{
     IOnchainTinySynthLibraryDispatcher, IOnchainTinySynthSafeLibraryDispatcher,
 };
-use onchain_tinysynth::types::SynthSettings;
-use onchain_tinysynth::{page_data, segment};
+use onchain_midi_player::types::TinySynthSettings;
+use onchain_midi_player::{page_data, segment};
 use snforge_std::{DeclareResultTrait, declare};
 use starknet::ClassHash;
 
@@ -31,11 +31,11 @@ fn pad3(ref s: ByteArray, extra: u32) {
     }
 }
 
-/// The Beasts-layout `token_uri` (README, "Consumer token_uri layout"), assembled as a consumer
-/// does it, with the crate's encoder and segments. The same layout as `spliceTokenUri` in
-/// scripts/page.mjs, which computed the fixtures' digests.
+/// The Beasts-layout `token_uri` (docs/token-uri-layout.md, "Consumer token_uri layout"), assembled
+/// as a consumer does it, with the crate's encoder and segments. The same layout as
+/// `spliceTokenUri` in scripts/page.mjs, which computed the fixtures' digests.
 pub fn beasts_token_uri(
-    members: @ByteArray, svg: @ByteArray, midi: ByteArray, settings: @SynthSettings,
+    members: @ByteArray, svg: @ByteArray, midi: ByteArray, settings: @TinySynthSettings,
 ) -> ByteArray {
     let image_key: ByteArray = "\"image\":\"data:image/svg+xml;base64,";
     let mut head: ByteArray = "{";

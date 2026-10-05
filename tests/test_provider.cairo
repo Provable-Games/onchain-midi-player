@@ -1,15 +1,16 @@
-//! The sound provider interface (`onchain_tinysynth::interface::ISoundProvider`, with
-//! `onchain_tinysynth::types::TokenSound`): a mock composer's provider fed into `midi_segment` end
-//! to end, the README's "Calling a provider" snippet compiled and exercised, and a Serde round trip
-//! of `TokenSound`. The mocks are reached with `call_contract`, as an NFT reaches a provider.
+//! The sound provider interface (`onchain_midi_player::interface::ISoundProvider`, with
+//! `onchain_midi_player::types::TinySynthSound`): a mock composer's provider fed into
+//! `midi_segment` end to end, the "Calling a provider" snippet (docs/sound-provider.md) compiled
+//! and exercised, and a Serde round trip of `TinySynthSound`. The mocks are reached with
+//! `call_contract`, as an NFT reaches a provider.
 
 use core::num::traits::Zero;
-use onchain_tinysynth::interface::{
+use onchain_midi_player::interface::{
     IOnchainTinySynthDispatcherTrait, ISoundProviderDispatcher, ISoundProviderDispatcherTrait,
 };
-use onchain_tinysynth::settings::default_operator;
-use onchain_tinysynth::types::{
-    Filter, FilterKind, Operator, SynthSettings, Timbre, TokenSound, WaveDef, Waveform,
+use onchain_midi_player::settings::default_operator;
+use onchain_midi_player::types::{
+    Filter, FilterKind, Operator, Timbre, TinySynthSettings, TinySynthSound, WaveDef, Waveform,
 };
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ContractAddress;
@@ -26,8 +27,8 @@ use crate::settings_fixtures::{valid_filter_extremes, valid_reference_waves};
 /// only `get_sound`, the whole of `ISoundProvider`.
 #[starknet::contract]
 mod MockSoundProvider {
-    use onchain_tinysynth::interface::ISoundProvider;
-    use onchain_tinysynth::types::TokenSound;
+    use onchain_midi_player::interface::ISoundProvider;
+    use onchain_midi_player::types::TinySynthSound;
     use crate::page_fixtures::{case_beast_140bpm_midi, case_beast_140bpm_settings};
 
     #[storage]
@@ -35,9 +36,11 @@ mod MockSoundProvider {
 
     #[abi(embed_v0)]
     impl SoundProviderImpl of ISoundProvider<ContractState> {
-        fn get_sound(self: @ContractState, token_id: u256) -> TokenSound {
+        fn get_sound(self: @ContractState, token_id: u256) -> TinySynthSound {
             assert(token_id.low & 0xffff == 1, 'unknown token');
-            TokenSound { midi: case_beast_140bpm_midi(), settings: case_beast_140bpm_settings() }
+            TinySynthSound {
+                midi: case_beast_140bpm_midi(), settings: case_beast_140bpm_settings(),
+            }
         }
     }
 }
@@ -100,8 +103,8 @@ mod MockRawProvider {
 /// settings, to test the reply cap without storing a long reply.
 #[starknet::contract]
 mod MockLongScoreProvider {
-    use onchain_tinysynth::interface::ISoundProvider;
-    use onchain_tinysynth::types::TokenSound;
+    use onchain_midi_player::interface::ISoundProvider;
+    use onchain_midi_player::types::TinySynthSound;
     use super::small_sound;
 
     #[storage]
@@ -109,26 +112,26 @@ mod MockLongScoreProvider {
 
     #[abi(embed_v0)]
     impl SoundProviderImpl of ISoundProvider<ContractState> {
-        fn get_sound(self: @ContractState, token_id: u256) -> TokenSound {
+        fn get_sound(self: @ContractState, token_id: u256) -> TinySynthSound {
             let mut midi: ByteArray = "";
             for _ in 0..token_id.low {
                 midi.append(@"0123456789012345678901234567890"); // 31 bytes: one felt
             }
-            TokenSound { midi, settings: small_sound().settings }
+            TinySynthSound { midi, settings: small_sound().settings }
         }
     }
 }
 
 // ------------------------------------------------------------------------------------------------
-// The README's "Calling a provider" snippet: a copy that CI compiles and these tests run. It is not
-// part of the crate. Keep it identical to the README's snippet.
+// The "Calling a provider" snippet in docs/sound-provider.md: a copy that CI compiles and these
+// tests run. It is not part of the crate. Keep it identical to that snippet.
 // ------------------------------------------------------------------------------------------------
 
 /// The largest reply, in felts, that this renderer will decode: set it from your own gas budget.
 const MAX_REPLY_FELTS: u32 = 4_000;
 
 /// `provider.get_sound(token_id)`, or `None` when the token should play without sound.
-fn fetch_sound(provider: ContractAddress, token_id: u256) -> Option<TokenSound> {
+fn fetch_sound(provider: ContractAddress, token_id: u256) -> Option<TinySynthSound> {
     if provider.is_zero() {
         return Option::None; // no provider set: sound is off, and no call is made
     }
@@ -138,9 +141,9 @@ fn fetch_sound(provider: ContractAddress, token_id: u256) -> Option<TokenSound> 
     if reply.len() > MAX_REPLY_FELTS {
         return Option::None; // larger than this renderer decodes
     }
-    let sound: TokenSound = Serde::deserialize(ref reply)?; // `None` if truncated or malformed
+    let sound: TinySynthSound = Serde::deserialize(ref reply)?; // `None` if truncated or malformed
     if !reply.is_empty() {
-        return Option::None; // it starts like a `TokenSound` but carries more
+        return Option::None; // it starts like a `TinySynthSound` but carries more
     }
     Option::Some(sound)
 }
@@ -207,8 +210,8 @@ fn the_snippet_gives_none_when_the_call_fails() {
     assert(fetch_sound(provider, 1).is_some(), 'known token');
 }
 
-/// A small `TokenSound` with every kind of field, serialized: 36 felts.
-pub fn small_sound() -> TokenSound {
+/// A small `TinySynthSound` with every kind of field, serialized: 36 felts.
+pub fn small_sound() -> TinySynthSound {
     let mut midi: ByteArray = "";
     for _ in 0..40_u32 {
         midi.append_byte(0x90);
@@ -220,7 +223,7 @@ pub fn small_sound() -> TokenSound {
         ),
         ..default_operator(),
     };
-    let settings = SynthSettings {
+    let settings = TinySynthSettings {
         quality: 0,
         reverb: 0,
         master_vol: 40,
@@ -228,7 +231,7 @@ pub fn small_sound() -> TokenSound {
         waves: [WaveDef::Samples([1, -1].span())].span(),
         timbres: [Timbre { drum: false, slot: 80, operators: [carrier].span() }].span(),
     };
-    TokenSound { midi, settings }
+    TinySynthSound { midi, settings }
 }
 
 // Indices into the serialized `small_sound()`: the settings' `quality` (a `u8`) and the tag of its
@@ -247,7 +250,7 @@ fn small_sound_felts() -> Array<felt252> {
 
 /// `fetch_sound` on a provider that replies with the small sound's felts, felt `index` set to
 /// `value`.
-fn reply_with(index: u32, value: felt252) -> Option<TokenSound> {
+fn reply_with(index: u32, value: felt252) -> Option<TinySynthSound> {
     let mut felts = array![];
     for (i, felt) in small_sound_felts().into_iter().enumerate() {
         felts.append(if i == index {
@@ -270,7 +273,7 @@ fn the_snippet_rejects_a_bad_reply() {
     let felts = small_sound_felts();
     assert(fetch_sound(deploy_raw(felts.span().slice(0, 35)), 1).is_none(), 'truncated');
     assert(fetch_sound(deploy_raw([].span()), 1).is_none(), 'empty');
-    // A whole `TokenSound` followed by more felts.
+    // A whole `TinySynthSound` followed by more felts.
     let mut trailing = small_sound_felts();
     trailing.append(0);
     assert(fetch_sound(deploy_raw(trailing.span()), 1).is_none(), 'trailing felt');
@@ -301,16 +304,24 @@ fn token_sound_serde_round_trip() {
         waves.append(*wave);
     }
     waves.append(WaveDef::Harmonics([65_535, 0, 32_767, 0, 1].span()));
-    let settings = SynthSettings {
+    let settings = TinySynthSettings {
         waves: waves.span(), timbres: valid_filter_extremes().timbres, ..valid_reference_waves(),
     };
-    let sound = TokenSound { midi: case_beast_140bpm_midi(), settings };
+    let sound = TinySynthSound { midi: case_beast_140bpm_midi(), settings };
     let mut felts = array![];
     sound.serialize(ref felts);
     let mut span = felts.span();
-    let back: TokenSound = Serde::deserialize(ref span).expect('deserialize');
+    let back: TinySynthSound = Serde::deserialize(ref span).expect('deserialize');
     assert(span.is_empty(), 'trailing felts');
     assert(back == sound, 'round trip');
     // The same felts through a provider.
-    assert(fetch_sound(deploy_raw(felts.span()), 1) == Option::Some(sound), 'through a provider');
+    assert(
+        fetch_sound(deploy_raw(felts.span()), 1) == Option::Some(sound.clone()),
+        'through a provider',
+    );
+    // A data rule: they are also the calldata of `midi_segment(midi, settings)`.
+    let mut calldata = array![];
+    sound.midi.serialize(ref calldata);
+    sound.settings.serialize(ref calldata);
+    assert(felts == calldata, 'sound != midi_segment calldata');
 }

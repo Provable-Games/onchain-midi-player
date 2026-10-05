@@ -3,9 +3,9 @@
 //! `append` tests add appending it after a 31-byte prefix (word-aligned: the destination has no
 //! pending bytes, so whole words are copied) and after the 29-byte `data:application/json;base64,`
 //! (unaligned: every word is split across two). Subtract `fetch` for the cost of the append itself.
-//! Results are in the README.
+//! Results are in docs/gas.md and docs/token-uri-layout.md.
 
-use onchain_tinysynth::page_data;
+use onchain_midi_player::page_data;
 
 #[test]
 fn gas_segment_fetch() {

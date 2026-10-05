@@ -1,6 +1,6 @@
-# Example: a Beasts-style NFT with the onchain TinySynth player
+# Example: a Beasts-style NFT with the onchain MIDI player
 
-A runnable end-to-end example of how an NFT that already renders its own SVG (modelled on the Beasts NFT) adds the onchain TinySynth player to its `token_uri`. It calls the real class, `onchain_tinysynth::contract::OnchainTinySynth`, which the tests declare and never deploy: the NFT stores its class hash and reaches it with library calls. The class's base64 encoder is the maintainer's optimized encoder, `game_components_encoding` (see the root [README](../../README.md#the-base64-encoder)).
+A runnable end-to-end example of how an NFT that already renders its own SVG (modelled on the Beasts NFT) adds the onchain MIDI player to its `token_uri`. It calls the real class, `onchain_midi_player::contract::OnchainTinySynth`, which the tests declare and never deploy: the NFT stores its class hash and reaches it with library calls. The class's base64 encoder is the maintainer's optimized encoder, `game_components_encoding` (see [The base64 encoder](../../docs/development.md#the-base64-encoder)).
 
 Tokens 1-3 are small samples that together cover every padding length. Token 4 is a full-size Beast, for a full-size measurement:
 - **art:** the Beasts renderer's SVG for a shiny, animated Warlock, 22,733 bytes;
@@ -15,7 +15,7 @@ examples/beast_consumer/
 │                                  builds its OnchainTinySynth class (build-external-contracts)
 ├── src/
 │   ├── beast_like_nft.cairo       BeastLikeNft: render_svg, members, word-aligned token_uri assembly
-│   ├── sound.cairo                the tokens' MIDI files and SynthSettings
+│   ├── sound.cairo                the tokens' MIDI files and TinySynthSettings
 │   └── beast_data.cairo           generated: token 4's real Beast SVG and synthetic score
 ├── tests/
 │   ├── golden.cairo               generated: expected token_uri / SVG per sample token, token 4's
@@ -23,7 +23,7 @@ examples/beast_consumer/
 │   ├── naive.cairo                naive reference: plain JSON, base64-encoded once
 │   ├── test_token_uri.cairo       golden parity, naive parity, library call without deployment
 │   ├── test_art_safety.cairo      the art rule on the rendered SVG (no `</script`)
-│   ├── test_reverts.cairo         invalid SynthSettings and unknown tokens revert
+│   ├── test_reverts.cairo         invalid TinySynthSettings and unknown tokens revert
 │   └── test_gas.cairo             token 4's token_uri, piece by piece
 ├── scripts/
 │   ├── reference.mjs              independent JS reference of everything above
@@ -65,15 +65,15 @@ examples/beast_consumer/
 7. While <head> is parsed, the shim inflates the engine and runs it as an inline <script>.
 8. Player, on DOMContentLoaded: shows #art first (re-encoded as data:image/svg+xml;base64 in an
    <img>), then parses #settings and decodes and checks #midi; ▶ starts TinySynth with the
-   settings, loops at End-of-Track and restarts the art in sync. See the root README.
+   settings, loops at End-of-Track and restarts the art in sync. See docs/token-uri-layout.md.
 ```
 
-`token_uri` is assembled from base64 pieces that are each encoded on their own, using `b64(X ++ Y) == b64(X) ++ b64(Y)` when `len(X) % 3 == 0`. The full layout and alignment rules are in the root [README](../../README.md#consumer-token_uri-layout) and walked through step by step in the comments of [`beast_like_nft.cairo`](src/beast_like_nft.cairo). In short:
+`token_uri` is assembled from base64 pieces that are each encoded on their own, using `b64(X ++ Y) == b64(X) ++ b64(Y)` when `len(X) % 3 == 0`. The full layout and alignment rules are in [`token_uri` layout](../../docs/token-uri-layout.md#consumer-token_uri-layout) and walked through step by step in the comments of [`beast_like_nft.cairo`](src/beast_like_nft.cairo). In short:
 
 - The consumer's pieces (`'{' members ',' <pad>`, `S`, the comma and the image key) are padded with spaces between JSON tokens to multiples of 3 bytes.
 - The class pads `PAGE` and `D` to multiples of 9, because they are spliced at both layers.
 - `S = svg_b64 '"' <pad>` is encoded once and appended twice. The first copy is the `image` value; the second, at the HTML layer, is the SVG that closes the art block, and its `"` closes the `animation_url` string.
-- **Word alignment.** The consumer adds 3 spaces at a time between JSON tokens, so that its two largest appends start on a 31-byte `ByteArray` word: the first `b64(S)` and the segment. Each group is the constant `'ICAg'` (`b64('   ')`), and the image key and the comma are constants too: `b64(' "image":"data:image/svg+xml;base64,')` and `'LCAg'` (`b64(',  ')`). So no alignment space is base64-encoded at call time. For token 4 this saves 16.2M L2 gas of appends (16.4M instead of 32.6M). The root [README](../../README.md#integration-guide) explains it.
+- **Word alignment.** The consumer adds 3 spaces at a time between JSON tokens, so that its two largest appends start on a 31-byte `ByteArray` word: the first `b64(S)` and the segment. Each group is the constant `'ICAg'` (`b64('   ')`), and the image key and the comma are constants too: `b64(' "image":"data:image/svg+xml;base64,')` and `'LCAg'` (`b64(',  ')`). So no alignment space is base64-encoded at call time. For token 4 this saves 16.2M L2 gas of appends (16.4M instead of 32.6M). [Alignment](../../docs/token-uri-layout.md#alignment) explains it.
 
 The tokens:
 
@@ -146,7 +146,7 @@ The optional headless check loads the page seven ways:
 - as a variant whose MIDI block holds a file with SysEx (F0) events;
 - as a variant with settings that do not parse (`1,1,30,40,64,0`, a token missing);
 - as a variant whose gzipped engine is corrupt (one payload byte changed);
-- as a variant whose SVG breaks the [art rule](../../README.md#art-svg-requirements) (a `<script>` element in it);
+- as a variant whose SVG breaks the [art rule](../../docs/token-uri-layout.md#art-svg-requirements) (a `<script>` element in it);
 - token 4's page, a full-size Beast, decoded from its `token_uri` (whose SHA-256 the Cairo tests pin), as a `data:` URI.
 
 For the valid pages it confirms that the page's shim inflated the engine (its gzip tag replaced by the pinned build, byte for byte), that the art renders (for token 1 it samples a pixel of the PNG inside the SVG's `foreignObject`), that ▶ is enabled, and that ▶ starts TinySynth with the token's settings: for token 1 the custom lead on program 80, the custom kick on drum 36, the reverb and volume, and the End-of-Track loop at tick 192; for token 4 the reference lead on program 0, the reference kick on drum 36, no reverb, and the loop at the score's End-of-Track (tick 58,560).
@@ -166,19 +166,19 @@ PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromiu
 
 ## Integration checklist for a real NFT (such as Beasts)
 
-- [ ] **The SVG never contains `</script`** (case-insensitive). It is the unclosed last block of the page, so the HTML parser would end it there (see [Art (SVG) requirements](../../README.md#art-svg-requirements)). Beasts' guarantees carry over: name charset `A-Z a-z 0-9`, space, `'`, `-` (no `<` or `/`); fixed reviewed literals; art URIs validated as strict base64. The class never sees the SVG, so check the rule in your own tests, as this example does: `assertArtSafe` in `scripts/reference.mjs` and `contains_script_end_tag` in `tests/test_art_safety.cairo`.
+- [ ] **The SVG never contains `</script`** (case-insensitive). It is the unclosed last block of the page, so the HTML parser would end it there (see [Art (SVG) requirements](../../docs/token-uri-layout.md#art-svg-requirements)). Beasts' guarantees carry over: name charset `A-Z a-z 0-9`, space, `'`, `-` (no `<` or `/`); fixed reviewed literals; art URIs validated as strict base64. The class never sees the SVG, so check the rule in your own tests, as this example does: `assertArtSafe` in `scripts/reference.mjs` and `contains_script_end_tag` in `tests/test_art_safety.cairo`.
 - [ ] **Base64 the SVG once** and reuse `b64(S)` for both `image` and the art.
 - [ ] **Pad your pieces to multiples of 3** with spaces between JSON tokens: `'{' members ',' <pad>`, then the image key, then `svg_b64 '"' <pad>`, then `',  '`. Only the final `'}'` may produce `=`.
 - [ ] **Word-align the large appends** (optional, saves gas): add `'ICAg'` (3 spaces) before the constant image key until `b64(S)` starts at a multiple of 31 bytes, and after `'LCAg'` until the segment does (see `align_to_word` in `beast_like_nft.cairo`).
 - [ ] **Key order**: members, then `image`, then `animation_url` last, because the art closes the `animation_url` string.
-- [ ] **`animation_url_segment` and `midi_segment` come from library calls** on the stored class hash (`IOnchainTinySynthLibraryDispatcher`). The class is declared, never deployed. Store the class hash; updating it is how you opt into a new engine or page.
+- [ ] **`animation_url_segment` and `midi_segment` come from library calls** on the stored class hash (`IOnchainTinySynthLibraryDispatcher`). The class is declared, never deployed. Store the class hash; updating it is how you opt into a new engine or page. When you store or change it, check that `engine()` is `'tinysynth'`, as the constructor does: engine classes share the `midi_segment` selector, so another engine's class would not revert, only render the wrong page.
 - [ ] **No change to the renderer.** It keeps returning raw SVG.
-- [ ] Pass `SynthSettings` that are constants or derived from permanent traits, so each token's sound stays fixed. Invalid settings revert the whole `token_uri`.
+- [ ] Pass `TinySynthSettings` that are constants or derived from permanent traits, so each token's sound stays fixed. Invalid settings revert the whole `token_uri`.
 - [ ] Use the class's `base64` or your own encoder, as long as it is standard RFC 4648.
 
 ## Gas
 
-L2 gas, with the class's optimized encoder; the root [README](../../README.md#gas-and-limits) has the class's own measurements and the comparison with the byte-wise stand-in encoder it replaced.
+L2 gas, with the class's optimized encoder; [Gas and limits](../../docs/gas.md) has the class's own measurements.
 
 `snforge test matches_js --gas-report`:
 

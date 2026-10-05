@@ -1,4 +1,4 @@
-//! Integration tests for the onchain_tinysynth crate.
+//! Integration tests for the onchain_midi_player crate.
 
 mod class_fixtures;
 mod helpers;

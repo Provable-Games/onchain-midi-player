@@ -28,7 +28,7 @@ import { validateSettings } from "../player/validate.js";
 import { lfsr } from "./reference_waves.mjs";
 import { ALL_SLOTS, INVALID, LONG_LFSR_SNARE, VALID, longLfsr, structuralMax, widestOperator } from "./settings_fixtures.mjs";
 
-/** @typedef {import("../player/settings.js").SynthSettings} SynthSettings */
+/** @typedef {import("../player/settings.js").TinySynthSettings} TinySynthSettings */
 /** @typedef {import("../player/settings.js").Operator} Operator */
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -36,8 +36,8 @@ export const JSON_PATH = join(root, "tests/fixtures/settings.json");
 export const CAIRO_PATH = join(root, "tests/settings_fixtures.cairo");
 
 /**
- * Cairo Serde of a `SynthSettings` value, as felt literals.
- * @param {SynthSettings} s
+ * Cairo Serde of a `TinySynthSettings` value, as felt literals.
+ * @param {TinySynthSettings} s
  * @returns {string[]}
  */
 export function serde(s) {
@@ -95,7 +95,7 @@ function caught(fn) {
 }
 
 /** The error that Cairo's `validate` then `encode` would raise, per the JS reference. */
-const jsError = (/** @type {SynthSettings} */ s) => caught(() => encodeSettings(validateSettings(s)));
+const jsError = (/** @type {TinySynthSettings} */ s) => caught(() => encodeSettings(validateSettings(s)));
 
 /** @param {boolean} cond @param {string} msg */
 function check(cond, msg) {
@@ -206,12 +206,12 @@ function expectedAttr(error) {
 /**
  * @param {string} fnName
  * @param {string} doc
- * @param {SynthSettings} settings
+ * @param {TinySynthSettings} settings
  */
 function settingsFn(fnName, doc, settings) {
   return [
     `/// ${doc}`,
-    `pub fn ${fnName}() -> SynthSettings {`,
+    `pub fn ${fnName}() -> TinySynthSettings {`,
     deserializeCall(serde(settings)),
     "}",
   ].join("\n");
@@ -232,10 +232,10 @@ export function cairoSource(fx) {
     "// gives the same SETTINGS bytes, or the same panic data, as the JS reference.",
     "",
     "use core::sha256::compute_sha256_byte_array;",
-    "use onchain_tinysynth::settings::{encode, validate};",
-    "use onchain_tinysynth::types::{Operator, SynthSettings, Timbre, WaveDef};",
+    "use onchain_midi_player::settings::{encode, validate};",
+    "use onchain_midi_player::types::{Operator, Timbre, TinySynthSettings, WaveDef};",
     "",
-    "fn deserialize(felts: Array<felt252>) -> SynthSettings {",
+    "fn deserialize(felts: Array<felt252>) -> TinySynthSettings {",
     "    let mut span = felts.span();",
     "    let settings = Serde::deserialize(ref span).expect('fixture: bad Serde');",
     "    assert(span.len() == 0, 'fixture: trailing felts');",
@@ -258,10 +258,11 @@ export function cairoSource(fx) {
     "pub const STRUCTURAL_MAX_SHA256: u256 =",
     `    0x${fx.structural_max.sha256};`,
     "",
-    "/// The largest valid `SynthSettings` in v1 (`structuralMax` in scripts/settings_fixtures.mjs), the",
-    "/// most validation and encoding work: every slot (programs 0..=127, then drums 35..=81), each with",
-    "/// the same 8 operators with every field at its widest. Built in a loop: too large for a literal.",
-    "pub fn structural_max() -> SynthSettings {",
+    "/// The largest valid `TinySynthSettings` in v1 (`structuralMax` in scripts/settings_fixtures.mjs),",
+    "/// the most validation and encoding work: every slot (programs 0..=127, then drums 35..=81), each",
+    "/// with the same 8 operators with every field at its widest. Built in a loop: too large for a",
+    "/// literal.",
+    "pub fn structural_max() -> TinySynthSettings {",
     "    let mut felts = array![",
     ...fillItems(operatorsSerde(STRUCTURAL_MAX_OPERATORS).map(String), 8),
     "    ]",
@@ -274,7 +275,7 @@ export function cairoSource(fx) {
     "    for slot in 35..82_u8 {",
     "        timbres.append(Timbre { drum: true, slot, operators });",
     "    }",
-    `    SynthSettings {`,
+    `    TinySynthSettings {`,
     `        quality: ${structuralMax().quality},`,
     `        reverb: ${structuralMax().reverb},`,
     `        master_vol: ${structuralMax().master_vol},`,
@@ -304,7 +305,7 @@ export function cairoSource(fx) {
     "/// from state 1, each step outputs bit 0 (1 is -128, 0 is 127), shifts right and feeds back bit 0",
     "/// XOR bit 1, for 32,767 steps. On a snare (`longLfsr` in scripts/settings_fixtures.mjs). Built in",
     "/// a loop: too large for a literal.",
-    "pub fn long_lfsr() -> SynthSettings {",
+    "pub fn long_lfsr() -> TinySynthSettings {",
     "    let mut samples: Array<i8> = array![];",
     "    let mut r: u32 = 1;",
     "    loop {",
@@ -321,7 +322,7 @@ export function cairoSource(fx) {
     ...feltsArray(operatorsSerde([LONG_LFSR_SNARE]).map(String)),
     "        .span();",
     "    let operators: Span<Operator> = Serde::deserialize(ref felts).expect('fixture: bad Serde');",
-    "    SynthSettings {",
+    "    TinySynthSettings {",
     `        quality: ${longLfsr().quality},`,
     `        reverb: ${longLfsr().reverb},`,
     `        master_vol: ${longLfsr().master_vol},`,

@@ -9,7 +9,7 @@
 
 use beast_consumer::beast_like_nft::{members, token_data, token_svg};
 use beast_consumer::sound;
-use onchain_tinysynth::settings::encode;
+use onchain_midi_player::settings::encode;
 use crate::golden;
 
 fn alphabet() -> Span<u8> {

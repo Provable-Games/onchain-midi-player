@@ -1,8 +1,8 @@
 // @ts-check
-// Pins the engine behaviours that the README's MIDI contract documents and that a composer could not
+// Pins the engine behaviours that the MIDI contract (docs/midi-contract.md) documents and that a composer could not
 // guess from the MIDI standard. It runs the pinned TinySynth (scripts/engine.mjs, SHA-256 checked) on
 // the WebAudio mock, with its 60 ms scheduler driven by hand. If a re-pinned engine changes one of
-// these behaviours, the test fails here: update the README's MIDI contract with it.
+// these behaviours, the test fails here: update the MIDI contract with it.
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -70,7 +70,7 @@ function engine({ voices = 64 } = {}) {
 
 const near = (/** @type {number} */ a, /** @type {number} */ b) => Math.abs(a - b) < 1e-9;
 
-describe("the pinned engine behaves as the README's MIDI contract says", () => {
+describe("the pinned engine behaves as the MIDI contract says", () => {
   test("loop: a pass ends at End-of-Track; the tempo returns to 120 BPM; the program carries over", () => {
     // Tick 0 note on; tick 96 tempo 240 BPM, note off, program 40; End-of-Track at 192.
     // One pass: 96 ticks at 120 BPM (0.5 s) + 96 ticks at 240 BPM (0.25 s) = 0.75 s.

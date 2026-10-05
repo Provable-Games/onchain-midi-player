@@ -1,6 +1,6 @@
 // @ts-check
 // Reference custom waves (issue #2): generic chip-sound shapes as `WaveDef::Samples` tables, generated
-// from their definitions rather than listed. The README ("Custom waves") and the sound-design skill
+// from their definitions rather than listed. docs/sound-settings.md ("Custom waves") and the sound-design skill
 // describe them, scripts/settings_fixtures.mjs builds fixtures from them (Cairo/JS parity and gas),
 // and scripts/render_check.mjs renders them (pitch, pulse width and stepped character).
 //

@@ -1,0 +1,12 @@
+{
+  "name": "onchain-midi-player",
+  "description": "Integrate the onchain MIDI player into an NFT's token_uri, write MIDI and TinySynthSettings for it, and inspect deployed tokens.",
+  "author": {
+    "name": "Provable Games",
+    "url": "https://github.com/Provable-Games"
+  },
+  "homepage": "https://github.com/Provable-Games/onchain-midi-player#agent-skills",
+  "repository": "https://github.com/Provable-Games/onchain-midi-player",
+  "license": "Apache-2.0",
+  "keywords": ["starknet", "cairo", "nft", "midi", "tinysynth", "token_uri"]
+}

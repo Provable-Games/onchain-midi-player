@@ -1,8 +1,8 @@
 {
-  "name": "onchain-tinysynth-player",
+  "name": "onchain-midi-player-js",
   "private": true,
   "type": "module",
-  "description": "Player-side JavaScript and tooling for onchain-tinysynth (no runtime dependencies).",
+  "description": "Player-side JavaScript and tooling for onchain-midi-player (no runtime dependencies).",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=22"

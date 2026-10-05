@@ -1,9 +1,9 @@
-//! The art rule (root README, "Art (SVG) requirements"): the SVG must never contain `</script`, in
-//! any letter case. In the animation_url page the SVG is the raw text of the last block,
-//! `<script type="text/plain" id="art">`, which the HTML parser ends at the first `</script`. The
-//! class never sees the SVG, so the consumer checks its own renderer, here in its tests rather than
-//! onchain. scripts/art_safety.test.mjs has the same check in JavaScript (`assertArtSafe`) and
-//! shows the failure.
+//! The art rule (docs/token-uri-layout.md, "Art (SVG) requirements"): the SVG must never contain
+//! `</script`, in any letter case. In the animation_url page the SVG is the raw text of the last
+//! block, `<script type="text/plain" id="art">`, which the HTML parser ends at the first
+//! `</script`. The class never sees the SVG, so the consumer checks its own renderer, here in its
+//! tests rather than onchain. scripts/art_safety.test.mjs has the same check in JavaScript
+//! (`assertArtSafe`) and shows the failure.
 
 use beast_consumer::beast_like_nft::{beast_image, render_svg, token_data, token_svg};
 use crate::golden;
