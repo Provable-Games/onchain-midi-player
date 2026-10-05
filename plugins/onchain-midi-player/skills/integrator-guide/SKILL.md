@@ -27,7 +27,7 @@ sierra = true
 build-external-contracts = ["onchain_midi_player::contract::OnchainTinySynth"]
 ```
 
-**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against. The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch.
+**Choosing a `rev` before a release tag exists.** Pick a commit whose `VERSION` in `src/page_data.cairo` (`grep 'pub const VERSION' src/page_data.cairo`) equals the `version()` of the class you test against, and that is from after the rename to onchain-midi-player (the package and type names used here). The same `VERSION` always means the same page bytes, and `git log --oneline -- src/page_data.cairo` shows where it changed. Pin that commit, not a branch. The Sepolia test classes were built before the rename, from a different package and types, and have no `engine()`, so they are not a target for these snippets: test against the class your dependency builds.
 
 Use the Scarb and Starknet Foundry versions in its [`.tool-versions`](https://github.com/Provable-Games/onchain-midi-player/blob/main/.tool-versions): the crate's base64 encoder uses unstable corelib features ([The base64 encoder](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#the-base64-encoder)).
 
