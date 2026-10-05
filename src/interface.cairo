@@ -251,6 +251,16 @@ pub trait IOnchainTinySynth<T> {
 /// that needs only the settings calls `get_sound` and takes `.settings`: that costs latency, not
 /// money, because views are free.
 ///
+/// # Data rules
+///
+/// - Each engine has its own typed settings struct, here `TinySynthSettings`. There is no settings
+///   enum and no opaque bytes.
+/// - The felt layouts of `TinySynthSettings` and `TinySynthSound` are fixed at release.
+/// - `Serde(TinySynthSound { midi, settings })` equals the calldata of `midi_segment(midi,
+///   settings)`. Keep it that way.
+/// - A later engine's provider function is `get_<engine>_sound`, returning `<Engine>Sound`.
+///   `get_sound` belongs to TinySynth permanently.
+///
 /// # The provider contract
 ///
 /// A contract implementing `ISoundProvider` must honour all of these:

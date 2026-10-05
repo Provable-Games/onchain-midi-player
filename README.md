@@ -277,6 +277,8 @@ pub trait ISoundProvider<T> {
 
 **A provider adds `get_sound` beside the interfaces it already has.** The Beast composer's contract (`midi_fun_contract`) keeps its own `IMidiProvider` (`get_midi`, `get_midi_for`) and `ISynthSettingsProvider` (`get_settings`), and implements only `get_sound` from this crate. Cairo reports a name clash when one contract implements two traits that share a function name; with `get_sound` alone, the provider's own `get_midi` and `get_settings` interfaces keep their names.
 
+**Data rules.** Each engine has its own typed settings struct, here `TinySynthSettings`: there is no settings enum and no opaque bytes, and the felt layouts of `TinySynthSettings` and `TinySynthSound` are fixed at release. `Serde(TinySynthSound { midi, settings })` is exactly the calldata of `midi_segment(midi, settings)`, and stays so. A later engine's providers implement `get_<engine>_sound`, returning `<Engine>Sound`; `get_sound` belongs to TinySynth permanently.
+
 **Tools that need only the settings** call `get_sound` and take `.settings`. That costs extra latency, not money: views are free.
 
 A provider is deployed, so unlike the class it can be read with `starknet_call` from any RPC client or explorer.

@@ -316,5 +316,13 @@ fn token_sound_serde_round_trip() {
     assert(span.is_empty(), 'trailing felts');
     assert(back == sound, 'round trip');
     // The same felts through a provider.
-    assert(fetch_sound(deploy_raw(felts.span()), 1) == Option::Some(sound), 'through a provider');
+    assert(
+        fetch_sound(deploy_raw(felts.span()), 1) == Option::Some(sound.clone()),
+        'through a provider',
+    );
+    // A data rule: they are also the calldata of `midi_segment(midi, settings)`.
+    let mut calldata = array![];
+    sound.midi.serialize(ref calldata);
+    sound.settings.serialize(ref calldata);
+    assert(felts == calldata, 'sound != midi_segment calldata');
 }

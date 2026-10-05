@@ -44,6 +44,9 @@ pub const FIXED_POINT_SCALE: u32 = 10_000;
 
 /// Engine-wide settings plus optional custom sounds, passed to `midi_segment`.
 ///
+/// TinySynth's own typed settings (no settings enum, no opaque bytes); its felt layout is fixed at
+/// release (see `TinySynthSound`).
+///
 /// Defaults (`crate::settings::default_settings()`): `quality: 1, reverb: 30,
 /// master_vol: 40, voices: 64, waves: [].span(), timbres: [].span()`. The volume default
 /// is below TinySynth's 50 because dense passages clipped at 50 in quality 1.
@@ -211,6 +214,16 @@ pub enum FilterKind {
 
 /// A token's sound: its score and the instruments the score plays, the two arguments of
 /// `midi_segment`.
+///
+/// Data rules, for this engine and every engine added later:
+/// - Each engine has its own typed settings struct, here `TinySynthSettings`. There is no settings
+///   enum and no opaque bytes.
+/// - The felt layouts of `TinySynthSettings` and `TinySynthSound` are fixed at release: no field
+///   is added, removed, retyped or reordered after it.
+/// - `Serde(TinySynthSound { midi, settings })` equals the calldata of `midi_segment(midi,
+///   settings)`, so a provider's reply can be forwarded as is. Keep it that way.
+/// - A later engine's provider function is `get_<engine>_sound`, returning `<Engine>Sound`.
+///   `get_sound` belongs to TinySynth permanently.
 #[derive(Drop, Clone, Serde, PartialEq, Debug)]
 pub struct TinySynthSound {
     /// The raw bytes of a Standard MIDI File that passes `checkMidi` (README, "MIDI contract").
