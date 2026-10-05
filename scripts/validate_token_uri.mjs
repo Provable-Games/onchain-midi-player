@@ -33,7 +33,7 @@ import { validateSettings } from "../player/validate.js";
 import { byteArrayFromFelts, shortStrings, tokenUriFromCall } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/bytearray.mjs";
 import { checkArt, splitPage } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/split_page.mjs";
 import { checkScore } from "./check_midi.mjs";
-import { ART_OPEN, PAGE_VERSIONS_PATH, VERSION } from "./page.mjs";
+import { ART_OPEN, MIDI_OPEN, PAGE_VERSIONS_PATH, SETTINGS_OPEN, VERSION } from "./page.mjs";
 import { normalizeSha256, verifyEngine } from "./verify_engine.mjs";
 
 /** Where each check comes from. */
@@ -163,6 +163,16 @@ export const selector = (/** @type {string} */ name) => "0x" + (BigInt("0x" + ke
 // A small XML well-formedness check for the SVG (no dependencies)
 // ---------------------------------------------------------------------------------------------
 
+/** Whether a code point is an XML 1.0 Char. */
+const xmlChar = (/** @type {number} */ cp) => cp === 9 || cp === 10 || cp === 13 || (cp >= 0x20 && cp <= 0xd7ff) || (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff);
+
+/** Expands the predefined entities and character references of text that passed the checks of `parseXml`. */
+const expandRefs = (/** @type {string} */ t) =>
+  t.replace(/&(amp|lt|gt|quot|apos|#x[0-9a-fA-F]+|#[0-9]+);/g, (_, ref) => {
+    if (ref[0] !== "#") return { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" }[/** @type {"amp"} */ (ref)];
+    return String.fromCodePoint(ref[1] === "x" ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10));
+  });
+
 class XmlError extends Error {
   /** @param {string} message @param {number} at */
   constructor(message, at) {
@@ -180,7 +190,8 @@ function lineCol(/** @type {string} */ s, /** @type {number} */ at) {
 
 /**
  * Parses XML for well-formedness (one root; matching, properly nested tags; quoted unique attributes;
- * known entities; bound namespace prefixes) and collects what the reference checks need. A DOCTYPE
+ * known entities and valid character references; bound namespace prefixes) and collects what the
+ * reference checks need, with attribute values and style text expanded as a browser reads them. A DOCTYPE
  * is accepted (a browser does not fetch its DTD) and its internal subset reported; processing
  * instructions other than the XML declaration are rejected. Throws an `XmlError`.
  * @param {string} s
@@ -215,6 +226,10 @@ export function parseXml(s) {
   const text = (/** @type {string} */ t, /** @type {number} */ at) => {
     const ent = t.search(/&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)/);
     if (ent >= 0) throw new XmlError("undefined entity or a bare &", at + ent);
+    for (const m of t.matchAll(/&#(x[0-9a-fA-F]+|[0-9]+);/g)) {
+      const cp = m[1][0] === "x" ? parseInt(m[1].slice(1), 16) : parseInt(m[1], 10);
+      if (!xmlChar(cp)) throw new XmlError(`character reference ${m[0]} is not an XML character`, at + (m.index ?? 0));
+    }
     const ctl = t.search(/[\x00-\x08\x0B\x0C\x0E-\x1F]/);
     if (ctl >= 0) throw new XmlError("control character", at + ctl);
   };
@@ -228,7 +243,7 @@ export function parseXml(s) {
       } else {
         text(t, i);
         if (t.includes("]]>")) throw new XmlError('"]]>" in text', i + t.indexOf("]]>"));
-        if (stack[stack.length - 1].name === "style") styles.push({ text: t, at: i });
+        if (stack[stack.length - 1].name === "style") styles.push({ text: expandRefs(t), at: i });
       }
       i = j;
     } else if (s.startsWith("<!--", i)) {
@@ -304,7 +319,7 @@ export function parseXml(s) {
         if (value.includes("<")) throw new XmlError(`"<" in the value of attribute ${an}`, e + 1 + value.indexOf("<"));
         text(value, e + 1);
         if (own.some((a) => a.name === an)) throw new XmlError(`duplicate attribute ${an}`, w);
-        own.push({ name: an, value, at: w });
+        own.push({ name: an, value: expandRefs(value), at: w });
         k = close + 1;
       }
       const scope = new Map(stack.length ? stack[stack.length - 1].scope : [["xml", "http://www.w3.org/XML/1998/namespace"]]);
@@ -411,7 +426,7 @@ const kind = (/** @type {unknown} */ v) => (v === null ? "null" : Array.isArray(
 export function parseInput(buf) {
   const text = buf.toString("utf8").trim();
   if (text.startsWith("data:")) return { uri: text };
-  if (!text.startsWith("[") && !text.startsWith("{")) throw new Error("the input is not a data URI, token JSON or token_uri call output");
+  if (!text.startsWith("[") && !text.startsWith("{")) return fromCall(text); // sncast output with lines before the JSON
   let doc;
   try {
     doc = JSON.parse(text);
@@ -420,9 +435,19 @@ export function parseInput(buf) {
   }
   if (Array.isArray(doc)) return { uri: byteArrayFromFelts(doc).toString("latin1"), felts: doc.length };
   if (isObject(doc) && !["result", "response", "error"].some((k) => k in doc)) return { json: text };
-  const bytes = tokenUriFromCall(text);
-  const result = isObject(doc) && Array.isArray(doc.result) ? doc.result.length : undefined;
-  return { uri: bytes.toString("latin1"), felts: result };
+  return fromCall(text);
+}
+
+/** The token_uri in a call's output (see tokenUriFromCall), and its felt count when it is a raw response. */
+function fromCall(/** @type {string} */ text) {
+  let doc;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    doc = undefined;
+  }
+  const felts = isObject(doc) && Array.isArray(doc.result) ? doc.result.length : undefined;
+  return { uri: tokenUriFromCall(text).toString("latin1"), felts };
 }
 
 /**
@@ -584,6 +609,7 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
   /** @type {Record<string, any>} */
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
   const record = versions[version];
+  const expect = opts.expect ? normalizeSha256(opts.expect) : null;
   try {
     const { gzip, engine, page } = verifyEngine(html);
     r.hashes.page_sha256 = page.sha256;
@@ -596,8 +622,7 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
     r.info("player.page_sha256", `PAGE sha256 ${page.sha256} (${page.length} bytes)`, "verifying");
     // --expect replaces the engine comparison only; the gzip payload and PAGE are always compared
     // with the record, because a matching PAGE is what proves the shim and the player are the class's.
-    if (opts.expect) {
-      const expect = normalizeSha256(opts.expect);
+    if (expect) {
       r.check(engine.sha256 === expect, "player.engine_sha256", `the engine's SHA-256 equals --expect (${engine.sha256})`, `the engine's SHA-256 is ${engine.sha256}, not --expect ${expect}`, "verifying");
     } else if (!record) {
       r.fail("player.engine_sha256", `scripts/page_versions.json has no record for version ${version}: pass --version or --expect`, "verifying");
@@ -608,7 +633,7 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
       r.check(gzip.sha256 === record.gzip_sha256 && gzip.length === record.gzip_len, "player.gzip", `the gzip payload equals the record of ${version} (${gzip.length} bytes)`, `the gzip payload (${gzip.length} bytes, ${gzip.sha256}) differs from the record of ${version} (${record.gzip_len} bytes, ${record.gzip_sha256})`, "verifying");
       const other = Object.entries(versions).find(([, v]) => v.page_sha256 === page.sha256);
       r.check(page.sha256 === record.page_sha256, "player.page_sha256_record", `PAGE equals the record of ${version} (page_sha256)`, `PAGE sha256 ${page.sha256} differs from the record of ${version} (${record.page_sha256})${other ? `; it is the page of version ${other[0]}: pass --version ${other[0]}` : ""}`, "verifying");
-    } else if (opts.expect) {
+    } else if (expect) {
       r.warn("player.page_sha256_record", `scripts/page_versions.json has no record for version ${version}: the gzip payload and PAGE were not compared with any record (pass --version)`, "verifying");
     }
   } catch (e) {
@@ -624,18 +649,26 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
   }
   r.pass("player.blocks", "the settings, MIDI and art blocks follow the fixed page in that order", "token-uri-layout");
   checkPageSelfContained(r, html.slice(0, html.indexOf(ART_OPEN)));
-  r.sizes.settings_bytes = blocks.settings.length;
-  r.sizes.midi_base64_chars = blocks.midiB64.length;
+  // The page hands each block's raw text to its decoders, which strip only U+0020 padding: so do not
+  // use the trimmed blocks of splitPage, which would hide a tab or a newline the page rejects.
+  const rawBetween = (/** @type {string} */ open, /** @type {string} */ close, /** @type {number} */ from) => {
+    const a = html.indexOf(open, from) + open.length;
+    return html.slice(a, html.indexOf(close, a));
+  };
+  const rawSettings = rawBetween(SETTINGS_OPEN, MIDI_OPEN, 0);
+  const rawMidi = rawBetween(MIDI_OPEN, ART_OPEN, html.indexOf(SETTINGS_OPEN));
+  r.sizes.settings_bytes = rawSettings.trim().length;
+  r.sizes.midi_base64_chars = rawMidi.trim().length;
   r.sizes.art_bytes = blocks.art.length;
   try {
-    const s = decodeSettings(blocks.settings);
+    const s = decodeSettings(rawSettings);
     validateSettings(s);
-    r.pass("player.settings", `SETTINGS decodes and passes the class's checks (${blocks.settings.length} bytes, ${s.timbres.length} timbres, ${s.waves.length} waves)`, "sound-settings");
+    r.pass("player.settings", `SETTINGS decodes and passes the class's checks (${rawSettings.trim().length} bytes, ${s.timbres.length} timbres, ${s.waves.length} waves)`, "sound-settings");
   } catch (e) {
     const err = /** @type {any} */ (e);
     r.fail("player.settings", `SETTINGS: ${err.message}${err.indices?.length ? ` [${err.indices.join(", ")}]` : ""}`, "sound-settings");
   }
-  const midi = checkScore({ label: "midi", b64: blocks.midiB64 });
+  const midi = checkScore({ label: "midi", b64: rawMidi });
   if (midi.ok) {
     r.sizes.midi_bytes = midi.size ?? 0;
     r.pass("player.midi", `the MIDI passes the page's own check (${midi.size} bytes, loop ${midi.seconds.toFixed(3)} s)`, "midi-contract");
@@ -686,7 +719,14 @@ export function validateTokenUri(input, opts = {}) {
         }
       }
     }
-  } else jsonText = input.json;
+  } else {
+    jsonText = input.json;
+    // The token_uri this JSON makes: the sizes and the response cap apply to it all the same.
+    if (jsonText !== undefined) {
+      r.sizes.json_bytes = Buffer.byteLength(jsonText);
+      r.sizes.rpc_response_estimated = Math.ceil((JSON_PREFIX.length + Math.ceil(r.sizes.json_bytes / 3) * 4) / 31) * WORD_CHARS;
+    }
+  }
   if (jsonText === undefined) return finish(r, opts);
   if (jsonText.charCodeAt(0) === 0xfeff) r.fail("json.parse", "the JSON starts with a byte order mark", "ERC-721");
   /** @type {unknown} */

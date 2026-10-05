@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
-import { ART_OPEN, HTML_PREFIX, JSON_PREFIX, SVG_PREFIX, b64, byteArrayFelts, withGzipPayload } from "./page.mjs";
+import { ART_OPEN, HTML_PREFIX, MIDI_OPEN, JSON_PREFIX, SVG_PREFIX, b64, byteArrayFelts, withGzipPayload } from "./page.mjs";
 import { RPC_CAP, base64Problem, fetchTokenUri, formatReport, keccak256, parseInput, parseXml, run, selector, validateTokenUri } from "./validate_token_uri.mjs";
 
 const SCRIPT = fileURLToPath(new URL("./validate_token_uri.mjs", import.meta.url));
@@ -48,8 +48,11 @@ test("raw call output gives the same report: a result array, a JSON-RPC response
     const checks = check(input).toJSON().checks.filter((c) => c.id !== "input.bytearray");
     assert.equal(JSON.stringify(checks.map((c) => [c.level, c.id])), same);
   }
+  // sncast output with a warning line before the JSON (`> call.json 2>&1`).
+  const noisy = parseInput(Buffer.from(`[WARNING] RPC version differs\n${JSON.stringify({ response: JSON.stringify(golden) })}\n`));
+  assert.equal(noisy.uri, golden);
   assert.throws(() => parseInput(Buffer.from(JSON.stringify(felts.slice(0, -1)))), /not one ByteArray/);
-  assert.throws(() => parseInput(Buffer.from("hello")), /not a data URI/);
+  assert.throws(() => parseInput(Buffer.from("hello")), /no starknet_call result/);
   assert.throws(() => parseInput(Buffer.from(JSON.stringify({ error: { code: 40, message: "Contract error" } }))), /call failed/);
 });
 
@@ -168,6 +171,13 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   assert.deepEqual(failing(`<!DOCTYPE svg [<!ENTITY e "x">]><svg xmlns='http://www.w3.org/2000/svg'>&e;</svg>`).filter((i) => i.startsWith("image.")), ["image.xml"]);
   assert.ok(failing(`<!DOCTYPE svg [<!ENTITY e "x">]><svg xmlns='http://www.w3.org/2000/svg'/>`).includes("image.no_entities"));
   assert.ok(failing("<svg><rect/></svg>").includes("image.svg_root"));
+  // Character references: only XML characters; and references are expanded before the checks, as a browser reads them.
+  for (const bad of ["&#0;", "&#xD800;", "&#x110000;", "&#8;", "&#xFFFE;"]) assert.ok(failing(svg(`<text>${bad}</text>`)).includes("image.xml"), bad);
+  assert.deepEqual(failing(svg("<text>&#65;&#x1F600;&amp;</text>")).filter((i) => i.startsWith("image.")), []);
+  assert.deepEqual(failing(svg("<defs><linearGradient id='g'/></defs><rect fill='url(&#35;g)'/>")).filter((i) => i.startsWith("image.")), []);
+  assert.ok(failing(svg("<rect style='fill:u&#114;l(https://example.com/p)'/>")).includes("image.self_contained"));
+  assert.ok(failing(svg("<rect fill='url(&#104;ttps://example.com/p)'/>")).includes("image.self_contained"));
+  assert.ok(failing(svg("<style>rect{fill:u&#114;l(https://e.com/p)}</style>")).includes("image.self_contained"));
   assert.ok(failing("<svg xmlns='http://www.w3.org/2000/svg'><image xlink:href='#a'/></svg>").includes("image.xml"));
   assert.match(check({ uri: toUri(withImage("<svg xmlns='x'>\n<rect></svg>")) }).checks.find((c) => c.id === "image.xml")?.message ?? "", /line 2/);
   assert.ok(ids(check({ uri: toUri({ ...goldenJson(), image: "https://example.com/1.png" }) }), "warn").includes("image.type"));
@@ -207,6 +217,11 @@ test("the page: a wrong or unknown engine, a changed page, a wrong version, inva
   assert.notEqual(midi, html);
   assert.deepEqual(fails(midi), ["player.midi"]);
   assert.match(check({ uri: toUri(withHtml(midi)) }).checks.find((c) => c.id === "player.midi")?.message ?? "", /fails the page's check/);
+  // A tab at the end of the settings or the MIDI block: the page's decoders strip only spaces, so it
+  // disables playback, and the trimmed blocks of splitPage must not hide it.
+  assert.deepEqual(fails(html.replace(MIDI_OPEN, "\t" + MIDI_OPEN)), ["player.settings"]);
+  assert.deepEqual(fails(html.replace(ART_OPEN, "\t" + ART_OPEN)), ["player.midi"]);
+  assert.deepEqual(fails(html.replace(MIDI_OPEN, "\n" + MIDI_OPEN)), ["player.settings"]);
   // SETTINGS that do not decode.
   const settings = html.replace(/(id="settings">\s*)1,/, "$12,");
   assert.notEqual(settings, html);
@@ -246,6 +261,13 @@ test("sizes: the JSON-RPC response against the 10 MiB cap", () => {
   const near = check({ uri: JSON_PREFIX + "A".repeat(4_000_000) });
   assert.ok(ids(near, "warn").includes("size.rpc"));
   assert.ok(!ids(near, "fail").includes("size.rpc"));
+  // The decoded token JSON gets the same verdict as its token_uri.
+  const huge = { ...goldenJson(), description: "x".repeat(3_000_000) };
+  const [asUri, asJson] = [check({ uri: toUri(huge) }), check({ json: JSON.stringify(huge) })];
+  assert.ok(ids(asUri, "warn").includes("size.rpc"));
+  assert.deepEqual([ids(asJson, "warn"), asJson.sizes.rpc_response_estimated], [ids(asUri, "warn"), asUri.sizes.rpc_response_estimated]);
+  const over = { ...goldenJson(), description: "x".repeat(4_000_000) };
+  assert.ok(ids(check({ json: JSON.stringify(over) }), "fail").includes("size.rpc"));
   // A measured size replaces the estimate.
   assert.equal(check({ uri: golden }, { rpcResponseBytes: 1234 }).sizes.rpc_response_bytes, 1234);
 });
@@ -308,6 +330,7 @@ test("command line: exit codes, --json, stdin, usage errors", async () => {
   assert.equal(r.status, 1);
   assert.match(r.stdout, /FAIL token_uri\.base64 .*"!" at offset 0/);
   assert.equal(cli(["-", "--expect", "00".repeat(32)], golden).status, 1);
+  assert.equal(cli(["-", "--expect", "zz"], golden).status, 2);
   assert.equal(cli([]).status, 2);
   assert.equal(cli(["--bogus"]).status, 2);
   assert.equal(cli(["/nonexistent"]).status, 2);
