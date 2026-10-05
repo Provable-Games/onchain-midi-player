@@ -27,12 +27,12 @@ Get the tools: Node 22 or later, and a clone whose `grep 'pub const VERSION' src
 
 ## What the class checks
 
-`midi_segment` reverts on exactly the checks in the table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/settings.cairo), in the checkout whose `VERSION` matches your class. Trust that table and `preview`, which runs the same checks; do not rely on remembered ranges:
+`midi_segment` reverts on exactly the checks in the table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/settings.cairo), in the checkout whose `VERSION` matches your class. Trust that table and `preview`, which runs the same checks; do not rely on remembered ranges.
 
 - Validation covers what the format and the engine require: `quality` is 0 or 1, `voices` at least 1, the counts, the slots, the routes, the wave index, and that a filter sits on an audio output with a cutoff and a Q above 0. Every other number takes any value of its integer type, every wave sample and harmonic included.
-- Custom waves (issue #2) and filters (issue #3) are accepted; see below.
+- Custom waves and filters are accepted (below).
 - There is no `SETTINGS` length cap: the network prices the cost ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#the-size-of-settings), [Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits)).
-- The operator values multiply into the engine's frequencies and levels. When a product passes the 32-bit float range at some note and tuning (a long FM chain of high ratios, or a large `key_scale`), the engine skips that note: it makes no sound, and the song plays on (the fork's task T5.2). See [Engine limits on operator values](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#engine-limits-on-operator-values).
+- The operator values multiply into the engine's frequencies and levels. When a product passes the 32-bit float range at some note and tuning (a long FM chain of high ratios, or a large `key_scale`), the engine skips that note: it makes no sound, and the song plays on. See [Engine limits on operator values](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#engine-limits-on-operator-values).
 
 The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`; wave lengths are in the check table). Read them from your checkout.
 
@@ -62,7 +62,7 @@ The count limits are constants in that file (`MAX_TIMBRES`, `MAX_OPERATORS`, `MA
 
 ## Custom waves
 
-Issue [#2](https://github.com/Provable-Games/onchain-midi-player/issues/2). See [Custom waves](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#custom-waves), the source of truth for this section.
+See [Custom waves](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#custom-waves), the source of truth for this section.
 
 - **Define each wave once** in `TinySynthSettings.waves`, shared by every timbre, and select it in an operator with `wave: Waveform::Custom(index)`, 0-based. An index past the table reverts `'TS: wave index out of range'`. Up to `MAX_WAVES` entries; unused and repeated entries are allowed.
 - **`WaveDef::Samples(Span<i8>)`** is one cycle of a chip wave, played sample-and-hold: sample `s` is `s / 128` (−128 is −1.0, 127 is 0.9921875). The note sets the cycle rate, whatever the table's length, so a melodic wave keeps the usual `ratio` and `offset_hz`. The engine holds each sample for the same number of frames, so steps stay sharp.
@@ -90,14 +90,14 @@ let pulse_carrier = Operator { wave: Waveform::Custom(0), ..default_operator() }
 
 ## Filters
 
-Issue [#3](https://github.com/Provable-Games/onchain-midi-player/issues/3), using the engine's fixed operator filter from fork issue [#27](https://github.com/Provable-Games/webaudio-tinysynth/issues/27). See [Filters](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#filters), the source of truth for this section.
+See [Filters](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#filters), the source of truth for this section.
 
 - **One fixed filter per audio output:** `filter: Option::Some(Filter { kind, cutoff, key_track, q })` on an operator whose `route` is 0. It sits between the operator's envelope and the channel, is set at note-on and has no envelope, so no sweeps. FM and AM paths are never filtered: a filter on a modulator reverts `'TS: filter on modulator'`.
 - **`kind`:** `LowPass`, `HighPass` or `BandPass`.
 - **`cutoff`**, fixed point: Hz, or with `key_track` a multiple of the note's frequency (tuned, before `ratio`, `offset_hz`, bend and the pitch envelope), so a lead keeps its brightness across the keyboard. On drums use Hz: a drum timbre's note is its drum note.
 - **`q`**, fixed point: a linear Q. `7_071` (0.7071) is flat for a low- or high-pass, and higher values add a resonant peak at the cutoff. A band-pass's bandwidth is its centre ÷ `q`.
 - **Ranges:** a cutoff and a Q above 0 (`'TS: filter cutoff out of range'`, `'TS: filter q out of range'`); nothing else is checked. The engine clamps the computed cutoff to 0.45 × the sample rate (21,600 Hz at 48 kHz, 19,845 Hz at 44.1 kHz). Very high or key-tracked cutoffs are therefore safe, but the ceiling, and so how a very high cutoff sounds, depends on the listener's device.
-- **Chip hi-hats are now possible:** `MetallicNoise` at `ratio` 0 and `offset_hz` 390 Hz through a 3 kHz high-pass (`cutoff` 30,000,000, `q` 7,071), as the closed and open hats of the `filters` entry in [`tests/fixtures/settings.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/tests/fixtures/settings.json). They measure at least 24 dB less energy below 1 kHz than above 4 kHz (about 34 to 36 dB, against about 9 dB unfiltered).
+- **Chip hi-hats:** `MetallicNoise` at `ratio` 0 and `offset_hz` 390 Hz through a 3 kHz high-pass (`cutoff` 30,000,000, `q` 7,071), as the closed and open hats of the `filters` entry in [`tests/fixtures/settings.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/tests/fixtures/settings.json). They measure at least 24 dB less energy below 1 kHz than above 4 kHz (about 34 to 36 dB, against about 9 dB unfiltered).
 - **Filtered leads and basses:** a sawtooth or square through a key-tracked low-pass, for example `cutoff` 40,000 (4× the note); a band-pass on `WhiteNoise` gives breath and formant textures.
 - **Porting from TinySynth:** `fl`, `ff`, `fq` and `fk` become `kind` (`lowpass` is `LowPass`, and so on), `cutoff` = `ff` × 10,000, `q` = `fq` × 10,000 (TinySynth's default `fq` is 0.7071) and `key_track` = `fk` == 1.
 - **Cost:** a filter adds 8 to 26 bytes of `SETTINGS` (a typical one 15 to 18). Six filtered voices take `midi_segment` with a full-size score to 62.4M, against 60.7M for the three reference sounds.
@@ -118,16 +118,11 @@ let hat = Operator {
 };
 ```
 
-## Not accepted yet
-
-- Nothing: the class accepts every part of the format.
-- `WhiteNoise` and `MetallicNoise` are accepted and seeded, so their buffers are the same on every page load.
-
 ## Wire format, size and gas
 
 - The class validates the settings, then writes them into the page as `SETTINGS`: a flat list of canonical decimal integers (only `0-9`, `-` and `,`), fields in declaration order, a length before every list, enums as their variant index, `bool` as 0/1, `Option` as 0 or 1 followed by the value. Format version 1. See [The `SETTINGS` format](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#the-settings-format); grammar in [`src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/settings.cairo).
 - Size: `1,1,30,40,64,0,0` with the defaults, plus about 6 bytes per timbre, 50 per operator and 2 to 6 per wave sample or harmonic. `preview` prints the size. The class does not cap the length; the gas grows with it.
-- Gas: `SETTINGS` is base64-encoded at call time with the MIDI, about 14.5M L2 gas per 1,000 bytes ([Gas and limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md)).
+- Gas: `SETTINGS` is base64-encoded at call time with the MIDI, about 14.5M L2 gas per 1,000 bytes ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#the-size-of-settings)).
 
 ## `'TS: …'` errors
 

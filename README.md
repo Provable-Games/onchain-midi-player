@@ -111,7 +111,7 @@ npm run check-midi -- song.mid other.mid
 - Only the tempo resets between passes. Set tempo, programs and controllers at tick 0 so every pass starts the same way.
 - Channel 10 is drums: notes 35–81, and note-offs are ignored. The other channels play General MIDI programs 0–127.
 - The art restarts at every pass. Make the pass a whole multiple of the art's animation periods, or the art jumps at the loop point.
-- Every byte costs gas: about 14.5M L2 gas per KB.
+- Every byte costs gas: about 14M L2 gas per KB.
 
 **Sound settings.** Each `midi_segment` call takes a `TinySynthSettings` value, declared in [`src/types.cairo`](src/types.cairo):
 
@@ -143,7 +143,8 @@ A marketplace or indexer reads `token_uri` with a view call (`starknet_call`). T
 | --- | --- |
 | The fixed page: `animation_url_segment()` and appending it, word-aligned | about 10M |
 | Art: per KB of SVG (it is encoded twice) | about 9M |
-| MIDI or `SETTINGS`: per KB | about 14.5M |
+| MIDI: per KB | about 14M |
+| `SETTINGS`: per KB | about 14.5M |
 | Your contract's own work: rendering the SVG, the JSON members | yours to measure |
 
 `SETTINGS` is the text form of your `TinySynthSettings`. The defaults are 16 bytes, and three typical custom sounds about 0.3 KB. Each operator adds about 50 bytes, and each wave sample or harmonic 2 to 6 bytes. `SETTINGS` has no size cap: gas and the node's cap are the only limits.
@@ -207,6 +208,27 @@ The skills then run as `/onchain-midi-player:midi-guide` and so on. `claude plug
   "enabledPlugins": { "onchain-midi-player@onchain-midi-player": true }
 }
 ```
+
+**Install in Codex.** Ask the built-in [`$skill-installer`](https://learn.chatgpt.com/docs/build-skills#install-curated-skills-for-local-use) to install all four skills. Send this prompt in Codex:
+
+```text
+$skill-installer Install these skills from Provable-Games/onchain-midi-player:
+- plugins/onchain-midi-player/skills/integrator-guide
+- plugins/onchain-midi-player/skills/midi-guide
+- plugins/onchain-midi-player/skills/sound-design
+- plugins/onchain-midi-player/skills/token-uri-inspector
+```
+
+For a pinned version, add `Use ref <tag-or-commit> for all four skills` to the prompt. The installer adds them to your user skills directory, available across projects. Open `/skills` to check they appear; restart Codex if needed. Invoke them as `$integrator-guide`, `$midi-guide`, `$sound-design` or `$token-uri-inspector`.
+
+For a project-local installation, run this from your project's root, using the path to your clone of this repository:
+
+```sh
+mkdir -p .agents/skills
+cp -R /path/to/onchain-midi-player/plugins/onchain-midi-player/skills/. .agents/skills/
+```
+
+Copy all four folders, including their scripts and references, to preserve links between skills. Commit `.agents/skills/` to share them with your team. To update a project-local installation, repeat the copy from an updated clone. For an installer-managed update, remove the installed skill folders before asking `$skill-installer` to install them again from the desired ref.
 
 **Other agents.** Each `SKILL.md` follows the open [Agent Skills](https://agentskills.io/specification) format. Copy the whole `skills/` folder into your agent's skills directory to keep the links between skills.
 
