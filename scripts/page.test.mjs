@@ -27,6 +27,10 @@ test("compareSemVer orders by SemVer precedence", () => {
   const ordered = ["0.1.0", "0.2.0", "0.10.0", "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "1.0.1"];
   for (let i = 1; i < ordered.length; i++) assert.ok(compareSemVer(ordered[i - 1], ordered[i]) < 0, `${ordered[i - 1]} < ${ordered[i]}`);
   assert.equal(compareSemVer("1.2.3", "1.2.3"), 0);
+  // Exact beyond 2^53, where Number would round both to the same value.
+  assert.ok(compareSemVer("0.2.0-9007199254740992", "0.2.0-9007199254740993") < 0);
+  assert.ok(compareSemVer("9007199254740993.0.0", "9007199254740992.0.0") > 0);
+  assert.ok(compareSemVer("0.9007199254740992.0", "0.9007199254740993.0") < 0);
 });
 
 test("the committed build is the one recorded for VERSION, and every record is well formed", () => {
