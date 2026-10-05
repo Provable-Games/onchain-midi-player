@@ -14,7 +14,7 @@ use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 
 fn synth() -> IOnchainTinySynthSafeLibraryDispatcher {
     // Declared only, never deployed.
-    let class_hash = *declare("OnchainTinySynth").unwrap().contract_class().class_hash;
+    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
     IOnchainTinySynthSafeLibraryDispatcher { class_hash }
 }
 
@@ -240,7 +240,7 @@ fn filter_cutoff_or_q_of_zero_reverts() {
 #[test]
 #[feature("safe_dispatcher")]
 fn unknown_token_reverts() {
-    let class_hash = *declare("OnchainTinySynth").unwrap().contract_class().class_hash;
+    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
     let (address, _) = declare("BeastLikeNft")
         .unwrap()
         .contract_class()

@@ -121,7 +121,8 @@ These findings come from the beasts-v3 integration ([PR #124](https://github.com
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 
 // Declare the class (thanks to build-external-contracts) and never deploy it.
-let tinysynth = *declare("OnchainTinySynth").unwrap().contract_class().class_hash;
+// On edition 2025_12 `class_hash` is a `ClassHash`; on 2024_07 prefix it with `*`.
+let tinysynth = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
 let nft_class = declare("YourNft").unwrap().contract_class();
 let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 ```
