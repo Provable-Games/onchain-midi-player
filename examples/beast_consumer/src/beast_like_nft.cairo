@@ -53,7 +53,7 @@ pub trait IBeastLikeNft<T> {
 
 /// Fixed collection description. Contains no `"` or `\`, so it embeds in JSON unescaped.
 pub fn description() -> ByteArray {
-    "A Beast-like example token. Its animation_url plays the onchain MIDI with the onchain TinySynth class."
+    "A Beast-like example token. Its animation_url plays the onchain MIDI with the TinySynth class."
 }
 
 /// A tiny 4x4 solid red PNG, standing in for the Beasts pixel art that the contract reads from its

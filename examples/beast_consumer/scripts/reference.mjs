@@ -59,7 +59,7 @@ export const TOKENS = {
 };
 
 export const DESCRIPTION =
-  'A Beast-like example token. Its animation_url plays the onchain MIDI with the onchain TinySynth class.';
+  'A Beast-like example token. Its animation_url plays the onchain MIDI with the TinySynth class.';
 
 // ---------------------------------------------------------------------------------------------
 // Token 4: a full-size Beast (mirrors src/beast_data.cairo, which gen_fixtures.mjs writes from these)
