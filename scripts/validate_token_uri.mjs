@@ -206,7 +206,7 @@ export function parseXml(s) {
   const styles = [];
   /** @type {string[]} */
   const elements = [];
-  /** @type {{name: string, local: string, scope: Map<string, string>}[]} */
+  /** @type {{name: string, local: string, scope: Map<string, string>, style?: {text: string, at: number}}[]} */
   const stack = [];
   /** @type {{local: string, ns: string | undefined} | null} */
   let root = null;
@@ -214,6 +214,8 @@ export function parseXml(s) {
   let doctype = false;
   let internalSubset = false;
   const n = s.length;
+  const badChar = s.search(/[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u);
+  if (badChar >= 0) throw new XmlError(`U+${s.charCodeAt(badChar).toString(16).toUpperCase().padStart(4, "0")} is not an XML character`, badChar);
   let i = s.charCodeAt(0) === 0xfeff ? 1 : 0;
   const NAME = /[A-Za-z_:À-￿][A-Za-z0-9_:.\-·À-￿]*/y;
   const name = (/** @type {number} */ at, /** @type {string} */ what) => {
@@ -246,7 +248,10 @@ export function parseXml(s) {
       } else {
         text(t, i);
         if (t.includes("]]>")) throw new XmlError('"]]>" in text', i + t.indexOf("]]>"));
-        if (stack[stack.length - 1].local === "style") styles.push({ text: expandRefs(t), at: i });
+        {
+          const st = stack[stack.length - 1].style;
+          if (st) st.text += expandRefs(t);
+        }
       }
       i = j;
     } else if (s.startsWith("<!--", i)) {
@@ -258,7 +263,10 @@ export function parseXml(s) {
       const j = s.indexOf("]]>", i);
       if (!stack.length) throw new XmlError("CDATA outside the root element", i);
       if (j < 0) throw new XmlError("unterminated CDATA section", i);
-      if (stack[stack.length - 1].local === "style") styles.push({ text: s.slice(i + 9, j), at: i });
+      {
+        const st = stack[stack.length - 1].style;
+        if (st) st.text += s.slice(i + 9, j);
+      }
       i = j + 3;
     } else if (s.startsWith("<?", i)) {
       const j = s.indexOf("?>", i);
@@ -343,7 +351,13 @@ export function parseXml(s) {
       if (!root) root = { local: nm.slice(nm.indexOf(":") + 1), ns: scope.get(prefix(nm)) };
       if (selfClosed) {
         if (!stack.length) rootClosed = true;
-      } else stack.push({ name: nm, local: nm.slice(nm.indexOf(":") + 1), scope });
+      } else {
+        // The text of a style element is all its text and CDATA chunks together, as the browser reads it.
+        const local = nm.slice(nm.indexOf(":") + 1);
+        const style = local === "style" ? { text: "", at: i } : undefined;
+        if (style) styles.push(style);
+        stack.push({ name: nm, local, scope, style });
+      }
       i = k;
     }
   }
@@ -438,7 +452,8 @@ export function parseInput(buf) {
     doc = undefined; // possibly sncast output with extra lines; tokenUriFromCall reads those
   }
   if (Array.isArray(doc)) return { uri: byteArrayFromFelts(doc).toString("latin1"), felts: doc.length };
-  if (isObject(doc) && !["result", "response", "error"].some((k) => k in doc)) return { json: text };
+  // A call output has none of the token's own fields; a token JSON may carry any extra field, even "result".
+  if (isObject(doc) && (["name", "image", "animation_url"].some((k) => k in doc) || !["result", "response", "error"].some((k) => k in doc))) return { json: text };
   return fromCall(text);
 }
 
@@ -840,6 +855,7 @@ export async function fetchTokenUri({ rpc, contract, token, fetchImpl = fetch })
     return out;
   };
   let last = "";
+  let first = "";
   for (const name of ["token_uri", "tokenURI"]) {
     let text;
     try {
@@ -862,15 +878,21 @@ export async function fetchTokenUri({ rpc, contract, token, fetchImpl = fetch })
       throw new Error("the RPC response is not JSON");
     }
     if (doc.error) {
-      last = clean(`${doc.error.message ?? "error"} (code ${doc.error.code}) ${doc.error.data ? JSON.stringify(doc.error.data) : ""}`.trim());
+      const raw = `${doc.error.message ?? "error"} (code ${doc.error.code}) ${doc.error.data ? JSON.stringify(doc.error.data) : ""}`.trim();
       const reasons = shortStrings(doc.error);
-      if (name === "token_uri" && (doc.error.code === 21 || reasons.includes("ENTRYPOINT_NOT_FOUND") || /ENTRYPOINT_NOT_FOUND/.test(last))) continue;
-      throw new Error(`starknet_call failed: ${last}${reasons.length ? `\nrevert reason: ${reasons.join(", ")}` : ""}`);
+      // Redact after assembling the whole message: a decoded revert reason can hold the URL too.
+      last = clean(`${name}: starknet_call failed: ${raw}${reasons.length ? `\nrevert reason: ${reasons.join(", ")}` : ""}`);
+      if (name === "token_uri" && (doc.error.code === 21 || reasons.includes("ENTRYPOINT_NOT_FOUND") || /ENTRYPOINT_NOT_FOUND/.test(raw))) {
+        first = last;
+        continue;
+      }
+      // A nested ENTRYPOINT_NOT_FOUND (a bad library_call) also retries, so keep the first error: it is the one to read.
+      throw new Error(first ? `${first}\nthen ${last}` : last);
     }
     if (!Array.isArray(doc.result)) throw new Error("the RPC response has no result array");
     return { uri: byteArrayFromFelts(doc.result).toString("latin1"), felts: doc.result.length, responseBytes: Buffer.byteLength(text) };
   }
-  throw new Error(`starknet_call failed: ${last}`);
+  throw new Error(last);
 }
 
 // ---------------------------------------------------------------------------------------------

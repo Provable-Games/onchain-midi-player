@@ -56,6 +56,13 @@ test("raw call output gives the same report: a result array, a JSON-RPC response
   assert.throws(() => parseInput(Buffer.from(JSON.stringify({ error: { code: 40, message: "Contract error" } }))), /call failed/);
 });
 
+test("decoded token JSON with extra fields named like call output is still token JSON", () => {
+  const withExtra = { ...goldenJson(), result: "ok", response: "x", error: 1 };
+  const [asJson, asUri] = [check(parseInput(Buffer.from(JSON.stringify(withExtra)))), check({ uri: toUri(withExtra) })];
+  assert.deepEqual(ids(asJson, "fail"), []);
+  assert.deepEqual(ids(asJson, "warn"), ids(asUri, "warn"));
+});
+
 test("the decoded token JSON is accepted without the token_uri layer", () => {
   const r = check({ json: JSON.stringify(goldenJson()) });
   assert.deepEqual(ids(r, "fail"), []);
@@ -169,6 +176,11 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   const prefixed = "<svg xmlns='http://www.w3.org/2000/svg' xmlns:s='http://www.w3.org/2000/svg'>";
   assert.ok(failing(`${prefixed}<s:style>@import "https://example.com/a.css";</s:style></svg>`).includes("image.self_contained"));
   assert.ok(failing(`${prefixed}<s:style><![CDATA[rect{fill:url(https://example.com/p)}]]></s:style></svg>`).includes("image.self_contained"));
+  // Literal characters must be XML characters everywhere, and a style's text is its chunks together.
+  for (const bad of ["<text><![CDATA[a\u0001b]]></text>", "<!-- \u0001 --><g/>", "<text>a\u0002</text>", "<text>\uFFFE</text>"]) assert.ok(failing(svg(bad)).includes("image.xml"), JSON.stringify(bad));
+  assert.ok(failing(svg("<style>rect{fill:u<![CDATA[rl]]>(https://example.com/p)}</style>")).includes("image.self_contained"));
+  assert.ok(failing(svg("<style>@im<!-- x -->port 'https://example.com/a.css';</style>")).includes("image.self_contained"));
+  assert.ok(failing(svg("<style>rect{fill:ur<![CDATA[l(]]>https://example.com/p)}</style>")).includes("image.self_contained"));
   // XML declarations follow their grammar.
   const body = "<svg xmlns='http://www.w3.org/2000/svg'/>";
   for (const bad of ["<?xml bogus?>", "<?xml version='1.0' bogus='1'?>", "<?xml encoding='utf-8'?>", "<?xml version=\"2.0\"?>", "<?xml version='1.0' standalone='maybe'?>"]) {
@@ -303,6 +315,7 @@ test("keccak-256 and the selectors", () => {
 
 test("fetch: calls token_uri with the u256 split, falls back to tokenURI, and never reveals the RPC URL", async () => {
   const rpc = "https://rpc.example.com/v0_8/SECRET_KEY";
+  const rpc2 = "https://rpc.test/KEY";
   const felts = byteArrayFelts(golden);
   /** @type {any[]} */
   const calls = [];
@@ -334,6 +347,16 @@ test("fetch: calls token_uri with the u256 split, falls back to tokenURI, and ne
   assert.match(await fails(async () => ({ ok: false, status: 429, text: async () => "" })), /HTTP 429/);
   assert.match(await fails(async () => ({ ok: true, status: 200, text: async () => "<html>" })), /not JSON/);
   assert.match(await fails(async () => reply({ error: { code: 40, message: `Contract error at ${rpc}`, data: { revert_error: ["0x4f7574206f6620676173"] } } })), /revert reason: Out of gas/);
+  // A revert reason that decodes to the URL is redacted too.
+  const urlFelt = "0x" + Buffer.from(rpc2).toString("hex");
+  const redacted = await fetchTokenUri({ rpc: rpc2, contract: "0x1", token: "1", fetchImpl: /** @type {any} */ (async () => reply({ error: { code: 40, message: "Contract error", data: { revert_error: [urlFelt] } } })) }).catch((e) => e.message);
+  assert.doesNotMatch(redacted, /rpc\.test|KEY/);
+  assert.match(redacted, /<rpc>/);
+  // A nested ENTRYPOINT_NOT_FOUND (a bad library_call) retries with tokenURI, and the first error stays in the message.
+  const nested = "0x" + Buffer.from("ENTRYPOINT_NOT_FOUND").toString("hex");
+  let n = 0;
+  const msg = await fetchTokenUri({ rpc, contract: "0x1", token: "1", fetchImpl: /** @type {any} */ (async () => reply({ error: { code: 40, message: "Contract error", data: { revert_error: [n++ === 0 ? nested : "0x4f7574206f6620676173"] } } })) }).catch((e) => e.message);
+  assert.match(msg, /token_uri: starknet_call failed[\s\S]*revert reason: ENTRYPOINT_NOT_FOUND[\s\S]*then tokenURI: starknet_call failed[\s\S]*Out of gas/);
 });
 
 test("command line: exit codes, --json, stdin, usage errors", async () => {
