@@ -13,6 +13,7 @@ Implemented:
 - **The gzipped engine (issue #14):** `PAGE` carries the engine gzipped, with a small gunzip shim, which nearly halves the segment and its gas. See [The gzipped engine](#the-gzipped-engine).
 - **The class (issue #10):** `OnchainTinySynth` in [`src/contract.cairo`](src/contract.cairo), with `midi_segment` in [`src/segment.cairo`](src/segment.cairo). It matches every golden fixture byte for byte, directly and through a library call. See [Gas and limits](#gas-and-limits).
 - **Custom waves (issue #2):** `SynthSettings.waves`, sample and harmonic waveforms that the player registers with the engine before installing the timbres, from `page.9`. See [Custom waves](#custom-waves).
+- **The sound provider interface:** `ISoundProvider` and `TokenSound` in [`src/provider.cairo`](src/provider.cairo), which a composer's contract implements to serve a token's MIDI and `SynthSettings`, and `try_get_sound`, with which an NFT calls it. The class does not use it. See [Sound provider interface](#sound-provider-interface).
 - **Filters (issue #3):** an optional fixed low-, high- or band-pass filter on each audio-output operator, which the player passes to the engine's operator filter, from `page.10`. See [Filters](#filters).
 - **The optimized base64 encoder:** the maintainer's `game_components_encoding` package, from the game-components release `v3.1.0`, which [`src/base64.cairo`](src/base64.cairo) re-exports. A full-size Beast `token_uri` costs 0.29B L2 gas. See [The base64 encoder](#the-base64-encoder).
 
@@ -147,6 +148,8 @@ Declared in [`src/interface.cairo`](src/interface.cairo) as `IOnchainTinySynth`.
 | `version() -> felt252` | Short string identifying the engine and page versions: `'tinysynth-3d965d1+page.10'`, an interim build (see [Versions](#versions) and [Build pipeline](#build-pipeline)). |
 | `license() -> ByteArray` | Apache-2.0 notice for this library and the embedded TinySynth, including the fork's modification notice, then the MIT licenses of fflate, from which the page's gunzip shim derives, and of game-components, whose base64 encoder the class embeds. |
 
+The crate also declares `ISoundProvider`, the interface composers implement to serve a token's MIDI and `SynthSettings` (see [Sound provider interface](#sound-provider-interface)). The class does not implement or call it.
+
 Only contracts can call these functions. The class is never deployed, so RPC nodes and block explorers cannot call it directly (`starknet_call` needs a contract address). For that reason the class does not store the raw engine script or a standalone single-layer `animation_url`: each would be a second or third stored copy of the page, adding class size for callers that cannot reach it.
 
 The class is `onchain_tinysynth::contract::OnchainTinySynth`: an empty `#[storage]` struct, no constructor, every entry point a view. `animation_url_segment`, `script_sha256`, `version` and `license` return the generated constants of [`src/page_data.cairo`](src/page_data.cairo). `midi_segment` validates and encodes the settings ([`src/settings.cairo`](src/settings.cairo)), builds `D` and returns `b64(b64(D))` ([`src/segment.cairo`](src/segment.cairo)). Invalid settings revert with the `'TS: ...'` short string and the indices as extra panic felts; through a library call the panic data arrives whole, followed by `'ENTRYPOINT_FAILED'`.
@@ -225,6 +228,8 @@ fn token_uri(
 }
 ```
 
+**MIDI and settings.** `midi` and `settings` come from wherever the collection keeps its sound: constants in the NFT or its renderer, as in the example, or a composer's contract that implements `ISoundProvider`, called with `try_get_sound` (see [Sound provider interface](#sound-provider-interface)).
+
 **Art (required).** The SVG must never contain `</script`, in any letter case; see [Art (SVG) requirements](#art-svg-requirements).
 
 **Base64 alignment (required).** Every piece passed to `base64`, except the final `'}'`, must be a multiple of 3 bytes long. Otherwise the encoder emits `=` padding mid-stream and the concatenation is no longer valid base64. The consumer pads with spaces between JSON tokens (`pad3`); the class pads `PAGE` and `D` itself.
@@ -244,6 +249,79 @@ The consumer chooses where its large pieces land by adding spaces between JSON t
 At most 30 groups are needed in each place (120 characters), and the decoded JSON only gains insignificant whitespace. `midi_segment` and the second `b64(S)` cannot be aligned this way: they follow the segment directly at both layers.
 
 **Your own encoder.** Consumers may use their own encoder instead of the class's `base64`, provided it produces standard RFC 4648 output. A copy compiled into the consumer also avoids passing the data through the library call: for a 22.7 KB SVG that saves about 7.4M L2 gas (75.2M instead of 82.6M).
+
+## Sound provider interface
+
+The class plays a token's MIDI with its `SynthSettings`; it does not know where they come from. [`src/provider.cairo`](src/provider.cairo) (`onchain_tinysynth::provider`) fixes how a composer's contract serves them, so any NFT can call any composer: a composer implements one function, and an NFT can change composers without changing its code. The class does not use this module, so it changes neither the class hash nor `PAGE`.
+
+A Standard MIDI File can select an instrument, with a program change or a note on channel 10, but it cannot define one. So the composer's contract owns both the score and the instrument definitions it plays, as `SynthSettings`. The NFT, or its renderer, calls one function and passes both straight to `midi_segment`:
+
+```cairo
+#[derive(Drop, Clone, Serde, PartialEq, Debug)]
+pub struct TokenSound {
+    pub midi: ByteArray, // a raw Standard MIDI File
+    pub settings: SynthSettings, // the instruments it plays
+}
+
+#[starknet::interface]
+pub trait ISoundProvider<T> {
+    fn get_sound(self: @T, token_id: u256) -> TokenSound;
+}
+
+/// Optional: the score alone, for tools and MIDI-only consumers. The same bytes as
+/// `get_sound(token_id).midi`.
+#[starknet::interface]
+pub trait IMidiProvider<T> {
+    fn get_midi(self: @T, token_id: u256) -> ByteArray;
+}
+```
+
+A provider is deployed, so unlike the class it can be read with `starknet_call` from any RPC client or explorer.
+
+### The provider contract
+
+A contract that implements `ISoundProvider` must honour all of these:
+
+1. **Token IDs as minted.** `get_sound` takes the NFT's token ID exactly as the NFT minted it, the whole `u256`. Decode only the bits the provider uses and ignore the rest: a provider that rejects unused bits breaks when the NFT's ID layout grows, as Beasts' newer 180-bit token IDs do.
+2. **A raw Standard MIDI File.** `midi` is the file's bytes, not base64 and not a data URI, and it passes the page's MIDI check, `check-midi` ([MIDI contract](#midi-contract), [Checking MIDI files](#checking-midi-files)). The class embeds the bytes without parsing them, so a bad file does not revert: the page shows an error instead of playing.
+3. **Valid settings.** `settings` passes `settings::validate` ([`src/settings.cairo`](src/settings.cairo)) in the class version the NFT calls; otherwise `midi_segment` reverts.
+4. **Deterministic.** The same token and the same live state always give the same bytes, whoever calls. Derive the sound from the token and contract state, never from the caller or the transaction. When state changes a token's sound, the NFT emits an ERC-4906 metadata update so marketplaces refetch.
+5. **View-only.** No storage writes, no events, no calls that change state.
+6. **Reverts only for an unknown token.** Every token the NFT has minted gets a sound.
+
+Recommended:
+
+- **Return only what the token's MIDI uses:** the timbres of the programs and drum notes it plays, and the waves those timbres select. `SETTINGS` costs about 14.5M L2 gas per 1,000 bytes through `midi_segment` ([The size of `SETTINGS`](#the-size-of-settings-no-byte-cap)). A Beast's subset is about 0.9–1.4 KB, against about 3.9 KB for a full chip bank: about 13–20M L2 gas against about 57M, on every `token_uri` call.
+- **Hold the preset bank as constants in the provider's code,** and pick each token's subset from them. Storage reads cost about 24K L2 gas per felt, and a `SynthSettings` stored field by field takes a felt per field.
+- **Keep sample tables short.** Each sample is 2 to 6 bytes of `SETTINGS`. The 32,767-step reference LFSR (147,532 bytes) adds about 2.1B L2 gas to `midi_segment`, more than many RPC nodes serve ([Network and node limits](#network-and-node-limits)), and the provider pays again to hold or build it (277.9M to build it in a Cairo loop). `WhiteNoise` and `MetallicNoise` need no table.
+- **Keep the provider's class at Sierra 1.7 or later,** like every class in the `token_uri` call chain ([Network and node limits](#network-and-node-limits)).
+
+### Calling a provider
+
+```cairo
+use onchain_tinysynth::provider::try_get_sound;
+
+match try_get_sound(provider, token_id) {
+    Option::Some(sound) => synth.midi_segment(sound.midi, sound.settings), // the token with sound
+    Option::None => no_sound, // the token without sound
+}
+```
+
+`try_get_sound(provider: ContractAddress, token_id: u256) -> Option<TokenSound>` calls `get_sound` with a raw `call_contract_syscall` and decodes the reply with `Serde::deserialize`. It returns `None`, so the NFT can fall back to the token without sound, when:
+
+- `provider` is zero. No call is made: the zero address is the switch that turns sound off.
+- The call fails: the provider panics (for an unknown token, for example) or has no `get_sound` entry point. Since Starknet 0.13.4 these failures return to the caller instead of reverting it.
+- The reply is not exactly one `TokenSound`: truncated, followed by trailing felts, or malformed (an integer out of its type's range, an unknown enum tag, a `ByteArray` word wider than 31 bytes, or a pending word wider than its length). The corelib's `Serde::deserialize` checks all of these in Cairo 2.20, so the helper needs no length or word checks of its own.
+
+Two failures still revert the whole call, uncatchably: calling an undeployed address, and running out of gas. Call `get_sound` once in the setter that changes the provider, so an undeployed address reverts the setter rather than every `token_uri`. The reply's size is not capped: like `SETTINGS`, it is priced in gas.
+
+**The settings are not validated by the helper.** `midi_segment` validates them anyway; the class version the NFT calls is the authority on what is valid, and this crate's `settings::validate` may be another version's; and `validate` reverts rather than returning a result. To fall back on invalid settings too, test the provider's output against the class in CI, or call `midi_segment` through `library_call_syscall` and treat an error as no sound.
+
+The generated `ISoundProviderDispatcher` suits callers that should revert when the provider fails. Its safe variant returns the provider's panics as errors but still panics in the caller's frame on a malformed reply.
+
+**The call path.** Have the NFT's renderer call the provider itself: the NFT `call_contract`s its renderer, the renderer calls `try_get_sound` and library-calls the class with the result. An NFT that fetches the sound and passes it on to its renderer moves the MIDI and settings through one more calldata hop.
+
+**Tests.** [`tests/test_provider.cairo`](tests/test_provider.cairo): a mock provider whose sound, passed to `midi_segment` through the class, gives a golden fixture byte for byte, for a 180-bit token ID; `try_get_sound`'s `None` for a panicking provider, a missing entry point, a zero address, and truncated, trailing and malformed replies; and a Serde round trip of a `TokenSound` with custom waves and filters. snforge 0.64.0 cannot test the failure paths of a safe *library* call (catching its panic replaces the caller's class hash for the rest of the test), so test them, as these tests do, with `call_contract` into mock contracts.
 
 ## Gas and limits
 
@@ -1119,12 +1197,12 @@ Four skills help AI agents working in other repositories, such as an NFT contrac
 
 | Skill | For |
 | --- | --- |
-| [`integrator-guide`](plugins/onchain-tinysynth/skills/integrator-guide/SKILL.md) | Adding the player to a contract's `token_uri`: the library dispatcher, holding the class hash, the `token_uri` layout, the art rule, snforge tests, gas and RPC caps |
-| [`midi-guide`](plugins/onchain-tinysynth/skills/midi-guide/SKILL.md) | Writing MIDI for the player: previewing offline, where it differs from standard MIDI players, every `checkMidi` rule, keeping the music in sync with the art |
-| [`sound-design`](plugins/onchain-tinysynth/skills/sound-design/SKILL.md) | The `SynthSettings` a contract passes: engine settings, custom timbres, `'TS: …'` errors, building settings in Cairo |
+| [`integrator-guide`](plugins/onchain-tinysynth/skills/integrator-guide/SKILL.md) | Adding the player to a contract's `token_uri`: the library dispatcher, holding the class hash, the `token_uri` layout, the art rule, calling a sound provider, snforge tests, gas and RPC caps |
+| [`midi-guide`](plugins/onchain-tinysynth/skills/midi-guide/SKILL.md) | Writing MIDI for the player: previewing offline, where it differs from standard MIDI players, every `checkMidi` rule, keeping the music in sync with the art, serving scores from a sound provider |
+| [`sound-design`](plugins/onchain-tinysynth/skills/sound-design/SKILL.md) | The `SynthSettings` a contract passes: engine settings, custom timbres, `'TS: …'` errors, building settings in Cairo, a sound provider's per-token subsets |
 | [`token-uri-inspector`](plugins/onchain-tinysynth/skills/token-uri-inspector/SKILL.md) | Fetching, decoding, verifying, rebuilding and viewing a deployed or local `token_uri`, and checking RPC call caps |
 
-**Install in Claude Code.** While this repository is private, installing the plugin and cloning it for the tools need GitHub access to it. The repository is a plugin marketplace ([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)) with one plugin, `onchain-tinysynth`. In the other project:
+**Install in Claude Code.** The repository is a plugin marketplace ([`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)) with one plugin, `onchain-tinysynth`. In the other project:
 
 ```sh
 claude plugin marketplace add Provable-Games/onchain-tinysynth    # or Provable-Games/onchain-tinysynth#<tag> to pin a ref
