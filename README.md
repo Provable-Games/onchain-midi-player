@@ -76,7 +76,7 @@ The interface, in [`src/interface.cairo`](src/interface.cairo):
 **4. Test it.** In snforge, declare the class (never deploy it) and library-call it from your NFT. Then:
 
 - Decode your `token_uri` and compare it with a reference, as the example's golden tests do.
-- Check `engine()`, `version()` and `script_sha256()` against your class's record in [`scripts/page_versions.json`](scripts/page_versions.json).
+- Check `engine()`, `version()` and `script_sha256()` against your class's record in [`scripts/page_versions.json`](scripts/page_versions.json), which holds the current version; for an earlier one, use `git log -p scripts/page_versions.json`.
 - Test that your rendered SVGs never contain `</script`.
 - Run `check-midi` on every score in CI (see below).
 - Budget your largest token's gas (see [How much fits](#how-much-fits-gas-and-limits)).
@@ -175,7 +175,7 @@ Every token's `animation_url` carries the engine, so anyone can check it offline
 
 1. Save the collection's `token_uri` (from its contract, an explorer or a marketplace) to `token_uri.txt`.
 2. Run `node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256>`. It needs Node 22 or later and nothing else. It prints the SHA-256 of the engine, of its gzip payload and of the fixed page.
-3. Compare them with the record for the class's `version()` in [`scripts/page_versions.json`](scripts/page_versions.json) (`script_sha256`, `gzip_sha256`, `page_sha256`).
+3. Compare them with the record for the class's `version()` in [`scripts/page_versions.json`](scripts/page_versions.json) (`script_sha256`, `gzip_sha256`, `page_sha256`). For an earlier version, find its record with `git log -p scripts/page_versions.json`.
 4. Optionally, rebuild the engine from the fork commit in that record (`engine_commit`), and the page and class from this repository.
 
 Shell and Python versions of step 2, and the rebuild steps: [Verifying the engine](docs/verifying.md).
