@@ -26,23 +26,13 @@ export const MIN_HARMONICS = 1;
 export const MIN_SAMPLES = 1;
 /** Fewest voices: with none, every note would be cut. */
 export const MIN_VOICES = 1;
-/**
- * Interim engine limits (checks 15-19), in fixed point: the pinned engine computes non-finite
- * AudioParam values past them and throws while playing. To be removed once it guards them (fork
- * #13, task T5.2).
- */
-export const MAX_VOLUME = 1000000;
-export const MAX_RATIO = 640000;
-export const MAX_PITCH_RATIO = 160000;
-export const MAX_SUSTAIN = 1000000;
-export const MAX_KEY_SCALE = 80000;
 const MAX_ROUTE = 10 + MAX_OPERATORS;
 
 /**
  * Applies the checks of `src/settings.cairo`, in the same order and with the same messages and
  * indices, and throws a `SettingsError` on the first failure. The other numeric fields, and every
- * wave sample and harmonic, take any value of their type, except the interim engine limits
- * (checks 15-19) and a filter's cutoff and Q, which must be above 0 (checks 21-22).
+ * wave sample and harmonic, take any value of their type, except a filter's cutoff and Q, which
+ * must be above 0 (checks 16-17).
  * @param {SynthSettings} s
  * @returns {SynthSettings} `s`
  */
@@ -84,11 +74,6 @@ export function validateSettings(s) {
       check(!(r >= 1 && r <= 10 && r >= pos), "TS: FM target not earlier", at);
       check(!(r >= 11 && r - 10 >= pos), "TS: AM target not earlier", at);
       if (typeof op.wave === "object") check(op.wave.Custom < s.waves.length, range("wave index"), at);
-      check(op.volume <= MAX_VOLUME, range("volume"), at);
-      check(op.ratio <= MAX_RATIO, range("ratio"), at);
-      check(op.pitch_ratio <= MAX_PITCH_RATIO, range("pitch_ratio"), at);
-      check(op.sustain <= MAX_SUSTAIN, range("sustain"), at);
-      check(op.key_scale >= -MAX_KEY_SCALE && op.key_scale <= MAX_KEY_SCALE, range("key_scale"), at);
       if (op.filter !== null) {
         check(r === 0, "TS: filter on modulator", at);
         check(op.filter.cutoff > 0, range("filter cutoff"), at);

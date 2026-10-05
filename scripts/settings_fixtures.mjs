@@ -104,28 +104,30 @@ const U32_MAX = 4294967295;
 const I32_MIN = -2147483648;
 const I32_MAX = 2147483647;
 
+/** The fields that multiply into the engine's gains and frequencies, at their type's maximum. */
+const EXTREMES = { volume: U32_MAX, ratio: U32_MAX, pitch_ratio: U32_MAX, sustain: U32_MAX, key_scale: I32_MAX };
+
 /**
- * The interim engine limits (checks 15-19 of src/settings.cairo): the fields that multiply into the
- * engine's gains and frequencies at their bounds, 100.0, 64.0, 16.0, 100.0 and +-8.0. Past them the
- * pinned engine computes non-finite AudioParam values and throws while playing
- * (scripts/page_check.mjs plays the fixtures at these values).
+ * The same fields at 100.0, 64.0, 16.0, 100.0 and +-8.0 (the class's interim bounds before the
+ * engine's T5.2 guard): large values at which the deepest FM chain still plays notes 0 and 127. Past
+ * them the engine can skip a note whose computed values overflow float32, so the filter fixture uses
+ * these, for its filters to be played rather than skipped (scripts/page_check.mjs checks that they are).
  */
-const BOUNDS = { volume: 1000000, ratio: 640000, pitch_ratio: 160000, sustain: 1000000, key_scale: 80000 };
+const LOUD = { volume: 1000000, ratio: 640000, pitch_ratio: 160000, sustain: 1000000, key_scale: 80000 };
 
 /** The widest filter (issue #3): cutoff and Q at the `u32` maximum, key-tracked. */
 const WIDEST_FILTER = /** @type {const} */ ({ kind: "BandPass", cutoff: U32_MAX, key_track: true, q: U32_MAX });
 
 /**
- * Widest valid operator in v1, at any position `o`: every field at its widest value (its bound for
- * the five bounded fields, the type's extreme for the others), and the widest filter, so an audio
- * output (route 0: only an output may have a filter, and a filter is far wider than a two-digit AM
- * route).
+ * Widest valid operator in v1, at any position `o`: every field at its widest value (the type's
+ * extreme), and the widest filter, so an audio output (route 0: only an output may have a filter,
+ * and a filter is far wider than a two-digit AM route).
  * @param {number} _o
  */
 export const widestOperator = (_o) => op({
-  route: 0, wave: "MetallicNoise", volume: BOUNDS.volume, ratio: BOUNDS.ratio, offset_hz: I32_MIN,
-  attack: U32_MAX, hold: U32_MAX, decay: U32_MAX, sustain: BOUNDS.sustain, release: U32_MAX, pitch_ratio: BOUNDS.pitch_ratio,
-  pitch_time: U32_MAX, key_scale: -BOUNDS.key_scale, filter: WIDEST_FILTER,
+  route: 0, wave: "MetallicNoise", volume: U32_MAX, ratio: U32_MAX, offset_hz: I32_MIN,
+  attack: U32_MAX, hold: U32_MAX, decay: U32_MAX, sustain: U32_MAX, release: U32_MAX, pitch_ratio: U32_MAX,
+  pitch_time: U32_MAX, key_scale: I32_MIN, filter: WIDEST_FILTER,
 });
 
 /** Every timbre slot reachable from MIDI, in order: programs 0..=127, then drum notes 35..=81. */
@@ -154,9 +156,8 @@ export const structuralMax = () => settings({
 // ------------------------------------------------------------------------------------------
 
 /**
- * Every field at its maximum, with routes at their limits (FM on op 7 from op 8, AM chains): the
- * type's maximum, or the bound for the five bounded fields; the audio output (operator 1) has the
- * widest filter.
+ * Every field at its type's maximum, with routes at their limits (FM on op 7 from op 8, AM chains);
+ * the audio output (operator 1) has the widest filter.
  */
 const MAX_FIELDS = settings({
   quality: 1, reverb: 255, master_vol: 255, voices: 255,
@@ -164,24 +165,24 @@ const MAX_FIELDS = settings({
     drum: false, slot: 127,
     operators: [0, 1, 2, 12, 4, 15, 6, 17].map((route) => op({
       route, wave: "Sawtooth", offset_hz: I32_MAX, attack: U32_MAX, hold: U32_MAX, decay: U32_MAX,
-      release: U32_MAX, pitch_time: U32_MAX, ...BOUNDS, filter: route === 0 ? WIDEST_FILTER : null,
+      release: U32_MAX, pitch_time: U32_MAX, ...EXTREMES, filter: route === 0 ? WIDEST_FILTER : null,
     })),
   }],
 });
 
 /**
- * The deepest FM chain, each operator modulating the one before (routes 0..7), with the five bounded
- * fields at their bounds (`key_scale` at +8.0): the case the interim engine limits were measured
- * against, since `ratio` and the gains compound once per level.
+ * The deepest FM chain, each operator modulating the one before (routes 0..7), with the fields that
+ * multiply into the gains and frequencies at their type's maximum: `ratio` and the gains compound
+ * once per level, so its computed values overflow float32 and the engine skips its notes.
  */
 const MAX_CHAIN = settings({
-  timbres: [{ drum: false, slot: 0, operators: Array.from({ length: 8 }, (_, route) => op({ route, ...BOUNDS })) }],
+  timbres: [{ drum: false, slot: 0, operators: Array.from({ length: 8 }, (_, route) => op({ route, ...EXTREMES })) }],
 });
 
-/** Every field at its minimum (`key_scale` at its bound, -8.0). */
+/** Every field at its type's minimum. */
 const MIN_FIELDS = settings({
   quality: 0, reverb: 0, master_vol: 0, voices: 1,
-  timbres: [{ drum: true, slot: 35, operators: [op({ ...NARROW, offset_hz: I32_MIN, key_scale: -BOUNDS.key_scale })] }],
+  timbres: [{ drum: true, slot: 35, operators: [op({ ...NARROW, offset_hz: I32_MIN, key_scale: I32_MIN })] }],
 });
 
 /** Slot edges, and the same number in both banks (programs and drums are separate). */
@@ -335,28 +336,28 @@ export const FILTER_SETTINGS = settings({
 });
 
 /**
- * Every filter at its extremes, with the five bounded fields at their bounds: each kind on its own
- * timbre (programs 100-102) with eight outputs, one per combination of cutoff (0.0001 or the u32
- * maximum), key tracking and Q (0.0001 or the u32 maximum); the deepest FM chain at the bounds
- * (`max_chain`) into a filtered output (program 103); and a drum (81) with key-tracked filters at the
- * u32 maximum. scripts/page_check.mjs plays notes 0 and 127 on each.
+ * Every filter at its extremes, with the multiplying fields at the large values that still play
+ * (`LOUD`): each kind on its own timbre (programs 100-102) with eight outputs, one per combination of
+ * cutoff (0.0001 or the u32 maximum), key tracking and Q (0.0001 or the u32 maximum); the deepest FM
+ * chain at those values into a filtered output (program 103); and a drum (81) with key-tracked
+ * filters at the u32 maximum. scripts/page_check.mjs plays notes 0 and 127 on each.
  */
 const FILTER_EXTREMES = settings({
   timbres: [
     ...(/** @type {const} */ (["LowPass", "HighPass", "BandPass"])).map((kind, k) => ({
       drum: false, slot: 100 + k,
       operators: Array.from({ length: 8 }, (_, o) => op({
-        wave: "Sawtooth", ...BOUNDS, key_scale: o % 2 ? -BOUNDS.key_scale : BOUNDS.key_scale,
+        wave: "Sawtooth", ...LOUD, key_scale: o % 2 ? -LOUD.key_scale : LOUD.key_scale,
         filter: filter(kind, o & 4 ? U32_MAX : 1, o & 1 ? U32_MAX : 1, Boolean(o & 2)),
       })),
     })),
     {
       drum: false, slot: 103,
-      operators: Array.from({ length: 8 }, (_, route) => op({ route, ...BOUNDS, filter: route ? null : filter("LowPass", U32_MAX, U32_MAX, true) })),
+      operators: Array.from({ length: 8 }, (_, route) => op({ route, ...LOUD, filter: route ? null : filter("LowPass", U32_MAX, U32_MAX, true) })),
     },
     {
       drum: true, slot: 81,
-      operators: [op({ ...BOUNDS, filter: filter("HighPass", U32_MAX, 1, true) }), op({ ...BOUNDS, wave: "WhiteNoise", filter: filter("BandPass", U32_MAX, U32_MAX, true) })],
+      operators: [op({ ...LOUD, filter: filter("HighPass", U32_MAX, 1, true) }), op({ ...LOUD, wave: "WhiteNoise", filter: filter("BandPass", U32_MAX, U32_MAX, true) })],
     },
   ],
 });
@@ -486,16 +487,7 @@ export const INVALID = [
     }),
     error: ["TS: wave index out of range", 1, 2],
   },
-  // Interim engine limits (15-19): one past each bound.
-  { name: "volume_max_plus_1", settings: one({ volume: 1000001 }), error: ["TS: volume out of range", 0, 0] },
-  { name: "ratio_max_plus_1", settings: one({ ratio: 640001 }), error: ["TS: ratio out of range", 0, 0] },
-  { name: "pitch_ratio_max_plus_1", settings: one({ pitch_ratio: 160001 }), error: ["TS: pitch_ratio out of range", 0, 0] },
-  { name: "sustain_max_plus_1", settings: one({ sustain: 1000001 }), error: ["TS: sustain out of range", 0, 0] },
-  { name: "key_scale_max_plus_1", settings: one({ key_scale: 80001 }), error: ["TS: key_scale out of range", 0, 0] },
-  { name: "key_scale_min_minus_1", settings: one({ key_scale: -80001 }), error: ["TS: key_scale out of range", 0, 0] },
-  { name: "u32_max_ratio", settings: one({ ratio: U32_MAX }), error: ["TS: ratio out of range", 0, 0] },
-  { name: "i32_max_key_scale", settings: one({ key_scale: I32_MAX }), error: ["TS: key_scale out of range", 0, 0] },
-  // Filters (20-22).
+  // Filters (15-17).
   {
     name: "filter_on_fm",
     settings: onTimbre({ operators: [op({}), op({ route: 1, filter: filter("LowPass", 10000000, 7071) })] }),
@@ -548,12 +540,6 @@ export const INVALID = [
     error: ["TS: route out of range", 0, 0],
   },
   { name: "order_route_before_wave", settings: one({ route: 1, wave: { Custom: 0 } }), error: ["TS: FM target not earlier", 0, 0] },
-  { name: "order_wave_index_before_volume", settings: one({ wave: { Custom: 0 }, volume: 1000001 }), error: ["TS: wave index out of range", 0, 0] },
-  { name: "order_volume_before_ratio", settings: one({ volume: 1000001, ratio: 640001 }), error: ["TS: volume out of range", 0, 0] },
-  { name: "order_ratio_before_pitch_ratio", settings: one({ ratio: 640001, pitch_ratio: 160001 }), error: ["TS: ratio out of range", 0, 0] },
-  { name: "order_pitch_ratio_before_sustain", settings: one({ pitch_ratio: 160001, sustain: 1000001 }), error: ["TS: pitch_ratio out of range", 0, 0] },
-  { name: "order_sustain_before_key_scale", settings: one({ sustain: 1000001, key_scale: -80001 }), error: ["TS: sustain out of range", 0, 0] },
-  { name: "order_key_scale_before_filter", settings: one({ key_scale: 80001, filter: filter("LowPass", 0, 0) }), error: ["TS: key_scale out of range", 0, 0] },
   { name: "order_wave_index_before_filter", settings: one({ wave: { Custom: 0 }, filter: filter("LowPass", 0, 0) }), error: ["TS: wave index out of range", 0, 0] },
   {
     name: "order_filter_modulator_before_cutoff",

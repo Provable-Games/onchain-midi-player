@@ -6,10 +6,10 @@
 //! `crate::settings::validate` checks only what the format or the engine requires: `quality`
 //! is 0 or 1, `voices` at least 1, the counts, slots, routes and wave indices, and that a filter is
 //! on an audio output with a cutoff and a Q above 0. Every other numeric field takes any value of
-//! its integer type, except five operator fields with interim engine limits (`volume`, `ratio`,
-//! `pitch_ratio`, `sustain`, `key_scale`): the pinned engine computes non-finite values past them
-//! and stalls (README, "Engine limits on operator values"). Every wave sample and harmonic takes
-//! any value of its type. `midi_segment` reverts with a descriptive error when a check fails; the
+//! its integer type, and so does every wave sample and harmonic. A note whose computed frequencies
+//! or levels overflow (a long FM chain, or a large `key_scale`, at a high note or tuning) is
+//! skipped by the engine: it is silent and the song plays on (README, "Engine limits on operator
+//! values"). `midi_segment` reverts with a descriptive error when a check fails; the
 //! exact checks, their order and their messages are listed in `crate::settings`. This is the only
 //! place they are enforced: the player page parses `SETTINGS` strictly but does not repeat them.
 //!
@@ -107,11 +107,11 @@ pub struct Operator {
     /// [`w`] Waveform.
     pub wave: Waveform,
     /// [`v`] Level, fixed-point. For an audio-output operator this is loudness; for a
-    /// modulator it is depth. Interim engine limit: 0..=100.0.
+    /// modulator it is depth. No limit.
     pub volume: u32,
     /// [`t`] Frequency multiple of the note, fixed-point. 0 makes the frequency fixed at
     /// `offset_hz`, which is how LFOs (for example 6 Hz vibrato) are built.
-    /// Interim engine limit: 0..=64.0.
+    /// No limit.
     pub ratio: u32,
     /// [`f`] Frequency offset in Hz, fixed-point. No limit: Web Audio clamps frequencies.
     pub offset_hz: i32,
@@ -122,19 +122,18 @@ pub struct Operator {
     pub hold: u32,
     /// [`d`] Decay time constant in seconds, fixed-point. No limit.
     pub decay: u32,
-    /// [`s`] Sustain level as a multiple of `volume`, fixed-point. Interim engine limit: 0..=100.0.
+    /// [`s`] Sustain level as a multiple of `volume`, fixed-point. No limit.
     pub sustain: u32,
     /// [`r`] Release time constant in seconds, fixed-point. TinySynth cuts the voice at
     /// 3.5 times this. No limit.
     pub release: u32,
     /// [`p`] Pitch envelope target as a multiple of the starting frequency, fixed-point.
-    /// 1 = no pitch change; below 1 = pitch drop (kicks, toms). Interim engine limit: 0..=16.0.
+    /// 1 = no pitch change; below 1 = pitch drop (kicks, toms). No limit.
     pub pitch_ratio: u32,
     /// [`q`] Pitch envelope time constant in seconds, fixed-point. No limit.
     pub pitch_time: u32,
     /// [`k`] Volume key scaling, fixed-point: level is multiplied by
-    /// `2^((note - 60) / 12 * key_scale)`. Negative values soften high notes. Interim engine
-    /// limit: -8.0..=8.0.
+    /// `2^((note - 60) / 12 * key_scale)`. Negative values soften high notes. No limit.
     pub key_scale: i32,
     /// Optional fixed filter on this operator's output (issue #3): TinySynth's `fl`, `ff`, `fq`
     /// and `fk`. Allowed only when `route == 0` (`'TS: filter on modulator'`): FM and AM paths

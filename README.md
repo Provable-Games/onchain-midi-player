@@ -127,7 +127,7 @@ The engine was 37,060 of the uncompressed page's 44,298 bytes, and the segment's
 - **What is not compressed:** the player, so the art and its errors never depend on inflation. Compressing the player with the engine would save about 1.7 KB of `PAGE` (about 3 KB of segment, 7%), but needs a second, raw copy of the art and error code to keep D9.
 - **Provenance.** The shim is derived from [fflate](https://github.com/101arrowz/fflate) 0.8.3's `gunzipSync` (MIT, Copyright (c) 2026 Arjun Barrett; the license is [vendored](tests/vendor/fflate-0.8.3.LICENSE) and in `license()`), trimmed to one-shot inflation, with the trailer checks added; [`player/gunzip.js`](player/gunzip.js) lists every change. The build minifies it with the pinned Terser and checks the result against `SHIM_PIN` in [`scripts/page.mjs`](scripts/page.mjs) (SHA-256 `bf6316a818dc7519afafa5af7bf826af5280c9950d208f0a2822f4295ab0d4df`), so the bytes that inflate the engine in every token change only deliberately.
 - **Compression.** The pinned fflate (pure JavaScript, in `package-lock.json` with Terser) compresses at level 9 with no timestamp and no file name, so the payload depends only on the engine bytes, never on the system zlib or the OS.
-- **Cost in the browser:** inflating the payload takes about 2 ms cold (0.4 ms warm) in headless Chromium, and the page is ready (▶ enabled) about 3 ms later than the uncompressed one: a median of 12.1 ms instead of 9.2 ms after navigation, as an offline `data:` URI. These were measured with the `b70ba90` engine's 9,862-byte payload; the `4b29ff1` engine's 10,406-byte one inflated in the same time (1.4 ms cold and 0.2-0.3 ms warm for both, measured side by side). With the current 13,994-byte payload, `npm run page-check` measured the page ready 10.7 ms after navigation in headless Chromium; it prints the figure for its `data:` page.
+- **Cost in the browser:** inflating the payload takes about 2 ms cold (0.4 ms warm) in headless Chromium, and the page is ready (▶ enabled) about 3 ms later than the uncompressed one: a median of 12.1 ms instead of 9.2 ms after navigation, as an offline `data:` URI. These were measured with the `b70ba90` engine's 9,862-byte payload; the `4b29ff1` engine's 10,406-byte one inflated in the same time (1.4 ms cold and 0.2-0.3 ms warm for both, measured side by side). With the current 14,056-byte payload, `npm run page-check` measured the page ready 10.8 ms after navigation in headless Chromium; it prints the figure for its `data:` page.
 
 | Hash (SHA-256) | Of | Where |
 | --- | --- | --- |
@@ -238,8 +238,8 @@ fn token_uri(
 
 | Append | Word-aligned | Unaligned |
 | --- | --- | --- |
-| The 53,316-byte `animation_url_segment()` ([`tests/test_page_gas.cairo`](tests/test_page_gas.cairo)) | 2.7M | 11.7M |
-| Every append of a full-size Beast's `token_uri`: two 40,420-character `b64(S)`, the segment, `midi_segment`, the small pieces (the example's `gas_t4_appends_*`) | 14.2M | 32.3M |
+| The 53,476-byte `animation_url_segment()` ([`tests/test_page_gas.cairo`](tests/test_page_gas.cairo)) | 2.7M | 11.7M |
+| Every append of a full-size Beast's `token_uri`: two 40,420-character `b64(S)`, the segment, `midi_segment`, the small pieces (the example's `gas_t4_appends_*`) | 16.4M | 32.6M |
 
 The consumer chooses where its large pieces land by adding spaces between JSON tokens, 3 at a time: 3 spaces are one 3-byte group, so they keep every piece a multiple of 3, and they encode to the constant `'ICAg'`, so they are never base64-encoded at call time. It does this in two places:
 
@@ -370,28 +370,28 @@ Through `IOnchainTinySynthLibraryDispatcher` on the declared class, as a consume
 
 | Entry point | L2 gas | Base64 share |
 | --- | --- | --- |
-| `animation_url_segment()` | 7.8M: 0.35M to materialize the constant, the rest to return its 53,316 bytes | none |
-| `midi_segment(midi, settings)` | 1.6M with no MIDI and the default settings; 60.7M with a score the size of the largest Beast score (3,716 bytes) and the 3 reference sounds (324.3M with the stand-in); 77.3M with that score and the six reference waves on eight timbres (1,356 bytes; see [Custom waves](#custom-waves)); 62.4M with that score and six filtered voices (465 bytes; see [Filters](#filters)); 2,785.8M with that score and the largest valid `SETTINGS` without custom waves (191,664 bytes; table below) | 53-98% |
+| `animation_url_segment()` | 7.8M: 0.35M to materialize the constant, the rest to return its 53,476 bytes | none |
+| `midi_segment(midi, settings)` | 1.6M with no MIDI and the default settings; 60.7M with a score the size of the largest Beast score (3,716 bytes) and the 3 reference sounds (324.3M with the stand-in); 77.2M with that score and the six reference waves on eight timbres (1,356 bytes; see [Custom waves](#custom-waves)); 62.4M with that score and six filtered voices (465 bytes; see [Filters](#filters)); 3,162.7M with that score and the largest valid `SETTINGS` without custom waves (218,264 bytes; table below) | 53-98% |
 | `base64(data)` | 0.2M for 3 bytes, 3.8M for 1,023 bytes, and about 3.6K per input byte for large inputs (20.5M for 1,023 bytes with the stand-in) | nearly all |
 | `script_sha256()` | 0.1M | none |
 | `version()` | 0.1M | none |
-| `license()` | 2.1M | none |
+| `license()` | 2.2M | none |
 
 ### `midi_segment` by MIDI and `SETTINGS` size
 
-Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`). Rows are synthetic scores with the sizes of the onchain composer's production Beast scores ([`tests/fixtures/midi/`](tests/fixtures/midi/README.md)): the gas depends only on the MIDI's length; columns are `SETTINGS` sizes: the defaults, the 3 Beast reference sounds, 6 timbres, one timbre on every slot (175 timbres of one operator) and the largest valid input without custom waves (175 timbres of 8 filtered operators with every field at its widest: the most validation and the most encoding work), measured with no MIDI and with the largest score only. Each cell is the total, then the base64 share (`b64(midi)` plus the two passes over `D`):
+Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`). Rows are synthetic scores with the sizes of the onchain composer's production Beast scores ([`tests/fixtures/midi/`](tests/fixtures/midi/README.md)): the gas depends only on the MIDI's length; columns are `SETTINGS` sizes: the defaults, the 3 Beast reference sounds, 6 timbres, one timbre on every slot (175 timbres of one operator) and the largest valid input without custom waves (175 timbres of 8 filtered operators with every field at its type's extreme: the most validation and the most encoding work), measured with no MIDI and with the largest score only. Each cell is the total, then the base64 share (`b64(midi)` plus the two passes over `D`):
 
-| MIDI | 16 bytes | 334 bytes | 504 bytes | 9,836 bytes | 191,664 bytes |
+| MIDI | 16 bytes | 334 bytes | 504 bytes | 9,836 bytes | 218,264 bytes |
 | --- | --- | --- | --- | --- | --- |
-| none | 1.4M (86%) | 5.8M (63%) | 8.4M (60%) | 145.3M (53%) | 2,630.1M (56%) |
-| 816 bytes | 13.2M (97%) | 17.6M (86%) | 19.8M (82%) | 157.1M (56%) | |
-| 1,541 bytes | 23.0M (97%) | 27.7M (90%) | 29.9M (87%) | 167.3M (59%) | |
-| 2,266 bytes | 33.4M (97%) | 37.4M (92%) | 40.3M (90%) | 176.9M (61%) | |
-| 2,991 bytes | 43.0M (98%) | 47.6M (94%) | 49.9M (92%) | 186.9M (63%) | |
-| 3,716 bytes (the largest Beast score's size) | 53.5M (98%) | 57.9M (94%) | 60.4M (93%) | 197.1M (65%) | 2,681.9M (57%) |
+| none | 1.4M (86%) | 5.8M (63%) | 8.3M (61%) | 144.8M (53%) | 3,000.6M (56%) |
+| 816 bytes | 13.2M (97%) | 17.6M (86%) | 19.7M (82%) | 156.6M (56%) | |
+| 1,541 bytes | 23.0M (97%) | 27.7M (90%) | 29.9M (87%) | 166.8M (59%) | |
+| 2,266 bytes | 33.4M (97%) | 37.4M (92%) | 40.3M (90%) | 176.4M (61%) | |
+| 2,991 bytes | 43.0M (98%) | 47.5M (94%) | 49.9M (92%) | 186.4M (63%) | |
+| 3,716 bytes (the largest Beast score's size) | 53.5M (98%) | 57.9M (94%) | 60.4M (93%) | 196.5M (65%) | 3,052.3M (57%) |
 | 3,716 bytes, with the stand-in encoder | 305.1M (100%) | 321.5M (99%) | 330.4M (99%) | not measured | not measured |
 
-The rest is validating and encoding `SETTINGS` (see [Sound settings](#sound-settings-and-custom-sounds)) and assembling `D`. The library call adds the cost of passing the inputs: 2.8M for the score with the reference sounds, about 103M with the largest `SETTINGS` (2,785.8M in all). Custom waves and filters cost what their size costs: see [Custom waves](#custom-waves) and [Filters](#filters). Before filters were accepted (`page.9`), the largest input was 156,489 bytes: 2,157.5M with no MIDI and 2,208.8M with the largest score, called directly, and 2,304.2M through the library call.
+The rest is validating and encoding `SETTINGS` (see [Sound settings](#sound-settings-and-custom-sounds)) and assembling `D`. The library call adds the cost of passing the inputs: 2.8M for the score with the reference sounds, about 110M with the largest `SETTINGS` (3,162.7M in all). Custom waves and filters cost what their size costs: see [Custom waves](#custom-waves) and [Filters](#filters). Under the interim operator bounds (to `3d965d1+page.10`) the largest input was 191,664 bytes: 2,630.1M with no MIDI and 2,681.9M with the largest score, called directly, and 2,785.8M through the library call. Before filters were accepted (`page.9`), it was 156,489 bytes: 2,157.5M with no MIDI and 2,208.8M with the largest score, called directly, and 2,304.2M through the library call.
 
 ### A full-size example `token_uri` against the 1B target
 
@@ -401,22 +401,22 @@ Token 4 of the example ([`examples/beast_consumer`](examples/beast_consumer/READ
 - **sounds:** the 3 reference sounds, 334 bytes of `SETTINGS`;
 - **layout:** word-aligned.
 
-Its `token_uri` is 144,197 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
+Its `token_uri` is 144,357 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
 
 | Piece | L2 gas | Of which base64 | With the stand-in encoder |
 | --- | --- | --- | --- |
-| **Whole `BeastLikeNft.token_uri`** | **286.4M** | **239.5M (84%)** | **1,414.6M** |
+| **Whole `BeastLikeNft.token_uri`** | **288.6M** | **239.5M (83%)** | **1,414.6M** |
 | `animation_url_segment()` (library call) | 7.8M | none | 6.2M |
 | `midi_segment()` (library call) | 60.1M | 54.6M | 323.7M |
 | The consumer's base64 (4 library calls): `b64(svg)` 82.6M, `b64(S)` 110.2M, the head and `'}'` about 1M | about 194M | 184.9M | about 1,059M |
-| The appends (word-aligned layout; 32.3M unaligned) | 14.2M | none | 16.0M |
+| The appends (word-aligned layout; 32.6M unaligned) | 16.4M | none | 16.0M |
 | The rest: SVG and score constants, members, name check | about 10M | none | about 10M |
 
-The stand-in column was measured with the engine at fork commit `b70ba90`, whose segment is 7,120 bytes shorter; it is not re-measured. With that engine the optimized encoder gave 286.2M for the whole call, 6.2M for the segment and 16.0M (29.9M unaligned) for the appends. The `page.10` segment is 176 bytes longer than `page.9`'s, yet the whole call costs 2.1M less than with `page.9` (288.5M): the appends cost 2.1M less (16.3M with `page.9`; 32.3M unaligned, against 32.4M), and the segment's library call is unchanged at 7.8M. `midi_segment` and the second `b64(S)`, which follow the segment, now start at the 27th byte of a 31-byte word (the 6th with `page.9`, the 9th with `page.8`, the 30th with `page.7`, the 13th with `page.6`). The `page.9` segment was 3,376 bytes longer than `page.8`'s, and cost 0.8M more than with `page.8` (287.7M).
+The stand-in column was measured with the engine at fork commit `b70ba90`, whose segment is 7,120 bytes shorter; it is not re-measured. With that engine the optimized encoder gave 286.2M for the whole call, 6.2M for the segment and 16.0M (29.9M unaligned) for the appends. The `fc04dbe+page.10` segment is 160 bytes longer than `3d965d1+page.10`'s, and the whole call costs 2.2M more (286.4M with `3d965d1+page.10`): the appends cost 2.2M more (14.2M before; 32.6M unaligned, against 32.3M), and the segment's library call is unchanged at 7.8M. `midi_segment` and the second `b64(S)`, which follow the segment, now start 1 byte into a 31-byte word (27 bytes in with `3d965d1+page.10`, 6 with `page.9`, 9 with `page.8`, 30 with `page.7`, 13 with `page.6`). The `3d965d1+page.10` segment was 176 bytes longer than `page.9`'s, yet its call cost 2.1M less than with `page.9` (288.5M); the `page.9` segment was 3,376 bytes longer than `page.8`'s, and cost 0.8M more than with `page.8` (287.7M).
 
 - **A full-size Beast costs 0.29B, well under budget:** less than a third of the 1B target, or of Starknet's limit of 1.1×10^9 L2 gas per transaction. With the stand-in encoder it cost 1.41B, over both. The projection from the encoder's lab figures (62% less encoding gas) was about 0.57B; measured, encoding costs about 83% less per byte than with the stand-in.
-- **Most of it is still the SVG.** Base64 is 84% of the total, and the two passes over the SVG are 67%. These are the same two passes Beasts' metadata makes today: it encodes the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 82M (346M with the stand-in).
-- **The sample tokens are cheaper:** a 1 KB SVG and a 112-byte MIDI cost 32.7M to 32.8M (90.2M to 90.6M with the stand-in and the `b70ba90` engine).
+- **Most of it is still the SVG.** Base64 is 83% of the total, and the two passes over the SVG are 67%. These are the same two passes Beasts' metadata makes today: it encodes the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 84M (346M with the stand-in).
+- **The sample tokens are cheaper:** a 1 KB SVG and a 112-byte MIDI cost 32.7M to 32.9M (90.2M to 90.6M with the stand-in and the `b70ba90` engine).
 
 ### The size of `SETTINGS`: no byte cap
 
@@ -425,18 +425,18 @@ The stand-in column was measured with the engine at fork commit `b70ba90`, whose
 - **What bounds it.** Very little, by design:
   - The counts are bounded: at most 175 timbres (each program and drum slot once), 8 operators each, and 256 waves (all that `Waveform::Custom(u8)` can index).
   - A wave's length is not: the engine takes any non-empty table ([webaudio-tinysynth#26](https://github.com/Provable-Games/webaudio-tinysynth/issues/26), the fork's decision D-028).
-  - The numbers take any value of their integer type, except five operator fields bounded only because the pinned engine fails beyond them (see [Engine limits on operator values](#engine-limits-on-operator-values)).
-  - **Without custom waves** the largest valid input is 191,664 bytes: 175 timbres of 8 operators, every one an audio output with the widest filter, and every field at its widest valid value. Before filters (issue #3, from `page.10`) it was 156,489 bytes.
+  - The numbers take any value of their integer type (see [Engine limits on operator values](#engine-limits-on-operator-values)).
+  - **Without custom waves** the largest valid input is 218,264 bytes: 175 timbres of 8 operators, every one an audio output with the widest filter, and every field at its type's extreme. Under the interim operator bounds (to `3d965d1+page.10`) it was 191,664 bytes, and before filters (issue #3, from `page.10`) 156,489 bytes.
   - **With custom waves (issue #2, from `page.9`)** there is no largest input.
 - **Cost per size.** Linear over every size measured, from 23 KB to 5.4 MB of `SETTINGS`. Every 1,000 bytes add about 14M L2 gas to `midi_segment` through the library call, and about 15M to a full Beast `token_uri`.
   - About 5-6M of that is encoding. The rest is base64, because `SETTINGS` sits inside `D`, which is encoded twice.
-  - Validation never exceeds about 27M, because it checks counts, slots, routes, five operator values and the filters, not samples.
+  - Validation never exceeds about 23M, because it checks counts, slots, routes, wave indices and the filters, not samples.
 - **Realistic settings are cheap.** The 3 reference sounds (334 bytes) or 6 timbres (504 bytes) add 4-7M over the defaults, about 2% of a full Beast `token_uri`. A full per-type pack of about 20 two- or three-operator timbres is about 2.6 KB, which adds about 40M.
 - **TinyChip's long noise can be carried exactly.** Its 32,767-step LFSR table, as `i8` samples of ±64, is 114,766 bytes of `SETTINGS` with one drum timbre on it. In token 4 in place of the reference sounds, the `token_uri` costs 2.44B, 2.15B more than with the reference sounds.
 - **The reference long LFSR** ([Custom waves](#custom-waves); 32,767 samples at 127 and −128, one drum timbre) is 147,532 bytes of `SETTINGS`. With the largest Beast score, `midi_segment` through the library call costs 2,192.8M besides the 277.9M the test spends building the table in a Cairo loop (`snforge test gas_lc_midi_segment_long_lfsr`): 2,132M more than with the reference sounds, 14.5M per 1,000 bytes.
 - **Larger art.** Each byte of SVG costs about 9K L2 gas in the full `token_uri`: the consumer's two base64 passes through the library call, plus appending `b64(S)` twice.
 
-The full Beast `token_uri` above, token 4 of the example, with `SETTINGS` of each size in place of the reference sounds. The inputs were built in loops, with the waves' samples at −128. The largest v1 input has every field at its widest valid value. The other rows were measured with every operator field at its type's extreme, before the interim engine limits, with validation lifted; the bounds change only the fields' widths, not the cost per byte. The table was measured with `page.7`. `page.10`'s segment is 9,328 bytes longer, so every `token_uri` is 9,328 characters longer, and costs about 0.2M more on the first row (134,869 to 144,197 characters, 286.2M to 286.4M; with `page.9`, 288.5M: the cost of the appends depends on where the segment ends in a 31-byte word); the calldata and `midi_segment` columns do not involve the page:
+The full Beast `token_uri` above, token 4 of the example, with `SETTINGS` of each size in place of the reference sounds. The inputs were built in loops, with the waves' samples at −128. The 156,489-byte row was the largest input of `page.7`, under the interim operator bounds. The other rows were measured with every operator field at its type's extreme, with validation lifted; the bounds changed only the fields' widths, not the cost per byte. The table was measured with `page.7`. The `fc04dbe+page.10` segment is 9,488 bytes longer, so every `token_uri` is 9,488 characters longer, and costs about 2.4M more on the first row (134,869 to 144,357 characters, 286.2M to 288.6M: the cost of the appends depends on where the segment ends in a 31-byte word); the calldata and `midi_segment` columns do not involve the page:
 
 | `SETTINGS` | Bytes | Calldata of `midi_segment` (felts) | `midi_segment` through the library call | Whole `token_uri` | `token_uri` length | JSON-RPC response (about 2.16 x) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -444,18 +444,18 @@ The full Beast `token_uri` above, token 4 of the example, with `SETTINGS` of eac
 | 22 timbres x 8 operators | 23,022 | 2,658 | 385.2M | 622.3M | 175,205 | 0.38 MB |
 | 44 timbres x 8 operators | 46,034 | 5,188 | 715.0M | 961.2M | 216,117 | 0.47 MB |
 | 88 timbres x 8 operators | 92,058 | 10,248 | 1,375.3M | 1,639.0M | 297,941 | 0.64 MB |
-| 175 timbres x 8 operators: the largest in v1 before filters | 156,489 | 20,253 | 2,303.7M | 2,605.3M | 412,485 | 0.89 MB |
+| 175 timbres x 8 operators: the largest in v1 before filters, under the interim operator bounds | 156,489 | 20,253 | 2,303.7M | 2,605.3M | 412,485 | 0.89 MB |
 | The same, plus 256 waves of 256 samples (issue #2) | 517,907 | 87,701 | 7,383.5M | 7,859.5M | 1,054,997 | 2.28 MB |
 | The same, plus 256 waves of 1,024 samples (issue #2) | 1,501,203 | 284,309 | 21,163.3M | 22,111.1M | 2,803,077 | 6.05 MB |
 | The same, plus 256 waves of 4,096 samples (issue #2) | 5,433,363 | 1,070,741 | 76,270.3M | 79,106.0M | 9,793,589 | 21.15 MB |
 | TinyChip's 32,767-step noise and one timbre (issue #2) | 114,766 | 32,915 | 1,825.6M | 2,436.9M | 338,309 | 0.73 MB |
 
-- **With filters (issue #3, from `page.10`)** every operator can carry one, which makes the largest input without custom waves 191,664 bytes. With the largest Beast score, `midi_segment` through the library call costs 2,785.8M (`snforge test gas_lc_midi_segment_max_heaviest`), about 13.7M per 1,000 bytes more than the 156,489-byte input above; it was not measured in a whole `token_uri`.
+- **With filters (issue #3, from `page.10`) and without the interim operator bounds (from `fc04dbe+page.10`)** every operator can carry a filter and every field can take its type's extreme, which makes the largest input without custom waves 218,264 bytes. With the largest Beast score, `midi_segment` through the library call costs 3,162.7M (`snforge test gas_lc_midi_segment_max_heaviest`), about 13.9M per 1,000 bytes more than the 156,489-byte input above; it was not measured in a whole `token_uri`.
 - **Where the limits fall.** A full Beast `token_uri` passes the 1B target at about 48 KB of `SETTINGS`, and 1.11B at about 56 KB. Whether a larger one renders depends on the RPC node that serves the call (next section).
 - **How these were measured.** With snforge, through the example's NFT (`--gas-report`, the `token_uri` call itself). The calldata is the `SynthSettings` and the score.
   - Every size runs. The 1.5 MB input takes 174M Cairo steps through `token_uri`, and the 5.4 MB input takes 73 s through `midi_segment`.
   - The library call moves the calldata in and the result out. It costs 1,468M more than calling `midi_segment` directly at 1.5 MB (284,309 felts in and 86,382 out), and 101M at the 156,489-byte input.
-  - The repository's tests go up to the largest v1 input (`structural_max()` in [`tests/settings_fixtures.cairo`](tests/settings_fixtures.cairo), built in a loop and checked against the JS reference's length and SHA-256). With every operator filtered (191,664 bytes) it takes about 21M steps through `midi_segment`, so [`Scarb.toml`](Scarb.toml) raises snforge's step limit to 100M. The larger sizes were measured once, outside CI.
+  - The repository's tests go up to the largest v1 input (`structural_max()` in [`tests/settings_fixtures.cairo`](tests/settings_fixtures.cairo), built in a loop and checked against the JS reference's length and SHA-256). With every operator filtered and every field at its type's extreme (218,264 bytes) it takes about 22M steps through `midi_segment`, so [`Scarb.toml`](Scarb.toml) raises snforge's step limit to 100M. The larger sizes were measured once, outside CI.
 
 ### Network and node limits
 
@@ -479,11 +479,11 @@ A consumer's `token_uri` is a view call (`starknet_call`), so what limits it is 
 | Hosted providers | Undocumented. The issue #11 probe found PublicNode capping below about 286M | |
 
 - **Against the table above:**
-  - A full Beast with the reference sounds (286.4M) already needs more than Juno's default.
-  - The largest input before filters (156,489 bytes, 2.61B) fits Pathfinder's and Madara's 10B. Filtering every operator (191,664 bytes) adds about 0.48B through `midi_segment` (2,785.8M against 2,303.7M), still well inside. So does TinyChip's long noise (2.44B).
+  - A full Beast with the reference sounds (288.6M) already needs more than Juno's default.
+  - The largest input before filters and under the interim bounds (156,489 bytes, 2.61B) fits Pathfinder's and Madara's 10B. The largest input without custom waves now (218,264 bytes: every operator filtered, every field at its type's extreme) adds about 0.86B through `midi_segment` (3,162.7M against 2,303.7M), still well inside. So does TinyChip's long noise (2.44B).
   - With custom waves, 10B is reached at about 670 KB of `SETTINGS`.
   - The responses pass jsonrpsee's 10 MiB at about 4.85 MB of `token_uri`, about 2.7 MB of `SETTINGS`.
-- **Hazard for integrators.** If any class in the call chain is Cairo 0 or Sierra before 1.7 (a proxy pointing at an old class, for example), that frame and everything below it switches to Cairo-steps accounting. It is then capped at 10M steps (Juno: 4M), about 1B gas. `midi_segment` alone takes about 21M steps with the largest `SETTINGS` without custom waves. Keep every class in the chain at Sierra 1.7 or later.
+- **Hazard for integrators.** If any class in the call chain is Cairo 0 or Sierra before 1.7 (a proxy pointing at an old class, for example), that frame and everything below it switches to Cairo-steps accounting. It is then capped at 10M steps (Juno: 4M), about 1B gas. `midi_segment` alone takes about 22M steps with the largest `SETTINGS` without custom waves. Keep every class in the chain at Sierra 1.7 or later.
 
 ## Sound settings and custom sounds
 
@@ -493,14 +493,14 @@ Declared in [`src/types.cairo`](src/types.cairo). The consumer passes a typed `S
 | --- | --- |
 | `SynthSettings` | `quality` (0 chip-tune, 1 FM), `reverb` (`u8` percent, 0 off), `master_vol` (`u8` percent), `voices` (`u8`, at least 1), `waves: Span<WaveDef>` (custom waveforms shared by all timbres, 0–256) and `timbres: Span<Timbre>` (0–175: each program and drum slot at most once) |
 | `Timbre` | A custom sound replacing General MIDI program `slot` (0–127), or drum note `slot` (35–81) when `drum` is true. Holds 1–8 operators |
-| `Operator` | One oscillator, using TinySynth's 13-parameter model: `route` (output, FM or AM target), `wave`, `volume`, `ratio`, `offset_hz`, `attack`, `hold`, `decay`, `sustain`, `release`, `pitch_ratio`, `pitch_time`, `key_scale`, plus an optional `filter`. The values after `wave` are `u32` (`offset_hz` and `key_scale`: `i32`), fixed point ÷10,000, with no limit except, for now, `volume` ≤ 100.0, `ratio` ≤ 64.0, `pitch_ratio` ≤ 16.0, `sustain` ≤ 100.0 and `key_scale` within ±8.0: [engine limits](#engine-limits-on-operator-values) |
+| `Operator` | One oscillator, using TinySynth's 13-parameter model: `route` (output, FM or AM target), `wave`, `volume`, `ratio`, `offset_hz`, `attack`, `hold`, `decay`, `sustain`, `release`, `pitch_ratio`, `pitch_time`, `key_scale`, plus an optional `filter`. The values after `wave` are `u32` (`offset_hz` and `key_scale`: `i32`), fixed point ÷10,000, with no limit: a note whose computed values overflow is skipped (see [Engine limits](#engine-limits-on-operator-values)) |
 | `Waveform` | `Sine`, `Square`, `Sawtooth`, `Triangle`, `WhiteNoise`, `MetallicNoise`, or `Custom(index)`: entry `index` of `SynthSettings.waves` |
 | `WaveDef` | `Harmonics(Span<u16>)` (band-limited custom wave, at least 1 harmonic) or `Samples(Span<i8>)` (one cycle of a chip wave, played sample-and-hold, at least 1 sample). The engine takes any length: see [Custom waves](#custom-waves) |
 | `Filter` | `LowPass`, `HighPass` or `BandPass`, with a cutoff (in Hz, or a multiple of the note frequency when `key_track` is set) and a linear Q, on an audio-output operator. Fixed, with no envelope: see [Filters](#filters) |
 
-- **Engine limits.** Five operator fields are bounded only because the pinned engine fails beyond them: see [Engine limits on operator values](#engine-limits-on-operator-values).
+- **Engine limits.** None on the values: the engine skips a note whose computed frequencies or levels overflow, and the song plays on. See [Engine limits on operator values](#engine-limits-on-operator-values).
 - **Units.** Fractional fields are fixed-point integers in units of `1 / FIXED_POINT_SCALE` (10,000), because Cairo has no floating point. For example `5_000` = 0.5.
-- **Validation.** `settings::validate` checks only what the format or the engine requires: `quality` is 0 or 1, `voices` at least 1, the counts (256 waves, 175 timbres, 1–8 operators, at least one harmonic or sample per wave), the slots and their uniqueness, the routes and their targets, the wave index, and that a filter is on an audio output with a cutoff and a Q above 0. Every other number takes any value of its integer type, every wave sample and harmonic included: the engine takes them (`setMasterVol`, `setReverbLev` and `setVoices` assign them, and Web Audio clamps frequencies), except five operator fields with interim engine limits (see [Engine limits on operator values](#engine-limits-on-operator-values)). A failed check reverts with a `'TS: ...'` short string followed by the 0-based indices of the offending wave, timbre or operator, for example `('TS: FM target not earlier', 3, 1)`. Invalid settings never reach the page. The checks and messages are listed in [`src/settings.cairo`](src/settings.cairo).
+- **Validation.** `settings::validate` checks only what the format or the engine requires: `quality` is 0 or 1, `voices` at least 1, the counts (256 waves, 175 timbres, 1–8 operators, at least one harmonic or sample per wave), the slots and their uniqueness, the routes and their targets, the wave index, and that a filter is on an audio output with a cutoff and a Q above 0. Every other number takes any value of its integer type, every wave sample and harmonic included: the engine takes them (`setMasterVol`, `setReverbLev` and `setVoices` assign them, Web Audio clamps frequencies, and the engine skips a note whose computed values overflow: see [Engine limits on operator values](#engine-limits-on-operator-values)). A failed check reverts with a `'TS: ...'` short string followed by the 0-based indices of the offending wave, timbre or operator, for example `('TS: FM target not earlier', 3, 1)`. Invalid settings never reach the page. The checks and messages are listed in [`src/settings.cairo`](src/settings.cairo).
 - **Not yet accepted.** Nothing: from `page.10` the class accepts every part of the format. Filters (issue #3) are accepted from `page.10` and custom waves (issue #2) from `page.9`, with no grammar or format-version change: an earlier class reverts them with `'TS: filter unsupported'` or `'TS: custom wave unsupported'`.
 - **Selecting sounds.** A MIDI file selects a custom sound the ordinary way: a program change to its slot, or the drum note on channel 10. Only programs 0–127 and drum notes 35–81 are reachable from MIDI.
 - **Consistency.** For a given class hash, the same settings and MIDI always produce the same sound. To keep a token's sound fixed, pass constants, or values derived only from permanent traits.
@@ -524,10 +524,10 @@ Issue #2, from `page.9`. `SynthSettings.waves` holds up to 256 wave definitions 
 | Settings (fixtures in [`scripts/settings_fixtures.mjs`](scripts/settings_fixtures.mjs)) | `SETTINGS` bytes | `validate` | `encode` | `midi_segment` through the library call, with the largest Beast score |
 | --- | --- | --- | --- | --- |
 | For comparison: the 3 Beast reference sounds, no custom wave (`beast_reference`) | 334 | | | 60.7M |
-| One wave: the reference lead on the 64-sample stepped triangle (`one_wave`) | 365 | 50K | 2.3M | 61.3M |
-| Several waves: the six short reference waves on eight timbres (`reference_waves`) | 1,356 | 299K | 8.2M | 77.3M |
-| 256 waves, two of them 300 harmonics and 2,000 samples long (`waves_256`) | 9,472 | 629K | 65.2M | |
-| The long LFSR, 32,767 samples, on one drum timbre (`longLfsr`) | 147,532 | 45K | 835.1M | 2,192.8M, besides 277.9M to build the table in a Cairo loop |
+| One wave: the reference lead on the 64-sample stepped triangle (`one_wave`) | 365 | 45K | 2.3M | 61.3M |
+| Several waves: the six short reference waves on eight timbres (`reference_waves`) | 1,356 | 273K | 8.2M | 77.2M |
+| 256 waves, two of them 300 harmonics and 2,000 samples long (`waves_256`) | 9,472 | 623K | 65.2M | |
+| The long LFSR, 32,767 samples, on one drum timbre (`longLfsr`) | 147,532 | 42K | 835.1M | 2,192.8M, besides 277.9M to build the table in a Cairo loop |
 
   Measured with snforge (`snforge test gas_one_wave gas_reference_waves gas_waves_256 gas_long_lfsr gas_lc_midi_segment`), net of building the input; validation checks only the counts, lengths and indices, never the samples.
 
@@ -579,13 +579,13 @@ Issue #3, from `page.10`. An audio-output operator (`route` 0) can carry a fixed
 - **`q`:** a conventional linear Q, fixed point: 0.7071 (`7_071`) gives a flat (Butterworth) low- or high-pass, and higher values a resonant peak at the cutoff. The engine passes `20 × log10(q)` dB to a low- or high-pass and `q` itself to a band-pass, whose bandwidth is the centre frequency ÷ `q`.
 - **Validation:** only what the engine requires (fork decisions D-007 and D-028): an audio output, and a cutoff and a Q above 0 (`'TS: filter cutoff out of range'`, `'TS: filter q out of range'`). The engine takes any finite value from 2^-126, and the smallest non-zero fixed-point value, 0.0001, is far above it. Every kind, key tracking, and cutoff and Q up to the `u32` maximum are accepted.
 - **The Nyquist clamp:** the engine clamps the computed cutoff to 0.45 × the sample rate (21,600 Hz at 48 kHz, 19,845 Hz at 44.1 kHz), so a higher cutoff, or a key-tracked one on high notes, plays as that frequency.
-- **Engine limits: none.** Filters add no interim bound. Measured on the page with the `3d965d1` engine in Chromium 153 and WebKit 26.6, every kind with its cutoff and Q at 0.0001 and at the `u32` maximum, fixed and key-tracked, played with no error and the next note always sent:
-  - on an output at the five [operator bounds](#engine-limits-on-operator-values), at notes 0 and 127;
-  - at the end of the deepest FM chain at those bounds;
+- **Engine limits: none.** Filters add no bound. Measured on the page with the `3d965d1` engine in Chromium 153 and WebKit 26.6, every kind with its cutoff and Q at 0.0001 and at the `u32` maximum, fixed and key-tracked, played with no error and the next note always sent:
+  - on an output at the class's former interim [operator bounds](#engine-limits-on-operator-values), at notes 0 and 127;
+  - at the end of the deepest FM chain at those values;
   - eight such outputs at once;
-  - with the MIDI tuning extremes listed there.
+  - with the MIDI tuning extremes.
 
-  The two known MIDI-tuning residuals throw on that chain with or without a filter: the throw comes from the chain. A control past an operator bound (`key_scale` at the `i32` maximum) threw and stalled as expected. CI plays the filter fixtures at these extremes on every engine (`checkExtremes`).
+  The two MIDI-tuning cases that threw on that chain with `3d965d1` threw with or without a filter: the throw came from the chain, and the `fc04dbe` engine skips that note instead. The cutoff is clamped, so the engine's overflow check has nothing to add for it. CI plays the filter fixtures at these extremes on every engine, and checks that every one of their notes sounds (`checkExtremes`).
 - **Player:** `toTinySynthOps` passes `fl` (the kind in lowercase: `lowpass`, `highpass` or `bandpass`), `ff` = `cutoff` ÷ 10,000, `fq` = `q` ÷ 10,000 and `fk` (1 when key-tracked). An operator without a filter gets none of these keys, so the engine builds no filter node and the operator plays exactly as before.
 - **Hi-hats:** metallic noise through a 3 kHz high-pass, the chip hat issue #3 asked for, is now possible: the `filters` fixture's closed and open hats.
 
@@ -608,9 +608,9 @@ Issue #3, from `page.10`. An audio-output operator (`route` 0) can carry a fixed
 | Settings (fixtures in [`scripts/settings_fixtures.mjs`](scripts/settings_fixtures.mjs)) | `SETTINGS` bytes | `validate` | `encode` | `midi_segment` through the library call, with the largest Beast score |
 | --- | --- | --- | --- | --- |
 | For comparison: the 3 Beast reference sounds, no filter (`beast_reference`) | 334 | | | 60.7M |
-| One filter: the reference lead's carrier through a key-tracked low-pass (`one_filter`) | 349 | 137K | 2.0M | 60.7M |
-| Six filtered voices: the three 1 kHz filters, the key-tracked low-pass and the two hats (`filters`) | 465 | 211K | 2.7M | 62.4M |
-| Every operator filtered, every field at its widest: the largest input without custom waves (`structural_max`) | 191,664 | 26.3M | 1,127.0M | 2,785.8M |
+| One filter: the reference lead's carrier through a key-tracked low-pass (`one_filter`) | 349 | 120K | 2.0M | 60.7M |
+| Six filtered voices: the three 1 kHz filters, the key-tracked low-pass and the two hats (`filters`) | 465 | 193K | 2.7M | 62.4M |
+| Every operator filtered, every field at its type's extreme: the largest input without custom waves (`structural_max`) | 218,264 | 22.1M | 1,296.5M | 3,162.7M |
 
   Measured with snforge (`snforge test gas_one_filter gas_filters gas_structural_max gas_lc_midi_segment`), net of building the input. Validating a filter costs about 0.1K L2 gas more per operator than `page.9`'s gate did.
 
@@ -649,43 +649,26 @@ fn filtered_settings() -> SynthSettings {
 
 ### Engine limits on operator values
 
-The goal is to let composers use everything the engine can do, with no limit for gas or size reasons. Five operator fields are bounded all the same, only because the pinned engine fails beyond them:
+The goal is to let composers use everything the engine can do, with no limit for gas or size reasons. The class bounds no operator value: every field takes any value of its integer type.
 
-| Field | Bound | Revert |
-| --- | --- | --- |
-| `volume` | ≤ 1,000,000 (100.0) | `TS: volume out of range` |
-| `ratio` | ≤ 640,000 (64.0) | `TS: ratio out of range` |
-| `pitch_ratio` | ≤ 160,000 (16.0) | `TS: pitch_ratio out of range` |
-| `sustain` | ≤ 1,000,000 (100.0) | `TS: sustain out of range` |
-| `key_scale` | −80,000..=80,000 (±8.0) | `TS: key_scale out of range` |
-
-- **Why.** These fields multiply into the gains and frequencies the engine passes to Web Audio, which requires finite `AudioParam` values (a `float`, at most about 3.4e38). With the pinned engine (`3d965d1`, as with `4b29ff1` and `b198d6c` before it), a note's gain is multiplied by `2^((note - 60) / 12 * key_scale)`, and an FM modulator's frequency and gain by its target's frequency. When a product overflows, or is NaN, the engine throws a `TypeError` for that note. Its scheduler then retries the same event on every tick, so the whole song stalls: nothing after that note plays. The fork's T5, in this pin, validates the values `setTimbre` receives (finite, times at least 0), which every value of these types is; it does not guard what they multiply into when a note plays. That is the fork's task T5.2 (issue #13), not yet done.
-- **Measured** on the page (the class's validation bypassed to go past the bounds), in Chromium with `4b29ff1` and `b198d6c`, and again in Chromium 153 and WebKit 26.6 with `3d965d1`'s engine (the same min.js as `197772d`), which gave the same thresholds:
-  - `key_scale` above about 20-24 at note 127, or below about −25 at note 0, throws, depending on `volume`.
-  - A chain of operators, each FM-modulating the one before, throws from 7 operators with `ratio` at its type's maximum. With `ratio`, `pitch_ratio` and `volume` all at theirs, it throws from 6.
-  - With `key_scale` at its type's maximum, the failing note was re-sent 51 times in 3 seconds, and the next note never played (with `3d965d1`: 50 times in Chromium, 47 in WebKit).
-  - With the other four at their bounds, `sustain` at its type's maximum throws on that chain once the MIDI raises the pitch (coarse tuning +63 semitones, note 127).
-  - At the bounds above, an 8-operator chain plays at notes 0 and 127 with no error. CI plays that chain (the `max_chain` fixture) and the `max_fields` and `min_fields` fixtures at these bounds, at velocity 127 (`checkExtremes` in `npm run page-check`).
-- **Known residual: MIDI tuning.** The class cannot bound what the MIDI does, and checking the MIDI for it would limit composers. On the 8-operator chain at all five bounds, at notes 0 and 127, each of these alone plays with no error:
-  - the full bend range (RPN 0 at its maximum, about ±129 semitones), bent fully up or down;
-  - coarse tuning ±63 (RPN 2), and fine tuning at its extremes (RPN 1);
-  - GM master coarse and fine tuning;
-  - GS master key-shift ±63, and GS master tune at the ends of its range.
-
-  Two things still throw, at note 127:
-  - coarse tuning +63, GS key-shift +63 and GS master tune at its maximum together, about +190 semitones;
-  - one GS master tune message whose four data nibbles are bytes above `0x0F` (up to `0x7F`), which the engine reads as about +556 semitones.
-
-  The same stall follows, in Chromium and WebKit with `3d965d1` too. It stays a known limit until the engine's guard lands (the fork's issue #13, task T5.2, in the release gate, issue #12).
+- **A note whose values overflow is skipped.** The operator values multiply into the frequencies and levels the engine passes to Web Audio, which requires them finite as 32-bit floats (at most about 3.4e38). A note's level is multiplied by `2^((note - 60) / 12 * key_scale)`, and an FM modulator's frequency and depth by its target's frequency, so a long FM chain of high ratios, or a large `key_scale`, can overflow at some notes and tunings. The pinned engine (`fc04dbe`, the fork's task T5.2) computes every operator's pitch, pitch-envelope target, level and sustain level before it makes anything, and skips the note when one of them is not finite as a 32-bit float. The note makes no sound, takes no voice and throws nothing, and the song plays on. [`scripts/engine_contract.test.mjs`](scripts/engine_contract.test.mjs) pins this.
+- **How to avoid it.** Keep FM chains short or their ratios low, and `key_scale` moderate. For reference, an 8-operator FM chain with `volume` 100.0, `ratio` 64.0, `pitch_ratio` 16.0, `sustain` 100.0 and `key_scale` ±8.0 sounds at notes 0 and 127 without tuning. A skipped note logs no error, so only listening shows it: preview the score with its settings ([Previewing a score](#previewing-a-score)) at its highest and lowest notes and its tuning.
+- **Measured** on the page with `fc04dbe` in Chromium 153 and WebKit 26.6, re-running the probes of the interim bounds (the class's validation bypassed). Neither engine logged an error in any case:
+  - An 8-operator chain, each operator FM-modulating the one before: notes 0 and 127 are skipped from 7 operators with `ratio` at its type's maximum, and from 6 with `ratio`, `pitch_ratio` and `volume` at theirs. With every field at its type's maximum, note 127 is skipped from 1 operator. `volume`, `pitch_ratio` or `sustain` alone at its maximum sounds at both notes.
+  - `key_scale` at its type's maximum skips note 127, and at its minimum note 0; the other note sounds.
+  - `sustain` at its type's maximum, on that chain with the other four fields at the values above and MIDI coarse tuning +63, skips note 127.
+  - The two MIDI-tuning cases that still stalled the song under the interim bounds now skip note 127 on that chain: coarse tuning +63 with GS key-shift +63 and GS master tune at its maximum (about +190 semitones), and one GS master tune message whose four data nibbles are bytes above `0x0F` (about +556 semitones).
+  - In every case the next note sounds, on the same channel and on another, and each note-on is sent once per pass. The previous engine re-sent the failing note on every tick (about 50 times in 3 seconds) and nothing after it played.
+  - CI plays the `max_fields`, `min_fields` and `max_chain` fixtures, every field at its type's extreme, at notes 0 and 127 and velocity 127, then a plain note that must sound (`checkExtremes` in `npm run page-check`).
+- **Before `fc04dbe`.** Classes from `page.7` to `tinysynth-3d965d1+page.10` pinned engines that threw on such a note, and their scheduler then retried it on every tick, so the whole song stalled. Those classes bounded five fields as interim engine limits: `volume` ≤ 100.0, `ratio` ≤ 64.0, `pitch_ratio` ≤ 16.0, `sustain` ≤ 100.0 and `key_scale` within ±8.0 (`'TS: volume out of range'` and so on). Even so, the two MIDI-tuning cases above stalled. Removing the bounds changed neither the grammar nor the format version.
 - **Filters** add no bound: see [Filters](#filters).
-- **Interim.** The bounds do not limit what the engine can play. They go once the pinned engine guards non-finite computed values, which is the fork's issue #13 (task T5.2, after T5), part of the release gate (issue #12). Removing them changes neither the grammar nor the format version.
 
 ### The `SETTINGS` format
 
 The class writes settings into the page as `SETTINGS`, format version 1.
 - **Syntax.** A flat list of canonical decimal integers separated by commas (`[0-9,-]` only, so it can never close its `<script>` block).
 - **Structure.** Fields in declaration order, a length before every list, enums as their variant index, `bool` as 0/1, and `Option` as 0 (`None`) or 1 followed by the value.
-- **Spec.** The grammar, the 22 checks and their messages are in [`src/settings.cairo`](src/settings.cairo). They were specified in issue #1 ([spec](https://github.com/Provable-Games/onchain-tinysynth/issues/1#issuecomment-5964892140), [shared-wave-table amendment](https://github.com/Provable-Games/onchain-tinysynth/issues/1#issuecomment-5965159953)).
+- **Spec.** The grammar, the 17 checks and their messages are in [`src/settings.cairo`](src/settings.cairo). They were specified in issue #1 ([spec](https://github.com/Provable-Games/onchain-tinysynth/issues/1#issuecomment-5964892140), [shared-wave-table amendment](https://github.com/Provable-Games/onchain-tinysynth/issues/1#issuecomment-5965159953)).
 
 ```text
 1,1,0,40,64,0,3,                                         version, quality, reverb, master_vol, voices, 0 waves, 3 timbres
@@ -696,16 +679,16 @@ The class writes settings into the page as `SETTINGS`, format version 1.
 The crate exports:
 - the pure functions `onchain_tinysynth::settings::{validate, encode, validate_and_encode}`;
 - the helpers `default_settings()` and `default_operator()` (TinySynth's operator defaults in fixed-point);
-- the limits as constants (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`, `MIN_HARMONICS`, `MIN_SAMPLES`, `MIN_VOICES`, `MAX_VOLUME`, `MAX_RATIO`, `MAX_PITCH_RATIO`, `MAX_SUSTAIN`, `MAX_KEY_SCALE`, …).
+- the limits as constants (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`, `MIN_HARMONICS`, `MIN_SAMPLES`, `MIN_VOICES`, …).
 
 Gas (snforge, L2 gas, net of building the input):
 
 | Input | `SETTINGS` bytes | `validate` | `encode` |
 | --- | --- | --- | --- |
 | no timbres | 16 | 10K | 107K |
-| 6 timbres (Beast lead, kick, snare, two hats, bass) | 504 | 271K | 3.0M |
-| one timbre on every slot (175 timbres of one operator) | 9,836 | 10.1M | 58.2M |
-| largest valid input without custom waves: 175 timbres × 8 filtered operators, every field at its widest valid value (156,489 bytes, 26.1M and 925.1M before filters) | 191,664 | 26.3M | 1,127.0M |
+| 6 timbres (Beast lead, kick, snare, two hats, bass) | 504 | 245K | 3.0M |
+| one timbre on every slot (175 timbres of one operator) | 9,836 | 9.6M | 58.2M |
+| largest valid input without custom waves: 175 timbres × 8 filtered operators, every field at its type's extreme (191,664 bytes, 26.3M and 1,127.0M under the interim operator bounds; 156,489 bytes, 26.1M and 925.1M before filters too) | 218,264 | 22.1M | 1,296.5M |
 | custom waves: one, several, 256, and the long LFSR | see [Custom waves](#custom-waves) | | |
 | filters: one and six | see [Filters](#filters) | | |
 
@@ -814,6 +797,7 @@ The rules follow from how TinySynth reads a file: it stops reading a track at En
 - **The art.** The player restarts the art when tick 0 is heard, on ▶ and again at every pass (see [The player page](#the-player-page)). A pass that is a whole multiple of every period of the art's animation keeps them in step with no visible jump. Otherwise the art jumps back to its start at every loop point, and an animation longer than the pass never finishes.
 - **■** stops playback: TinySynth's `stopMIDI` cuts every voice (drum hits and notes already scheduled ahead included), and cancels the volume, expression, pan and modulation changes it had already scheduled. The art keeps running.
 - **Scheduling.** TinySynth schedules events about 0.2 s ahead. Each message takes effect at its own time, except CC120, CC121 and CC123–127 (see below) and the voice limit (see [Limits](#limits)), which act when the event is scheduled.
+- **Notes the engine cannot compute.** A note whose computed frequencies or levels overflow the 32-bit float range, at a high note or tuning on a long FM chain or with a large `key_scale`, is skipped: it makes no sound and takes no voice, and the song plays on (see [Engine limits on operator values](#engine-limits-on-operator-values)). Tuning adds to the note's pitch, so upward tuning can push such a timbre over.
 
 ### Channels and instruments
 
@@ -1103,7 +1087,7 @@ The engine tests, the page build and the page checks use the vendored engine (`t
 
 ### Golden fixtures
 
-Computed by the JS reference ([`scripts/page.mjs`](scripts/page.mjs)) from the inputs in [`scripts/page_fixtures.mjs`](scripts/page_fixtures.mjs). Ten valid cases (MIDI, settings, SVG, JSON members), one of them with custom waves (`chip_waves`), cover every `D` padding length (0-8) and every consumer padding length (0-2 for the head and for `S`); six invalid cases cover settings reverts. Per valid case:
+Computed by the JS reference ([`scripts/page.mjs`](scripts/page.mjs)) from the inputs in [`scripts/page_fixtures.mjs`](scripts/page_fixtures.mjs). Eleven valid cases (MIDI, settings, SVG, JSON members), one of them with custom waves (`chip_waves`) and one with filters (`filtered`), cover every `D` padding length (0-8) and every consumer padding length (0-2 for the head and for `S`); seven invalid cases cover settings reverts. Per valid case:
 
 - the expected `midi_segment(midi, settings)` in full, with `SETTINGS`, `D` and its pad;
 - the decoded `animation_url` HTML (`PAGE ++ D ++ SVG`) and the consumer-layout `token_uri`, as length and SHA-256. They are 25-60 KB each and fully determined by stored pieces, so they are pinned by digest rather than stored. The example's three tokens hold complete `token_uri` goldens.
@@ -1119,11 +1103,11 @@ The class compiled with Scarb 2.20.1, against [Starknet's current limits](https:
 
 | | The class | The class without the encoder | Page constants only | Page constants only, `const` felt array (`page.6` before this class) | Limit |
 | --- | --- | --- | --- | --- | --- |
-| Sierra program | 19,255 felts | 13,735 felts | 8,617 felts | 4,369 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 988,362 bytes (24% of the limit) | 673,908 bytes | 377,769 bytes | 191,246 bytes | 4,089,446 bytes |
-| CASM bytecode | 30,041 felts (37% of the limit) | 18,514 felts | 6,083 felts | 2,563 felts | 81,920 felts |
+| Sierra program | 19,206 felts | 13,735 felts | 8,617 felts | 4,369 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 985,129 bytes (24% of the limit) | 673,908 bytes | 377,769 bytes | 191,246 bytes | 4,089,446 bytes |
+| CASM bytecode | 29,906 felts (37% of the limit) | 18,514 felts | 6,083 felts | 2,563 felts | 81,920 felts |
 
-- **The class** is `OnchainTinySynth` with the optimized encoder, at `page.10`. It is 2.7 KB, 54 Sierra felts and 55 CASM felts larger than at `page.9` (985,647 bytes, 19,201 and 29,986 felts, measured the same way at `7f5d592`): the segment is 176 bytes and `license()` 1 byte longer, and validation checks the filters. At `page.9` it was 23.7 KB, 545 Sierra felts and 324 CASM felts larger than at `page.8` (961,925 bytes, 18,656 and 29,662 felts, measured the same way at `973f4cf`): the segment was 3,376 bytes and `license()` 1,459 bytes longer, and validation dropped the two custom-wave checks. The other columns were measured at `page.8` and not again. At `page.8` the class was 40.6 KB, 943 Sierra felts and 590 CASM felts larger than at `page.7` (921,352 bytes, 17,713 and 29,072 felts, measured the same way at `2e3c9da`; the figures this README gave for `page.7`, 916,094 bytes, 17,625 and 28,912 felts, were measured before #28 added the operator bounds in `c74d355`), all of it page constants. `page.7` was 11.4 KB, 195 Sierra felts and 370 CASM felts smaller than `page.6` (932,702 bytes, 17,908 and 29,442 felts), which also checked the numeric ranges and the `SETTINGS` length. "Without the encoder" is the same class with `bytes_base64_encode` returning its input: the encoder adds 4,921 Sierra felts, 288 KB and 11,148 CASM felts. The byte-wise stand-in it replaced added 1,701 Sierra felts, 98 KB and 4,149 CASM felts (the whole class was then 727,248 bytes and 22,242 CASM felts). The optimized encoder costs about 190 KB more class size, for about 83% less gas per encoded byte.
+- **The class** is `OnchainTinySynth` with the optimized encoder, at `fc04dbe+page.10`. It is 3.2 KB, 49 Sierra felts and 135 CASM felts smaller than with `3d965d1+page.10` (988,362 bytes, 19,255 and 30,041 felts, measured the same way at `e0b33af`): validation no longer checks the five interim operator bounds, while the segment is 160 bytes and `license()` 278 bytes longer. At `3d965d1+page.10` it was 2.7 KB, 54 Sierra felts and 55 CASM felts larger than at `page.9` (985,647 bytes, 19,201 and 29,986 felts, measured the same way at `7f5d592`): the segment was 176 bytes and `license()` 1 byte longer, and validation checked the filters. At `page.9` it was 23.7 KB, 545 Sierra felts and 324 CASM felts larger than at `page.8` (961,925 bytes, 18,656 and 29,662 felts, measured the same way at `973f4cf`): the segment was 3,376 bytes and `license()` 1,459 bytes longer, and validation dropped the two custom-wave checks. The other columns were measured at `page.8` and not again. At `page.8` the class was 40.6 KB, 943 Sierra felts and 590 CASM felts larger than at `page.7` (921,352 bytes, 17,713 and 29,072 felts, measured the same way at `2e3c9da`; the figures this README gave for `page.7`, 916,094 bytes, 17,625 and 28,912 felts, were measured before #28 added the operator bounds in `c74d355`), all of it page constants. `page.7` was 11.4 KB, 195 Sierra felts and 370 CASM felts smaller than `page.6` (932,702 bytes, 17,908 and 29,442 felts), which also checked the numeric ranges and the `SETTINGS` length. "Without the encoder" is the same class with `bytes_base64_encode` returning its input: the encoder adds 4,921 Sierra felts, 288 KB and 11,148 CASM felts. The byte-wise stand-in it replaced added 1,701 Sierra felts, 98 KB and 4,149 CASM felts (the whole class was then 727,248 bytes and 22,242 CASM felts). The optimized encoder costs about 190 KB more class size, for about 83% less gas per encoded byte.
 - **Page constants only** is a stub class serving `animation_url_segment`, `script_sha256`, `version` and `license`. With the `b70ba90` engine, the string-literal segment cost about 130 KB and 2,700 CASM felts more than the `const` felt array, and saved 3.4M L2 gas on every call. The last column predates this class and has the `b70ba90` engine's 42,644-byte segment and the 4,104-byte `license()`. The page-constants column has the `page.8` build's 49,764-byte segment and its 7,324-byte `license()`, which holds the game-components notice and the `b198d6c` fork NOTICE (with `page.6`'s 43,940-byte segment and 6,417-byte `license()` it was 337,078 bytes, 7,671 Sierra felts and 5,490 CASM felts). The `page.6` class, with the `4b29ff1` engine, was 10.5 KB, 232 Sierra felts and 149 CASM felts larger than the `b70ba90` build (922,222 bytes, 17,676 Sierra felts and 29,293 CASM felts for the class).
 - **The rest** of the class is the settings validation and encoding.
 - The method: `contract_class.json` without debug info, and the `bytecode` of `compiled_contract_class.json`.
@@ -1132,12 +1116,12 @@ The class compiled with Scarb 2.20.1, against [Starknet's current limits](https:
 
 The segment's size sets its cost at every step of a consumer's `token_uri`: the class materializes it, the library call returns it, the consumer appends it to its `ByteArray`, and `token_uri` returns it again. [`tests/test_page_gas.cairo`](tests/test_page_gas.cairo) (`snforge test gas_segment`) measures materializing and appending it, in L2 gas:
 
-| | `page.5` (78,804 bytes), `const` array | `b70ba90+page.6` (42,644 bytes), `const` array | `b70ba90+page.6`, string literal | `4b29ff1+page.7` (43,988 bytes), string literal | `b198d6c+page.8` (49,764 bytes), string literal | `3d965d1+page.9` (53,140 bytes), string literal | Now: `3d965d1+page.10` (53,316 bytes), string literal |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Materializing `animation_url_segment()` | 6.83M | 3.70M | 0.28M | 0.29M | 0.33M | 0.35M | 0.35M |
-| Appending it to a `ByteArray` with no pending bytes (word-aligned) | +4.00M | +2.16M | +2.16M | +2.23M | +2.52M | +2.69M | +2.70M |
-| Appending it after the 29-byte `data:application/json;base64,` (unaligned) | +17.25M | +9.34M | +9.34M | +9.63M | +10.90M | +11.64M | +11.67M |
-| The class's side of the library call that returns it (the example's gas report) | 10.82M | 5.86M | 2.44M | 2.51M | 2.85M | 3.04M | 3.05M |
+| | `page.5` (78,804 bytes), `const` array | `b70ba90+page.6` (42,644 bytes), `const` array | `b70ba90+page.6`, string literal | `4b29ff1+page.7` (43,988 bytes), string literal | `b198d6c+page.8` (49,764 bytes), string literal | `3d965d1+page.9` (53,140 bytes), string literal | `3d965d1+page.10` (53,316 bytes), string literal | Now: `fc04dbe+page.10` (53,476 bytes), string literal |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Materializing `animation_url_segment()` | 6.83M | 3.70M | 0.28M | 0.29M | 0.33M | 0.35M | 0.35M | 0.35M |
+| Appending it to a `ByteArray` with no pending bytes (word-aligned) | +4.00M | +2.16M | +2.16M | +2.23M | +2.52M | +2.69M | +2.70M | +2.71M |
+| Appending it after the 29-byte `data:application/json;base64,` (unaligned) | +17.25M | +9.34M | +9.34M | +9.63M | +10.90M | +11.64M | +11.67M | +11.71M |
+| The class's side of the library call that returns it (the example's gas report) | 10.82M | 5.86M | 2.44M | 2.51M | 2.85M | 3.04M | 3.05M | 3.06M |
 
 The consumer's whole library call, including reading the result, is 7.8M (see [Gas and limits](#gas-and-limits)). The [Integration guide](#integration-guide) shows how a consumer lands the segment on a word boundary.
 
@@ -1156,10 +1140,10 @@ Issue #11's automatable checks, on Playwright's Chromium 153, Firefox 155 and We
 | No network requests; offline from `data:` and `file://` | every load (requests blocked and listed; for the gzip tag's `data:` URI, see [CI](#ci)); `checkDataPage`, `checkFile` |
 | Sandboxed iframe, strict CSP, marketplace-style frames | `checkIframe`, `checkCsp` with `checkCspControl`, `checkEmbeds` (a `srcdoc` frame; the page re-served from another origin) |
 | Offline renders of the reference timbres, the custom waves and the filters | [`render_check.mjs`](scripts/render_check.mjs): the reference lead, kick and snare; the stepped triangle's pitch (within 1 cent) and steps, the pulse widths, and two page loads giving the same generated buffers and the same audio (see [Custom waves](#custom-waves)); each filter's response against the Web Audio biquad's, key tracking, the 0.45 × sample-rate clamp and the high-passed hats (see [Filters](#filters)) |
-| Settings at their extremes play without an error | `checkExtremes`: notes 0 and 127 at velocity 127 on every custom timbre of the `max_fields`, `min_fields` and `max_chain` settings fixtures, at the engine limits, of the custom-wave fixtures (`custom_waves`, `reference_waves`, `waves_256` and the long LFSR), and of the filter fixtures (`filters`, and `filter_extremes`: every kind with its cutoff and Q at 0.0001 and the `u32` maximum, fixed and key-tracked, at the engine limits); any error fails it, a non-finite `AudioParam` value or a wave the engine refuses included (see [Engine limits on operator values](#engine-limits-on-operator-values)) |
+| Settings at their extremes play without an error | `checkExtremes`: notes 0 and 127 at velocity 127 on every custom timbre, then a plain note on another channel, which must sound. On the `max_fields`, `min_fields` and `max_chain` settings fixtures, every field at its type's extreme, the engine may skip the notes it cannot compute (it prints how many); on the custom-wave fixtures (`custom_waves`, `reference_waves`, `waves_256` and the long LFSR) and the filter fixtures (`filters`, and `filter_extremes`: every kind with its cutoff and Q at 0.0001 and the `u32` maximum, fixed and key-tracked, on loud operators and the deepest FM chain), every note must sound. Any error fails it, a non-finite `AudioParam` value or a wave the engine refuses included (see [Engine limits on operator values](#engine-limits-on-operator-values)) |
 | Which marketplaces render `data:` HTML; iOS Safari and Android Chrome; indexers, wallets and RPC providers on a full-size `token_uri` | manual |
 
-Every check that CI runs passes on all three engines, on `tinysynth-3d965d1+page.10` (this build; Chromium and WebKit locally, Firefox in CI). `page.10` changes only how the player converts settings, not its timing, so the drift check was not re-run for it. On `tinysynth-3d965d1+page.9` the 1-minute drift check gave Chromium −0.6 ms and WebKit +0.1 ms, with the art restarted at 36 of 36 passes on each, every pass on the tempo map's grid and no message late. The render check's results changed with the re-pin because the engine's noise and reverb are now seeded (fork #7): it stores no reference audio, only tolerances, and it now also checks that two page loads generate the same buffers and render the same audio. With the T5 engine, `checkRangeOnly` uses rules the engine does not enforce (a volume past its interim limit, a duplicate program slot), because the engine's constructor itself rejects `quality` 2.
+Every check that CI runs passes on all three engines, on `tinysynth-fc04dbe+page.10` (this build; Chromium and WebKit locally, Firefox in CI). It has the same player as `tinysynth-3d965d1+page.10`, on which every check passed too; `page.10` changes only how the player converts settings, not its timing, so the 10-minute drift check was not re-run for it. On `tinysynth-3d965d1+page.9` the 1-minute drift check gave Chromium −0.6 ms and WebKit +0.1 ms, with the art restarted at 36 of 36 passes on each, every pass on the tempo map's grid and no message late. The render check's results changed with the re-pin because the engine's noise and reverb are now seeded (fork #7): it stores no reference audio, only tolerances, and it now also checks that two page loads generate the same buffers and render the same audio. With the T5 engine, `checkRangeOnly` uses a rule the engine does not enforce (a duplicate program slot), because the engine's constructor itself rejects `quality` 2.
 
 From `page.8` the player restarts the art at every pass, timed to that pass's tick 0 as heard, so the art can drift from the sound only by what builds up within one pass. Runs of the drift check at `2292b66`, on `tinysynth-b198d6c+page.8`, one engine at a time, on a shared 32-core Linux machine, the `beast_140bpm` page (a 1.714 s pass) with a probe art that sweeps once per pass, so the pass is a whole multiple of the art's period, a checkpoint every 10 s:
 

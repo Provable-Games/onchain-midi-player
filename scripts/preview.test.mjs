@@ -108,7 +108,7 @@ describe("checks", () => {
         },
       );
     }
-    assert.equal(panicData(Object.assign(new Error(), { code: "TS: volume out of range", indices: [3, 1] }) /** @type {any} */), "('TS: volume out of range', 3, 1)");
+    assert.equal(panicData(Object.assign(new Error(), { code: "TS: route out of range", indices: [3, 1] }) /** @type {any} */), "('TS: route out of range', 3, 1)");
   });
 
   test("a settings file with a misspelt or missing field: exit 1, naming it", () => {
