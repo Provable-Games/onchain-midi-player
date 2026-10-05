@@ -1,8 +1,7 @@
 //! The sound provider interface (`onchain_tinysynth::interface::ISoundProvider`, with
 //! `onchain_tinysynth::types::TokenSound`): a mock composer's provider fed into `midi_segment` end
-//! to end, the rule that `get_sound` is `get_midi` and `get_settings` together, the README's
-//! "Calling a provider" snippet compiled and exercised, and a Serde round trip of `TokenSound`.
-//! The mocks are reached with `call_contract`, as an NFT reaches a provider.
+//! to end, the README's "Calling a provider" snippet compiled and exercised, and a Serde round trip
+//! of `TokenSound`. The mocks are reached with `call_contract`, as an NFT reaches a provider.
 
 use core::num::traits::Zero;
 use onchain_tinysynth::interface::{
@@ -23,35 +22,22 @@ use crate::settings_fixtures::{valid_filter_extremes, valid_reference_waves};
 
 /// A composer's provider. It decodes only the low 16 bits of the token ID, ignoring the rest as a
 /// provider must, and knows one token, 1: the `beast_140bpm` golden fixture's MIDI and settings.
-/// Any other value of those bits is an unknown token, the one case where it reverts. The three
-/// entry points share one internal function, `sound`, so `get_sound` is `get_midi` and
-/// `get_settings` by construction.
+/// Any other value of those bits is an unknown token, the one case where it reverts. It implements
+/// only `get_sound`, the whole of `ISoundProvider`.
 #[starknet::contract]
 mod MockSoundProvider {
     use onchain_tinysynth::interface::ISoundProvider;
-    use onchain_tinysynth::types::{SynthSettings, TokenSound};
+    use onchain_tinysynth::types::TokenSound;
     use crate::page_fixtures::{case_beast_140bpm_midi, case_beast_140bpm_settings};
 
     #[storage]
     struct Storage {}
 
-    fn sound(token_id: u256) -> TokenSound {
-        assert(token_id.low & 0xffff == 1, 'unknown token');
-        TokenSound { midi: case_beast_140bpm_midi(), settings: case_beast_140bpm_settings() }
-    }
-
     #[abi(embed_v0)]
     impl SoundProviderImpl of ISoundProvider<ContractState> {
         fn get_sound(self: @ContractState, token_id: u256) -> TokenSound {
-            sound(token_id)
-        }
-
-        fn get_midi(self: @ContractState, token_id: u256) -> ByteArray {
-            sound(token_id).midi
-        }
-
-        fn get_settings(self: @ContractState, token_id: u256) -> SynthSettings {
-            sound(token_id).settings
+            assert(token_id.low & 0xffff == 1, 'unknown token');
+            TokenSound { midi: case_beast_140bpm_midi(), settings: case_beast_140bpm_settings() }
         }
     }
 }
@@ -64,7 +50,7 @@ pub struct RawReply {
 
 impl RawReplySerde of Serde<RawReply> {
     fn serialize(self: @RawReply, ref output: Array<felt252>) {
-        for felt in *self.felts {
+        for felt in self.felts {
             output.append(*felt);
         }
     }
@@ -110,23 +96,19 @@ mod MockRawProvider {
     }
 }
 
-#[starknet::interface]
-pub trait IGetSound<T> {
-    fn get_sound(self: @T, token_id: u256) -> TokenSound;
-}
-
 /// A provider whose score is `token_id` words long, one felt each, with the small sound's
 /// settings, to test the reply cap without storing a long reply.
 #[starknet::contract]
 mod MockLongScoreProvider {
+    use onchain_tinysynth::interface::ISoundProvider;
     use onchain_tinysynth::types::TokenSound;
-    use super::{IGetSound, small_sound};
+    use super::small_sound;
 
     #[storage]
     struct Storage {}
 
     #[abi(embed_v0)]
-    impl GetSoundImpl of IGetSound<ContractState> {
+    impl SoundProviderImpl of ISoundProvider<ContractState> {
         fn get_sound(self: @ContractState, token_id: u256) -> TokenSound {
             let mut midi: ByteArray = "";
             for _ in 0..token_id.low {
@@ -198,26 +180,12 @@ fn provider_sound_feeds_midi_segment() {
     assert(segment == case_beast_140bpm_midi_segment(), 'midi_segment != fixture');
 }
 
-/// The rule of `ISoundProvider`: `get_sound(id) == TokenSound { midi: get_midi(id), settings:
-/// get_settings(id) }`.
-#[test]
-fn get_sound_is_get_midi_with_get_settings() {
-    let provider = mock_provider();
-    for token_id in array![1, wide_token_id()] {
-        let expected = TokenSound {
-            midi: provider.get_midi(token_id), settings: provider.get_settings(token_id),
-        };
-        assert(provider.get_sound(token_id) == expected, 'get_sound != its parts');
-    }
-}
-
 #[test]
 fn dispatchers_reach_the_provider() {
     let provider = mock_provider();
     let sound = provider.get_sound(1);
     assert(sound.midi == case_beast_140bpm_midi(), 'get_sound midi');
-    assert(provider.get_midi(wide_token_id()) == sound.midi, 'get_midi');
-    assert(provider.get_settings(wide_token_id()) == sound.settings, 'get_settings');
+    assert(provider.get_sound(wide_token_id()) == sound, 'wide token ID');
     assert(
         fetch_sound(provider.contract_address, 1) == Option::Some(sound), 'snippet != dispatcher',
     );

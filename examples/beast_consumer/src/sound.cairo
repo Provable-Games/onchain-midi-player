@@ -1,7 +1,7 @@
 //! The tokens' music: a Standard MIDI File and its `SynthSettings`.
 //!
 //! In the real Beasts integration the MIDI comes from the onchain composer (a sound provider whose
-//! `get_midi` reads the Beast's state). For the sample tokens it is a fixed one-bar loop that
+//! `get_sound` reads the Beast's state). For the sample tokens it is a fixed one-bar loop that
 //! exercises what the README's "MIDI contract" recommends. `scripts/reference.mjs` holds a
 //! byte-identical copy that the golden test keeps in lockstep. Token 4 uses a synthetic score the
 //! size of the composer's largest production score, and the Beast reference sounds.

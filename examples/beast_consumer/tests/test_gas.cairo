@@ -25,7 +25,7 @@ use snforge_std::{DeclareResultTrait, declare};
 use crate::test_token_uri::setup;
 
 fn synth() -> IOnchainTinySynthLibraryDispatcher {
-    let class_hash = *declare("OnchainTinySynth").unwrap().contract_class().class_hash;
+    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
     IOnchainTinySynthLibraryDispatcher { class_hash }
 }
 

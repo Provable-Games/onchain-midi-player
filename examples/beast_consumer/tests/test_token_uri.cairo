@@ -19,7 +19,7 @@ use crate::naive::naive_token_uri;
 
 /// Declares the class (no deploy) and deploys the NFT with its class hash.
 pub fn setup() -> (IBeastLikeNftDispatcher, ClassHash) {
-    let class_hash = *declare("OnchainTinySynth").unwrap().contract_class().class_hash;
+    let class_hash = declare("OnchainTinySynth").unwrap().contract_class().class_hash;
     let nft_class = declare("BeastLikeNft").unwrap().contract_class();
     let (address, _) = nft_class.deploy(@array![class_hash.into()]).unwrap();
     (IBeastLikeNftDispatcher { contract_address: address }, class_hash)

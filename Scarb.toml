@@ -1,7 +1,7 @@
 [package]
 name = "onchain_tinysynth"
 version = "0.1.0"
-edition = "2024_07"
+edition = "2025_12"
 description = "Starknet class library that serves an onchain, offline-playable TinySynth MIDI player for NFTs via library_call."
 repository = "https://github.com/Provable-Games/onchain-tinysynth"
 license = "Apache-2.0"

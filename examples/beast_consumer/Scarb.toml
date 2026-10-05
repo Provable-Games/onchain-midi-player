@@ -1,7 +1,7 @@
 [package]
 name = "beast_consumer"
 version = "0.1.0"
-edition = "2024_07"
+edition = "2025_12"
 description = "End-to-end example: a Beasts-style NFT injecting the onchain TinySynth player into its token_uri, with library calls to the real class."
 license = "Apache-2.0"
 publish = false

@@ -225,43 +225,36 @@ pub trait IOnchainTinySynth<T> {
 /// channel) but cannot define one. So the provider owns both the score, as a raw Standard MIDI
 /// File, and the instruments it plays, as a `SynthSettings`.
 ///
-/// The three functions are views of one sound, tied by this rule:
-///
-/// ```text
-/// get_sound(id) == TokenSound { midi: get_midi(id), settings: get_settings(id) }
-/// ```
-///
-/// **An NFT calls `get_sound`**: one call that reads the token's state once, and whose reply goes
-/// straight to `midi_segment`:
+/// The interface is one function, because the player needs one thing from a provider: the token's
+/// sound, the MIDI and its instruments, in one call that reads the token's state once. Its reply
+/// goes straight to `midi_segment`:
 ///
 /// ```text
 /// let sound = <the README's snippet>(provider, token_id)?;
 /// let segment = synth.midi_segment(sound.midi, sound.settings);
 /// ```
 ///
-/// `get_midi` and `get_settings` serve tools and consumers that need only one half. A provider
-/// that already implements both, as the Beast composer's does, only needs to add `get_sound`.
-///
-/// A provider can implement all three with one internal function that builds the `TokenSound`,
-/// which keeps the rule true by construction. Sharing it also matters because a per-token subset
-/// of the settings depends on the programs the token's MIDI uses: `get_settings` has to work out
-/// the same score that `get_midi` returns.
+/// Interfaces for the MIDI alone or the settings alone belong to the composer's own project, not to
+/// this crate. A provider adds `get_sound` beside whatever interfaces it already has: the Beast
+/// composer's contract keeps its `IMidiProvider` and `ISynthSettingsProvider` and implements only
+/// `get_sound` from here. That leaves the provider's own interfaces free to keep their function
+/// names: Cairo raises a name clash when one contract implements two traits that share one. A tool
+/// that needs only the settings calls `get_sound` and takes `.settings`: that costs latency, not
+/// money, because views are free.
 ///
 /// # The provider contract
 ///
 /// A contract implementing `ISoundProvider` must honour all of these:
 ///
-/// - **Token IDs as minted.** Every function takes the NFT's token ID exactly as the NFT minted
-///   it, the whole `u256`. Decode only the bits you use and ignore the rest: a provider that
-///   rejects unused bits breaks when the NFT's ID layout grows (Beasts' newer IDs are 180 bits).
+/// - **Token IDs as minted.** `get_sound` takes the NFT's token ID exactly as the NFT minted it,
+///   the whole `u256`. Decode only the bits you use and ignore the rest: a provider that rejects
+///   unused bits breaks when the NFT's ID layout grows (Beasts' newer IDs are 180 bits).
 /// - **A raw Standard MIDI File.** `midi` is the file's bytes (not base64, not a data URI), and it
 ///   passes the page's MIDI check, `checkMidi` (`npm run check-midi`; README "MIDI contract"). The
 ///   class embeds the bytes without parsing them, so a bad file does not revert: the page shows an
 ///   error instead of playing.
 /// - **Valid settings.** `settings` passes `crate::settings::validate`, in the class version the
 ///   NFT calls; otherwise `midi_segment` reverts.
-/// - **One sound.** `get_sound(id)` equals `TokenSound { midi: get_midi(id), settings:
-///   get_settings(id) }`, for every token, at every state.
 /// - **Deterministic.** The same token and the same live state always give the same bytes, for any
 ///   caller. Derive the sound from the token and contract state, never from the caller or the
 ///   transaction.
@@ -270,6 +263,11 @@ pub trait IOnchainTinySynth<T> {
 ///
 /// Recommended:
 ///
+/// - **Keep the other interfaces consistent.** If the provider also exposes the MIDI or the
+///   settings through its own interfaces, they should equal `get_sound(id).midi` and
+///   `get_sound(id).settings`, for every token, at every state. One internal function that builds
+///   the `TokenSound` for all of them keeps that true by construction. Sharing it also matters
+///   because a per-token subset of the settings depends on the programs the token's MIDI uses.
 /// - **Return only what the token's MIDI uses:** the timbres of the programs and drum notes it
 ///   plays, and the waves those timbres select. `SETTINGS` costs about 14.5M L2 gas per 1,000
 ///   bytes through `midi_segment`: a Beast's subset is about 0.9 to 1.4 KB, a full chip bank about
@@ -285,14 +283,4 @@ pub trait ISoundProvider<T> {
     /// state once. This is what an NFT calls. A view, deterministic for a given token and state.
     /// Reverts only for an unknown token.
     fn get_sound(self: @T, token_id: u256) -> TokenSound;
-
-    /// The score alone: the raw Standard MIDI File of `token_id`, the same bytes as
-    /// `get_sound(token_id).midi`. The signature matches the `get_midi(token_id) -> ByteArray` of
-    /// the Beast composer's provider (`midi_fun_contract`).
-    fn get_midi(self: @T, token_id: u256) -> ByteArray;
-
-    /// The instruments alone: the `SynthSettings` of `token_id`, the same value as
-    /// `get_sound(token_id).settings`. The signature matches the Beast composer's
-    /// `ISynthSettingsProvider::get_settings`.
-    fn get_settings(self: @T, token_id: u256) -> SynthSettings;
 }
