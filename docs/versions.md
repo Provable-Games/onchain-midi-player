@@ -4,7 +4,7 @@ Class hashes are immutable. The engine and the player page are stored in the cla
 
 - **`version()`** is the class's [SemVer](https://semver.org) version, as a short string such as `'0.1.0'`. Every declared class has its own. Builds before the release are `0.x.0`; `1.0.0` comes at release, when the call and settings layouts freeze, and from then on the major number promises call and settings-layout compatibility.
 - **`engine()`** names the engine, `'tinysynth'`. The engine commit and the page revision of each version are in the table below and in [`scripts/page_versions.json`](../scripts/page_versions.json).
-- **Classes declared before SemVer**, such as the Sepolia classes below, return `tinysynth-<engine ref>+page.<n>` and have no `engine()`.
+- **Classes declared before SemVer**, such as the `page.9` and `page.6` Sepolia classes below, return `tinysynth-<engine ref>+page.<n>` and have no `engine()`.
 
 ## Versions
 
@@ -12,7 +12,7 @@ The class is declared but never deployed, so block explorers cannot call `versio
 
 | `version()` | Class hash (Sepolia) | Class hash (mainnet) | Release tag | `script_sha256()` (decompressed engine) | Gzip payload SHA-256 / length | Engine fork commit | Page revision | `PAGE` SHA-256 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `0.1.0` | not declared | not declared | none | `4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c` | `3a0f61485f5ac3bd723566adbcdb595da7a7bfa93f9d28fd29c22f0408270310` / 14,056 bytes | [`fc04dbe`](https://github.com/Provable-Games/webaudio-tinysynth/commit/fc04dbe7d78bd0a4de5eb80887756f31c2c373f2) | page.10 | `6b6da50eafd9e9ef8ecf9891cd7c883440fa9d0340af2a5868d7ab8b38323f26` |
+| `0.1.0` | `0x00a02eabc2fdcd63b736228b03519bfbd9b259d50a50fc125c8d3bd8286401c9` (test class) | not declared | none | `4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c` | `3a0f61485f5ac3bd723566adbcdb595da7a7bfa93f9d28fd29c22f0408270310` / 14,056 bytes | [`fc04dbe`](https://github.com/Provable-Games/webaudio-tinysynth/commit/fc04dbe7d78bd0a4de5eb80887756f31c2c373f2) | page.10 | `6b6da50eafd9e9ef8ecf9891cd7c883440fa9d0340af2a5868d7ab8b38323f26` |
 | `tinysynth-3d965d1+page.9` | `0x1a0c989b6cb7d5f045e526728fb22069fa584515e17c77ad4f0da5932161b66` (test class) | not declared | none | `95d8947a460a2e3ca410a285822668c76b65493b88094b9c83a0207311206c31` | `3087c4a65f8d7fc24ca73621d5812855bed3b4877e4f6c153e5dca2792ac57de` / 13,994 bytes | [`3d965d1`](https://github.com/Provable-Games/webaudio-tinysynth/commit/3d965d1cef4756bb85b9dd307b85511fd543afbf) | page.9 | `ae67ecdde5d1d961eb040b14f07e9a9fc6f3fca15b8d126701c0d4697068a275` |
 | `tinysynth-4b29ff1+page.6` | `0x442cab13e9049a2eed9e508273ccfad626e690da394de58ba4f62d675b4f85a` (test class) | not declared | none | `b49e8ceb802b7665cd6f66100dc390874c806a8894be464273d43c532940fc55` | `dec711614d61133881b642bc93829a26a7ac1cc8b7b34e5dd25f4f2482aa5d63` / 10,406 bytes | [`4b29ff1`](https://github.com/Provable-Games/webaudio-tinysynth/commit/4b29ff10d40989fd97967ed26ee4b2c95dbd8a26) | page.6 | `b1f1f7e3ca5f9579c6027c8ee43f3dee4e9e19ee0917d03b0685a19e42b75c13` |
 
@@ -26,12 +26,14 @@ Where the class and the example are declared or deployed. A consumer stores a cl
 
 | Network | What | Class hash | Contract address | Built from |
 | --- | --- | --- | --- | --- |
+| Sepolia | Test class, `version()` `0.1.0`, not for production | `0x00a02eabc2fdcd63b736228b03519bfbd9b259d50a50fc125c8d3bd8286401c9` | `0x0003395155b5526d41f32ad26c7b1fa7ef38067643d7da0325a7cd115bc5abc9` (inspection instance) | [`e1b0d54`](https://github.com/Provable-Games/onchain-midi-player/commit/e1b0d54757d5545824fffb6c9913bc673f6c5a9e) |
+| Sepolia | Example `BeastLikeNft` ([`examples/beast_consumer`](../examples/beast_consumer)), library-calling the class above | `0x00985623e977c1570ae682f25688c083b07178de1f8b6d2124573948499bb913` | `0x06a01505c95b5e5aa4de00e3b160135a887b475dae855eaf3c910a773af4bffa` | [`e1b0d54`](https://github.com/Provable-Games/onchain-midi-player/commit/e1b0d54757d5545824fffb6c9913bc673f6c5a9e) |
 | Sepolia | Test class, `version()` `tinysynth-3d965d1+page.9`, not for production | `0x1a0c989b6cb7d5f045e526728fb22069fa584515e17c77ad4f0da5932161b66` | `0x073956b0a1dd278fe75a9a190afba520cc5ea1a10036264e640791a29dbdb511` (inspection instance) | [`7f5d592`](https://github.com/Provable-Games/onchain-midi-player/commit/7f5d592) |
 | Sepolia | Example `BeastLikeNft` ([`examples/beast_consumer`](../examples/beast_consumer)), library-calling the class above | `0x7f290530571bdfd547b05125ff87ac54b5b395f580e41c64226e06f3a3b725c` | `0x02afe413608e07eb426344cd9108440e9304321fc55626f7e91e1ba6655f8392` | [`7f5d592`](https://github.com/Provable-Games/onchain-midi-player/commit/7f5d592) |
 | Sepolia | Test class, `version()` `tinysynth-4b29ff1+page.6`, not for production | `0x442cab13e9049a2eed9e508273ccfad626e690da394de58ba4f62d675b4f85a` | `0x064b629e081c108fef2a39fbd314a792d78be06339a6edc32c397bb7e8aab97d` (inspection instance) | [`d735793`](https://github.com/Provable-Games/onchain-midi-player/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) |
 | Sepolia | Example `BeastLikeNft` ([`examples/beast_consumer`](../examples/beast_consumer)), library-calling the class above | `0x7f290530571bdfd547b05125ff87ac54b5b395f580e41c64226e06f3a3b725c` | `0x066dd6aa3b669e66df4cf6fc74cf18a335a95268154292e44ea0c59227caea92` | [`d735793`](https://github.com/Provable-Games/onchain-midi-player/commit/d7357936754b5753ee4e9cc9134a0d373b75c099) |
 
-- **The Sepolia classes** were built before the project was renamed, from the package `onchain_tinysynth`, with the types `SynthSettings` and `TokenSound`.
+- **The `page.9` and `page.6` Sepolia classes** were built before the project was renamed, from the package `onchain_tinysynth`, with the types `SynthSettings` and `TokenSound`.
 - **Each class validates settings with its own code,** in `src/settings.cairo` at its "Built from" commit. The current [Sound settings](sound-settings.md) describe the first row of [Versions](#versions). Test your settings against the class you will call.
 - **The `page.9` class** reverts filters (`'TS: filter unsupported'`), and bounds `volume` to 100.0, `ratio` to 64.0, `pitch_ratio` to 16.0, `sustain` to 100.0 and `key_scale` to ±8.0 (`'TS: … out of range'`).
 - **The `page.6` class** also reverts custom waves (`'TS: custom wave unsupported'`), range-checks `reverb`, `master_vol`, `voices` and every operator value, caps the counts lower, and caps the `SETTINGS` length (`'TS: settings too long'`). It restarts the art only on ▶, not at every pass.
