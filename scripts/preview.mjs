@@ -26,7 +26,8 @@
 //   - the art rule: the SVG must never contain `</script`, in any letter case.
 // It then writes PAGE ++ D ++ SVG, the decoded animation_url of a token with these inputs, byte for
 // byte as the class and a consumer produce it (scripts/page.mjs: pageHtml, dFragment).
-// The page is this checkout's PAGE: check out the commit whose VERSION equals the class's version().
+// The page is this checkout's PAGE: check out the tag v<version> of a released class, or for an interim
+// class a commit whose VERSION equals its version() (README: Versions).
 //
 // Exit status: 0 when the page is written, 1 when the MIDI, the settings or the SVG fails its check,
 // 2 on a usage error or an input that cannot be read.
@@ -288,7 +289,7 @@ export async function run(args, out = console.log, err = console.error) {
     for (const line of lines) out(line);
     writeFileSync(opts.out, html);
     out(`wrote ${opts.out}: ${html.length} bytes, PAGE ++ D ++ SVG`);
-    out(`  page ${VERSION}: it must equal the class's version()`);
+    out(`  page of version ${VERSION}: it must equal the class's version()`);
     const port = opts.serve;
     if (port === null) return 0;
     const name = `/${basename(opts.out)}`;

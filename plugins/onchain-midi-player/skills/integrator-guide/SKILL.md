@@ -152,6 +152,7 @@ let (address, _) = nft_class.deploy(@array![tinysynth.into()]).unwrap();
 ## 9. Choose the class hash
 
 - Take it from the README's [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#deployments) table. Today only interim test classes exist there; the release class is not declared yet. Do not ship the interim class to production.
+- `engine()` names the engine and `version()` is the class's SemVer: interim classes are `0.x.0`, and from `1.0.0` the major number promises call and settings-layout compatibility. Every declared class has its own version, so a new class hash always comes with a new `version()`.
 - Check a class before you use it: library-call `engine()`, `version()` and `script_sha256()` in a test, or run `verify_engine.mjs` on a token, and compare both with that version's row in [Versions](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#versions). The README's [Verifying the engine](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#verifying-the-engine) also rebuilds the class hash from source.
 
 ## Checklist

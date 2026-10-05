@@ -205,11 +205,14 @@ pub trait IOnchainTinySynth<T> {
     /// time. It was added before the first release, so every released class answers it.
     fn engine(self: @T) -> felt252;
 
-    /// Short-string (at most 31 ASCII bytes) identifying the engine and page versions of
-    /// this class: `'tinysynth-<engine ref>+page.<n>'`, e.g. `'tinysynth-b70ba90+page.1'`, where
-    /// the engine ref is the pinned fork commit (short SHA) or release tag. Changes whenever the
-    /// engine, page, or
-    /// built-in sound settings change, which always implies a new class hash.
+    /// The class's version: a SemVer short string, `MAJOR.MINOR.PATCH` with an optional
+    /// pre-release tag (at most 31 bytes), e.g. `'0.1.0'`. Every declared class has its own:
+    /// interim builds are `0.x.0`, and `1.0.0` comes at release, when the call and settings
+    /// layouts freeze. From then on the major number promises call and settings-layout
+    /// compatibility. `engine()` names the engine; the README's Versions table and
+    /// `scripts/page_versions.json` map each version to its engine commit, page revision and
+    /// `PAGE` SHA-256. Classes declared before this format return
+    /// `'tinysynth-<engine ref>+page.<n>'`.
     fn version(self: @T) -> felt252;
 
     /// Returns the license notice for this class: Apache License 2.0, covering both this

@@ -169,7 +169,7 @@ fn gas_lc_version() {
 
 #[test]
 fn gas_lc_license() {
-    assert(class().license().len() == 9066, 'license');
+    assert(class().license().len() == 9054, 'license');
 }
 
 // ------------------------------------------------------------------------------------------------

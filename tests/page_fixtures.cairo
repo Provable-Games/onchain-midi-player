@@ -37,9 +37,9 @@ pub const PAGE_SHA256: u256 = 0x6b6da50eafd9e9ef8ecf9891cd7c883440fa9d0340af2a58
 /// SHA-256 of `animation_url_segment()`, 53476 bytes.
 pub const SEGMENT_SHA256: u256 = 0xf3c6dbf17ec8e2985581b59e289fe9e90c98749a995df9cdcf4eb2dcc7ddce93;
 
-/// SHA-256 of `license()`, 9066 bytes.
-pub const LICENSE_SHA256: u256 = 0x778dfa36a41f0e85f12fc5008c08f54f8715770b5e0d053866a75d840b03c55b;
-pub const LICENSE_LEN: u32 = 9066;
+/// SHA-256 of `license()`, 9054 bytes.
+pub const LICENSE_SHA256: u256 = 0xee0b3416119219b43fd20081ec5f0b01c257a9a296844505aee867cabcf866bf;
+pub const LICENSE_LEN: u32 = 9054;
 
 /// SHA-256 of the engine (the pinned fork build, commit fc04dbe).
 pub const ENGINE_SHA256: u256 = 0x4135920f9591e37e1c6f9f839e0756cccb30e3b2cd3b4972f6f68860821e8c2c;
@@ -69,7 +69,7 @@ fn page_data_license_version_and_engine_hashes_match_the_build() {
     let license = page_data::license();
     assert_eq!(license.len(), LICENSE_LEN);
     assert(sha256(@license) == LICENSE_SHA256, 'license sha256');
-    assert(page_data::VERSION == 'tinysynth-fc04dbe+page.10', 'version');
+    assert(page_data::VERSION == '0.1.0', 'version');
     assert(page_data::ENGINE_SHA256 == ENGINE_SHA256, 'engine sha256');
     assert(page_data::GZIP_SHA256 == GZIP_SHA256, 'gzip sha256');
     assert_eq!(page_data::GZIP_LEN, GZIP_LEN);

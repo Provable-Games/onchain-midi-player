@@ -26,7 +26,7 @@ function pageData() {
   return {
     engine: { sha256: constant("ENGINE_SHA256").replace(/^0x/, ""), length: read(`tests/vendor/webaudio-tinysynth-${ENGINE_PIN.ref}.min.js`).length },
     gzip: { sha256: constant("GZIP_SHA256").replace(/^0x/, ""), length: Number(constant("GZIP_LEN")) },
-    page: { sha256: JSON.parse(read("scripts/page_versions.json").toString("utf8"))[constant("VERSION").slice(1, -1)], length: Number(constant("PAGE_LEN")) },
+    page: { sha256: JSON.parse(read("scripts/page_versions.json").toString("utf8"))[constant("VERSION").slice(1, -1)].page_sha256, length: Number(constant("PAGE_LEN")) },
   };
 }
 
