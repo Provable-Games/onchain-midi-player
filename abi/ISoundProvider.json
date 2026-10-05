@@ -1,0 +1,346 @@
+[
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::byte_array::ByteArray",
+    "members": [
+      {
+        "name": "data",
+        "type": "core::array::Array::<core::bytes_31::bytes31>"
+      },
+      {
+        "name": "pending_word",
+        "type": "core::felt252"
+      },
+      {
+        "name": "pending_word_len",
+        "type": "core::internal::bounded_int::BoundedInt::<0, 30>"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::array::Span::<core::integer::u16>",
+    "members": [
+      {
+        "name": "snapshot",
+        "type": "@core::array::Array::<core::integer::u16>"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::array::Span::<core::integer::i8>",
+    "members": [
+      {
+        "name": "snapshot",
+        "type": "@core::array::Array::<core::integer::i8>"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "onchain_midi_player::types::WaveDef",
+    "variants": [
+      {
+        "name": "Harmonics",
+        "type": "core::array::Span::<core::integer::u16>"
+      },
+      {
+        "name": "Samples",
+        "type": "core::array::Span::<core::integer::i8>"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::array::Span::<onchain_midi_player::types::WaveDef>",
+    "members": [
+      {
+        "name": "snapshot",
+        "type": "@core::array::Array::<onchain_midi_player::types::WaveDef>"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::bool",
+    "variants": [
+      {
+        "name": "False",
+        "type": "()"
+      },
+      {
+        "name": "True",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "onchain_midi_player::types::Waveform",
+    "variants": [
+      {
+        "name": "Sine",
+        "type": "()"
+      },
+      {
+        "name": "Square",
+        "type": "()"
+      },
+      {
+        "name": "Sawtooth",
+        "type": "()"
+      },
+      {
+        "name": "Triangle",
+        "type": "()"
+      },
+      {
+        "name": "WhiteNoise",
+        "type": "()"
+      },
+      {
+        "name": "MetallicNoise",
+        "type": "()"
+      },
+      {
+        "name": "Custom",
+        "type": "core::integer::u8"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "onchain_midi_player::types::FilterKind",
+    "variants": [
+      {
+        "name": "LowPass",
+        "type": "()"
+      },
+      {
+        "name": "HighPass",
+        "type": "()"
+      },
+      {
+        "name": "BandPass",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "onchain_midi_player::types::Filter",
+    "members": [
+      {
+        "name": "kind",
+        "type": "onchain_midi_player::types::FilterKind"
+      },
+      {
+        "name": "cutoff",
+        "type": "core::integer::u32"
+      },
+      {
+        "name": "key_track",
+        "type": "core::bool"
+      },
+      {
+        "name": "q",
+        "type": "core::integer::u32"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::option::Option::<onchain_midi_player::types::Filter>",
+    "variants": [
+      {
+        "name": "Some",
+        "type": "onchain_midi_player::types::Filter"
+      },
+      {
+        "name": "None",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "onchain_midi_player::types::Operator",
+    "members": [
+      {
+        "name": "route",
+        "type": "core::integer::u8"
+      },
+      {
+        "name": "wave",
+        "type": "onchain_midi_player::types::Waveform"
+      },
+      {
+        "name": "volume",
+        "type": "core::integer::u32"
+      },
+      {
+        "name": "ratio",
+        "type": "core::integer::u32"
+      },
+      {
+        "name": "offset_hz",
+        "type": "core::integer::i32"
+      },
+      {
+        "name": "attack",
+        "type": "core::integer::u32"
+      },
+      {
+        "name": "hold",
+        "type": "core::integer::u32"
+      },
+      {
+        "name": "decay",
+        "type": "core::integer::u32"
+      },
+      {
+        "name": "sustain",
+        "type": "core::integer::u32"
+      },
+      {
+        "name": "release",
+        "type": "core::integer::u32"
+      },
+      {
+        "name": "pitch_ratio",
+        "type": "core::integer::u32"
+      },
+      {
+        "name": "pitch_time",
+        "type": "core::integer::u32"
+      },
+      {
+        "name": "key_scale",
+        "type": "core::integer::i32"
+      },
+      {
+        "name": "filter",
+        "type": "core::option::Option::<onchain_midi_player::types::Filter>"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::array::Span::<onchain_midi_player::types::Operator>",
+    "members": [
+      {
+        "name": "snapshot",
+        "type": "@core::array::Array::<onchain_midi_player::types::Operator>"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "onchain_midi_player::types::Timbre",
+    "members": [
+      {
+        "name": "drum",
+        "type": "core::bool"
+      },
+      {
+        "name": "slot",
+        "type": "core::integer::u8"
+      },
+      {
+        "name": "operators",
+        "type": "core::array::Span::<onchain_midi_player::types::Operator>"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::array::Span::<onchain_midi_player::types::Timbre>",
+    "members": [
+      {
+        "name": "snapshot",
+        "type": "@core::array::Array::<onchain_midi_player::types::Timbre>"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "onchain_midi_player::types::TinySynthSettings",
+    "members": [
+      {
+        "name": "quality",
+        "type": "core::integer::u8"
+      },
+      {
+        "name": "reverb",
+        "type": "core::integer::u8"
+      },
+      {
+        "name": "master_vol",
+        "type": "core::integer::u8"
+      },
+      {
+        "name": "voices",
+        "type": "core::integer::u8"
+      },
+      {
+        "name": "waves",
+        "type": "core::array::Span::<onchain_midi_player::types::WaveDef>"
+      },
+      {
+        "name": "timbres",
+        "type": "core::array::Span::<onchain_midi_player::types::Timbre>"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "onchain_midi_player::types::TinySynthSound",
+    "members": [
+      {
+        "name": "midi",
+        "type": "core::byte_array::ByteArray"
+      },
+      {
+        "name": "settings",
+        "type": "onchain_midi_player::types::TinySynthSettings"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "onchain_midi_player::interface::ISoundProvider",
+    "items": [
+      {
+        "type": "function",
+        "name": "get_sound",
+        "inputs": [
+          {
+            "name": "token_id",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "onchain_midi_player::types::TinySynthSound"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  }
+]

@@ -30,10 +30,9 @@ export const PAGE_PATH = new URL("../tests/fixtures/page.html", import.meta.url)
  * `0.x.0` while pre-release, and `1.0.0` comes at release, when the call and settings layouts
  * freeze; from then on the major number promises call and settings-layout compatibility.
  * `engine()` names the engine. scripts/page_versions.json records, for every VERSION, the SHA-256
- * of its PAGE, the engine pin and PAGE_VERSION, and the build fails when any of them changes under
- * a recorded VERSION: bump VERSION, then record it with `npm run gen:page -- --record`. Classes
- * declared before this format return `tinysynth-<engine ref>+page.<PAGE_VERSION>`; their records
- * stay, under those keys.
+ * of its PAGE, the engine pin, PAGE_VERSION, script_sha256() and the gzip payload's SHA-256 and
+ * length, and the build fails when any of them changes under a recorded VERSION: bump VERSION,
+ * then record it with `npm run gen:page -- --record`.
  */
 export const VERSION = "0.1.0";
 /** Revision of the page (player, markup and styles): bump it when the page changes. */
@@ -120,37 +119,54 @@ export function encoderLicense() {
   return text;
 }
 
-/** @typedef {{page_sha256: string, engine_ref: string, engine_commit: string, page: number}} VersionRecord */
+/**
+ * @typedef {{page_sha256: string, engine_ref: string, engine_commit: string, page: number,
+ *   script_sha256: string, gzip_sha256: string, gzip_len: number}} VersionRecord
+ */
+
+/** The fields of a VersionRecord, in the order scripts/page_versions.json writes them. */
+const RECORD_FIELDS = /** @type {Array<keyof VersionRecord>} */ (["page_sha256", "engine_ref", "engine_commit", "page", "script_sha256", "gzip_sha256", "gzip_len"]);
 
 /**
  * Problems with one record of scripts/page_versions.json, under `key` (none: an empty array). The
- * engine ref is a short commit or a tag (vendor_engine.mjs's label); a short commit must be the
- * start of the full one. A key from before SemVer must say what its record says.
+ * key is a SemVer VERSION. The engine ref is a short commit or a tag (vendor_engine.mjs's label); a
+ * short commit must be the start of the full one.
  * @param {string} key
  * @param {VersionRecord} r
  */
 export function versionRecordProblems(key, r) {
   const problems = [];
-  if (JSON.stringify(Object.keys(r)) !== JSON.stringify(["page_sha256", "engine_ref", "engine_commit", "page"])) problems.push("fields");
-  if (!/^[0-9a-f]{64}$/.test(r.page_sha256)) problems.push("page_sha256");
+  if (JSON.stringify(Object.keys(r)) !== JSON.stringify(RECORD_FIELDS)) problems.push("fields");
+  for (const f of /** @type {const} */ (["page_sha256", "script_sha256", "gzip_sha256"])) if (!/^[0-9a-f]{64}$/.test(r[f])) problems.push(f);
   if (!/^[0-9a-f]{40}$/.test(r.engine_commit)) problems.push("engine_commit");
   if (!/^[0-9A-Za-z._-]{1,16}$/.test(r.engine_ref) || (/^[0-9a-f]{7}$/.test(r.engine_ref) && !r.engine_commit.startsWith(r.engine_ref))) problems.push("engine_ref");
   if (!Number.isInteger(r.page) || r.page < 1) problems.push("page");
-  if (!isSemVer(key) && key !== `tinysynth-${r.engine_ref}+page.${r.page}`) problems.push("key");
+  if (!Number.isInteger(r.gzip_len) || r.gzip_len < 1) problems.push("gzip_len");
+  if (!isSemVer(key)) problems.push("key");
   return problems;
 }
 
-/** This build's record for VERSION in scripts/page_versions.json. */
-export function versionRecord(/** @type {string} */ pageSha256) {
-  return { page_sha256: pageSha256, engine_ref: ENGINE_PIN.ref, engine_commit: ENGINE_PIN.commit, page: PAGE_VERSION };
+/**
+ * This build's record for VERSION in scripts/page_versions.json, from the SHA-256 of its PAGE and
+ * the SHA-256 and length of its gzip payload.
+ * @param {string} pageSha256
+ * @param {string} gzipSha256
+ * @param {number} gzipLen
+ * @returns {VersionRecord}
+ */
+export function versionRecord(pageSha256, gzipSha256, gzipLen) {
+  return {
+    page_sha256: pageSha256, engine_ref: ENGINE_PIN.ref, engine_commit: ENGINE_PIN.commit, page: PAGE_VERSION,
+    script_sha256: ENGINE_PIN.sha256, gzip_sha256: gzipSha256, gzip_len: gzipLen,
+  };
 }
 
 /**
  * Checks that `version` names exactly this build in the record of versions (VERSION -> the
- * SHA-256 of PAGE, the engine pin and the page revision), so version() can never stay the same
- * while the page or the engine changes. With `record`, a VERSION not yet in it is added: it must be
- * SemVer and come after every SemVer version recorded. (Several versions may share a PAGE: a
- * version names a class, and a class can change while its page does not.) Returns the (possibly
+ * SHA-256 of PAGE, the engine pin, the page revision and the engine's hashes), so version() can
+ * never stay the same while the page or the engine changes. With `record`, a VERSION not yet in it
+ * is added: it must be SemVer and come after every version recorded. (Several versions may share a
+ * PAGE: a version names a class, and a class can change while its page does not.) Returns the (possibly
  * extended) record; throws if the build changed under a recorded VERSION, or if VERSION is new and
  * `record` is false.
  * @param {Record<string, VersionRecord>} versions
@@ -160,15 +176,14 @@ export function versionRecord(/** @type {string} */ pageSha256) {
  */
 export function checkPageVersion(versions, version, entry, { record = false } = {}) {
   const known = versions[version];
-  const fields = /** @type {Array<keyof VersionRecord>} */ (["page_sha256", "engine_ref", "engine_commit", "page"]);
-  if (known !== undefined && fields.every((f) => known[f] === entry[f])) return versions;
+  if (known !== undefined && RECORD_FIELDS.every((f) => known[f] === entry[f])) return versions;
   if (known !== undefined) {
     throw new Error(`PAGE or the engine changed (${JSON.stringify(entry)}) but VERSION ${version} is recorded for ` +
       `${JSON.stringify(known)}: bump VERSION in scripts/page.mjs, then run npm run gen:page -- --record`);
   }
   if (!isSemVer(version)) throw new Error(`VERSION ${version} is not SemVer (MAJOR.MINOR.PATCH[-pre], at most 31 bytes)`);
   for (const v of Object.keys(versions)) {
-    if (isSemVer(v) && compareSemVer(version, v) <= 0) throw new Error(`VERSION ${version} must come after the recorded ${v}`);
+    if (compareSemVer(version, v) <= 0) throw new Error(`VERSION ${version} must come after the recorded ${v}`);
   }
   if (!record) throw new Error(`VERSION ${version} is not recorded in scripts/page_versions.json: run npm run gen:page -- --record`);
   return { ...versions, [version]: entry };

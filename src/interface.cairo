@@ -209,10 +209,10 @@ pub trait IOnchainTinySynth<T> {
     /// pre-release tag (at most 31 bytes), e.g. `'0.1.0'`. Every declared class has its own:
     /// interim builds are `0.x.0`, and `1.0.0` comes at release, when the call and settings
     /// layouts freeze. From then on the major number promises call and settings-layout
-    /// compatibility. `engine()` names the engine; the Versions table in docs/versions.md and
-    /// `scripts/page_versions.json` map each version to its engine commit, page revision and
-    /// `PAGE` SHA-256. Classes declared before this format return
-    /// `'tinysynth-<engine ref>+page.<n>'`.
+    /// compatibility. A release has the git tag `v<version>`; a class without one is a test
+    /// class, not for production. `engine()` names the engine; `scripts/page_versions.json` maps
+    /// each version to its engine commit, page revision and hashes, and `deployments/` lists
+    /// where each class is declared.
     fn version(self: @T) -> felt252;
 
     /// Returns the license notice for this class: Apache License 2.0, covering both this

@@ -1,6 +1,6 @@
 // @ts-check
-// Node tests for scripts/page.mjs: the VERSION record that keeps version() tied to the page, the
-// row of docs/versions.md's Versions table that publishes it, and the notices in license().
+// Node tests for scripts/page.mjs: the VERSION record (scripts/page_versions.json) that keeps
+// version() tied to the page, and the notices in license().
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,7 +12,10 @@ import {
 import { ENGINE_PIN } from "./engine.mjs";
 
 /** @param {string} page_sha256 @param {number} [page] */
-const rec = (page_sha256, page = 1) => ({ page_sha256, engine_ref: "abc1234", engine_commit: "abc1234".padEnd(40, "0"), page });
+const rec = (page_sha256, page = 1) => ({
+  page_sha256, engine_ref: "abc1234", engine_commit: "abc1234".padEnd(40, "0"), page,
+  script_sha256: "c".repeat(64), gzip_sha256: "d".repeat(64), gzip_len: 100,
+});
 
 test("VERSION is SemVer and fits a short string", () => {
   assert.ok(isSemVer(VERSION), VERSION);
@@ -35,21 +38,29 @@ test("compareSemVer orders by SemVer precedence", () => {
 
 test("the committed build is the one recorded for VERSION, and every record is well formed", () => {
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
-  assert.deepEqual(versions[VERSION], versionRecord(sha256(pageHtml())));
-  assert.deepEqual(versions[VERSION], { page_sha256: sha256(pageHtml()), engine_ref: ENGINE_PIN.ref, engine_commit: ENGINE_PIN.commit, page: PAGE_VERSION });
+  const { page } = JSON.parse(readFileSync(new URL("../tests/fixtures/page.json", import.meta.url), "utf8"));
+  assert.equal(page.version, VERSION);
+  assert.deepEqual(versions[VERSION], versionRecord(sha256(pageHtml()), page.gzip_sha256, page.gzip_len));
+  assert.deepEqual(versions[VERSION], {
+    page_sha256: sha256(pageHtml()), engine_ref: ENGINE_PIN.ref, engine_commit: ENGINE_PIN.commit, page: PAGE_VERSION,
+    script_sha256: page.engine_sha256, gzip_sha256: page.gzip_sha256, gzip_len: page.gzip_len,
+  });
+  assert.equal(page.engine_sha256, ENGINE_PIN.sha256);
   for (const [key, r] of Object.entries(versions)) assert.deepEqual(versionRecordProblems(key, r), [], key);
 });
 
-test("versionRecordProblems: short commits and tags as the engine ref, and legacy keys", () => {
+test("versionRecordProblems: short commits and tags as the engine ref, SemVer keys and hashes", () => {
   const commit = "abc1234".padEnd(40, "0");
-  const record = (/** @type {string} */ engine_ref, engine_commit = commit) => ({ page_sha256: "a".repeat(64), engine_ref, engine_commit, page: 3 });
+  const record = (/** @type {string} */ engine_ref, engine_commit = commit) => ({ ...rec("a".repeat(64), 3), engine_ref, engine_commit });
   assert.deepEqual(versionRecordProblems("1.0.0", record("abc1234")), []);
   // A tagged release pin (vendor_engine.mjs keeps the tag as the ref): the commit need not start with it.
   assert.deepEqual(versionRecordProblems("1.0.0", record("v2.1.0")), []);
-  assert.deepEqual(versionRecordProblems("tinysynth-v2.1.0+page.3", record("v2.1.0")), []);
   assert.deepEqual(versionRecordProblems("1.0.0", record("def5678")), ["engine_ref"]);
   assert.deepEqual(versionRecordProblems("1.0.0", record("abc1234", "abc1234")), ["engine_commit"]);
-  assert.deepEqual(versionRecordProblems("tinysynth-abc1234+page.4", record("abc1234")), ["key"]);
+  assert.deepEqual(versionRecordProblems("tinysynth-abc1234+page.3", record("abc1234")), ["key"]);
+  assert.deepEqual(versionRecordProblems("1.0.0", { ...record("abc1234"), script_sha256: "C".repeat(64), gzip_len: 0 }), ["script_sha256", "gzip_len"]);
+  const { gzip_len, ...missing } = record("abc1234");
+  assert.deepEqual(versionRecordProblems("1.0.0", /** @type {any} */ (missing)), ["fields", "gzip_len"]);
 });
 
 test("checkPageVersion: a changed page or engine under a recorded VERSION fails, even with --record", () => {
@@ -60,7 +71,7 @@ test("checkPageVersion: a changed page or engine under a recorded VERSION fails,
 });
 
 test("checkPageVersion: a new VERSION needs --record, must be SemVer and must come after every recorded version", () => {
-  const versions = { "tinysynth-abc1234+page.1": rec("aa"), "0.1.0": rec("aa") };
+  const versions = { "0.0.1": rec("aa"), "0.1.0": rec("aa") };
   assert.throws(() => checkPageVersion(versions, "0.2.0", rec("bb")), /not recorded/);
   assert.deepEqual(checkPageVersion(versions, "0.2.0", rec("bb"), { record: true }), { ...versions, "0.2.0": rec("bb") });
   // A class can change while its page does not, so a new version may name a recorded page.
@@ -68,33 +79,8 @@ test("checkPageVersion: a new VERSION needs --record, must be SemVer and must co
   assert.throws(() => checkPageVersion(versions, "0.0.9", rec("bb"), { record: true }), /must come after the recorded 0\.1\.0/);
   assert.throws(() => checkPageVersion(versions, "0.1.0-rc.1", rec("bb"), { record: true }), /must come after/);
   assert.throws(() => checkPageVersion(versions, "tinysynth-def5678+page.2", rec("bb"), { record: true }), /not SemVer/);
-});
-
-test("docs/versions.md's Versions table has a row for VERSION with the build's hashes", () => {
-  const { page } = JSON.parse(readFileSync(new URL("../tests/fixtures/page.json", import.meta.url), "utf8"));
-  assert.equal(page.version, VERSION);
-  const doc = readFileSync(new URL("../docs/versions.md", import.meta.url), "utf8");
-  const start = doc.indexOf("\n## Versions\n");
-  assert.ok(start >= 0, "docs/versions.md has a Versions section");
-  const section = doc.slice(start, doc.indexOf("\n## ", start + 1));
-  const rows = section.split("\n").filter((line) => line.startsWith(`| \`${VERSION}\` |`));
-  assert.equal(rows.length, 1, `one row for ${VERSION}: update docs/versions.md's Versions table`);
-  const cells = rows[0].split("|").slice(1, -1).map((cell) => cell.trim());
-  assert.equal(cells.length, 9);
-  assert.equal(cells[4], `\`${page.engine_sha256}\``, "script_sha256()");
-  assert.equal(cells[5], `\`${page.gzip_sha256}\` / ${page.gzip_len.toLocaleString("en-US")} bytes`, "gzip payload");
-  assert.ok(cells[6].startsWith(`[\`${page.engine_commit.slice(0, 7)}\`](https://github.com/Provable-Games/webaudio-tinysynth/commit/${page.engine_commit})`), "engine fork commit");
-  // Every row's engine commit, page revision and PAGE SHA-256 are its record's.
-  const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
-  for (const row of section.split("\n").filter((line) => line.startsWith("| `") && !line.startsWith("| `version()`"))) {
-    const [version, , , , , , engine, revision, digest] = row.split("|").slice(1, -1).map((cell) => cell.trim());
-    const r = versions[version.slice(1, -1)];
-    assert.ok(r, `${version} is recorded in scripts/page_versions.json`);
-    // Labelled by the short commit, as for VERSION's row, whether the pin is a commit or a tag.
-    assert.ok(engine.startsWith(`[\`${r.engine_commit.slice(0, 7)}\`](https://github.com/Provable-Games/webaudio-tinysynth/commit/${r.engine_commit})`), `${version}: engine`);
-    assert.equal(revision, `page.${r.page}`, `${version}: page revision`);
-    assert.equal(digest, `\`${r.page_sha256}\``, `${version}: PAGE SHA-256`);
-  }
+  // Every field is compared: a new gzip payload under a recorded VERSION fails too.
+  assert.throws(() => checkPageVersion(versions, "0.1.0", { ...rec("aa"), gzip_len: 101 }), /PAGE or the engine changed/);
 });
 
 test("license(): NOTICE first, then fflate's and game-components' MIT licenses", () => {

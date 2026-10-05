@@ -25,6 +25,8 @@ npm run check:settings   # fail if they are out of date
 node scripts/gen_midi_fixtures.mjs   # regenerate the synthetic scores (then gen:page)
 npm ci && npm run gen:page   # rebuild the page, src/page_data.cairo and the page fixtures
 npm run check:page       # fail if any of them is out of date
+npm run gen:abi          # scarb --release build (and --test), then write abi/
+npm run check:abi        # fail if abi/ is out of date
 npm run check-midi -- song.mid   # check MIDI files against the page's MIDI contract
 npm run preview -- song.mid      # write (and optionally serve) the page a token with that MIDI gets
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromium \
@@ -53,12 +55,20 @@ All base64 in the class goes through `onchain_midi_player::base64::bytes_base64_
    - the golden fixtures for the class: [`tests/fixtures/page.json`](../tests/fixtures/page.json) and [`tests/page_fixtures.cairo`](../tests/page_fixtures.cairo);
    - the class's test fixtures, [`tests/class_fixtures.cairo`](../tests/class_fixtures.cairo): the raw `PAGE`, base64 vectors from Node's encoder, and the synthetic scores of [`tests/fixtures/midi/`](../tests/fixtures/midi/README.md).
 
-`VERSION` is the class's SemVer version (see [Versions and deployments](versions.md)). [`scripts/page_versions.json`](../scripts/page_versions.json) records, for every `VERSION`, the SHA-256 of `PAGE`, the engine pin (`engine_ref`, `engine_commit`) and the page revision (`page`, from `PAGE_VERSION`), and the build fails if any of them changes while `VERSION` stays the same. A new `VERSION` must be SemVer and come after every recorded one; several versions may share a `PAGE`, because a class's Cairo code can change while its page does not.
+`VERSION` is the class's SemVer version, returned by `version()`. [`scripts/page_versions.json`](../scripts/page_versions.json) records, for every `VERSION`, the SHA-256 of `PAGE`, the engine pin (`engine_ref`, `engine_commit`), the page revision (`page`, from `PAGE_VERSION`), `script_sha256()` (`script_sha256`) and the gzip payload's SHA-256 and length (`gzip_sha256`, `gzip_len`), and the build fails if any of them changes while `VERSION` stays the same. A new `VERSION` must be SemVer and come after every recorded one; several versions may share a `PAGE`, because a class's Cairo code can change while its page does not.
 
-- To change the page, bump `PAGE_VERSION` and `VERSION` in [`scripts/page.mjs`](../scripts/page.mjs) (a re-pin needs a new `VERSION` too), run `npm run gen:page -- --record`, and update the first row of [Versions](versions.md#versions).
+- To change the page, bump `PAGE_VERSION` and `VERSION` in [`scripts/page.mjs`](../scripts/page.mjs) (a re-pin needs a new `VERSION` too), and run `npm run gen:page -- --record`.
 - Bump `VERSION` for every class that is declared, even when only its Cairo code changed.
+- When you declare a class or deploy the example, record it in [`deployments/<network>.json`](../deployments/sepolia.json), replacing the previous entry (git history keeps superseded entries: `git log -p deployments/<network>.json`): `class` (its `version()`, class hash, declare transaction, the full commit it was built from, `release_tag`, `null` for a test class, and its inspection instance) and `example`. Hashes and addresses are `0x` and 64 lowercase hex digits. `scripts/deployments.test.mjs` checks the shape, that the version is in `scripts/page_versions.json`, and that the example's `player_class_hash` is the class beside it.
 
 **Golden fixtures.** The JS reference ([`scripts/page.mjs`](../scripts/page.mjs)) computes them from the inputs in [`scripts/page_fixtures.mjs`](../scripts/page_fixtures.mjs). The valid cases cover every `D` padding length and every consumer padding length, and include custom waves and filters; the invalid cases cover settings reverts. snforge checks `midi_segment` byte for byte against each, directly and through the library call, and the decoded page and consumer-layout `token_uri` against their length and SHA-256.
+
+## ABIs
+
+[`abi/`](../abi) holds the ABIs integrators load into starknet.js, starknet.py or another client. [`scripts/gen_abi.mjs`](../scripts/gen_abi.mjs) (`npm run gen:abi`, or `npm run check:abi` to verify) writes them from the release build's artifacts in `target/release/`:
+
+- `abi/OnchainTinySynth.json`: the `abi` array of the class's `contract_class.json`.
+- `abi/ISoundProvider.json`: the provider interface and the types it uses. No contract of the crate implements it, so it comes from the test crate's `MockSoundProvider` ([`tests/test_provider.cairo`](../tests/test_provider.cairo)), less the mock's own `impl` and `event` entries.
 
 ## Player JavaScript
 
@@ -113,10 +123,10 @@ GitHub Actions runs on every pull request and on pushes to `main` ([`.github/wor
 | --- | --- |
 | `cairo` | `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer`; the Scarb lockfiles stay unchanged |
 | `javascript` | The example's Node tests, `npm ci`, `npm test`, and `tsc --checkJs` on `player/` |
-| `generated` | Reruns the fixture generators, `npm run check:settings` and `npm run check:page`, then fails on any diff |
+| `generated` | Reruns the fixture generators, `npm run check:settings`, `npm run check:page` and the ABI generator, then fails on any diff |
 | `browser` | One leg per engine (Chromium, Firefox, WebKit): the example's `browser_check.mjs`, `render-check`, `page-check` and a 1-minute `drift-check` |
 
-**Drift guards.** [`scripts/skills.test.mjs`](../scripts/skills.test.mjs), run by `npm test`, keeps the agent skills in step with the code and these docs. It checks the skills' frontmatter and the plugin manifests, that every link in the skills, the README and `docs/` resolves (files and anchors), that the MIDI reference lists every `checkMidi` message, that the operator table matches the validator, that every gas figure in the skills appears in the README or `docs/` and the MIDI and `SETTINGS` rates agree with [`docs/gas.md`](gas.md), that the skills name settings limits by their `src/settings.cairo` constants, and that they hardcode nothing a re-pin changes. `scripts/page.test.mjs` checks the [Versions](versions.md#versions) table against the build and `scripts/page_versions.json`, and `scripts/check_midi.test.mjs` checks that the [MIDI contract](midi-contract.md) lists every MIDI error.
+**Drift guards.** [`scripts/skills.test.mjs`](../scripts/skills.test.mjs), run by `npm test`, keeps the agent skills in step with the code and these docs. It checks the skills' frontmatter and the plugin manifests, that every link in the skills, the README and `docs/` resolves (files and anchors), that the MIDI reference lists every `checkMidi` message, that the operator table matches the validator, that every gas figure in the skills appears in the README or `docs/` and the MIDI and `SETTINGS` rates agree with [`docs/gas.md`](gas.md), that the skills name settings limits by their `src/settings.cairo` constants, and that they hardcode nothing a re-pin changes. `scripts/page.test.mjs` checks `scripts/page_versions.json` against the build, `scripts/deployments.test.mjs` checks `deployments/`, and `scripts/check_midi.test.mjs` checks that the [MIDI contract](midi-contract.md) lists every MIDI error.
 
 **Reviews.** Codex and Claude review each same-repository pull request ([`codex-review.yml`](../.github/workflows/codex-review.yml), [`claude-review.yml`](../.github/workflows/claude-review.yml)) and post one comment each. A HIGH or CRITICAL finding fails that provider's review gate. The reviewers also check the agent skills against each change. Setup, secrets and policies are in [`.github/scripts/README.md`](../.github/scripts/README.md).
 
@@ -127,7 +137,7 @@ scarb fmt --check && scarb build && snforge test
 (cd examples/beast_consumer && scarb fmt --check && scarb build && snforge test)
 node scripts/gen_midi_fixtures.mjs
 (cd examples/beast_consumer && node --test scripts/*.test.mjs && node scripts/gen_fixtures.mjs)
-npm ci && npm test && npm run check:settings && npm run check:page
+npm ci && npm test && npm run check:settings && npm run check:page && npm run check:abi
 git diff --exit-code                     # generators left no drift
 
 # Pinned tools for the type check and the browser checks

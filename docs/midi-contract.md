@@ -134,10 +134,10 @@ npm run check-midi -- song.mid                        # the same, through npm
     32 bytes
   ```
 - **Exit status.** 0 if every score passes, 1 if any fails, and 2 for a usage error or an input it cannot read (a missing file, invalid JSON, or JSON with no `midi_b64` string), so it can gate another repository's CI.
-- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player, and a declared class keeps the player it was declared with. So use a checkout whose `VERSION` (in `src/page_data.cairo`) is the `version()` of the class your consumer stores (see [Versions](versions.md#versions)): its release tag `v<version>`, or `main` while its `VERSION` matches. In another repository's CI, for example:
+- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player, and a declared class keeps the player it was declared with. So use a checkout whose `VERSION` (in `src/page_data.cairo`) is the `version()` of the class your consumer stores: its release tag `v<version>`, or `main` while its `VERSION` matches. In another repository's CI, for example:
 
   ```sh
-  REF=main   # or v<version>, the release tag of the class you target (docs/versions.md)
+  REF=main   # or v<version>, the release tag of the class you target
   git clone --depth 1 --branch "$REF" https://github.com/Provable-Games/onchain-midi-player "$RUNNER_TEMP/onchain-midi-player"
   node "$RUNNER_TEMP/onchain-midi-player/scripts/check_midi.mjs" path/to/*.mid
   ```

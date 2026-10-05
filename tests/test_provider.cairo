@@ -24,7 +24,8 @@ use crate::settings_fixtures::{valid_filter_extremes, valid_reference_waves};
 /// A composer's provider. It decodes only the low 16 bits of the token ID, ignoring the rest as a
 /// provider must, and knows one token, 1: the `beast_140bpm` golden fixture's MIDI and settings.
 /// Any other value of those bits is an unknown token, the one case where it reverts. It implements
-/// only `get_sound`, the whole of `ISoundProvider`.
+/// only `get_sound`, the whole of `ISoundProvider`, so its ABI, less its own `impl` and `event`
+/// entries, is `abi/ISoundProvider.json` (scripts/gen_abi.mjs).
 #[starknet::contract]
 mod MockSoundProvider {
     use onchain_midi_player::interface::ISoundProvider;

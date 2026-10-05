@@ -31,8 +31,8 @@
 //   node scripts/build_page.mjs --record  also record a new VERSION in scripts/page_versions.json
 //
 // Every run fails if PAGE or the engine pin changed while VERSION stayed the same
-// (scripts/page_versions.json maps each VERSION to the SHA-256 of its PAGE, the engine pin and
-// PAGE_VERSION): bump VERSION (and PAGE_VERSION if the page changed) in scripts/page.mjs, then --record.
+// (scripts/page_versions.json maps each VERSION to the SHA-256 of its PAGE, the engine pin,
+// PAGE_VERSION, script_sha256() and the gzip payload's SHA-256 and length): bump VERSION (and PAGE_VERSION if the page changed) in scripts/page.mjs, then --record.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -206,7 +206,7 @@ export async function build() {
     version: VERSION, license, engineCommit: ENGINE_PIN.commit, engineSha256: ENGINE_PIN.sha256,
     gzipSha256, gzipLen: engineGzip.length, shimSha256: sha256(shim),
   });
-  return { page, cairo, fixtures, classFixtures: classFixturesCairo(page), sizes, segment };
+  return { page, cairo, fixtures, classFixtures: classFixturesCairo(page), sizes, segment, gzipSha256 };
 }
 
 /**
@@ -280,11 +280,11 @@ ${cairoByteArrayConst("license", "LICENSE", license, [
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const { page, cairo, fixtures, classFixtures, sizes } = await build();
+  const { page, cairo, fixtures, classFixtures, sizes, gzipSha256 } = await build();
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
   let recorded;
   try {
-    recorded = checkPageVersion(versions, VERSION, versionRecord(sha256(page)), { record: process.argv.includes("--record") });
+    recorded = checkPageVersion(versions, VERSION, versionRecord(sha256(page), gzipSha256, sizes.gzip), { record: process.argv.includes("--record") });
   } catch (e) {
     console.error(/** @type {Error} */ (e).message);
     process.exit(1);

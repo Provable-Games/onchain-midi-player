@@ -53,7 +53,7 @@ Pick a tempo whose beat, or a subdivision of it, is a whole number of frames. Th
 
 ## The Beast worked example
 
-The example's token 4 is a full-size Beast on Sepolia (see [Deployments](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/versions.md#deployments)). Its synthetic score uses a production Beast tempo, 455,000 µs per quarter (131.87 BPM; the production tempos are in [`scripts/gen_midi_fixtures.mjs`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/gen_midi_fixtures.mjs)). `check-midi` reports `loop 55.510 s, maxTick 58560`.
+The example's token 4 is a full-size Beast on Sepolia (the example in [`deployments/sepolia.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json)). Its synthetic score uses a production Beast tempo, 455,000 µs per quarter (131.87 BPM; the production tempos are in [`scripts/gen_midi_fixtures.mjs`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/gen_midi_fixtures.mjs)). `check-midi` reports `loop 55.510 s, maxTick 58560`.
 
 - 55,510 ms / 800 ms = 69.39 GIF loops per pass, so a pass ends 0.39 of the way through a GIF loop.
 - The 455 ms beat and the 800 ms GIF loop line up every lcm(455, 800) = 72,800 ms, longer than the pass. Within a pass, the beat never lines up with the GIF again.
