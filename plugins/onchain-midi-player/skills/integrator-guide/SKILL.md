@@ -19,7 +19,7 @@ The class is declared on Starknet but never deployed. Your contract reaches it w
 ```toml
 [dependencies]
 onchain_midi_player = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "<release tag>" }
-# Until a release is tagged: rev = "<commit>" (docs/versions.md, "Deployments")
+# Until a release is tagged: rev = "<commit>", a recent commit of this repository (not a Sepolia "Built from" commit, which predates the rename)
 
 [[target.starknet-contract]]
 sierra = true
