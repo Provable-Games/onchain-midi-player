@@ -107,7 +107,7 @@ The checks run on Playwright's Chromium, Firefox and WebKit. They load the class
 | Every failure path keeps the art, ▶ disabled | `checkFailures` (settings, MIDI), `checkEngineFailures` (gzip payload), `checkAudioFailures` (no Web Audio; `resume()` rejects) |
 | No network requests; offline from `data:` and `file://` | every load; `checkDataPage`, `checkFile` |
 | Sandboxed iframe, strict CSP, marketplace-style frames | `page_check.mjs`: `checkIframe`, `checkCsp` with `checkCspControl`, `checkEmbeds`; [`hosting_check.mjs`](../scripts/hosting_check.mjs): `data:` and `srcdoc` frames in a host with a strict CSP, and the hosts where the page cannot run |
-| Offline renders of the reference timbres, custom waves and filters | [`render_check.mjs`](../scripts/render_check.mjs) |
+| Offline renders of the reference timbres, custom waves and filters; two page loads render the same audio (Firefox bit for bit, Chromium and WebKit within 80 float32 ULPs, 9.5e-6, from rounding in the browser's mixing) | [`render_check.mjs`](../scripts/render_check.mjs) |
 | Settings at their extremes play without an error | `checkExtremes` |
 | Marketplaces, mobile browsers, real audio hardware, indexers, wallets and RPC providers | manual |
 
