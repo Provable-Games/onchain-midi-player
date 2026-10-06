@@ -267,6 +267,29 @@ describe("mount: defaults, layout and animation", () => {
       restore();
     }
   });
+  test("pause holds the frame and requests no animation frames; play resumes from the clock", () => {
+    const { frames, restore } = browser();
+    try {
+      const { c, ops } = canvas();
+      let t = 1;
+      const m = mount(c, { midi: SONG, clock: () => t });
+      const latest = () => fills(ops.slice(ops.findLastIndex((op) => op[0] === "clear")));
+      m.play();
+      const playing = latest();
+      t = 1.5;
+      m.pause();
+      frames[0]();
+      assert.equal(frames.length, 1, "paused: the pending frame was cancelled, none requested");
+      assert.deepEqual(latest(), playing, "the same frame, at the clock's last reading");
+      m.draw(); // a resize while paused redraws the held frame
+      assert.deepEqual(latest(), playing);
+      m.play();
+      assert.equal(frames.length, 2, "resumed");
+      assert.notDeepEqual(latest(), playing, "drawn at the clock's new reading");
+    } finally {
+      restore();
+    }
+  });
   test("prefers-reduced-motion: play keeps it standing still", () => {
     const { frames, restore } = browser({ reduced: true });
     try {

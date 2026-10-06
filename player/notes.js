@@ -8,10 +8,10 @@
  *
  * Notes enter on the right and travel left; a note sounds as it reaches the playhead, near the left
  * edge (`playheadX`). One colour per channel; the drum channel (9, "channel 10") is ticks along a
- * band at the bottom; pitch maps to height over the song's own range. Before ▶ and after ■, and
- * for a reader who prefers reduced motion, the opening bars stand still, muted (`idleAlpha`); while
- * playing they scroll with the clock (`playAlpha`), only while the page is visible (the browser
- * pauses animation frames for a hidden page). The defaults suit the Beasts card (250x350, its art
+ * band at the bottom; pitch maps to height over the song's own range. Before ▶, and for a reader
+ * who prefers reduced motion, the opening bars stand still, muted (`idleAlpha`); while playing they
+ * scroll with the clock (`playAlpha`), only while the page is visible (the browser pauses animation
+ * frames for a hidden page); paused, they hold where they are. The defaults suit the Beasts card (250x350, its art
  * frame at (15, 58), 220x156), so a Beasts page's call is short:
  *
  *   OnchainMidiNotes.mount(canvas, { midi, clock, img })
@@ -230,8 +230,9 @@ export function drawNotes(g, roll, o, at, live) {
 
 /**
  * Mounts the notes UI on `canvas` (see DEFAULTS for the options) and draws it standing still.
- * Returns `play()` (scroll with the clock, from the clock's tick 0), `stop()` (back to standing
- * still), `draw()` (lay out and redraw), and the resolved `options`.
+ * Returns `play()` (scroll with the clock, from wherever it is: also resumes), `pause()` (hold the
+ * current frame; no animation frames until `play()`), `stop()` (back to the still opening bars),
+ * `draw()` (lay out and redraw), and the resolved `options`.
  * @param {HTMLCanvasElement} canvas
  * @param {Partial<NotesOptions>} options
  */
@@ -242,7 +243,8 @@ export function mount(canvas, options) {
   const roll = midiNotes(midi);
   const img = () => (typeof o.img == "function" ? o.img() : o.img);
   let frame = 0;
-  let live = false;
+  let live = false; // playing or paused: the scrolling view, at the clock's last reading
+  let at = 0;
   canvas.style.position = "fixed";
   canvas.style.background = o.background;
   const first = img();
@@ -266,29 +268,33 @@ export function mount(canvas, options) {
   };
   const tick = () => {
     frame = 0;
-    if (!live) return;
     try {
-      paint(o.clock());
+      paint((at = o.clock()));
       frame = globalThis.requestAnimationFrame(tick);
-    } catch (e) {
-      live = false; // the notes stop where they are
-    }
+    } catch (e) {} // the notes stop where they are
   };
-  const draw = () => live || paint(0);
-  const stop = () => {
-    live = false;
+  const halt = () => {
     if (frame) globalThis.cancelAnimationFrame(frame);
     frame = 0;
-    paint(0);
+  };
+  const draw = () => frame || paint(at);
+  const stop = () => {
+    halt();
+    live = false;
+    paint((at = 0));
   };
   globalThis.addEventListener?.("resize", draw);
   draw();
   return {
     play() {
-      stop();
-      if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+      halt();
+      if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return stop();
       live = true;
       tick();
+    },
+    pause() {
+      halt();
+      paint(at);
     },
     stop,
     draw,

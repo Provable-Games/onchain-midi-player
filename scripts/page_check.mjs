@@ -12,12 +12,13 @@
 //   file://    decoded to a file and opened from disk (every other request blocked and listed)
 //   embeds     two other ways a host can frame it: <iframe sandbox="allow-scripts" srcdoc="...">,
 //              and re-served from another origin in <iframe sandbox="allow-scripts allow-same-origin">
-//   touch      ▶ and ■ by tapping, in a touch context
+//   touch      ▶ and ❚❚ by tapping, in a touch context
 //
 // For each it checks that the shim inflated the gzipped engine (the gzip tag replaced by an inline
 // script whose text hashes to script_sha256(), run before the player registered its
 // DOMContentLoaded listener), that ▶ is disabled until the page is ready, that the art is shown
-// first, that ▶ starts TinySynth (AudioContext running, notes scheduled) and ■ stops it, that the
+// first, that ▶ starts TinySynth (AudioContext running, notes scheduled) and ❚❚ pauses it (suspended,
+// its clock standing still, nothing scheduled) until ▶ resumes it where it was, that the
 // page loops at End-of-Track (consecutive passes start maxTick x tick2Time apart, which is the pass
 // length the MIDI's own tempo map gives: the tempo is right), and that nothing
 // is requested over the network and nothing is logged as an error. That the gzip tag's data: URI is
@@ -27,7 +28,8 @@
 // restarts the art: the probe art is a bar sweeping linearly over 8 s, and screenshots before and
 // after ▶ show the bar where time-since-restart (not time-since-load) puts it; that the art
 // restarts again at every pass, each time at the pass's tick 0 as heard (its startTime plus the
-// output latency), and never after ■; and it prints when the page became ready. It prints how long each ▶ took to start playback. Failure variants
+// output latency), never while paused, and on resuming at once, offset to the music's position in
+// the pass (a negative SMIL begin); and it prints when the page became ready. It prints how long each ▶ took to start playback. Failure variants
 // (unparsable settings, invalid MIDI; a corrupt, truncated or missing gzip payload, or one without
 // the engine) must keep the art visible, keep ▶ disabled, show the exact error and construct no
 // synth. So must the failures ▶ can meet: no Web Audio at all, or an AudioContext whose resume()
@@ -64,7 +66,7 @@ import { ART_OPEN, MIDI_OPEN, dFragment, pageHtml, sha256, withGzipPayload } fro
 import { decodePng, encodePng } from "./png.mjs";
 import { smf } from "./page_fixtures.mjs";
 import { longLfsr } from "./settings_fixtures.mjs";
-import { ENGINE_MISSING } from "../player/player.js";
+import { ENGINE_MISSING, PAUSE_ICON, PLAY_ICON } from "../player/player.js";
 
 const shotDir = process.argv[2];
 
@@ -291,6 +293,15 @@ async function startPlayback(frame, n = 1) {
   console.log(`  info ▶ to playMIDI: ${Date.now() - t0} ms`);
 }
 
+/** Waits until the AudioContext is in `state` ("suspended" after ❚❚, "running" after ▶ resumes it). */
+const contextState = (/** @type {any} */ frame, /** @type {string} */ want) => frame.waitForFunction((/** @type {string} */ want) => {
+  const synth = /** @type {any} */ (window).__check.synth;
+  return synth && synth.getAudioContext().state === want;
+}, want, { timeout: 10000 }).catch(() => {}); // the checks that follow report a state never reached
+
+/** ❚❚: paused, not stopped (▶ shown, the AudioContext suspended, the engine still playing its song). */
+const isPaused = (/** @type {any} */ st) => st.label === "Play" && st.synth?.state === "suspended" && st.synth?.playing === 1;
+
 /**
  * Start times of every pass: the first lead note-on (channel 1, note 72) of each.
  * @param {any} frame
@@ -392,7 +403,7 @@ async function checkArtwork() {
 }
 
 /**
- * The ▶/■ button sits at the art's `data-play-anchor`: on a card whose art frame (a rounded black
+ * The ▶/❚❚ button sits at the art's `data-play-anchor`: on a card whose art frame (a rounded black
  * rect) is (15, 58) to (235, 202) in a 250x350 viewBox, with the Beast's box (62, 66) to (190, 194)
  * inside it, anchored at "235 202 32" (the frame's bottom-right corner, a 32-unit button), the
  * button's bounding rect lies inside the frame, in its bottom-right quadrant, with a diameter of 32 x
@@ -465,7 +476,7 @@ async function checkPlayAnchor() {
   await page.evaluate(() => { const i = /** @type {HTMLElement} */ (document.querySelector("img")); i.style.width = ""; i.style.height = ""; });
   await inBox("the img back to 100%");
   await startPlayback(page);
-  check((await state(page)).label === "Stop", "the anchored button plays (a click on it started playback)");
+  check((await state(page)).label === "Pause", "the anchored button plays (a click on it started playback)");
   await inBox("while playing, after the art restarted");
   const errors = await logged();
   check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
@@ -498,9 +509,9 @@ async function checkPlayAnchor() {
 }
 
 /**
- * Background audio (the silent <audio> element and the media session) after ▶ and after ■, in
+ * Background audio (the silent <audio> element and the media session) after ▶ and after ❚❚, in
  * whatever frame the page is in. The element must play (a looping 6 s blob: WAV) after ▶ and be
- * paused after ■; where the engine has navigator.mediaSession, the playback state follows, and the
+ * paused after ❚❚; where the engine has navigator.mediaSession, the playback state follows, and the
  * play, pause and stop handlers (and no others) are registered.
  * @param {any} frame
  * @param {"playing" | "paused"} now
@@ -519,39 +530,41 @@ async function checkBackground(frame, now) {
 }
 
 /**
- * The media session's handlers and a pause from outside drive the page as ▶ and ■ do: while the page
- * plays, the captured pause handler stops it (the engine stopped, the element paused), the play
- * handler starts it again, and pausing the silent element (a notification, a headset, a call) stops
- * it like ■. Ends stopped.
+ * The media session's handlers and a pause from outside drive the page as ▶ and ❚❚ do: while the
+ * page plays, the captured pause handler pauses it (the AudioContext suspended, the element paused),
+ * the play handler resumes it (no new playMIDI), pausing the silent element (a notification, a
+ * headset, a call) pauses it like ❚❚, and the stop handler pauses too. Ends paused.
  * @param {any} frame
  */
 async function checkMediaControls(frame) {
   const before = await state(frame);
   if (!before.session) return skip("media session handlers: this engine has no navigator.mediaSession");
-  const wait = (/** @type {number} */ n) => frame.waitForFunction((/** @type {number} */ n) => /** @type {any} */ (window).__check.plays.length >= n && /** @type {any} */ (window).__check.sends.length > 0, n, { timeout: 15000 });
   await frame.evaluate(() => /** @type {any} */ (window).__check.handlers.pause());
+  await contextState(frame, "suspended");
   let st = await state(frame);
-  check(st.label === "Play" && st.synth.playing === 0 && st.media.paused === true && st.session.state === "paused", "the pause handler stops: ▶ shown, the engine stopped, the element paused");
+  check(isPaused(st) && st.media.paused === true && st.session.state === "paused", "the pause handler pauses: ▶ shown, the AudioContext suspended, the element paused");
   await frame.evaluate(() => /** @type {any} */ (window).__check.handlers.play());
-  await wait(before.plays.length + 1);
+  await contextState(frame, "running");
   st = await state(frame);
-  check(st.label === "Stop" && st.synth.playing === 1 && st.synth.state === "running" && st.media.paused === false && st.session.state === "playing" && st.plays.length === before.plays.length + 1,
-    `the play handler starts: ■ shown, the engine playing (AudioContext ${st.synth.state}), the element playing`);
+  check(st.label === "Pause" && st.synth.playing === 1 && st.synth.state === "running" && st.media.paused === false && st.session.state === "playing" && st.plays.length === before.plays.length,
+    `the play handler resumes: ❚❚ shown, the AudioContext ${st.synth.state}, no new playMIDI, the element playing`);
   await frame.evaluate(() => /** @type {any} */ (window).__check.media.el.pause());
   // The element's pause event is delivered asynchronously.
   await frame.waitForFunction(() => document.getElementById("play")?.getAttribute("aria-label") === "Play", null, { timeout: 5000 }).catch(() => {});
+  await contextState(frame, "suspended");
   st = await state(frame);
-  check(st.label === "Play" && st.synth.playing === 0 && st.session.state === "paused", "pausing the silent element from outside stops the player, as ■ does");
+  check(isPaused(st) && st.session.state === "paused", "pausing the silent element from outside pauses the player, as ❚❚ does");
   await frame.evaluate(() => /** @type {any} */ (window).__check.handlers.play());
-  await wait(before.plays.length + 2);
+  await contextState(frame, "running");
   await frame.evaluate(() => /** @type {any} */ (window).__check.handlers.stop());
+  await contextState(frame, "suspended");
   st = await state(frame);
-  check(st.label === "Play" && st.synth.playing === 0 && st.media.paused === true, "the stop handler stops");
+  check(isPaused(st) && st.media.paused === true, "the stop handler pauses too");
 }
 
 /**
- * Background audio on the data: page: the silent element plays after ▶ and is paused after ■ (and
- * again after ▶), the media session's handlers drive ▶/■, and a pause from outside stops the player.
+ * Background audio on the data: page: the silent element plays after ▶ and is paused after ❚❚ (and
+ * plays again after ▶), the media session's handlers drive ▶/❚❚, and a pause from outside pauses the player.
  * Online, with every request still blocked and listed.
  */
 async function checkBackgroundAudio() {
@@ -565,7 +578,8 @@ async function checkBackgroundAudio() {
   await checkBackground(page, "playing");
   await page.click("#play");
   await checkBackground(page, "paused");
-  await startPlayback(page, 2);
+  await page.click("#play");
+  await contextState(page, "running");
   await checkBackground(page, "playing");
   await checkMediaControls(page);
   const errors = await logged();
@@ -607,7 +621,7 @@ async function checkDataPage() {
   await page.waitForFunction(() => /** @type {any} */ (window).__check.imgs.length >= 2, null, { timeout: 3000 }).catch(() => {});
   st = await state(page);
   check(st.constructed === 1 && st.synth.state === "running", `▶: synth constructed in the gesture, AudioContext ${st.synth.state}`);
-  check(st.label === "Stop" && st.icon === "M6 6h12v12H6z", "▶ became ■");
+  check(st.label === "Pause" && st.icon === PAUSE_ICON, "▶ became ❚❚");
   const play = st.plays[0];
   const restart = st.imgs[1];
   check(!!restart && restart.src === artSrc(c.svg).replace(";base64,", ";r=1;base64,") && st.img.count === 1,
@@ -649,23 +663,41 @@ async function checkDataPage() {
   check(passLags.length >= 2 && passLags.every((l) => l > -20 && l < 100),
     `the art restarted at each of the ${passLags.length} passes heard since ▶, at the pass's tick 0 as heard (lags ${passLags.map((l) => l.toFixed(1)).join(", ")} ms)`);
 
+  // ❚❚ for 1.5 s: the AudioContext suspended, its clock standing still, nothing more scheduled, the
+  // engine not stopped, and no art restart.
   await page.click("#play");
+  await contextState(page, "suspended");
   st = await state(page);
-  const sends = st.sends;
-  await page.waitForTimeout(Math.ceil((c.midi_loop_seconds + 0.3) * 1000));
-  const stopped = await state(page);
-  check(st.label === "Play" && stopped.synth.playing === 0 && stopped.synth.startTime === null && stopped.sends === sends, "■ stops: the engine stopped (startTime null), nothing scheduled after it");
-  check(stopped.imgs.length === st.imgs.length, "■: no art restart after it, for a whole pass");
+  const [sends, frozen, imgs] = [st.sends, st.synth.time, st.imgs.length];
+  await page.waitForTimeout(1500);
+  const paused = await state(page);
+  // The engine's sequencer may still schedule the events within its look-ahead (0.2 s) of the
+  // stopped clock, at their own times: they sound after ▶. Nothing beyond it.
+  const meanwhile = (await page.evaluate(() => /** @type {any} */ (window).__check.sends)).slice(sends).map((/** @type {number[]} */ m) => m[3]);
+  check(isPaused(paused) && paused.icon === PLAY_ICON && paused.synth.time === frozen && meanwhile.every((t) => t <= frozen + 0.2 + 1e-6),
+    `❚❚ pauses: AudioContext ${paused.synth.state}, its clock at ${frozen.toFixed(4)} s and ${paused.synth.time.toFixed(4)} s 1.5 s later, the engine ${paused.synth.playing ? "not stopped" : "stopped"}, ${paused.label} shown; ${meanwhile.length} messages scheduled meanwhile, none past its 0.2 s look-ahead${meanwhile.length ? ` (up to ${(Math.max(...meanwhile) - frozen).toFixed(3)} s ahead)` : ""}`);
+  check(paused.imgs.length === imgs, "❚❚: no art restart while paused");
 
-  const before2 = stopped.imgs.length;
-  await startPlayback(page, 2);
-  await page.waitForFunction((/** @type {number} */ n) => /** @type {any} */ (window).__check.imgs.length > n, before2, { timeout: 3000 }).catch(() => {});
+  // ▶: resumed where it was (no new playMIDI), the clock advancing again, and the art restarted at
+  // once with its animations begun as far into the pass as the music is: a negative SMIL begin of
+  // the paused position, ((frozen clock - output latency - first startTime) mod pass).
+  await page.click("#play");
+  await contextState(page, "running");
+  await page.waitForFunction((/** @type {number} */ n) => /** @type {any} */ (window).__check.imgs.length > n, imgs, { timeout: 3000 }).catch(() => {});
   st = await state(page);
-  const again = st.plays[1];
-  const restartStarts = (await passStarts(page, c.midi_loop_seconds)).filter((t) => t >= again.startTime - 1e-9);
-  check(st.constructed === 1 && st.label === "Stop" && Math.abs(restartStarts[0] - again.startTime) < 1e-9,
-    "▶ again: same synth, playback from tick 0 at startTime");
-  check(st.imgs.length > before2 && st.imgs[before2].src.includes(`;r=${before2};base64,`), `▶ again: art restarted again (r=${before2})`);
+  const pass = c.midi_loop_seconds;
+  const into = (((frozen - (play.outputLatency || 0) - play.startTime) % pass) + pass) % pass;
+  const resumed = st.imgs[imgs];
+  const svg = resumed ? Buffer.from(resumed.src.split("base64,")[1], "base64").toString("utf8") : "";
+  const begin = /<animate begin='-([0-9.]+)s'/.exec(svg);
+  // The player reads the clock once resume() has settled, by when it may have run on a little.
+  const ahead = begin ? +begin[1] - into : NaN;
+  check(ahead > -1 / 60 && ahead < 0.05 && resumed.src.includes(`;r=${imgs};base64,`),
+    `▶ resumes: the art restarted at once (r=${imgs}) with begin='-${begin ? begin[1] : "?"}s': the paused position ${into.toFixed(4)} s into the ${pass.toFixed(4)} s pass, plus ${(1000 * ahead).toFixed(1)} ms the clock ran before resume() settled`);
+  check(st.label === "Pause" && st.plays.length === 1 && st.constructed === 1, "▶ resumes: ❚❚ shown, the same synth, no new playMIDI");
+  await page.waitForTimeout(300);
+  const later = await state(page);
+  check(later.synth.time > frozen + 0.2 && later.sends > sends + meanwhile.length, `▶ resumes: the clock advancing again (${frozen.toFixed(3)} s to ${later.synth.time.toFixed(3)} s), scheduling again`);
   const errors = await logged();
   check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   check(blocked.length === 0, `no network requests${blocked.length ? ": " + blocked.join(" ") : ""}`);
@@ -693,8 +725,9 @@ async function checkIframe() {
   check(st.constructed === 1 && st.synth.state === "running" && st.sends > 0, `▶: AudioContext ${st.synth.state}, ${st.sends} MIDI messages scheduled`);
   await checkLoop(frame, c);
   await frame.click("#play");
+  await contextState(frame, "suspended");
   st = await state(frame);
-  check(st.synth.playing === 0 && st.label === "Play", "■ stops");
+  check(isPaused(st), "❚❚ pauses (AudioContext suspended)");
   const errors = await logged();
   check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   check(blocked.length === 0, `no network requests beyond the host page${blocked.length ? ": " + blocked.join(" ") : ""}`);
@@ -774,8 +807,9 @@ async function checkFile() {
     check(st.constructed === 1 && st.synth.state === "running" && st.sends > 0, `▶: AudioContext ${st.synth.state}, ${st.sends} MIDI messages scheduled`);
     await checkLoop(page, c);
     await page.click("#play");
+    await contextState(page, "suspended");
     st = await state(page);
-    check(st.synth.playing === 0 && st.label === "Play", "■ stops");
+    check(isPaused(st), "❚❚ pauses (AudioContext suspended)");
     const errors = await logged();
     check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
     check(blocked.length === 0, `no network requests${blocked.length ? ": " + blocked.join(" ") : ""}`);
@@ -819,8 +853,9 @@ async function checkEmbeds() {
     st = await state(frame);
     check(st.constructed === 1 && st.synth.state === "running" && st.sends > 0, `▶: AudioContext ${st.synth.state}, ${st.sends} MIDI messages scheduled`);
     await frame.click("#play");
+    await contextState(frame, "suspended");
     st = await state(frame);
-    check(st.synth.playing === 0 && st.label === "Play", "■ stops");
+    check(isPaused(st), "❚❚ pauses (AudioContext suspended)");
     const errors = await logged();
     check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
     check(blocked.length === 0, `no network requests beyond the host page${blocked.length ? ": " + blocked.join(" ") : ""}`);
@@ -828,10 +863,10 @@ async function checkEmbeds() {
   }
 }
 
-/** ▶ and ■ by touch, as on a phone: taps in a context with touch (hasTouch; isMobile is not on every engine). */
+/** ▶ and ❚❚ by touch, as on a phone: taps in a context with touch (hasTouch; isMobile is not on every engine). */
 async function checkTouch() {
   const c = CASES.all_builtin_waves;
-  console.log(`touch: tap ▶, then tap ■ (${c.name}, data: URI, offline)`);
+  console.log(`touch: tap ▶, then tap ❚❚ (${c.name}, data: URI, offline)`);
   const { context, page, blocked, logged } = await open({ offline: true, hasTouch: true });
   await page.goto(TOKENS[c.name].url);
   await ready(page);
@@ -844,12 +879,13 @@ async function checkTouch() {
   }, null, { timeout: 10000 }).catch(() => {}); // the checks that follow report a start that never came
   console.log(`  info tap to the art restart: ${Date.now() - t0} ms`);
   let st = await state(page);
-  check(st.constructed === 1 && st.synth?.state === "running" && st.sends > 0 && st.label === "Stop",
-    `tap ▶: AudioContext ${st.synth?.state}, ${st.sends} MIDI messages scheduled, ▶ became ■`);
+  check(st.constructed === 1 && st.synth?.state === "running" && st.sends > 0 && st.label === "Pause",
+    `tap ▶: AudioContext ${st.synth?.state}, ${st.sends} MIDI messages scheduled, ▶ became ❚❚`);
   check(st.imgs.length >= 2 && st.imgs[1].src.includes(";r=1;base64,"), "tap ▶: art restarted (r=1)");
   await page.tap("#play");
+  await contextState(page, "suspended");
   st = await state(page);
-  check(st.synth?.playing === 0 && st.label === "Play", "tap ■: stopped");
+  check(isPaused(st), "tap ❚❚: paused");
   const errors = await logged();
   check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   check(blocked.length === 0, "no network requests");

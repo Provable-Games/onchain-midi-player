@@ -73,7 +73,8 @@ export function webAudioMock() {
       this.destination = new Node("dest");
       contexts.push(this);
     }
-    resume() { log.push(["ctx", "resume"]); return Promise.resolve(); }
+    resume() { log.push(["ctx", "resume"]); this.state = "running"; return Promise.resolve(); }
+    suspend() { log.push(["ctx", "suspend"]); this.state = "suspended"; return Promise.resolve(); }
     createGain() { return new Gain(); }
     createOscillator() { return new Osc(); }
     createBufferSource() { return new Src(); }

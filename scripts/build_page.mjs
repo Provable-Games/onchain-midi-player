@@ -231,7 +231,7 @@ function cairoSource({ page, segment, license, sizes, gzipSha256, shimSha256 }) 
 //! PAGE is the fixed HTML page of this class version, byte for byte the file
 //! tests/fixtures/page.html. In order: head and styles, the TinySynth engine gzipped in a
 //! <script type="text/javascript+gzip" src="data:text/javascript;base64,...">, the gunzip shim
-//! <script> that inflates it, the ▶/■ control, the player <script>, then the opening of the
+//! <script> that inflates it, the ▶/❚❚ control, the player <script>, then the opening of the
 //! settings block and its alignment spaces.
 //!
 //! - version(): ${VERSION}

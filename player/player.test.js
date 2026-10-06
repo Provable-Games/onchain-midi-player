@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import vm from "node:vm";
 import { gzipSync } from "node:zlib";
-import { ENGINE_MISSING, MEDIA_TITLE, PLAY_ICON, STOP_ICON, artUrl, checkMidi, decodeMidi, playAnchor, silentWav } from "./player.js";
+import { ENGINE_MISSING, MEDIA_TITLE, PLAY_ICON, PAUSE_ICON, artUrl, checkMidi, decodeMidi, playAnchor, silentWav } from "./player.js";
 import { ENGINE_SHA256, engineSource } from "../scripts/engine.mjs";
 import { runPage } from "../scripts/page_harness.mjs";
 import { webAudioMock } from "../scripts/webaudio_mock.mjs";
@@ -240,8 +240,8 @@ describe("the page's player script, fake engine", () => {
     assert.deepEqual(h.calls.slice(1, 5).map((x) => x[0]), ["setQuality", "setMasterVol", "setReverbLev", "setVoices"]);
     assert.equal(h.calls.filter((x) => x[0] === "setTimbre").length, 3);
     assert.deepEqual(h.calls.slice(-2), [["prewarm"], ["resume"]], "the noise buffer is built in the gesture, before resume() and playMIDI()");
-    assert.equal(h.els.icon.attributes.d, STOP_ICON);
-    assert.equal(h.els.play.attributes["aria-label"], "Stop");
+    assert.equal(h.els.icon.attributes.d, PAUSE_ICON);
+    assert.equal(h.els.play.attributes["aria-label"], "Pause");
     await h.flush();
     const after = h.calls.slice(h.calls.findIndex((x) => x[0] === "resume") + 1);
     assert.deepEqual(after.map((x) => x[0]), ["loadMIDI", "setLoop", "setLoopEnd", "playMIDI"]);
@@ -281,7 +281,7 @@ describe("the page's player script, fake engine", () => {
     assert.deepEqual(h.consoleErrors, []);
   });
 
-  test("toggle: ■ stops and cancels a pending art restart and the polling; ▶ again restarts from the top with the same synth", async () => {
+  test("toggle: ❚❚ suspends the AudioContext and cancels a pending art restart and the polling; ▶ resumes, nothing reloaded", async () => {
     const h = runPage(htmlOf(CASES.default_120bpm));
     h.ready();
     h.click();
@@ -289,30 +289,56 @@ describe("the page's player script, fake engine", () => {
     assert.equal(h.timers.size, 1);
     assert.equal(h.intervals.size, 1);
     const before = h.calls.length;
-    h.click(); // ■
-    // Only stopMIDI: the engine cuts every voice and drops the controller changes it had scheduled.
-    assert.deepEqual(h.calls.slice(before), [["stopMIDI"]]);
+    h.click(); // ❚❚
+    // Only suspend: the clock stands still, so every voice and scheduled event holds; nothing is stopped.
+    assert.deepEqual(h.calls.slice(before), [["suspend"]]);
+    assert.equal(h.synths[0].getAudioContext().state, "suspended");
     assert.equal(h.timers.size, 0, "pending art restart cancelled");
     assert.equal(h.intervals.size, 0, "polling stopped");
     assert.equal(h.els.icon.attributes.d, PLAY_ICON);
     assert.equal(h.els.play.attributes["aria-label"], "Play");
     const n = h.calls.length;
     h.click(); // ▶
+    assert.equal(h.els.icon.attributes.d, PAUSE_ICON);
+    assert.equal(h.els.play.attributes["aria-label"], "Pause");
     await h.flush();
-    assert.deepEqual(h.calls.slice(n).map((x) => x[0]), ["resume", "loadMIDI", "setLoop", "setLoopEnd", "playMIDI"]);
+    assert.deepEqual(h.calls.slice(n).map((x) => x[0]), ["resume"], "resumed where it was: nothing reloaded or replayed");
+    assert.equal(h.synths[0].getAudioContext().state, "running");
     assert.equal(h.calls.filter((x) => x[0] === "new").length, 1, "one synth for the page's lifetime");
+    assert.equal(h.timers.size, 1, "the cancelled art restart is timed again");
+    assert.equal(h.intervals.size, 1, "polling again");
     h.runTimers();
     h.loadImages();
     assert.match(h.art()?.src || "", /^data:image\/svg\+xml;r=1;base64,/);
-    h.click(); // ■
-    h.click(); // ▶
-    await h.flush();
-    h.runTimers();
-    h.loadImages();
-    assert.match(h.art()?.src || "", /^data:image\/svg\+xml;r=2;base64,/, "every restart gets a new URL");
   });
 
-  test("■ while the restarted art is still decoding: the art is not swapped; a stale decode never wins", async () => {
+  test("artUrl's offset: every SMIL animation without a begin starts that far into its timeline", () => {
+    const svg = "<svg><animate a='1'/><animateTransform b='2'/><set begin='1s'/><animateMotion/><animated/></svg>";
+    const back = (/** @type {string} */ url) => Buffer.from(url.split("base64,")[1], "base64").toString();
+    assert.equal(back(artUrl(svg, 2, 1.23456)), "<svg><animate begin='-1.235s' a='1'/><animateTransform begin='-1.235s' b='2'/><set begin='1s'/><animateMotion begin='-1.235s'/><animated/></svg>");
+    assert.match(artUrl(svg, 2, 1.2), /^data:image\/svg\+xml;r=2;base64,/);
+    assert.equal(artUrl(svg, 2, 0), artUrl(svg, 2), "no offset: the art as it is");
+  });
+
+  test("▶ after ❚❚: the art restarts at once, offset to the music's position in the pass", async () => {
+    const c = CASES.default_120bpm;
+    const h = runPage(htmlOf(c), { outputLatency: 0.02 });
+    h.ready();
+    h.click(); // ▶: startTime 1.6 (the fake engine's currentTime 1.5 plus 0.1)
+    await h.flush();
+    h.run(1); // the first restart at 1.62, then 0.88 s into the pass
+    h.loadImages();
+    h.click(); // ❚❚
+    h.click(); // ▶
+    await h.flush();
+    const into = 2.5 - 0.02 - 1.6;
+    h.loadImages();
+    assert.equal(h.art()?.src, artUrl(c.svg, 2, into), "restart 2, 0.880 s in");
+    assert.match(Buffer.from((h.art()?.src || "").split("base64,")[1], "base64").toString(), /begin='-0\.880s'/);
+    assert.deepEqual(h.consoleErrors, []);
+  });
+
+  test("❚❚ while the restarted art is still decoding: the art is not swapped; ▶ resumes without restarting it", async () => {
     const c = CASES.default_120bpm;
     const h = runPage(htmlOf(c));
     h.ready();
@@ -320,18 +346,18 @@ describe("the page's player script, fake engine", () => {
     h.click(); // ▶
     await h.flush();
     h.runTimers(); // the restart image is created and starts decoding
-    h.click(); // ■ before it has decoded
+    h.click(); // ❚❚ before it has decoded
     h.loadImages();
-    assert.equal(h.art(), first, "stopped: the art is not reset");
-    h.click(); // ▶ again
+    assert.equal(h.art(), first, "paused: the art is not reset");
+    h.click(); // ▶: resumed; the art realigns at the next pass start, not now
     await h.flush();
     h.runTimers();
     h.loadImages();
-    assert.match(h.art()?.src || "", /;r=2;base64,/);
+    assert.equal(h.art(), first);
     assert.equal(h.page.body.filter((e) => e.tag === "img").length, 1);
   });
 
-  test("▶ then ■ before the AudioContext has resumed: nothing starts", async () => {
+  test("▶ then ❚❚ before the AudioContext has resumed: nothing starts; the next ▶ starts from tick 0", async () => {
     const h = runPage(htmlOf(CASES.default_120bpm));
     h.ready();
     h.click();
@@ -339,6 +365,9 @@ describe("the page's player script, fake engine", () => {
     await h.flush();
     assert.deepEqual(h.calls.filter((x) => ["loadMIDI", "playMIDI"].includes(x[0])), []);
     assert.equal(h.timers.size, 0);
+    h.click();
+    await h.flush();
+    assert.deepEqual(h.calls.slice(-5).map((x) => x[0]), ["resume", "loadMIDI", "setLoop", "setLoopEnd", "playMIDI"]);
   });
 
   const base = CASES.beast_140bpm;
@@ -499,7 +528,7 @@ describe("the play button's anchor on the art (playAnchor)", () => {
     h.resize(700, 175);
     assert.deepEqual([h.els.play.style.left, h.els.play.style.top, h.els.play.style.width, h.els.play.style.padding], ["358px", "54px", "44px", "11px"]);
     h.click();
-    assert.equal(h.els.icon.attributes.d, STOP_ICON, "the button still works");
+    assert.equal(h.els.icon.attributes.d, PAUSE_ICON, "the button still works");
     const plain = runPage(htmlOf(c));
     plain.ready();
     assert.deepEqual(Object.values(plain.els.play.style).filter(Boolean), [], "no attribute: the stylesheet's bottom-right corner");
@@ -557,7 +586,7 @@ describe("background audio: the silent element, the media session, the iOS audio
     assert.ok(b.subarray(44).every((v) => v === 128));
   });
 
-  test("▶: the silent looping element plays inside the click, before the AudioContext resumes; ■ pauses it", async () => {
+  test("▶: the silent looping element plays inside the click, before the AudioContext resumes; ❚❚ pauses it", async () => {
     const h = runPage(htmlOf(c));
     h.ready();
     assert.equal(h.media.audio === null, true, "nothing is created before a click");
@@ -568,10 +597,10 @@ describe("background audio: the silent element, the media session, the iOS audio
     assert.equal(h.media.audio.paused, false);
     assert.equal(h.media.session?.playbackState, "playing");
     await h.flush();
-    h.click(); // ■
+    h.click(); // ❚❚
     assert.equal(h.media.audio.paused, true);
     assert.equal(h.media.session?.playbackState, "paused");
-    assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+    assert.deepEqual(h.calls.at(-1), ["suspend"]);
     h.click(); // ▶ again: the same element
     assert.equal(h.media.audio.paused, false);
     assert.equal(h.media.session?.playbackState, "playing");
@@ -586,7 +615,7 @@ describe("background audio: the silent element, the media session, the iOS audio
     assert.equal(h.media.typeAtNew, "playback", "set before the synth is constructed");
     assert.equal(h.media.audioSession?.type, "playback");
     await h.flush();
-    h.click(); // ■
+    h.click(); // ❚❚
     /** @type {any} */ (h.media.audioSession).type = "ambient"; // another page or the system changed it
     h.click(); // ▶
     assert.equal(h.media.audioSession?.type, "playback");
@@ -665,13 +694,13 @@ describe("background audio: the silent element, the media session, the iOS audio
     assert.deepEqual(h.uncaught, []);
   });
 
-  test("media session: play, pause and stop handlers run the code of ▶ and ■; no seek or track handlers", async () => {
+  test("media session: play, pause and stop handlers run the code of ▶ and ❚❚; no seek or track handlers", async () => {
     const h = await playing();
     const handlers = /** @type {Record<string, any>} */ (h.media.session?.handlers);
     assert.deepEqual(Object.keys(handlers).sort(), ["pause", "play", "stop"]);
     assert.equal(h.synths.length, 1);
     handlers.pause();
-    assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+    assert.deepEqual(h.calls.at(-1), ["suspend"]);
     assert.equal(h.els.icon.attributes.d, PLAY_ICON);
     assert.equal(h.media.audio.paused, true);
     assert.equal(h.media.session?.playbackState, "paused");
@@ -681,82 +710,83 @@ describe("background audio: the silent element, the media session, the iOS audio
     handlers.stop();
     assert.equal(h.calls.length, n);
     handlers.play();
-    assert.equal(h.els.icon.attributes.d, STOP_ICON);
+    assert.equal(h.els.icon.attributes.d, PAUSE_ICON);
     assert.equal(h.media.audio.paused, false);
     assert.equal(h.media.session?.playbackState, "playing");
     await h.flush();
-    assert.deepEqual(h.calls.slice(n).map((x) => x[0]), ["resume", "loadMIDI", "setLoop", "setLoopEnd", "playMIDI"]);
+    assert.deepEqual(h.calls.slice(n).map((x) => x[0]), ["resume"], "resumed");
     handlers.play(); // already playing: nothing
     await h.flush();
-    assert.equal(h.calls.filter((x) => x[0] === "playMIDI").length, 2);
+    assert.equal(h.calls.filter((x) => x[0] === "playMIDI").length, 1);
     handlers.stop();
-    assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+    assert.deepEqual(h.calls.at(-1), ["suspend"]);
     assert.equal(h.els.icon.attributes.d, PLAY_ICON);
     assert.deepEqual(h.consoleErrors, []);
   });
 
-  test("a pause of the element from outside (notification, headset, call) stops the player once; the page's own ■ does not re-enter", async () => {
+  test("a pause of the element from outside (notification, headset, call) stops the player once; the page's own ❚❚ does not re-enter", async () => {
     const h = await playing();
     h.media.audio.pause(); // from outside
-    assert.equal(h.calls.filter((x) => x[0] === "stopMIDI").length, 1);
+    assert.equal(h.calls.filter((x) => x[0] === "suspend").length, 1);
     assert.equal(h.els.icon.attributes.d, PLAY_ICON);
     assert.equal(h.media.session?.playbackState, "paused");
     assert.equal(h.timers.size + h.intervals.size, 0);
     h.click(); // ▶
     await h.flush();
-    h.click(); // ■: pauses the element, whose pause event must not stop the stopped player again
-    assert.equal(h.calls.filter((x) => x[0] === "stopMIDI").length, 2);
+    h.click(); // ❚❚: pauses the element, whose pause event must not stop the stopped player again
+    assert.equal(h.calls.filter((x) => x[0] === "suspend").length, 2);
     h.media.audio.pause(); // a late event while stopped: nothing
-    assert.equal(h.calls.filter((x) => x[0] === "stopMIDI").length, 2);
+    assert.equal(h.calls.filter((x) => x[0] === "suspend").length, 2);
   });
 
   test("a pause event that fires after ▶ has restarted the element does not stop the player", async () => {
     const h = await playing();
-    h.click(); // ■
+    h.click(); // ❚❚
     h.click(); // ▶ before the earlier pause event was delivered
     const { onpause } = h.media.audio;
     onpause(); // the stale event
-    assert.equal(h.els.icon.attributes.d, STOP_ICON);
-    assert.equal(h.calls.filter((x) => x[0] === "stopMIDI").length, 1);
+    assert.equal(h.els.icon.attributes.d, PAUSE_ICON);
+    assert.equal(h.calls.filter((x) => x[0] === "suspend").length, 1);
   });
 
   test("hidden page: playback continues while the silent element plays", async () => {
     const h = await playing();
     h.setHidden(true);
-    assert.equal(h.els.icon.attributes.d, STOP_ICON);
-    assert.equal(h.calls.filter((x) => x[0] === "stopMIDI").length, 0);
+    assert.equal(h.els.icon.attributes.d, PAUSE_ICON);
+    assert.equal(h.calls.filter((x) => x[0] === "suspend").length, 0);
     h.setHidden(false);
-    assert.equal(h.els.icon.attributes.d, STOP_ICON);
+    assert.equal(h.els.icon.attributes.d, PAUSE_ICON);
   });
 
   for (const [label, options] of /** @type {Array<[string, Parameters<typeof runPage>[1]]>} */ ([
     ["the element's play() rejects (a host CSP without media-src blob:)", { silentAudio: "rejects" }],
     ["the browser has no Audio", { silentAudio: "missing" }],
   ])) {
-    test(`no media session (${label}): music still plays; a hidden page stops, a visible one does not`, async () => {
+    test(`no media session (${label}): music still plays; a hidden page pauses, a visible one does not`, async () => {
       const h = await playing(htmlOf(c), options);
       assert.deepEqual(h.calls.slice(-4).map((x) => x[0]), ["loadMIDI", "setLoop", "setLoopEnd", "playMIDI"]);
-      assert.equal(h.els.icon.attributes.d, STOP_ICON);
+      assert.equal(h.els.icon.attributes.d, PAUSE_ICON);
       h.setHidden(false);
-      assert.equal(h.els.icon.attributes.d, STOP_ICON, "visible: still playing");
+      assert.equal(h.els.icon.attributes.d, PAUSE_ICON, "visible: still playing");
       h.setHidden(true);
-      assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+      assert.deepEqual(h.calls.at(-1), ["suspend"]);
       assert.equal(h.els.icon.attributes.d, PLAY_ICON);
       assert.equal(h.timers.size + h.intervals.size, 0);
       h.setHidden(false);
-      h.click(); // ▶ again works
+      h.click(); // ▶ resumes
       await h.flush();
-      assert.equal(h.calls.filter((x) => x[0] === "playMIDI").length, 2);
+      assert.deepEqual(h.calls.at(-1), ["resume"]);
+      assert.equal(h.calls.filter((x) => x[0] === "playMIDI").length, 1);
       assert.deepEqual(h.consoleErrors, []);
       assert.deepEqual(h.uncaught, []);
     });
   }
 
-  test("a browser without mediaSession and audioSession: ▶ and ■ work, nothing is logged", async () => {
+  test("a browser without mediaSession and audioSession: ▶ and ❚❚ work, nothing is logged", async () => {
     const h = await playing(htmlOf(c), { mediaSession: false, audioSession: false });
-    assert.equal(h.els.icon.attributes.d, STOP_ICON);
+    assert.equal(h.els.icon.attributes.d, PAUSE_ICON);
     h.click();
-    assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+    assert.deepEqual(h.calls.at(-1), ["suspend"]);
     assert.equal(h.media.audio.paused, true);
     assert.deepEqual(h.consoleErrors, []);
   });
@@ -866,7 +896,7 @@ describe("the page's gunzip shim and the engine (D9: the art and the error still
 
 describe("the page's player script, real engine", () => {
   for (const name of ["beast_140bpm", "six_timbres_format1", "slot_edges"]) {
-    test(`${name}: plays from tick 0, loops every maxTick x tick2Time, ■ stops`, async () => {
+    test(`${name}: plays from tick 0, loops every maxTick x tick2Time, ❚❚ holds everything, ▶ carries on`, async () => {
       const c = CASES[name];
       const h = runPage(htmlOf(c), { engine: "real", outputLatency: 0.02 });
       h.ready();
@@ -893,11 +923,27 @@ describe("the page's player script, real engine", () => {
         assert.ok(Math.abs(period - c.midi_loop_seconds) < 1e-9, `pass ${i}: ${period} s, expected ${c.midi_loop_seconds} s`);
         assert.ok(Math.abs(period - synth.maxTick * synth.tick2Time) < 1e-9, "maxTick x tick2Time");
       }
-      h.click(); // ■
-      assert.equal(synth.playing, 0);
-      const sent = synth.sent.length;
-      h.advance(1);
-      assert.equal(synth.sent.length, sent, "nothing scheduled after ■");
+      h.click(); // ❚❚
+      await h.flush();
+      assert.equal(ctx.state, "suspended");
+      assert.equal(synth.playing, 1, "not stopped");
+      const [sent, time, status] = [synth.sent.length, ctx.currentTime, synth.getPlayStatus()];
+      h.advance(1); // the engine's sequencer runs on, against a clock that stands still
+      assert.equal(ctx.currentTime, time);
+      assert.equal(synth.sent.length, sent, "nothing more scheduled while paused");
+      // A message the engine sends while paused (an event of its look-ahead) does not resume it.
+      const log = h.audio.log.length;
+      synth.send([0x90, 60, 1], ctx.currentTime + 0.1);
+      await h.flush();
+      assert.equal(ctx.state, "suspended");
+      assert.ok(!h.audio.log.slice(log).some((/** @type {any[]} */ x) => x[0] === "ctx" && x[1] === "resume"), "the engine's wake is held while paused");
+      h.click(); // ▶
+      await h.flush();
+      assert.equal(ctx.state, "running");
+      assert.equal(synth.getPlayStatus().startTime, status.startTime, "not reloaded: the same pass, where it was");
+      h.advance(c.midi_loop_seconds);
+      assert.ok(synth.sent.length > sent, "scheduling carries on");
+      assert.equal(h.calls.filter((x) => x[0] === "playMIDI").length, 1);
     });
   }
 
@@ -969,8 +1015,8 @@ describe("the page's player script, real engine", () => {
     assert.equal(h.page.body.filter((e) => e.tag === "img").length, 1);
     h.advance(0.3);
     assert.equal(h.timers.size, 0, "nothing more until the next pass");
-    h.click(); // ■
-    assert.deepEqual([...h.intervals.values()].map((i) => i.delay), [60], "■: only the engine's sequencer runs");
+    h.click(); // ❚❚
+    assert.deepEqual([...h.intervals.values()].map((i) => i.delay), [60], "❚❚: only the engine's sequencer runs");
     assert.deepEqual(h.consoleErrors, []);
   });
 
@@ -1096,11 +1142,11 @@ describe("the page's player script, real engine", () => {
     assert.ok(passes.length >= 20, `${passes.length} restarts`);
     assert.deepEqual(passes, passes.map((_, k) => k), "one restart per pass, each at its tick 0 plus the output latency, none skipped");
     assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, passes.length), "each restart's image was swapped in");
-    h.click(); // ■
+    h.click(); // ❚❚
     assert.equal(h.timers.size, 0);
   });
 
-  test("■ (the engine's stopMIDI) cuts drum hits scheduled ahead and the controller changes TinySynth had scheduled", async () => {
+  test("❚❚ suspends: the drum hits and controller changes TinySynth scheduled ahead are kept, nothing is stopped or cancelled", async () => {
     // PPQ 100 at 120 BPM: CC7 100, a note and a drum hit at tick 0; a drum hit and CC7 0 at tick
     // 50 (0.25 s); End-of-Track at 200.
     const midi = smf({ ppq: 100, tracks: [[[0, 0xb0, 7, 100], [0, 0x90, 60, 100], [0, 0x99, 36, 100], [50, 0x99, 38, 100], [0, 0xb0, 7, 0], [100, 0x80, 60, 0], [50, 0xff, 0x2f, 0]]] });
@@ -1119,19 +1165,15 @@ describe("the page's player script, real engine", () => {
     const mute = log.find((/** @type {any[]} */ c) => c[0] === `${vols[0]}.gain` && c[1] === "set" && c[2] === 0);
     assert.ok(mute && mute[3] > synth.getAudioContext().currentTime, "a future mute is pending");
     const from = log.length;
-    h.click(); // ■
+    h.click(); // ❚❚
     /** @type {any[][]} */
     const after = log.slice(from);
     const now = synth.getAudioContext().currentTime;
-    for (const src of sources) assert.ok(after.some((c) => c[0] === src && c[1] === "stop" && c[2] === undefined), `${src}: stopped at once`);
-    for (let ch = 0; ch < 16; ch++) {
-      for (const param of [`${vols[ch]}.gain`, `${synth.chmod[ch].name}.gain`, `${synth.chpan[ch].name}.pan`]) {
-        assert.ok(after.some((c) => c[0] === param && c[1] === "cancel" && c[2] === now), `channel ${ch}: ${param} automation cancelled`);
-      }
-    }
+    assert.deepEqual(after, [["ctx", "suspend"]], "only the context is suspended: no source stopped, no automation cancelled");
+    assert.ok(mute[3] > now, "the mute is still pending, at its time");
     assert.deepEqual(synth.chvol.map((/** @type {any} */ n) => n.name), vols, "the channel nodes stay");
     const { play, startTime } = synth.getPlayStatus();
-    assert.deepEqual([play, startTime], [0, null], "stopped: no startTime");
+    assert.ok(play === 1 && startTime !== null, "still playing, in the same pass");
   });
 
   test("the custom timbres are installed in the real engine", async () => {
@@ -1162,7 +1204,7 @@ describe("the page's player script, real engine", () => {
     assert.deepEqual(h.consoleErrors, []);
   });
 
-  test("a song with no events other than tempo: ▶ plays nothing and shows no error, the art restarts at once, ■ and ▶ still work", async () => {
+  test("a song with no events other than tempo: ▶ plays nothing and shows no error, the art restarts at once, ❚❚ and ▶ still work", async () => {
     // checkMidi accepts it (a valid file with a loop of at least 50 ms). The engine (fork #9) leaves
     // such a song stopped: startTime is null, so there is no tick 0 to time the art restart to, and
     // the player restarts the art at once.
@@ -1179,15 +1221,17 @@ describe("the page's player script, real engine", () => {
         const synth = h.synths[0];
         assert.equal(synth.getPlayStatus().play, 0, `${label}, ▶ ${press}: the engine stays stopped`);
         assert.equal(synth.getPlayStatus().startTime, null, `${label}, ▶ ${press}: no startTime`);
-        assert.equal(h.els.icon.attributes.d, STOP_ICON, `${label}, ▶ ${press}: the toggle shows ■`);
-        assert.deepEqual([...h.timers.values()].map((t) => t.delay), [0], `${label}, ▶ ${press}: an art restart, at once`);
-        h.runTimers();
-        h.loadImages();
-        assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, press), `${label}, ▶ ${press}: the art restarted`);
+        assert.equal(h.els.icon.attributes.d, PAUSE_ICON, `${label}, ▶ ${press}: the toggle shows ❚❚`);
+        if (press === 1) {
+          assert.deepEqual([...h.timers.values()].map((t) => t.delay), [0], `${label}, ▶: an art restart, at once`);
+          h.runTimers();
+          h.loadImages();
+        } else assert.equal(h.timers.size, 0, `${label}, ▶ again: resumed, no restart`);
+        assert.equal(h.art()?.src, artUrl(CASES.default_120bpm.svg, 1), `${label}, ▶ ${press}: the art restarted once`);
         h.advance(1);
         assert.deepEqual(synth.sent, [], `${label}, ▶ ${press}: nothing scheduled`);
         assert.equal(h.timers.size, 0, `${label}, ▶ ${press}: no pass, no further restart`);
-        h.click(); // ■
+        h.click(); // ❚❚
         assert.equal(h.els.icon.attributes.d, PLAY_ICON);
       }
       assert.equal(h.els.error.hidden, true, `${label}: no error shown`);

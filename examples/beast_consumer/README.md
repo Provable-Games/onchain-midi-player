@@ -134,7 +134,7 @@ So the contract's output equals both an independent JS implementation and plain 
 - `fixtures/token_uri.txt`: the exact `token_uri` of token 1, identical to the contract's output.
 - `fixtures/token.json`: the decoded JSON, pretty-printed. Keys are `name`, `description`, `attributes`, `image`, `animation_url`.
 - `fixtures/image.svg`: the `image`, decoded. Open it in a browser.
-- `fixtures/animation.html`: the `animation_url`, decoded. Open it in a browser, offline: it shows the art with the ▶/■ button, and plays the one-bar MIDI (112 bytes, PPQ 48, 120 BPM, End-of-Track at tick 192) in a loop with the token's custom lead and kick.
+- `fixtures/animation.html`: the `animation_url`, decoded. Open it in a browser, offline: it shows the art with the ▶/❚❚ button, and plays the one-bar MIDI (112 bytes, PPQ 48, 120 BPM, End-of-Track at tick 192) in a loop with the token's custom lead and kick.
 
 The optional headless check loads the page seven ways:
 - from disk;
