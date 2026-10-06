@@ -28,6 +28,8 @@ npm run check:page       # fail if any of them is out of date
 npm run gen:abi          # scarb --release build (and --test), then write abi/
 npm run check:abi        # fail if abi/ is out of date
 npm run check-midi -- song.mid   # check MIDI files against the page's MIDI contract
+npm run certify:fixture          # certify the pinned page against the supported software fixture
+npm run certify:production       # validate reviewed production pins and first-attempt native evidence
 npm run preview -- song.mid      # write (and optionally serve) the page a token with that MIDI gets
 PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core PLAYWRIGHT_BROWSER=chromium \
   npm run render-check   # optional: render the reference timbres in a headless browser
@@ -37,6 +39,22 @@ PLAYWRIGHT_CORE=... PLAYWRIGHT_BROWSER=webkit npm run drift-check -- --minutes 1
 ```
 
 The engine tests, the page build and the page checks use the vendored engine (`tests/vendor/`, SHA-256 checked on every load).
+
+## Playback certification
+
+`scripts/certification/` keeps an independent MIDI/state/pitch/demand oracle, a deterministic harness that runs the actual consumer page and pinned engine, and a manifest-driven native-evidence validator. `npm run certify:fixture` checks a supported sine fixture through the real settings install, three loop passes, Stop and replay paths. It is software scheduling evidence only: it does not render native audio and cannot qualify a composer pair. The `bend-known-bad` case is also runnable directly and must exit nonzero:
+
+```sh
+node scripts/certification/cli.mjs --scope fixture --case bend-known-bad
+```
+
+The production scope reads `scripts/certification/production-manifest.v1.json` and `production-results.v1.json`. For every pair, the CLI and stable build check hash-read its exact MIDI, setup, settings and conversion inputs, require the reviewed `wire-json-identity` mapping to produce semantically identical setup/settings JSON, and run that pair through the actual built PAGE, player and settings installer. The independent event/state oracle and installed engine must agree for three loop passes and the Stop/reload path. The manifest also pins the page, embedded and source/min engine builds, timing policy and approval reference, live/offline voice budgets, metric/tolerance version, and each approved pair input. The result file binds to the manifest's exact bytes.
+
+Every production pair also needs a unique, complete first attempt for Chromium, Firefox and WebKit, both source and min builds, and both 44.1 and 48 kHz (12 rows). Rows and their first attempts bind the browser version plus Playwright Core version, exact `browsers.json` hash, per-engine revision/install bundle ID and a canonical identity hash; equal browser version strings cannot stand in for the same browser build. For example, the current Playwright 1.63.0 headless Chromium identity uses version `153.0.8010.12`, revision `1243`, and install bundle ID `chromium_headless_shell-1243`; the separate full-browser directory `chromium-1243` is not interchangeable. This identifies a browser toolchain only and supplies no production audio result. Rows bind their audio to float32 stereo WAV hashes; diagnostics or later retries cannot replace a failed first attempt. The reviewed `native-tolerances-v1` policy caps peak at 1.0, pitch error at 25 cents and timing error at 20 ms, and requires at least 0.995 sine purity. Raw PCM channel RMS must be positive even when a manifest sets its optional RMS floor to zero. The validator recomputes channel metrics, checks every note against independent oracle identities, and recomputes supported isolated one-operator dry-sine onset, pitch and envelope values from raw audio using a stable-window sine-purity check. Other timbres and polyphonic attribution remain incomplete until a reviewed native measure supports them. Production qualification additionally requires first-attempt physical-device audio captures bound to each exact pair; an empty or self-reported device status does not qualify. The manifest and hashes are reviewable pins, not a protected attestation boundary, so required-workflow and release administration still matter.
+
+Exit status is 0 only for complete qualified coverage, 1 for observed fidelity or pin failures, and 2 for missing/unsupported evidence. Fixture scope never satisfies production scope. The checked-in manifest currently has zero pairs, an unsupported-until-finalized setup mapping, no native rows, and no device cases; `qualification: incomplete` therefore exits 2. Browser fixture captures alone cannot qualify Casey's production bank or physical device playback.
+
+Before declaring a stable `1.x` class, operators must run both `npm run certify:production` and `npm run check:page` and require exit 0, then review the version-specific certificate in `scripts/certification/release-certificates.v1.json`. `check:page` blocks stable versions without matching production evidence, while interim `0.x` builds remain usable. `node scripts/build_page.mjs --check --check-release-version 1.0.0` is a stricter preflight for testing the release hook from a `0.x` checkout; it always checks the candidate's actual version first, so this flag cannot weaken a stable candidate's check. These checks cannot stop someone from invoking `sncast declare` directly; repository workflow and administrative release controls must enforce the required check.
 
 ## The base64 encoder
 
@@ -177,20 +195,21 @@ A release is a tagged commit whose class is declared on Sepolia, then on mainnet
 3. **Validate in three browsers.** Run `render-check`, `page-check`, `hosting-check` and a 10-minute `drift-check` on Chromium, Firefox and WebKit (CI runs the first three per pull request and [`drift.yml`](../.github/workflows/drift.yml) the last). The rows marked manual in [Browser validation](#browser-validation) are still checked by hand.
 4. **Tag.** After the pull request merges, tag the merged commit `v<version>` (signed) and push the tag.
 5. **Build the class from the tag.** In a clean checkout of the tag, with the versions in [`.tool-versions`](../.tool-versions): `scarb --release build` (the profile the ABIs and earlier declarations use), then `sncast --scarb-profile release utils class-hash --contract-name TinySynth`. Repeat on a second machine; the hashes must agree, and `npm ci && npm run check:page && npm run check:abi` must pass.
-6. **Declare on Sepolia, then mainnet.** Declare the same build on each network, and check that the hash `sncast` prints equals step 5's:
+6. **Certify before declaration.** Run `npm run certify:production` and `npm run check:page`; both must exit 0 for a stable release. A fixture result is not a substitute. The current empty production manifest is incomplete and blocks stable releases. The scripts validate the repository's release path, but direct `sncast declare` commands remain possible unless repository workflow and administrative controls require these checks.
+7. **Declare on Sepolia, then mainnet.** Declare the same build on each network, and check that the hash `sncast` prints equals step 5's:
 
    ```sh
    sncast --account <account> declare --url <rpc url> --contract-name TinySynth
    ```
-7. **Deploy the inspection instance** on each network: a deployment of the class with no constructor, so explorers and RPC calls can read `version()`, `engine()`, `script_sha256()` and `license()`. Consumers never call it.
+8. **Deploy the inspection instance** on each network: a deployment of the class with no constructor, so explorers and RPC calls can read `version()`, `engine()`, `script_sha256()` and `license()`. Consumers never call it.
 
    ```sh
    sncast --account <account> deploy --url <rpc url> --class-hash <class hash> --salt <salt>
    ```
 
    The address depends on the class hash, the salt and, with `--unique`, the deploying account. Once the final class hash is known, a vanity address can be mined offline: compute the address for many salts and deploy with the best one.
-8. **Deploy the example,** if wanted: declare and deploy `BeastLikeNft` from [`examples/beast_consumer`](../examples/beast_consumer) with the class hash as its constructor argument.
+9. **Deploy the example,** if wanted: declare and deploy `BeastLikeNft` from [`examples/beast_consumer`](../examples/beast_consumer) with the class hash as its constructor argument.
    Deploy [`examples/stress_nft`](../examples/stress_nft) the same way (its constructor also takes an owner), and update its [`sepolia.json`](../examples/stress_nft/sepolia.json): its RPC check builds the reference from the checked-out page, so it matches only a `StressNft` that pins the current class.
-9. **Record each network** in `deployments/<network>.json`: `version`, `release_tag` `v<version>`, class hash, declare and deploy transactions, `built_from` (the tagged commit's full SHA), the inspection instance and the example (`null` if none). Remove the superseded record from `scripts/page_versions.json` (step 2 added the new one beside it). `npm test` checks the files.
-10. **Verify the declared class.** Call `version()`, `engine()` and `script_sha256()` on the inspection instance, and compare them with [`scripts/page_versions.json`](../scripts/page_versions.json). Call a real consumer's `token_uri` (the example's, or the NFT's) through several RPC providers (the [`token-uri-inspector`](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill has the commands) and compare each result byte for byte with the JS reference ([`gen_fixtures.mjs`](../examples/beast_consumer/scripts/gen_fixtures.mjs)). Record any provider that fails, such as an `Out of gas` revert.
-11. **Publish a GitHub release** for the tag. List the class hash and declare transaction per network, the inspection instances, the engine's fork tag and SHA-256, the toolchain versions, and how to reproduce the build: check out the tag, install the versions in `.tool-versions`, run `scarb --release build` and `sncast --scarb-profile release utils class-hash --contract-name TinySynth`, and compare with the class hash. Link [Verifying the engine](verifying.md).
+10. **Record each network** in `deployments/<network>.json`: `version`, `release_tag` `v<version>`, class hash, declare and deploy transactions, `built_from` (the tagged commit's full SHA), the inspection instance and the example (`null` if none). Remove the superseded record from `scripts/page_versions.json` (step 2 added the new one beside it). `npm test` checks the files and requires each stable release record to match its own page and certificate.
+11. **Verify the declared class.** Call `version()`, `engine()` and `script_sha256()` on the inspection instance, and compare them with [`scripts/page_versions.json`](../scripts/page_versions.json). Call a real consumer's `token_uri` (the example's, or the NFT's) through several RPC providers (the [`token-uri-inspector`](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill has the commands) and compare each result byte for byte with the JS reference ([`gen_fixtures.mjs`](../examples/beast_consumer/scripts/gen_fixtures.mjs)). Record any provider that fails, such as an `Out of gas` revert.
+12. **Publish a GitHub release** for the tag. List the class hash and declare transaction per network, the inspection instances, the engine's fork tag and SHA-256, the toolchain versions, and how to reproduce the build: check out the tag, install the versions in `.tool-versions`, run `scarb --release build` and `sncast --scarb-profile release utils class-hash --contract-name TinySynth`, and compare with the class hash. Link [Verifying the engine](verifying.md).

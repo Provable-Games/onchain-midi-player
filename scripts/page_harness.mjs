@@ -125,12 +125,13 @@ export function parseDocument(html) {
 /**
  * Runs the page's shim and player on `html`. Returns the fake DOM, the engine's record and controls.
  * @param {string} html
- * @param {{engine?: "fake" | "real", outputLatency?: number | null, constructError?: string, resumeError?: string}} [options]
+ * @param {{engine?: "fake" | "real", outputLatency?: number | null, constructError?: string, resumeError?: string,
+ *   sampleRate?: number, onConstruct?: (synth: any, audio: any) => void}} [options]
  *   outputLatency: the AudioContext's, in seconds, or null for a context without the property (an
  *   engine that does not support it); constructError: the fake engine's constructor throws this
  *   message; resumeError: its AudioContext's resume() rejects with this message
  */
-export function runPage(html, { engine = "fake", outputLatency = 0.02, constructError, resumeError } = {}) {
+export function runPage(html, { engine = "fake", outputLatency = 0.02, constructError, resumeError, sampleRate = 8000, onConstruct } = {}) {
   const doc = parseDocument(html);
   /** @type {string[]} errors thrown by inserted scripts, which a browser reports as uncaught */
   const uncaught = [];
@@ -176,8 +177,14 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
   let ready = [];
   /** @type {Map<number, {fn: () => void, delay: number, at: number}>} at: the AudioContext time when set */
   const timers = new Map();
+  /** @type {number[]} */
+  const timeoutDelays = [];
   /** @type {Map<number, {fn: () => void, delay: number}>} the engine's and the page's intervals */
   const intervals = new Map();
+  /** @type {number[]} */
+  const intervalDelays = [];
+  /** @type {any[]} */
+  const intervalObservations = [];
   let timerId = 0;
   /** @type {string[]} */
   const consoleErrors = [];
@@ -185,6 +192,8 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
   const synths = [];
   /** @type {any[][]} */
   const calls = [];
+  /** @type {any[][]} full page-install trace used only by certification reports */
+  const certificationCalls = [];
   /** @type {El[]} */
   const created = [];
 
@@ -211,11 +220,12 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     setTimeout: (/** @type {() => void} */ fn, /** @type {number} */ delay) => {
       // Browsers fire a longer delay than 2^31 - 1 ms at once: the player must never ask for one.
       if (!(delay >= 0 && delay <= 2147483647)) throw new Error(`setTimeout delay out of range: ${delay}`);
+      timeoutDelays.push(delay);
       timers.set(++timerId, { fn, delay, at: synths.length ? synths[0].getAudioContext().currentTime : 0 });
       return timerId;
     },
     clearTimeout: (/** @type {number} */ id) => { timers.delete(id); },
-    setInterval: (/** @type {() => void} */ fn, /** @type {number} */ delay) => { intervals.set(++timerId, { fn, delay }); return timerId; },
+    setInterval: (/** @type {() => void} */ fn, /** @type {number} */ delay) => { intervalDelays.push(delay); intervals.set(++timerId, { fn, delay }); return timerId; },
     clearInterval: (/** @type {number} */ id) => { intervals.delete(id); },
     atob, btoa, TextEncoder, TextDecoder,
     console: { error: (/** @type {any} */ e) => consoleErrors.push(String((e && e.message) || e)), log() {}, warn() {} },
@@ -225,7 +235,7 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
   /** @type {any} */
   let audio = null;
   if (engine === "real") {
-    audio = webAudioMock();
+    audio = webAudioMock({ sampleRate });
     Object.assign(sandbox, { AudioContext: audio.AudioContext, performance: { now: () => 0 } });
   }
   vm.createContext(sandbox);
@@ -240,28 +250,108 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     const Real = sandbox.WebAudioTinySynth;
     sandbox.WebAudioTinySynth = function (/** @type {any} */ opts) {
       const synth = new Real(opts);
+      synth.playInvocations = [];
+      synth.syncObservations = [];
+      synth.waveRegistrations = [];
       if (outputLatency === null) delete synth.getAudioContext().outputLatency;
       else synth.getAudioContext().outputLatency = outputLatency;
       // Only the page's own calls are recorded, not the engine's calls to itself (loadMIDI calls
       // stopMIDI, for example).
       let depth = 0;
-      for (const name of ["setLoop", "setLoopEnd", "loadMIDI", "playMIDI", "stopMIDI"]) {
+      for (const name of ["setSampleWave", "setHarmonicWave", "setQuality", "setMasterVol", "setReverbLev", "setVoices", "setTimbre", "setLoop", "setLoopEnd", "loadMIDI", "playMIDI", "stopMIDI"]) {
         const f = synth[name];
         synth[name] = (/** @type {any[]} */ ...args) => {
-          if (!depth) calls.push([name, ...args]);
+          if (!depth) {
+            certificationCalls.push([name, ...args]);
+            if (!["setSampleWave", "setHarmonicWave", "setQuality", "setMasterVol", "setReverbLev", "setVoices", "setTimbre"].includes(name)) calls.push([name, ...args]);
+          }
           depth++;
           try {
-            return f(...args);
+            if (name === "playMIDI") {
+              const before = { contextTime: synth.getAudioContext().currentTime, playTime: synth.playTime, startTime: synth.startTime };
+              const result = f(...args);
+              synth.playInvocations.push({ before, after: { contextTime: synth.getAudioContext().currentTime, playTime: synth.playTime, startTime: synth.startTime } });
+              return result;
+            }
+            const bufferStart = audio?.buffers?.length ?? 0;
+            const result = f(...args);
+            if (name === "setSampleWave" || name === "setHarmonicWave") {
+              synth.waveRegistrations.push({
+                method: name,
+                name: args[0],
+                createdBufferIds: (audio?.buffers || []).slice(bufferStart).map((/** @type {any} */ buffer) => buffer.id),
+              });
+            }
+            return result;
           } finally {
             depth--;
           }
         };
       }
+      if (typeof synth.sync === "function") {
+        const sync = synth.sync;
+        synth.sync = (/** @type {any[]} */ ...args) => {
+          const status = synth.getPlayStatus();
+          const before = {
+            contextTime: synth.getAudioContext().currentTime,
+            playTime: synth.playTime,
+            startTime: synth.startTime,
+            initialStartTime: status?.initialStartTime,
+          };
+          const result = sync(...args);
+          const afterStatus = synth.getPlayStatus();
+          synth.syncObservations.push({
+            args,
+            before,
+            after: {
+              contextTime: synth.getAudioContext().currentTime,
+              playTime: synth.playTime,
+              startTime: synth.startTime,
+              initialStartTime: afterStatus?.initialStartTime,
+            },
+          });
+          return result;
+        };
+      }
       const send = synth.send;
       synth.sent = [];
-      synth.send = (/** @type {number[]} */ msg, /** @type {number} */ t) => { synth.sent.push([msg, t]); return send(msg, t); };
+      synth.sendObservations = [];
+      synth.send = (/** @type {number[]} */ msg, /** @type {number} */ t) => {
+        const audioLogStart = audio.log.length;
+        const result = send(msg, t);
+        synth.sent.push([msg, t]);
+        const audioLog = audio.log.slice(audioLogStart);
+        const newNodeNames = audioLog.filter((/** @type {any[]} */ row) => row.length === 2 && row[1] === "create").map((/** @type {any[]} */ row) => row[0]);
+        synth.sendObservations.push({
+          message: [...msg], time: t, scheduledAt: synth.getAudioContext().currentTime,
+          audioLog,
+          nodes: newNodeNames.map((/** @type {string} */ name) => {
+            const node = audio.nodes[name];
+            return {
+              name,
+              kind: name.slice(0, name.indexOf("#")),
+              frequencyHz: node?.frequency?.value ?? null,
+              waveType: node?.waveType ?? null,
+              periodicWave: node?.periodicWave ?? null,
+              playbackRate: node?.playbackRate?.value ?? null,
+              detuneCents: node?.detune?.value ?? null,
+              bufferId: node?.buffer?.id ?? null,
+              bufferLength: node?.buffer?.length ?? null,
+              bufferSampleRate: node?.buffer?.sampleRate ?? null,
+              bufferHomeHz: node?.buffer?._b ?? null,
+              bufferSeconds: node?.buffer?._l ?? null,
+              gain: node?.gain?.value ?? null,
+              filterType: node?.kind ?? null,
+              q: node?.Q?.value ?? null,
+            };
+          }),
+        });
+        return result;
+      };
+      if (onConstruct) onConstruct(synth, audio);
       synths.push(synth);
       calls.push(["new", { ...opts }]);
+      certificationCalls.push(["new", { ...opts }]);
       return synth;
     };
   } else {
@@ -300,11 +390,15 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     page,
     els: page.elements,
     calls,
+    certificationCalls,
     synths,
     consoleErrors,
     uncaught,
     timers,
+    timeoutDelays,
     intervals,
+    intervalDelays,
+    intervalObservations,
     audio,
     /** Whether the inflated engine defined WebAudioTinySynth. */
     engineLoaded: loaded,
@@ -344,7 +438,11 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
           if (t.last === undefined) t.last = ctx.currentTime - step;
           if (ctx.currentTime - t.last >= iv.delay / 1000 - 1e-9) {
             t.last = ctx.currentTime;
+            const synth = synths[0];
+            const statusBefore = synth?.getPlayStatus?.() ?? null;
             iv.fn();
+            const statusAfter = synth?.getPlayStatus?.() ?? null;
+            intervalObservations.push({ delay: iv.delay, contextTime: ctx.currentTime, statusBefore, statusAfter });
           }
         }
         ran.push(...this.runDue());
@@ -387,7 +485,13 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
       const ctx = synths[0].getAudioContext();
       for (let t = 0; t < seconds; t += 0.06) {
         ctx.currentTime += 0.06;
-        for (const { fn } of [...intervals.values()]) fn();
+        for (const interval of [...intervals.values()]) {
+          const synth = synths[0];
+          const statusBefore = synth?.getPlayStatus?.() ?? null;
+          interval.fn();
+          const statusAfter = synth?.getPlayStatus?.() ?? null;
+          intervalObservations.push({ delay: interval.delay, contextTime: ctx.currentTime, statusBefore, statusAfter });
+        }
       }
     },
   };

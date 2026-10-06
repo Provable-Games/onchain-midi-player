@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // @ts-check
 // Vendors a TinySynth fork build for re-pinning: copies webaudio-tinysynth.min.js and NOTICE at a
-// commit or tag of a local fork checkout into tests/vendor, and prints the ENGINE_PIN line to put in
-// scripts/engine.mjs. Reads the checkout with `git show` only; needs no network and changes nothing
-// in the checkout.
+// commit or tag of a local fork checkout into tests/vendor, hashes webaudio-tinysynth.js for the
+// source-build certificate pin, and prints the complete ENGINE_PIN line for scripts/engine.mjs.
+// Reads the checkout with `git show` only; needs no network and changes nothing in the checkout.
 //
 // Usage: node scripts/vendor_engine.mjs <fork checkout> <commit or tag>
 //
@@ -27,10 +27,11 @@ const isTag = git("tag", "--list", ref).toString().trim() === ref;
 const label = isTag ? ref : commit.slice(0, 7);
 if (!/^[0-9A-Za-z._-]{1,16}$/.test(label)) throw new Error(`ref label ${JSON.stringify(label)} must be 1-16 of [0-9A-Za-z._-] (it names the vendored files and is recorded in scripts/page_versions.json)`);
 const engine = git("show", `${commit}:webaudio-tinysynth.min.js`);
+const source = git("show", `${commit}:webaudio-tinysynth.js`);
 const notice = git("show", `${commit}:NOTICE`);
 writeFileSync(join(VENDOR_DIR, `webaudio-tinysynth-${label}.min.js`), engine);
 writeFileSync(join(VENDOR_DIR, `webaudio-tinysynth-${label}.NOTICE`), notice);
-console.log(`vendored ${label} (${commit}): engine ${engine.length} bytes, NOTICE ${notice.length} bytes`);
+console.log(`vendored ${label} (${commit}): engine ${engine.length} bytes, source ${source.length} bytes (hash only), NOTICE ${notice.length} bytes`);
 console.log("Replace the ENGINE_PIN line in scripts/engine.mjs with:\n");
-console.log(`export const ENGINE_PIN = ${JSON.stringify({ ref: label, commit, sha256: sha256Hex(engine), noticeSha256: sha256Hex(notice) })
+console.log(`export const ENGINE_PIN = ${JSON.stringify({ ref: label, commit, sha256: sha256Hex(engine), sourceSha256: sha256Hex(source), noticeSha256: sha256Hex(notice) })
   .replace(/"(\w+)":/g, "$1: ").replace(/,/g, ", ").replace(/^\{/, "{ ").replace(/\}$/, " }")};`);

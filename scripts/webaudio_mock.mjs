@@ -4,16 +4,20 @@
 // player/player.test.js). Each call to webAudioMock() returns a fresh, independent recorder.
 
 /**
- * @returns {{AudioContext: any, log: any[][], nodes: Record<string, any>, contexts: any[]}}
+ * @param {{sampleRate?: number}} [options]
+ * @returns {{AudioContext: any, log: any[][], nodes: Record<string, any>, buffers: any[], contexts: any[]}}
  */
-export function webAudioMock() {
+export function webAudioMock({ sampleRate = 8000 } = {}) {
   /** @type {any[][]} */
   const log = [];
   /** @type {Record<string, any>} */
   const nodes = {};
   /** @type {any[]} */
+  const buffers = [];
+  /** @type {any[]} */
   const contexts = [];
   let id = 0;
+  let bufferId = 0;
   class Param {
     /** @param {string} name @param {number} value */
     constructor(name, value) { this.name = name; this.value = value; }
@@ -44,9 +48,9 @@ export function webAudioMock() {
       this.detune = new Param(this.name + ".detune", 0);
     }
     /** @param {string} t */
-    set type(t) { log.push([this.name, "type", t]); }
+    set type(t) { this.waveType = t; log.push([this.name, "type", t]); }
     /** @param {any} w */
-    setPeriodicWave(w) { log.push([this.name, "periodicWave", w]); }
+    setPeriodicWave(w) { this.periodicWave = w; log.push([this.name, "periodicWave", w]); }
   }
   class Src extends Node {
     constructor() {
@@ -69,7 +73,7 @@ export function webAudioMock() {
   }
   class Ctx {
     constructor() {
-      this.sampleRate = 8000; this.currentTime = 0; this.state = "running"; this.outputLatency = 0;
+      this.sampleRate = sampleRate; this.currentTime = 0; this.state = "running"; this.outputLatency = 0;
       this.destination = new Node("dest");
       contexts.push(this);
     }
@@ -79,12 +83,17 @@ export function webAudioMock() {
     createBufferSource() { return new Src(); }
     createBiquadFilter() { return new Biquad(); }
     /** @param {number} ch @param {number} len */
-    createBuffer(ch, len) { const d = Array.from({ length: ch }, () => new Float32Array(len)); return { length: len, getChannelData: (/** @type {number} */ i) => d[i] }; }
+    createBuffer(ch, len, rate = sampleRate) {
+      const d = Array.from({ length: ch }, () => new Float32Array(len));
+      const buffer = { id: `buffer#${++bufferId}`, numberOfChannels: ch, length: len, sampleRate: rate, getChannelData: (/** @type {number} */ i) => d[i] };
+      buffers.push(buffer);
+      return buffer;
+    }
     createStereoPanner() { const n = new Node("pan"); return Object.assign(n, { pan: new Param(n.name + ".pan", 0) }); }
     createDynamicsCompressor() { return new Node("comp"); }
     createConvolver() { return new Node("conv"); }
     /** @param {ArrayLike<number>} real @param {ArrayLike<number>} imag */
     createPeriodicWave(real, imag) { const w = { real: Array.from(real), imag: Array.from(imag) }; log.push(["ctx", "createPeriodicWave", w]); return w; }
   }
-  return { AudioContext: Ctx, log, nodes, contexts };
+  return { AudioContext: Ctx, log, nodes, contexts, buffers };
 }
