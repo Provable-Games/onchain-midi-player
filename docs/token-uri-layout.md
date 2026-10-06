@@ -54,8 +54,8 @@ Decoded, the `animation_url` value after its `data:text/html;base64,` prefix is 
 
 | Append | Word-aligned | Unaligned |
 | --- | --- | --- |
-| The 57,108-byte `animation_url_segment()` | 2.9M | 12.4M |
-| Every append of the example's full-size token: two 40,420-character `b64(S)`, the segment, `midi_segment` and the small pieces | 16.5M | 33.3M |
+| The 59,076-byte `animation_url_segment()` | 3.0M | 12.9M |
+| Every append of the example's full-size token: two 40,420-character `b64(S)`, the segment, `midi_segment` and the small pieces | 16.8M | 33.6M |
 
 The consumer chooses where its large pieces land by adding spaces between JSON tokens, 3 at a time. Three spaces are one 3-byte group, so they keep every piece a multiple of 3, and they encode to the constant `'ICAg'`, so they are never encoded at call time. It does this in two places:
 
@@ -140,13 +140,14 @@ The consumer's SVG must never contain `</script`, in any letter case.
 - **Why.** In the `animation_url` page, the SVG is the raw contents of the final `<script type="text/plain" id="art">` block, which stays open until the end of the document. The HTML parser ends that block at the first `</script`. The art is cut short there, the player's `<img>` gets a truncated SVG and shows a broken image, and the rest of the SVG leaks into the page as markup. The `image` member still decodes to the whole SVG, so marketplaces' image views do not show the failure.
 - **In practice.** No `<script>` elements in the SVG, and no comments or CDATA sections containing `</script`. Nothing else needs care: SVG is XML, so any `<` in text content is already escaped as `&lt;`. You lose nothing, because scripts inside an SVG never run when it is shown through `<img>`, which is how both this page and marketplaces' `image` views show it.
 - **Test it in your contract.** The class never sees the SVG: it returns the pieces around it, and you splice the art in. So the rule belongs in your own tests, on your renderer's output. [`examples/beast_consumer`](../examples/beast_consumer) shows how: `assertArtSafe` in its scripts and `contains_script_end_tag` in its Cairo tests check the rendered SVG. A renderer built from fixed, reviewed literals and validated fields meets the rule by construction. In Beasts, for example, names are limited to `A-Z a-z 0-9`, space, `'` and `-`, and art URIs are strict base64.
+- **Where the ▶/■ button goes (optional).** The root `<svg>` may carry `data-play-anchor="X Y"`, a point in the SVG's own units (its `viewBox`, else `width` and `height`). The page puts the button's bottom-right corner there, 6 px inside, wherever the `<img>` draws the art (it follows the image's own box, on resize too), and makes the button 32 px instead of 40 when the anchor is under 120 px from the art's top-left corner on screen. The Beasts card (250×350 viewBox, its 32×32 Beast drawn at (62, 66) to (190, 194)) uses `data-play-anchor="190 194"`. Without the attribute, or with a malformed or out-of-range one, the button stays in the viewport's bottom-right corner.
 - **`svg_b64`** is standard RFC 4648 base64 of the exact SVG bytes, with no line breaks. It may end with `=` padding, because it ends the HTML-layer stream. It is also the `image` value, so marketplaces and the page show the same bytes.
 
 ## The player page
 
 `PAGE` is [`tests/fixtures/page.html`](../tests/fixtures/page.html), byte for byte: head and styles, the engine gzipped in a `<script type="text/javascript+gzip" src="data:text/javascript;base64,...">` tag, the gunzip shim, a small ▶/■ button, the player script, then the opening of the settings block. The per-token `D` and the SVG follow it. The shim inflates the engine while the page is parsed; the player ([`player/player.js`](../player/player.js) and [`player/settings.js`](../player/settings.js)) starts on DOMContentLoaded:
 
-- **Art first.** It shows the art in an `<img>`, before and independently of the settings and the MIDI. The art fills the frame, and the button overlays the bottom-right corner.
+- **Art first.** It shows the art in an `<img>`, before and independently of the settings and the MIDI. The art fills the frame, and the button overlays its `data-play-anchor` (see [Art (SVG) requirements](#art-svg-requirements)), else the bottom-right corner.
 - **Settings and MIDI.** It parses `SETTINGS` strictly, and checks the MIDI with the page's MIDI check (the [MIDI contract](midi-contract.md)). Range checks on the settings are the class's alone: the class validates them before writing `SETTINGS`.
 - **Fail closed.** If the engine did not load, or on any settings or MIDI error, ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and it is logged. The art stays: the player that shows it is not compressed, so it never depends on inflation.
 - **▶** (a click or tap) creates the synth (and builds its noise buffer) on the first press, resumes audio inside the gesture, plays the MIDI from tick 0, and loops at End-of-Track. It restarts the art when tick 0 is heard, using the engine's start time plus the audio output latency, so the browser starts the art's animation again in step with the sound.

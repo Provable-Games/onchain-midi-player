@@ -241,6 +241,41 @@ export function artUrl(svg, restart = 0) {
   return "data:image/svg+xml;" + (restart ? "r=" + restart + ";" : "") + "base64," + btoa(bin);
 }
 
+/**
+ * Where the ▶/■ button goes when the art's root `<svg>` carries `data-play-anchor="X Y"`: a point in
+ * the SVG's own units (its `viewBox`, else `width` and `height`), such as the bottom-right corner of
+ * a sprite's box. The button's bottom-right corner is placed there, 6 px inside, where the <img>
+ * draws that point: `box` is the <img>'s own rectangle on screen (its `getBoundingClientRect()`), and
+ * the art fills it as `object-fit: contain` does, scaled to fit and centred. The button is kept
+ * inside the `vw` x `vh` viewport, and is 32 px instead of 40 when the anchor is under 120 px from
+ * the art's top-left corner on screen. Returns `null` (the button stays at the viewport's
+ * bottom-right corner) when the attribute is absent, malformed or outside the art, or the SVG or the
+ * image has no usable size.
+ * @param {string} svg
+ * @param {{left: number, top: number, width: number, height: number}} box
+ * @param {number} vw
+ * @param {number} vh
+ * @returns {{left: number, top: number, size: number} | null}
+ */
+export function playAnchor(svg, box, vw, vh) {
+  const tag = /<svg\b[^>]*>/i.exec(svg);
+  const attr = (/** @type {string} */ name) => {
+    const m = tag && new RegExp("\\s" + name + "\\s*=\\s*([\"'])(.*?)\\1", "i").exec(tag[0]);
+    return m ? m[2].trim() : "";
+  };
+  const num = (/** @type {string} */ s) => (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s) ? +s : NaN);
+  const list = (/** @type {string} */ s) => (s ? s.split(/[\s,]+/).map(num) : []);
+  const view = list(attr("viewBox"));
+  const [x0, y0, w, h] = view.length == 4 ? view : [0, 0, num(attr("width").replace(/px$/i, "")), num(attr("height").replace(/px$/i, ""))];
+  const [ax, ay, ...extra] = list(attr("data-play-anchor"));
+  if (!(w > 0 && h > 0 && box.width > 0 && box.height > 0) || extra.length || !(ax >= x0 && ax <= x0 + w && ay >= y0 && ay <= y0 + h)) return null;
+  const k = Math.min(box.width / w, box.height / h);
+  const size = Math.min((ax - x0) * k, (ay - y0) * k) < 120 ? 32 : 40;
+  const place = (/** @type {number} */ a, /** @type {number} */ a0, /** @type {number} */ len, /** @type {number} */ at, /** @type {number} */ span, /** @type {number} */ view) =>
+    Math.round(Math.max(0, Math.min(view - size, at + (span - len * k) / 2 + (a - a0) * k - 6 - size)));
+  return { left: place(ax, x0, w, box.left, box.width, vw), top: place(ay, y0, h, box.top, box.height, vh), size };
+}
+
 /** Fallback title of the media session, for art without a <title>. */
 export const MEDIA_TITLE = "Onchain music";
 
@@ -301,9 +336,40 @@ export function startPlayer() {
         shown = n;
         art.replaceWith(img);
         art = img;
+        watch(art);
       };
       img.src = artUrl(svg, n);
     };
+
+    /** @param {() => unknown} f best effort: a failure is silent */
+    const attempt = (f) => {
+      try {
+        f();
+      } catch (e) {}
+    };
+    // The button sits at the art's `data-play-anchor` if it has one (see playAnchor), else at the
+    // viewport's bottom-right corner (the stylesheet's). It follows the <img>'s actual box.
+    const place = () => attempt(() => {
+      const r = art && art.getBoundingClientRect();
+      const a = r && playAnchor(svg, r, window.innerWidth, window.innerHeight);
+      const s = button.style;
+      s.right = s.bottom = a ? "auto" : "";
+      s.left = a ? a.left + "px" : "";
+      s.top = a ? a.top + "px" : "";
+      s.width = s.height = a ? a.size + "px" : "";
+      s.padding = a ? a.size / 4 + "px" : "";
+    });
+    /** @type {ResizeObserver | undefined} */
+    let observer;
+    /** @param {HTMLImageElement | null} img the current art image */
+    const watch = (img) => attempt(() => {
+      observer = observer || new ResizeObserver(place);
+      observer.disconnect();
+      if (img) observer.observe(img);
+    });
+    place();
+    watch(art);
+    attempt(() => window.addEventListener("resize", place));
 
     // 2. The engine, settings and MIDI; on failure ▶ stays disabled and no synth is created.
     /** @type {import("./settings.js").TinySynthSettings} */
@@ -332,12 +398,6 @@ export function startPlayer() {
     let silent = null;
     let background = false; // the silent element is playing: the page may keep playing when hidden
     let armed = false; // the media session's metadata and handlers are set
-    /** @param {() => unknown} f best effort: a failure is silent */
-    const attempt = (f) => {
-      try {
-        f();
-      } catch (e) {}
-    };
     /** @param {boolean} on */
     const setPlaying = (on) => {
       playing = on;

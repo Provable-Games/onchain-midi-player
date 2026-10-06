@@ -392,6 +392,77 @@ async function checkArtwork() {
 }
 
 /**
+ * The ▶/■ button sits at the art's `data-play-anchor`: on a card whose Beast box is (62, 66) to
+ * (190, 194) in a 250x350 viewBox, anchored at "190 194", the button's bounding rect lies inside the
+ * box at its bottom-right corner (6 px in), in a portrait viewport the art fills and, after a resize,
+ * in a landscape one where the art is scaled and centred (object-fit: contain). Clicking it still
+ * plays. Without the attribute the button stays at the viewport's bottom-right corner.
+ */
+async function checkPlayAnchor() {
+  const c = CASES.default_120bpm;
+  const card = (/** @type {string} */ attrs) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 250 350' ${attrs}><rect width='250' height='350' fill='#1e1e22'/><rect x='62' y='66' width='128' height='128' fill='#c60'/></svg>`;
+  console.log("play button anchored at the art's data-play-anchor (data: URI, offline)");
+  const { context, page, logged } = await open({ offline: true, viewport: { width: 250, height: 350 } });
+  await page.goto(dataUrl(PAGE + c.d + card("data-play-anchor='190 194'")));
+  await ready(page);
+  // The button's rect and the art <img>'s own rect, as the page sees them.
+  const rect = () => page.evaluate(() => {
+    const r = /** @type {HTMLElement} */ (document.getElementById("play")).getBoundingClientRect();
+    const i = /** @type {HTMLElement} */ (document.querySelector("img")).getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, img: { left: i.left, top: i.top, width: i.width, height: i.height } };
+  });
+  /**
+   * The button lands on the Beast box's bottom-right corner, 6 px in, wherever the <img> draws the
+   * art (object-fit: contain inside the img's own rect). It moves after a resize or a resized image,
+   * so this waits for it, up to 2 s.
+   * @param {string} label
+   */
+  const inBox = async (label) => {
+    /** @type {any} */ let r, x, y;
+    const near = (/** @type {number} */ a, /** @type {number} */ b) => Math.abs(a - b) <= 1.5;
+    for (let n = 0; n < 40; n++) {
+      r = await rect();
+      const k = Math.min(r.img.width / 250, r.img.height / 350);
+      x = (/** @type {number} */ v) => r.img.left + (r.img.width - 250 * k) / 2 + v * k;
+      y = (/** @type {number} */ v) => r.img.top + (r.img.height - 350 * k) / 2 + v * k;
+      if (near(r.right, x(190) - 6) && near(r.bottom, y(194) - 6)) break;
+      await page.waitForTimeout(50);
+    }
+    check(near(r.right, x(190) - 6) && near(r.bottom, y(194) - 6) && r.left >= x(62) && r.top >= y(66),
+      `${label}: the button (${r.left.toFixed(1)}, ${r.top.toFixed(1)}) to (${r.right.toFixed(1)}, ${r.bottom.toFixed(1)}) is inside the Beast box (${x(62).toFixed(1)}, ${y(66).toFixed(1)}) to (${x(190).toFixed(1)}, ${y(194).toFixed(1)}) of the img (${r.img.width.toFixed(0)}x${r.img.height.toFixed(0)} at ${r.img.left.toFixed(0)}, ${r.img.top.toFixed(0)}), 6 px from its bottom-right corner`);
+  };
+  await inBox("portrait 250x350");
+  await page.setViewportSize({ width: 500, height: 400 });
+  await inBox("landscape 500x400 after a resize");
+  await page.setViewportSize({ width: 250, height: 350 });
+  await inBox("portrait again");
+  // A host or a shared copy that displays the image smaller (75%): the ResizeObserver follows it.
+  await page.evaluate(() => { const i = /** @type {HTMLElement} */ (document.querySelector("img")); i.style.width = "75%"; i.style.height = "75%"; });
+  await inBox("the img displayed at 75%");
+  await page.evaluate(() => { const i = /** @type {HTMLElement} */ (document.querySelector("img")); i.style.width = ""; i.style.height = ""; });
+  await inBox("the img back to 100%");
+  await startPlayback(page);
+  check((await state(page)).label === "Stop", "the anchored button plays (a click on it started playback)");
+  await inBox("while playing, after the art restarted");
+  const errors = await logged();
+  check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
+  await context.close();
+
+  // No attribute, and a malformed one: the corner.
+  for (const attrs of ["", "data-play-anchor='190'"]) {
+    const o = await open({ offline: true, viewport: { width: 250, height: 350 } });
+    await o.page.goto(dataUrl(PAGE + c.d + card(attrs)));
+    await ready(o.page);
+    const r = await o.page.evaluate(() => {
+      const b = /** @type {HTMLElement} */ (document.getElementById("play")).getBoundingClientRect();
+      return { right: innerWidth - b.right, bottom: innerHeight - b.bottom, w: b.width };
+    });
+    check(r.right === 12 && r.bottom === 12 && r.w === 40, `${attrs ? "a malformed anchor" : "no anchor"}: the button stays 12 px from the bottom-right corner, 40 px`);
+    await o.context.close();
+  }
+}
+
+/**
  * Background audio (the silent <audio> element and the media session) after ▶ and after ■, in
  * whatever frame the page is in. The element must play (a looping 6 s blob: WAV) after ▶ and be
  * paused after ■; where the engine has navigator.mediaSession, the playback state follows, and the
@@ -946,6 +1017,7 @@ async function checkExtremes() {
 try {
   await checkDataPage();
   await checkArtwork();
+  await checkPlayAnchor();
   await checkBackgroundAudio();
   await checkIframe();
   await checkCsp();

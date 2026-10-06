@@ -30,6 +30,8 @@ class El {
     this.disabled = false;
     this.hidden = false;
     this.title = "";
+    /** @type {Record<string, string>} */
+    this.style = {};
     this.alt = "";
     // A decoded image's size; the page's tests set the bitmap's with runPage's `bitmap` option.
     this.naturalWidth = 32;
@@ -43,6 +45,10 @@ class El {
     this.onerror = null;
     /** @type {El[] | null} the head or body list holding it */
     this.parent = null;
+  }
+  /** The element's box on screen: the whole viewport, as the stylesheet makes the art's, unless a test sets `imgBox`. */
+  getBoundingClientRect() {
+    return this.page.imgBox || { left: 0, top: 0, width: this.page.view[0], height: this.page.view[1] };
   }
   /** @param {string} name */
   getAttribute(name) {
@@ -92,6 +98,8 @@ class El {
  * @property {any[][]} events  reads of blocks, img src assignments, inserted scripts, replacements
  *   and DOMContentLoaded listeners, in order
  * @property {(code: string) => void} runScript  runs an inserted script
+ * @property {number[]} view  window.innerWidth and innerHeight
+ * @property {{left: number, top: number, width: number, height: number} | null} imgBox  the art's box when it is not the viewport
  */
 
 /**
@@ -129,16 +137,17 @@ export function parseDocument(html) {
  * Runs the page's shim and player on `html`. Returns the fake DOM, the engine's record and controls.
  * @param {string} html
  * @param {{engine?: "fake" | "real", outputLatency?: number | null, constructError?: string, resumeError?: string,
- *   silentAudio?: "plays" | "rejects" | "missing", mediaSession?: boolean, audioSession?: boolean, taintedCanvas?: boolean, bitmap?: number[]}} [options]
+ *   silentAudio?: "plays" | "rejects" | "missing", mediaSession?: boolean, audioSession?: boolean, taintedCanvas?: boolean, bitmap?: number[], viewport?: number[]}} [options]
  *   outputLatency: the AudioContext's, in seconds, or null for a context without the property (an
  *   engine that does not support it); constructError: the fake engine's constructor throws this
  *   message; resumeError: its AudioContext's resume() rejects with this message; silentAudio: what the
  *   silent <audio> element of the media session does (default: plays; "rejects": play() rejects, as
  *   under a CSP that blocks blob: media; "missing": the browser has no Audio); mediaSession and
  *   audioSession (default true): whether navigator has them; taintedCanvas: toDataURL throws; bitmap: the width and
- *   height of every decoded image (the art's embedded bitmap, default 32x32)
+ *   height of every decoded image (the art's embedded bitmap, default 32x32); viewport: window.innerWidth
+ *   and innerHeight (default 250x350)
  */
-export function runPage(html, { engine = "fake", outputLatency = 0.02, constructError, resumeError, silentAudio = "plays", mediaSession = true, audioSession = true, taintedCanvas = false, bitmap = [32, 32] } = {}) {
+export function runPage(html, { engine = "fake", outputLatency = 0.02, constructError, resumeError, silentAudio = "plays", mediaSession = true, audioSession = true, taintedCanvas = false, bitmap = [32, 32], viewport = [250, 350] } = {}) {
   const doc = parseDocument(html);
   /** @type {string[]} errors thrown by inserted scripts, which a browser reports as uncaught */
   const uncaught = [];
@@ -146,7 +155,7 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
   let sandbox = {};
   /** @type {Page} */
   const page = {
-    elements: {}, head: [], body: [], events: [],
+    elements: {}, head: [], body: [], events: [], view: viewport.slice(), imgBox: null,
     // A script inserted by another runs at once; what it throws is reported, not propagated to the
     // script that inserted it.
     runScript(code) {
@@ -308,6 +317,19 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     console: { error: (/** @type {any} */ e) => consoleErrors.push(String((e && e.message) || e)), log() {}, warn() {} },
   };
   sandbox.window = sandbox;
+  // The viewport (the <img> and the button are positioned against it); `resize` listeners.
+  sandbox.innerWidth = viewport[0];
+  sandbox.innerHeight = viewport[1];
+  /** @type {Array<() => void>} */
+  const sizeObservers = [];
+  sandbox.ResizeObserver = class {
+    constructor(/** @type {() => void} */ fn) { this.fn = fn; }
+    observe() { if (!sizeObservers.includes(this.fn)) sizeObservers.push(this.fn); }
+    disconnect() { const i = sizeObservers.indexOf(this.fn); if (i >= 0) sizeObservers.splice(i, 1); }
+  };
+  /** @type {Array<() => void>} */
+  const resizers = [];
+  sandbox.addEventListener = (/** @type {string} */ type, /** @type {() => void} */ fn) => { if (type === "resize") resizers.push(fn); };
 
   /** @type {any} */
   let audio = null;
@@ -396,6 +418,20 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     intervals,
     audio,
     media,
+    /** Resizes the viewport and fires resize. */
+    resize(/** @type {number} */ w, /** @type {number} */ h) {
+      sandbox.innerWidth = w;
+      sandbox.innerHeight = h;
+      page.view = [w, h];
+      for (const fn of resizers) fn();
+    },
+    /** Gives the art's <img> another box than the viewport (a host that sizes it) and notifies the ResizeObserver. */
+    resizeImg(/** @type {{left: number, top: number, width: number, height: number}} */ box) {
+      page.imgBox = box;
+      for (const fn of [...sizeObservers]) fn();
+    },
+    /** How many ResizeObserver callbacks are registered (one while the art is observed). */
+    get observers() { return sizeObservers.length; },
     /** Hides or shows the page and fires visibilitychange. */
     setHidden(/** @type {boolean} */ hidden) {
       documentState.hidden = hidden;
