@@ -128,7 +128,7 @@ fn gas_t4_b64_s() {
 // ------------------------------------------------------------------------------------------------
 
 /// Token 4's pieces at their real lengths: b64('{' members ',' <pad>) (308), b64(head) of the
-/// unaligned layout (356), b64(S) (40,420), the segment (53,508) and midi_segment (9,568).
+/// unaligned layout (356), b64(S) (40,420), the segment (56,884) and midi_segment (9,568).
 fn pieces() -> (ByteArray, ByteArray, ByteArray, ByteArray, ByteArray) {
     (filler(308), filler(356), filler(40420), page_data::animation_url_segment(), filler(9568))
 }

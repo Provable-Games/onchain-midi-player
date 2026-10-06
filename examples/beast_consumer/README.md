@@ -73,15 +73,15 @@ examples/beast_consumer/
 - The consumer's pieces (`'{' members ',' <pad>`, `S`, the comma and the image key) are padded with spaces between JSON tokens to multiples of 3 bytes.
 - The class pads `PAGE` and `D` to multiples of 9, because they are spliced at both layers.
 - `S = svg_b64 '"' <pad>` is encoded once and appended twice. The first copy is the `image` value; the second, at the HTML layer, is the SVG that closes the art block, and its `"` closes the `animation_url` string.
-- **Word alignment.** The consumer adds 3 spaces at a time between JSON tokens, so that its two largest appends start on a 31-byte `ByteArray` word: the first `b64(S)` and the segment. Each group is the constant `'ICAg'` (`b64('   ')`), and the image key and the comma are constants too: `b64(' "image":"data:image/svg+xml;base64,')` and `'LCAg'` (`b64(',  ')`). So no alignment space is base64-encoded at call time. For token 4 this saves 16.2M L2 gas of appends (16.4M instead of 32.6M). [Alignment](../../docs/token-uri-layout.md#alignment) explains it.
+- **Word alignment.** The consumer adds 3 spaces at a time between JSON tokens, so that its two largest appends start on a 31-byte `ByteArray` word: the first `b64(S)` and the segment. Each group is the constant `'ICAg'` (`b64('   ')`), and the image key and the comma are constants too: `b64(' "image":"data:image/svg+xml;base64,')` and `'LCAg'` (`b64(',  ')`). So no alignment space is base64-encoded at call time. For token 4 this saves 16.8M L2 gas of appends (16.5M instead of 33.3M). [Alignment](../../docs/token-uri-layout.md#alignment) explains it.
 
 The tokens:
 
 | token | name | head spaces | comma piece | S pad | D pad | `token_uri` chars |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 58,449 |
-| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 58,457 |
-| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 58,453 |
+| 1 | Warlock | 68 | 12 bytes | 2 | 4 | 61,825 |
+| 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 61,833 |
+| 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 61,829 |
 | 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 147,765 |
 
 Tokens 1-3 cover every pad length: `len('{' members ',')` and `len(S)` take every remainder mod 3, and `D` three different pads. Only `reverb` varies between them (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding. The head spaces include the alignment groups.
@@ -110,7 +110,7 @@ snforge test matches_js --gas-report   # token_uri gas, per contract and selecto
 snforge test gas_                      # token 4 piece by piece (see Gas)
 ```
 
-The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~44 KB token JSON byte by byte, and the token 4 test computes the SHA-256 of its 144,389-character `token_uri` in Cairo, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
+The generator is deterministic: running it again leaves `git diff` empty, and its output is already in `scarb fmt` style. The naive-nesting tests base64-encode the whole ~44 KB token JSON byte by byte, and the token 4 test computes the SHA-256 of its 147,765-character `token_uri` in Cairo, so `Scarb.toml` raises snforge's step limit (`max_n_steps`).
 
 To decode the actual contract output rather than the JS reference:
 
