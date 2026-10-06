@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { ART_OPEN, HTML_PREFIX, MIDI_OPEN, JSON_PREFIX, SVG_PREFIX, b64, byteArrayFelts, withGzipPayload } from "./page.mjs";
-import { RPC_CAP, base64Problem, fetchTokenUri, formatReport, keccak256, parseInput, parseXml, run, selector, validateTokenUri } from "./validate_token_uri.mjs";
+import { RPC_CAP, base64Problem, formatReport, parseInput, parseXml, run, validateTokenUri } from "./validate_token_uri.mjs";
 
 const SCRIPT = fileURLToPath(new URL("./validate_token_uri.mjs", import.meta.url));
 const GOLDEN = fileURLToPath(new URL("../examples/beast_consumer/fixtures/token_uri.txt", import.meta.url));
@@ -353,82 +353,6 @@ test("sizes: the JSON-RPC response against the 10 MiB cap", () => {
   assert.deepEqual([ids(asJson, "warn"), asJson.sizes.rpc_response_estimated], [ids(asUri, "warn"), asUri.sizes.rpc_response_estimated]);
   const over = { ...goldenJson(), description: "x".repeat(4_000_000) };
   assert.ok(ids(check({ json: JSON.stringify(over) }), "fail").includes("size.rpc"));
-  // A measured size replaces the estimate.
-  assert.equal(check({ uri: golden }, { rpcResponseBytes: 1234 }).sizes.rpc_response_bytes, 1234);
-});
-
-test("keccak-256 and the selectors", () => {
-  assert.equal(keccak256(Buffer.alloc(0)).toString("hex"), "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
-  assert.equal(keccak256(Buffer.from("a".repeat(200))).length, 32);
-  // The values of `sncast utils selector`.
-  assert.equal(selector("token_uri"), "0x0226ad7e84c1fe08eb4c525ed93cccadf9517670341304571e66f7c4f95cbe54");
-  assert.equal(selector("tokenURI"), "0x012a7823b0c6bee58f8c694888f32f862c6584caa8afa0242de046d298ba684d");
-});
-
-test("fetch: calls token_uri with the u256 split, falls back to tokenURI, and never reveals the RPC URL", async () => {
-  const rpc = "https://rpc.example.com/v0_8/SECRET_KEY";
-  const rpc2 = "https://rpc.test/KEY";
-  const felts = byteArrayFelts(golden);
-  /** @type {any[]} */
-  const calls = [];
-  const reply = (/** @type {any} */ body) => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
-  const token = (1n << 130n) + 5n;
-  const ok = await fetchTokenUri({ rpc, contract: "0x1", token: String(token), fetchImpl: /** @type {any} */ (async (/** @type {string} */ url, /** @type {any} */ init) => {
-    const body = JSON.parse(init.body);
-    calls.push([url, body.params.request]);
-    return reply(calls.length === 1 ? { jsonrpc: "2.0", id: 1, error: { code: 21, message: "Invalid message selector" } } : { jsonrpc: "2.0", id: 1, result: felts });
-  }) });
-  assert.equal(ok.uri, golden);
-  assert.equal(ok.felts, felts.length);
-  assert.equal(calls[0][1].entry_point_selector, selector("token_uri"));
-  assert.equal(calls[1][1].entry_point_selector, selector("tokenURI"));
-  assert.deepEqual(calls[0][1].calldata, ["0x5", "0x4"]);
-  const fails = async (/** @type {any} */ impl, url = rpc) => {
-    /** @type {Error | undefined} */
-    let error;
-    try {
-      await fetchTokenUri({ rpc: url, contract: "0x1", token: "1", fetchImpl: impl });
-    } catch (e) {
-      error = /** @type {Error} */ (e);
-    }
-    assert.ok(error);
-    assert.doesNotMatch(error.message + String(error.cause ?? ""), /SECRET_KEY|rpc\.example\.com|rpc\.test|KEY/);
-    return error.message;
-  };
-  assert.match(await fails(async () => { throw Object.assign(new TypeError(`fetch failed ${rpc}`), { cause: { code: "ENOTFOUND" } }); }), /request failed \(ENOTFOUND\)/);
-  assert.match(await fails(async () => ({ ok: false, status: 429, text: async () => "" })), /HTTP 429/);
-  assert.match(await fails(async () => ({ ok: true, status: 200, text: async () => "<html>" })), /not JSON/);
-  // A known revert reason and a fixed name for the code are printed.
-  assert.match(await fails(async () => reply({ error: { code: 40, message: `Contract error at ${rpc}`, data: { revert_error: ["0x4f7574206f6620676173"] } } })), /Contract error \(code 40\); revert reason: Out of gas/);
-  // Nothing else of the payload is: not the message, not the data, not a string that decodes to the URL (whole, split or encoded).
-  const hex = (/** @type {Uint8Array} */ b) => "0x" + Buffer.from(b).toString("hex");
-  const url = Buffer.from(rpc2);
-  const payloads = [
-    { code: 40, message: `bad ${rpc2}`, data: { revert_error: [hex(url)] } },
-    { code: 40, message: "Contract error", data: { revert_error: [hex(url.subarray(0, 10)), hex(url.subarray(10))] } },
-    { code: 40, message: "Contract error", data: `see ${rpc2}` },
-    { code: 99, message: "Odd", data: { x: hex(url) }, extra: rpc2 },
-  ];
-  for (const error of payloads) {
-    const m = await fails(async () => reply({ error }), rpc2);
-    assert.doesNotMatch(m, new RegExp(`${Buffer.from("KEY").toString("hex")}|${hex(url.subarray(0, 10)).slice(2)}|see`), JSON.stringify(error));
-    assert.match(m, /token_uri: starknet_call failed: (Contract error|error) \(code (40|99)\)/);
-  }
-  // A nested ENTRYPOINT_NOT_FOUND (a bad library_call) retries with tokenURI, and the first error stays in the message.
-  const nested = "0x" + Buffer.from("ENTRYPOINT_NOT_FOUND").toString("hex");
-  let n = 0;
-  const msg = await fails(async () => reply({ error: { code: 40, message: "Contract error", data: { revert_error: [n++ === 0 ? nested : "0x4f7574206f6620676173"] } } }));
-  assert.match(msg, /token_uri: starknet_call failed[^\n]*revert reason: ENTRYPOINT_NOT_FOUND\nthen tokenURI: starknet_call failed[^\n]*Out of gas/);
-  // The class's own TS: reasons are known strings, every one of src/settings.cairo; any other TS: string is hidden.
-  const tsReasons = [...readFileSync(new URL("../src/settings.cairo", import.meta.url), "utf8").matchAll(/'(TS: [^']+)'/g)].map((m) => m[1]).filter((m) => m !== "TS: ...");
-  assert.ok(tsReasons.length >= 20);
-  for (const reason of tsReasons) {
-    const m = await fails(async () => reply({ error: { code: 40, message: "x", data: { revert_error: ["0x" + Buffer.from(reason).toString("hex")] } } }));
-    assert.ok(m.includes(`revert reason: ${reason}`), reason);
-  }
-  const sneaky = await fails(async () => reply({ error: { code: 40, message: "x", data: { revert_error: ["0x" + Buffer.from("TS: " + Buffer.from("https://r/k").toString("hex")).toString("hex")] } } }));
-  assert.doesNotMatch(sneaky, /68747470|revert reason: TS/);
-  assert.match(sneaky, /1 other revert string\(s\) not shown/);
 });
 
 test("command line: exit codes, --json, stdin, usage errors", async () => {
@@ -467,19 +391,14 @@ test("command line: exit codes, --json, stdin, usage errors", async () => {
   assert.match(cli(["-"], JSON.stringify({ command: "call", error: "boom https://rpc.test/KEY" })).stderr, /starknet_call failed: error \(code unknown\)/);
   assert.equal(cli([]).status, 2);
   assert.equal(cli(["--bogus"]).status, 2);
-  // The CLI never echoes the RPC URL: not in a --flag=value form, not as a mistaken positional, not in a read error.
-  for (const args of [["--rpc=http://127.0.0.1:1/SECRET_KEY", "--contract", "0x1", "--token", "1"], ["http://127.0.0.1:1/SECRET_KEY", "--contract", "0x1", "--token", "1"], ["http://127.0.0.1:1/SECRET_KEY"], ["--rpcx=http://127.0.0.1:1/SECRET_KEY"], ["--bogus=SECRET_KEY"]]) {
-    r = cli(args);
-    assert.equal(r.status, 2, args.join(" "));
-    assert.doesNotMatch(r.stdout + r.stderr, /SECRET_KEY|127\.0\.0\.1/, args.join(" "));
-  }
-  assert.equal(cli(["/nonexistent"]).status, 2);
-  assert.equal(cli(["-"], "hello").status, 2);
-  assert.equal(cli(["--contract", "0x1", "--token", "1"]).status, 2);
-  // Fetch mode reports an unreachable RPC without printing its URL.
-  r = cli(["--rpc", "http://127.0.0.1:1/SECRET_KEY", "--contract", "0x1", "--token", "1"]);
+  // The CLI never echoes a URL typed by mistake as the input path.
+  r = cli(["http://127.0.0.1:1/SECRET_KEY"]);
   assert.equal(r.status, 2);
   assert.doesNotMatch(r.stdout + r.stderr, /SECRET_KEY|127\.0\.0\.1/);
+  // The removed fetch flags are unknown options.
+  assert.equal(cli(["--rpc", "x", "--contract", "0x1", "--token", "1"]).status, 2);
+  assert.equal(cli(["/nonexistent"]).status, 2);
+  assert.equal(cli(["-"], "hello").status, 2);
   const out = [];
   assert.equal(await run([GOLDEN], (l) => out.push(l)), 0);
   assert.ok(out.length);

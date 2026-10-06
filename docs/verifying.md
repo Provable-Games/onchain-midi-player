@@ -62,11 +62,12 @@ What a class hash fixes, and what the consumer supplies:
 
 ```sh
 npm run validate-token-uri -- token_uri.txt                    # a file, or - for stdin
-npm run validate-token-uri -- --rpc "$RPC" --contract "$NFT" --token 4   # fetch with starknet_call (or set STARKNET_RPC_URL)
 npm run validate-token-uri -- call.json --json                 # machine-readable report
 ```
 
-The input is a `token_uri`, the token JSON, a raw `starknet_call` response (or its result felts), or `sncast --json call` output. The report lists PASS, WARN and FAIL checks with the source of each, the SHA-256 of `PAGE`, and the size of every layer. It exits 0 unless a check fails, 1 on a failure and 2 for a usage error or an input it cannot read or fetch. The RPC URL, which may hold an API key, is never printed, and neither is any of an RPC error's payload: a failed call shows only its code, a fixed name for it, and known revert reasons (`Out of gas`, `ENTRYPOINT_NOT_FOUND`, the class's `TS: ...`).
+The input is a `token_uri`, the token JSON, a raw `starknet_call` response (or its result felts), or `sncast --json call` output. The report lists PASS, WARN and FAIL checks with the source of each, the SHA-256 of `PAGE`, and the size of every layer. It exits 0 unless a check fails, 1 on a failure and 2 for a usage error or an input it cannot read. It doesn't fetch: to check a deployed token, fetch the `token_uri` with the [token-uri-inspector](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill's commands and pass the output in. A saved RPC error response is reported by its code, a fixed name for it and known revert reasons (`Out of gas`, `ENTRYPOINT_NOT_FOUND`, the class's `TS: ...`), never its payload.
+
+The check for external references in the SVG and the page is a best-effort lint. The browser checks are authoritative: `page_check.mjs` and `hosting_check.mjs` load the pages in Chromium, Firefox and WebKit and assert that no network request is made ([Browser validation](development.md#browser-validation)).
 
 | Layer | Checks | Source |
 | --- | --- | --- |

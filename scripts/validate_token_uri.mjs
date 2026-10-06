@@ -9,22 +9,21 @@
 // `npm ci`) whose VERSION equals the class's version().
 //
 // Usage: node scripts/validate_token_uri.mjs <file | -> [options]
-//        node scripts/validate_token_uri.mjs --rpc <url> --contract <address> --token <id> [options]
 //   --expect <sha256>  the engine's SHA-256 (script_sha256()), instead of the record of the checked version
 //   --version <semver> the record of scripts/page_versions.json to check against (default: VERSION)
 //   --json             print the report as JSON
-//   --rpc <url>        fetch the token_uri with starknet_call (or set STARKNET_RPC_URL); the URL is never printed
 //
 // The input file is a token_uri (data:application/json;base64,...), the decoded token JSON, or the
 // output of a token_uri call: a raw starknet_call response (or just its result array of felts), or
-// `sncast --json call` output.
+// `sncast --json call` output. To check a deployed token, fetch it with the token-uri-inspector skill's
+// commands (or examples/stress_nft/scripts/rpc_check.mjs) and pipe the output in.
 //
 // Standards (every check names its source in the report):
 //   OpenSea, Media and traits: https://docs.opensea.io/docs/media-and-traits
 //   OpenSea, Metadata storage: https://docs.opensea.io/docs/metadata-storage
 //   ERC-721, metadata JSON schema: https://eips.ethereum.org/EIPS/eip-721
 // Exit status: 0 when nothing fails (warnings allowed), 1 when a check fails, 2 for a usage error or
-// an input that cannot be read or fetched.
+// an input that cannot be read.
 
 import { readFileSync } from "node:fs";
 import { DOMParser } from "@xmldom/xmldom";
@@ -115,53 +114,6 @@ function utf8(bytes) {
     return { error: `invalid UTF-8 near byte ${lo}` };
   }
 }
-
-/** keccak-256 (not SHA3-256: Starknet selectors use the original padding). */
-export function keccak256(/** @type {Uint8Array} */ data) {
-  const M = (1n << 64n) - 1n;
-  const rol = (/** @type {bigint} */ x, /** @type {number} */ n) => (n ? ((x << BigInt(n)) | (x >> BigInt(64 - n))) & M : x);
-  const A = new Array(25).fill(0n);
-  const block = (/** @type {Uint8Array} */ b) => {
-    for (let i = 0; i < 17; i++) {
-      let lane = 0n;
-      for (let j = 7; j >= 0; j--) lane = (lane << 8n) | BigInt(b[i * 8 + j]);
-      A[i] ^= lane;
-    }
-    let R = 1;
-    for (let round = 0; round < 24; round++) {
-      const C = [0, 1, 2, 3, 4].map((x) => A[x] ^ A[x + 5] ^ A[x + 10] ^ A[x + 15] ^ A[x + 20]);
-      for (let x = 0; x < 5; x++) {
-        const D = C[(x + 4) % 5] ^ rol(C[(x + 1) % 5], 1);
-        for (let y = 0; y < 5; y++) A[x + 5 * y] ^= D;
-      }
-      let [x, y] = [1, 0];
-      let cur = A[1];
-      for (let t = 0; t < 24; t++) {
-        [x, y] = [y, (2 * x + 3 * y) % 5];
-        [cur, A[x + 5 * y]] = [A[x + 5 * y], rol(cur, ((t + 1) * (t + 2)) / 2 % 64)];
-      }
-      for (let yy = 0; yy < 5; yy++) {
-        const T = [0, 1, 2, 3, 4].map((xx) => A[xx + 5 * yy]);
-        for (let xx = 0; xx < 5; xx++) A[xx + 5 * yy] = T[xx] ^ (~T[(xx + 1) % 5] & M & T[(xx + 2) % 5]);
-      }
-      for (let j = 0; j < 7; j++) {
-        R = ((R << 1) ^ ((R >> 7) * 0x71)) % 256;
-        if (R & 2) A[0] ^= 1n << BigInt((1 << j) - 1);
-      }
-    }
-  };
-  const padded = new Uint8Array(Math.ceil((data.length + 1) / 136) * 136);
-  padded.set(data);
-  padded[data.length] ^= 0x01;
-  padded[padded.length - 1] ^= 0x80;
-  for (let o = 0; o < padded.length; o += 136) block(padded.subarray(o, o + 136));
-  const out = Buffer.alloc(32);
-  for (let i = 0; i < 4; i++) out.writeBigUInt64LE(A[i], i * 8);
-  return out;
-}
-
-/** A Starknet entry point selector: the low 250 bits of keccak-256 of the name. */
-export const selector = (/** @type {string} */ name) => "0x" + (BigInt("0x" + keccak256(Buffer.from(name)).toString("hex")) & ((1n << 250n) - 1n)).toString(16).padStart(64, "0");
 
 // ---------------------------------------------------------------------------------------------
 // The SVG: parsed with @xmldom/xmldom, then the parsed tree is checked
@@ -624,7 +576,7 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
 /**
  * Validates a token_uri (or the token JSON) and returns the report.
  * @param {{uri?: string, json?: string, felts?: number}} input
- * @param {{expect?: string, version?: string, rpcResponseBytes?: number}} [opts]
+ * @param {{expect?: string, version?: string}} [opts]
  */
 /** The --expect value as 64 hex digits; the error never repeats the argument, which could be a URL typed by mistake. */
 function normalizeExpect(/** @type {string} */ value) {
@@ -675,7 +627,7 @@ export function validateTokenUri(input, opts = {}) {
       r.sizes.rpc_response_estimated = Math.ceil((JSON_PREFIX.length + Math.ceil(r.sizes.json_bytes / 3) * 4) / 31) * WORD_CHARS;
     }
   }
-  if (jsonText === undefined) return finish(r, opts);
+  if (jsonText === undefined) return finish(r);
   if (jsonText.charCodeAt(0) === 0xfeff) r.fail("json.parse", "the JSON starts with a byte order mark", "ERC-721");
   /** @type {unknown} */
   let json;
@@ -684,10 +636,10 @@ export function validateTokenUri(input, opts = {}) {
     if (jsonText.charCodeAt(0) !== 0xfeff) r.pass("json.parse", "valid JSON", "ERC-721");
   } catch (e) {
     r.fail("json.parse", `invalid JSON: ${/** @type {Error} */ (e).message}`, "ERC-721");
-    return finish(r, opts);
+    return finish(r);
   }
   checkFields(r, json);
-  if (!isObject(json)) return finish(r, opts);
+  if (!isObject(json)) return finish(r);
   const o = /** @type {Record<string, unknown>} */ (json);
 
   /** @type {Buffer | null} */
@@ -738,20 +690,18 @@ export function validateTokenUri(input, opts = {}) {
       }
     }
   }
-  return finish(r, opts);
+  return finish(r);
 }
 
 /**
  * Adds the size checks and returns the report.
  * @param {Report} r
- * @param {{rpcResponseBytes?: number}} opts
  */
-function finish(r, opts) {
-  if (opts.rpcResponseBytes !== undefined) r.sizes.rpc_response_bytes = opts.rpcResponseBytes;
-  const size = r.sizes.rpc_response_bytes ?? r.sizes.rpc_response_estimated;
+function finish(r) {
+  const size = r.sizes.rpc_response_estimated;
   if (size !== undefined) {
     r.sizes.rpc_cap_bytes = RPC_CAP;
-    const how = r.sizes.rpc_response_bytes !== undefined ? "measured" : "estimated";
+    const how = "estimated";
     const pct = `${((100 * size) / RPC_CAP).toFixed(1)}% of the 10 MiB cap`;
     if (size > RPC_CAP) r.fail("size.rpc", `the JSON-RPC response (${how}) is ${size} bytes: over the 10 MiB cap of jsonrpsee nodes`, "gas limits");
     else if (size > RPC_WARN) r.warn("size.rpc", `the JSON-RPC response (${how}) is ${size} bytes, ${pct}`, "gas limits");
@@ -761,72 +711,10 @@ function finish(r, opts) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Fetching through RPC
-// ---------------------------------------------------------------------------------------------
-
-/**
- * Calls `token_uri` (then `tokenURI`, if the contract has no such entry point) with starknet_call.
- * Errors never contain the RPC URL or any of the RPC error's payload (which may echo the URL, which
- * may carry an API key): only its code, a fixed name for it, and known revert reasons.
- * @param {{rpc: string, contract: string, token: string, fetchImpl?: typeof fetch}} p
- * @returns {Promise<{uri: string, felts: number, responseBytes: number}>}
- */
-export async function fetchTokenUri({ rpc, contract, token, fetchImpl = fetch }) {
-  /** @type {bigint} */
-  let id;
-  try {
-    id = BigInt(token);
-  } catch {
-    id = -1n;
-  }
-  if (id < 0n || id >= 1n << 256n) throw new Error("--token is not a u256 (a decimal or 0x hex number)");
-  const calldata = ["0x" + (id & ((1n << 128n) - 1n)).toString(16), "0x" + (id >> 128n).toString(16)];
-  let last = "";
-  let first = "";
-  for (const name of ["token_uri", "tokenURI"]) {
-    let text;
-    try {
-      const res = await fetchImpl(rpc, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "starknet_call", params: { request: { contract_address: contract, entry_point_selector: selector(name), calldata }, block_id: "latest" } }),
-        signal: AbortSignal.timeout(120_000),
-      });
-      if (!res.ok) throw new Error(`the RPC answered HTTP ${res.status}`);
-      text = await res.text();
-    } catch (e) {
-      const err = /** @type {any} */ (e);
-      throw new Error(err.message?.startsWith("the RPC answered") ? err.message : `the RPC request failed (${err.cause?.code ?? err.name})`);
-    }
-    let doc;
-    try {
-      doc = JSON.parse(text);
-    } catch {
-      throw new Error("the RPC response is not JSON");
-    }
-    if (doc.error) {
-      const code = Number(doc.error.code);
-      last = describeRpcError(doc.error, `${name}: `);
-      const reasons = shortStrings(doc.error);
-      if (name === "token_uri" && (code === 21 || reasons.includes("ENTRYPOINT_NOT_FOUND"))) {
-        first = last;
-        continue;
-      }
-      // A nested ENTRYPOINT_NOT_FOUND (a bad library_call) also retries, so keep the first error: it is the one to read.
-      throw new Error(first ? `${first}\nthen ${last}` : last);
-    }
-    if (!Array.isArray(doc.result)) throw new Error("the RPC response has no result array");
-    return { uri: byteArrayFromFelts(doc.result).toString("latin1"), felts: doc.result.length, responseBytes: Buffer.byteLength(text) };
-  }
-  throw new Error(last);
-}
-
-// ---------------------------------------------------------------------------------------------
 // Command line
 // ---------------------------------------------------------------------------------------------
 
-const USAGE = `usage: node scripts/validate_token_uri.mjs <token_uri file | -> [--expect <script_sha256>] [--version <semver>] [--json]
-       node scripts/validate_token_uri.mjs --contract <address> --token <id> [--rpc <url> | STARKNET_RPC_URL] [same options]`;
+const USAGE = `usage: node scripts/validate_token_uri.mjs <token_uri file | -> [--expect <script_sha256>] [--version <semver>] [--json]`;
 
 /**
  * The report as text.
@@ -861,12 +749,12 @@ export async function run(argv, out = console.log, err = console.error) {
     let a = argv[i];
     // `--flag=value`, for the flags that take one.
     const eq = a.indexOf("=");
-    if (a.startsWith("--") && eq > 0 && ["--rpc", "--contract", "--token", "--expect", "--version"].includes(a.slice(0, eq))) {
+    if (a.startsWith("--") && eq > 0 && ["--expect", "--version"].includes(a.slice(0, eq))) {
       argv = [...argv.slice(0, i), a.slice(0, eq), a.slice(eq + 1), ...argv.slice(i + 1)];
       a = argv[i];
     }
     if (a === "--json") opt.json = true;
-    else if (["--rpc", "--contract", "--token", "--expect", "--version"].includes(a)) {
+    else if (["--expect", "--version"].includes(a)) {
       if (argv[i + 1] === undefined) {
         err(`${a} needs a value\n${USAGE}`);
         return 2;
@@ -877,38 +765,28 @@ export async function run(argv, out = console.log, err = console.error) {
       return 2;
     } else pos.push(a);
   }
-  const rpc = /** @type {string | undefined} */ (opt.rpc) ?? process.env.STARKNET_RPC_URL;
-  const fetching = opt.contract !== undefined || opt.token !== undefined || opt.rpc !== undefined;
-  if (pos.length + (fetching ? 1 : 0) !== 1 || (fetching && (!rpc || opt.contract === undefined || opt.token === undefined))) {
+  if (pos.length !== 1) {
     err(USAGE);
     return 2;
   }
   /** @type {{uri?: string, json?: string, felts?: number}} */
   let input;
-  /** @type {number | undefined} */
-  let rpcResponseBytes;
   try {
-    if (fetching) {
-      const f = await fetchTokenUri({ rpc: /** @type {string} */ (rpc), contract: /** @type {string} */ (opt.contract), token: /** @type {string} */ (opt.token) });
-      input = { uri: f.uri, felts: f.felts };
-      rpcResponseBytes = f.responseBytes;
-    } else {
-      // Node's read error names the path, which may be a URL typed by mistake: print its code only.
-      let buf;
-      try {
-        buf = readFileSync(pos[0] === "-" ? 0 : pos[0]);
-      } catch (e) {
-        throw new Error(`cannot read the input (${/** @type {any} */ (e).code ?? "error"}): pass a file, or - for stdin`);
-      }
-      input = parseInput(buf);
+    // Node's read error names the path, which may be a URL typed by mistake: print its code only.
+    let buf;
+    try {
+      buf = readFileSync(pos[0] === "-" ? 0 : pos[0]);
+    } catch (e) {
+      throw new Error(`cannot read the input (${/** @type {any} */ (e).code ?? "error"}): pass a file, or - for stdin`);
     }
+    input = parseInput(buf);
   } catch (e) {
     err(`ERROR ${String(/** @type {Error} */ (e).message)}`);
     return 2;
   }
   let report;
   try {
-    report = validateTokenUri(input, { expect: /** @type {string | undefined} */ (opt.expect), version: /** @type {string | undefined} */ (opt.version), rpcResponseBytes }).toJSON();
+    report = validateTokenUri(input, { expect: /** @type {string | undefined} */ (opt.expect), version: /** @type {string | undefined} */ (opt.version) }).toJSON();
   } catch (e) {
     err(`ERROR ${String(/** @type {Error} */ (e).message)}`);
     return 2;

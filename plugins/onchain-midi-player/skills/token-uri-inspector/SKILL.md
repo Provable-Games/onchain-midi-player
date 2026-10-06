@@ -41,10 +41,9 @@ To check the whole token in one run (it needs `npm ci` once, for the pinned SVG 
 
 ```sh
 npm run validate-token-uri -- token_uri.txt            # or call.json from step 1
-npm run validate-token-uri -- --rpc "$RPC" --contract "$NFT" --token 4   # fetches it; no stderr mixing; STARKNET_RPC_URL works too
 ```
 
-It prints PASS, WARN and FAIL with the source of each, and never prints the RPC URL. Exit status 0 means nothing failed (warnings allowed), 1 a failed check, 2 a usage error or an input it could not read or fetch. It does not rebuild the page (step 5) or compare RPC providers (step 7), and `--expect <script_sha256>` replaces only its engine comparison: the gzip payload and `PAGE` are still compared with the record of `VERSION`, or of `--version`. The steps below show each layer separately.
+It prints PASS, WARN and FAIL with the source of each. It doesn't fetch; fetch with step 1's commands and pass the output in. Exit status 0 means nothing failed (warnings allowed), 1 a failed check, 2 a usage error or an input it could not read. Its external-reference check is a best-effort lint; the repository's browser checks, which assert no network requests in three engines, are authoritative. It does not rebuild the page (step 5) or compare RPC providers (step 7), and `--expect <script_sha256>` replaces only its engine comparison: the gzip payload and `PAGE` are still compared with the record of `VERSION`, or of `--version`. The steps below show each layer separately.
 
 ## 2. Decode
 
