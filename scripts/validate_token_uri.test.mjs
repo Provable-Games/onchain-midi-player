@@ -245,6 +245,8 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   assert.ok(failing(svg("<style>@import'https://example.com/a.css';</style>")).includes("image.self_contained"));
   // A self-contained import (a data: URI) is allowed, quoted or in url().
   assert.deepEqual(failing(svg("<style>@import 'data:text/css,rect{fill:red}'; @import url(data:text/css,a{}) ;</style>")).filter((i) => i.startsWith("image.")), []);
+  assert.deepEqual(failing(svg("<style>@import 'data:text/css,rect{fill:red;stroke:blue}'; @import url(\"data:text/css,a{b:c; d:e}\");</style>")).filter((i) => i.startsWith("image.")), []);
+  assert.ok(failing(svg("<style>@import url('https://example.com/a b.css');</style>")).includes("image.self_contained"));
   // Foreign HTML's resource attributes (srcset, poster, src) and encoding declarations that do not match the UTF-8 bytes.
   assert.ok(failing(svg("<foreignObject><img xmlns='http://www.w3.org/1999/xhtml' srcset='https://example.com/a.png 1x'/></foreignObject>")).includes("image.self_contained"));
   assert.ok(failing(svg("<foreignObject><video xmlns='http://www.w3.org/1999/xhtml' poster='//example.com/p.png' src='https://example.com/v.mp4'/></foreignObject>")).includes("image.self_contained"));

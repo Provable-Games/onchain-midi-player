@@ -193,7 +193,11 @@ function svgReferenceProblems(xml) {
   const urls = (/** @type {string} */ raw, /** @type {number} */ line, /** @type {string} */ where) => {
     const css = unescape(raw.replace(/\/\*[\s\S]*?\*\//g, " ")); // a CSS comment is inert, and splits a token
     for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, line]);
-    for (const m of css.matchAll(/@import\s*(?:url\(\s*)?(['"]?)([^'")\s;]*)\1/gi)) if (external(m[2])) out.push([`${where} has @import ${m[2].slice(0, 60)}, outside the document and data: URIs`, line]);
+    // A quoted target runs to its closing quote (a data: URI may hold spaces and semicolons); an unquoted one to whitespace, ";" or ")".
+    for (const m of css.matchAll(/@import\s*(?:url\(\s*)?(?:'([^']*)'|"([^"]*)"|([^'"\s;)]+))/gi)) {
+      const target = m[1] ?? m[2] ?? m[3];
+      if (external(target)) out.push([`${where} has @import ${target.slice(0, 60)}, outside the document and data: URIs`, line]);
+    }
   };
   for (const el of xml.elements) {
     const local = el.name.slice(el.name.indexOf(":") + 1).toLowerCase();
