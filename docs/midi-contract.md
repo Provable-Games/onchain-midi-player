@@ -1,6 +1,6 @@
 # MIDI contract
 
-What a composer can rely on, and what the page rejects. The `midi` argument of `midi_segment` is a Standard MIDI File passed as a `ByteArray`. The class embeds it as base64 and never parses it, so a file that breaks a rule here does not revert: the page shows the error, ▶ stays disabled, and the art still shows. Check files before they go onchain with [`check-midi`](#checking-midi-files), which runs the page's own check.
+What a composer can rely on, and what the headless player rejects. The `midi` argument of `midi_segment` is a Standard MIDI File passed as a `ByteArray`. The class embeds it as base64 and never parses it, so a file that breaks a rule here does not revert: headless readiness rejects and the NFT chooses how to present the error. The reference keeps art visible and disables its play control. Check files before they go onchain with [`check-midi`](#checking-midi-files), which runs the headless player's own check.
 
 Every rule below is fixed per class hash: the checks are `checkMidi` and `decodeMidi` in [`player/player.js`](../player/player.js), and playback is the pinned engine driven by that player. A new engine pin can change the playback rules. [`scripts/engine_contract.test.mjs`](../scripts/engine_contract.test.mjs) pins the less obvious ones, so a re-pin that changes one of them fails `npm test`.
 
@@ -87,7 +87,7 @@ Ignored, with no effect: every other controller, including bank select (CC0, CC3
 
 ## What's fixed and what's driven
 
-- **Fixed per class hash:** the engine, the player and the page, and so every rule in this section. A new engine or page means a new class hash and `version()`.
+- **Fixed per class hash:** the engine, the headless player and the loader, and so every rule in this section. Changed engine/player/loader artifacts mean a new class hash and `version()`.
 - **Driven on each call:** the MIDI (by the composer), and the `TinySynthSettings` and the art (by the consumer).
 
 The full list is in [Verifying the engine](verifying.md).
@@ -102,7 +102,7 @@ Nothing checks these; a file that ignores them still plays.
 - **Release every note by End-of-Track:** a note still held there sounds into the next pass.
 - **Put the note-off first:** at one tick, put a note's note-off before the next note-on of the same pitch on that channel. The other way round, the note-off releases the new note too.
 - **Prefer note-offs to CC120–127, and avoid CC121** (see the table).
-- **Keep the file small:** `midi_segment` base64-encodes the MIDI at call time, once on its own and twice inside `D`, so gas grows with its length. That is about 14M L2 gas per 1,000 bytes (1.4M with no MIDI and 53.5M with 3,716 bytes, in [the `midi_segment` table](gas.md#midi_segment-by-midi-and-settings-size)).
+- **Keep the file small:** `midi_segment` base64-encodes the MIDI at call time, once on its own and twice inside `D`, so gas grows with its length. That is about 14M L2 gas per 1,000 MIDI bytes in the current [component measurements](gas.md#components).
 
 ## Checking MIDI files
 
@@ -135,7 +135,7 @@ npm run check-midi -- song.mid                        # the same, through npm
     32 bytes
   ```
 - **Exit status.** 0 if every score passes, 1 if any fails, and 2 for a usage error or an input it cannot read (a missing file, invalid JSON, or JSON with no `midi_b64` string), so it can gate another repository's CI.
-- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player, and a declared class keeps the player it was declared with. So use a checkout whose `VERSION` (in `src/page_data.cairo`) is the `version()` of the class your consumer stores: its release tag `v<version>`, or `main` while its `VERSION` matches. In another repository's CI, for example:
+- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player, and a declared class keeps the player it was declared with. So use a checkout whose `VERSION` (in `src/segment_data.cairo`) is the `version()` of the class your consumer stores: its release tag `v<version>`, or `main` while its `VERSION` matches. In another repository's CI, for example:
 
   ```sh
   REF=main   # or v<version>, the release tag of the class you target
@@ -145,7 +145,7 @@ npm run check-midi -- song.mid                        # the same, through npm
 
 ## Previewing a score
 
-[`scripts/preview.mjs`](../scripts/preview.mjs) writes the page a token would get, offline: `PAGE ++ D ++ SVG`, byte for byte as the class and a consumer produce it (built with [`scripts/page.mjs`](../scripts/page.mjs)). It needs Node 22 or later and no `npm install`. Run it from a checkout whose `VERSION` (in `src/page_data.cairo`) is your class's `version()` (see [Agent skills](../README.md#agent-skills)).
+[`scripts/preview.mjs`](../scripts/preview.mjs) writes the composed consumer page a token would get, offline: a complete NFT-owned document with independent library/data/art/bootstrap fragments (built with [`scripts/segments.mjs`](../scripts/segments.mjs)). It needs Node 22 or later and no `npm install`. Run it from a checkout whose `VERSION` (in `src/segment_data.cairo`) is your class's `version()` (see [Agent skills](../README.md#agent-skills)).
 
 ```sh
 npm run preview -- song.mid                                        # default settings, placeholder art
@@ -153,7 +153,7 @@ npm run preview -- song.mid --settings sound.json --svg art.svg   # the token's 
 npm run preview -- song.mid --serve                                # also serve it on http://127.0.0.1:8000/
 ```
 
-- **Checks first.** It runs the MIDI through `checkMidi` and reports it as `check_midi.mjs` does; the settings through `player/validate.js` and `player/encode.js`, the JS reference of `settings::validate` and the encoder, printing the panic data `midi_segment` would revert with; and the SVG through the [art rule](token-uri-layout.md#art-svg-requirements). Any failure exits 1 and writes nothing.
+- **Checks first.** It runs the MIDI through `checkMidi` and reports it as `check_midi.mjs` does; the settings through `player/validate.js` and `player/encode.js`, the JS reference of `settings::validate` and the encoder, printing the panic data `midi_segment` would revert with; and the SVG through the [isolated-art framing](token-uri-layout.md#isolated-community-art). Any failure exits 1 and writes nothing.
 - **Inputs.** The MIDI in any form `check_midi.mjs` reads (one score). `--settings` takes a `TinySynthSettings` value as JSON, in the shape of the `settings` objects in [`tests/fixtures/settings.json`](../tests/fixtures/settings.json) (a whole fixture entry also works; every field is required and unknown fields are rejected), or a page's `SETTINGS` text, so a deployed token's page can be rebuilt from its blocks. `--out` defaults to `preview.html`; `--serve` takes an optional port (0 picks a free one).
 - **Identity.** `npm test` checks that, for the example's token 1, the output equals [`examples/beast_consumer/fixtures/animation.html`](../examples/beast_consumer/fixtures/animation.html), decoded from the golden `token_uri` the contract matches byte for byte, and that the `token_uri` around token 4's page has the digest the contract's is tested against.
 - **Playback** is the same engine and player code as in every token. Audio can still differ slightly across browsers and sample rates. Noise and reverb are generated from a fixed seed, so they are the same on every load at a given sample rate.

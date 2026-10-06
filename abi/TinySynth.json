@@ -318,7 +318,29 @@
     "items": [
       {
         "type": "function",
-        "name": "animation_url_segment",
+        "name": "gunzip_segment",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::byte_array::ByteArray"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "engine_segment",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::byte_array::ByteArray"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "player_segment",
         "inputs": [],
         "outputs": [
           {
@@ -349,33 +371,6 @@
       },
       {
         "type": "function",
-        "name": "base64",
-        "inputs": [
-          {
-            "name": "data",
-            "type": "core::byte_array::ByteArray"
-          }
-        ],
-        "outputs": [
-          {
-            "type": "core::byte_array::ByteArray"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
-        "name": "script_sha256",
-        "inputs": [],
-        "outputs": [
-          {
-            "type": "core::integer::u256"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
         "name": "engine",
         "inputs": [],
         "outputs": [
@@ -392,6 +387,17 @@
         "outputs": [
           {
             "type": "core::felt252"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "script_sha256",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
           }
         ],
         "state_mutability": "view"

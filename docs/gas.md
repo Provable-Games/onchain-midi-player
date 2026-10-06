@@ -1,114 +1,110 @@
-# Gas and limits
+# Gas, payload and class measurements
 
-L2 gas, measured with snforge 0.64.0 and Scarb 2.20.1. The short version, for budgeting a token, is in the [README](../README.md#how-much-fits-gas-and-limits).
+These 0.5.0 measurements use Scarb 2.20.1, snforge 0.64.0 and **Sierra gas** on 2026-10-06. [Machine-readable results](measurements/issue59.json) record the named probes, payload identities and class sizes. The comparison baseline is the verified **pending, unmerged** #57 head `32f776185370ed519e1f14f94a0975a843069702`; rebase and repeat against its final merged state before release. No class was declared or deployed for these checks.
 
-## Measure in Sierra gas
+## Full-size reference and encoding choices
 
-Every figure here is Sierra gas, snforge's default. Cairo-steps accounting gives numbers about 2.5× higher. On the example's full-size token (`snforge test gas_t4_token_uri`, the call with its test setup): about 304M with `--tracked-resource sierra-gas` and about 770M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M, because that account's class is Sierra 1.6, which forces Cairo-steps accounting for the whole transaction.
+The common input is the shiny Warlock SVG (22,733 bytes), a 3,716-byte synthetic MIDI and the three Beast sounds (334 serialized settings bytes). Both versions preserve the same visible/music/background behavior. The replacement safely frames supplied art as an encoded complete `<img>`, with bootstrap and closing HTML after it.
 
-- Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
-- Treat devnet estimates through its predeployed accounts as inflated by about 2.0–2.6×.
+| Full reference | L2 gas | Token URI characters |
+| --- | ---: | ---: |
+| Pending 0.4.0 whole-page baseline, same NFT setup and token 4 | 303,820,178 | 150,101 |
+| 0.5.0 Beast NFT, direct splicing | 429,355,528 | 167,905 |
+| 0.5.0 runtime reconstruction and nested encoding, byte-identical output | 831,613,928 | 167,905 |
 
-## Entry points
+The complete safe framing costs **41.3% more** than the previous art-as-document-tail representation. Direct splicing saves **48.4%** relative to reconstructing/encoding the complete replacement page at runtime. This includes each test's input/setup work, not the SHA-256 golden comparison. Both NFT versions have the same separately measured setup cost, 872,340 gas; subtracting it gives 302,947,838 for the pending baseline and 428,483,188 for the replacement. The runtime reconstruction is a compiled reference function and has no NFT deployment setup, so its comparison is conservative for direct splicing. The reference reuses the encoded metadata image attribute while constructing the complete isolated image fragment, applying the remaining outer layer rather than separately encoding the large image twice. Original SVG bytes remain unchanged; alignment spaces belong to its HTML representation and JSON framing.
 
-Through `ITinySynthLibraryDispatcher` on the declared class, as a consumer calls them, including passing the arguments and the result ([`tests/test_class_gas.cairo`](../tests/test_class_gas.cairo), `snforge test gas_lc`):
+## Fixed padding, dynamic padding and order
 
-| Entry point | L2 gas |
-| --- | --- |
-| `animation_url_segment()` | 8.6M: 0.37M to materialize the constant, the rest to return its 59,220 bytes |
-| `midi_segment(midi, settings)` | 1.6M with no MIDI and the default settings; 60.7M with a 3,716-byte score and the 3 reference sounds (334 bytes of `SETTINGS`); 3,162.7M with that score and the largest valid `SETTINGS` without custom waves (218,264 bytes) |
-| `base64(data)` | 0.2M for 3 bytes, 3.8M for 1,023 bytes, and about 3.6K per input byte for large inputs |
-| `script_sha256()` | 0.1M |
-| `engine()` | 0.1M |
-| `version()` | 0.1M |
-| `license()` | 2.5M |
+The root composition probes use the same complete document/UI and input constants, with a library dispatcher for each provider. They omit NFT deployment/storage/setup, so their totals differ from the Beast NFT totals above. The independent library is the tiny named-export fixture, not a real p5.js payload.
 
-## `midi_segment` by MIDI and `SETTINGS` size
+| Root consumer, same inputs within each pair | Raw fixed padding | L2 gas |
+| --- | ---: | ---: |
+| Full-size MIDI-only | 279 | 405,289,968 |
+| Full-size MIDI-only | 9 | 405,435,158 |
+| Small MIDI-only | 279 | 27,828,578 |
+| Small MIDI-only | 9 | 28,387,168 |
+| Small MIDI + independently called fixture provider | 279 | 28,051,688 |
+| Small MIDI + independently called fixture provider | 9 | 28,697,718 |
+| Full-size MIDI + fixture, art before data | 279 | 405,512,778 |
+| Full-size MIDI + fixture, data before art | 279 | 405,513,178 |
+| Small MIDI + fixture, data before art | 279 | 27,910,258 |
 
-Called directly, net of building the inputs (`snforge test gas_ms gas_b64_midi`). Rows are synthetic scores with the sizes of production Beast scores ([`tests/fixtures/midi/`](../tests/fixtures/midi/README.md)); the gas depends only on the MIDI's length. Columns are `SETTINGS` sizes: the defaults, the 3 Beast reference sounds, 6 timbres, one timbre on every slot (175 timbres of one operator), and the largest valid input without custom waves (175 timbres of 8 filtered operators, every field at its type's extreme). Each cell is the total, then the share spent on base64:
+Use **279-byte padding for fixed library fragments**: it saves 145,190 gas in the full-size base and 558,590 in the small base. The consumer inserts pre-encoded nine-space fragments until the returned-stream position is on a 31-byte word boundary before large constants. The fixed streams themselves are also word-aligned. Art-before-data wins the full input by only 400 gas; data-before-art wins the small input by 141,430. The reference uses art first, while both orders are valid and tested.
 
-| MIDI | 16 bytes | 334 bytes | 504 bytes | 9,836 bytes | 218,264 bytes |
-| --- | --- | --- | --- | --- | --- |
-| none | 1.4M (86%) | 5.8M (63%) | 8.3M (61%) | 144.8M (53%) | 3,000.6M (56%) |
-| 816 bytes | 13.2M (97%) | 17.6M (86%) | 19.7M (82%) | 156.6M (56%) | |
-| 1,541 bytes | 23.0M (97%) | 27.7M (90%) | 29.9M (87%) | 166.8M (59%) | |
-| 2,266 bytes | 33.4M (97%) | 37.4M (92%) | 40.3M (90%) | 176.4M (61%) | |
-| 2,991 bytes | 43.0M (98%) | 47.5M (94%) | 49.9M (92%) | 186.4M (63%) | |
-| 3,716 bytes | 53.5M (98%) | 57.9M (94%) | 60.4M (93%) | 196.5M (65%) | 3,052.3M (57%) |
+Dynamic data stays at **minimum nine-byte padding**. With the same 3,716-byte MIDI/default settings, encoding the dynamic fragment at 9 costs 53,969,010 gas; expanding it to 279 costs 55,997,370. Encoding extra whitespace costs more than the possible append saving. Settings validation and MIDI encoding retain their earlier algorithms; MIDI is encoded verbatim onchain and validated by the browser.
 
-The rest is validating and encoding `SETTINGS` and assembling the page fragment. The library call adds the cost of passing the inputs: 2.8M for the 3,716-byte score with the reference sounds, about 110M with the largest `SETTINGS`.
+## Components
 
-**The MIDI costs about 14M L2 gas per 1,000 bytes:** (53.5M − 1.4M) / 3,716 bytes in the 16-byte column, and 13.9M to 14.0M in the other columns. It is base64-encoded once on its own and twice inside the page fragment. `SETTINGS` costs 13.7M to 14.7M per 1,000 bytes depending on its size, so it is budgeted at 14.5M (see [The size of `SETTINGS`](#the-size-of-settings)).
+| Probe | L2 gas |
+| --- | ---: |
+| Loader constant materialization | 62,450 |
+| Engine constant materialization | 232,050 |
+| Headless player constant materialization | 72,050 |
+| Loader through `library_call` | 1,336,020 |
+| Engine through `library_call` | 5,109,250 |
+| Player through `library_call` | 1,549,620 |
+| Append engine + player, aligned (including materialization) | 2,565,090 |
+| Same append, unaligned | 10,361,090 |
+| Default settings/empty MIDI through `library_call` | 1,877,280 |
+| Three Beast sounds/3,716-byte MIDI through `library_call` | 61,021,398 |
 
-## A full-size token
+Library-call probes include serialization and the declaration test setup (17,420 gas). A direct per-token fragment with default settings and 3,716-byte MIDI costs 53,634,110 gas after subtracting its input-build probe; the three-sound input costs 58,211,508. Large settings/custom-wave validation is still priced by execution, without an arbitrary byte cap. Read exact per-size/validation/encoding probes in the JSON record rather than applying these small-input figures to large settings.
 
-Token 4 of the example ([`examples/beast_consumer`](../examples/beast_consumer/README.md#gas)) is a full-size Beast:
+## Payloads and release artifacts
 
-- **art:** the Beasts renderer's SVG for a shiny, animated Warlock, 22,733 bytes;
-- **music:** a synthetic score the size of the largest Beast score, 3,716 bytes;
-- **sounds:** the 3 reference sounds, 334 bytes of `SETTINGS`;
-- **layout:** word-aligned.
+| Provider fragment | Source bytes | Gzip bytes | Raw HTML bytes | Returned bytes / serialized felts |
+| --- | ---: | ---: | ---: | ---: |
+| Shared loader | 4,465 | inline | 4,743 | 8,432 / 275 |
+| TinySynth engine | 47,212 | 14,339 | 19,530 | 34,720 / 1,123 |
+| Headless player | 8,245 | 3,926 | 5,580 | 9,920 / 323 |
 
-Its `token_uri` is 150,101 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
+Together the fixed returned streams are 53,072 bytes, versus the pending baseline's 59,220-byte fixed page return. Separate source/gzip/raw/double-encoded hashes are in the [current segment manifest](../scripts/library_versions.json); the independent fixture's [record](../tests/fixtures/libraries/manifest.json) is separate. Fixed 279 padding adds 1,024 returned bytes over minimum 9 for this build.
 
-| Piece | L2 gas | Of which base64 |
-| --- | --- | --- |
-| **Whole `BeastLikeNft.token_uri`** | **290.0M** | **239.5M (83%)** |
-| `animation_url_segment()` (library call) | 8.6M | none |
-| `midi_segment()` (library call) | 60.1M | 54.6M |
-| The consumer's base64 (4 library calls): `b64(svg)` 82.6M, `b64(S)` 110.2M, the head and `'}'` about 1M | about 194M | 184.9M |
-| The appends (word-aligned layout; 33.8M unaligned) | 16.7M | none |
-| The rest: SVG and score constants, members, name check | about 10M | none |
+| Release class | Pending 0.4.0 | 0.5.0 |
+| --- | ---: | ---: |
+| Sierra JSON bytes | 1,028,322 | 983,489 |
+| Sierra program felts | 20,192 | 18,764 |
+| CASM JSON bytes | 809,039 | 787,215 |
+| CASM bytecode felts | 30,565 | 29,962 |
 
-- **Most of it is the SVG.** The two base64 passes over the SVG are 67% of the total: the same two passes any onchain SVG NFT makes, encoding the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 85M.
-- **Each byte of SVG** costs about 9K L2 gas in the full `token_uri`: two base64 passes through the library call, plus appending `b64(S)` twice.
-- **Small tokens are cheap:** the example's sample tokens, with a 1 KB SVG and a 112-byte MIDI, cost 34.1M to 34.3M.
+These are compact JSON build-artifact sizes, not declaration fee estimates. CASM generation is enabled locally in the release target; the ABI contains exactly eight MIDI class selectors. Browser startup/gesture-to-playing measurements are recorded separately in the JSON record after real offline Chromium/Firefox/WebKit checks. Audio output is a null sink and timers are best effort; hardware/device and mobile lock-screen validation remains outstanding.
 
-## The size of `SETTINGS`
+## Browser startup and first play
 
-`SETTINGS` has no length limit. The class checks only what the format and the engine require (see [Sound settings](sound-settings.md)). The rest is priced in gas, and served or refused by the RPC node.
+Three fresh offline full-size MIDI-only contexts per build use the same timestamps: init script to NFT control enable, then captured user click to engine `playMIDI`. Medians in milliseconds:
 
-- **Counts are bounded:** at most 175 timbres (each program and drum slot once), 8 operators each, and 256 waves. A wave's length is not bounded, and numbers take any value of their integer type. So without custom waves the largest valid input is 218,264 bytes, and with custom waves there is no largest input.
-- **Cost is linear,** over every size measured (the table below): 13.7M to 14.7M L2 gas per 1,000 bytes through `midi_segment` across the tables here (14.3M from 23 KB to 92 KB), so budget 14.5M L2 gas per 1,000 bytes. About 5–6M of that is encoding; the rest is base64, because `SETTINGS` is encoded twice. Validation never exceeds about 23M, because it checks counts, slots, routes, wave indices and filters, not samples.
-- **Realistic settings are cheap.** The 3 reference sounds (334 bytes) or 6 timbres (504 bytes) add 4–7M over the defaults, about 2% of a full-size token. A full pack of about 20 two- or three-operator timbres is about 2.6 KB, which adds about 40M.
+| Browser | Pending baseline startup | 0.5.0 startup | Pending baseline first play | 0.5.0 first play |
+| --- | ---: | ---: | ---: | ---: |
+| Chromium 153.0.8010.12 | 10.1 | 15.0 | 53.1 | 53.4 |
+| Firefox 155.0 | 12 | 19 | 1,748 | 1,733 |
+| WebKit 26.6 | 12 | 9 | 91 | 82 |
 
-`midi_segment` through the library call, with a 3,716-byte score:
+These small descriptive samples do not establish a performance guarantee. Firefox's null-sink backend accounts for substantial first-play variability (recorded samples span roughly 0.7–1.8 seconds); no device latency is inferred. `scripts/startup_check.mjs` reproduces three current samples and accepts a baseline HTML/token URI file for the same measurement. All three browser engines also pass offline page, strict-CSP sandbox/blocked-media, audio-render and one-minute schedule/drift checks. The drift trend is informational in that one-minute run; device/mobile lock-screen checks remain outstanding.
 
-| `SETTINGS` | Bytes | Calldata (felts) | `midi_segment` |
-| --- | --- | --- | --- |
-| The 3 reference sounds | 334 | 221 | 60.7M |
-| 22 timbres × 8 operators | 23,022 | 2,658 | 385.2M |
-| 44 timbres × 8 operators | 46,034 | 5,188 | 715.0M |
-| 88 timbres × 8 operators | 92,058 | 10,248 | 1,375.3M |
-| The long reference LFSR (32,767 samples) and one drum timbre (net of the 277.9M that builds the table) | 147,532 | | 2,192.8M |
-| The largest input without custom waves: 175 timbres × 8 filtered operators, every field at its type's extreme | 218,264 | | 3,162.7M |
-| 175 timbres × 8 operators, plus 256 waves of 1,024 samples | 1,501,203 | 284,309 | 21,163.3M |
+## Reproduce
 
-- **Where the limits fall.** A full-size token passes 1B at about 49 KB of `SETTINGS`, and the 1.11B transaction cap at about 56 KB. It reaches 10B at about 670 KB.
-- **Every size runs.** The 1.5 MB input takes 174M Cairo steps through `token_uri`. The repository's tests go up to the largest input without custom waves, which takes about 22M steps through `midi_segment`, so [`Scarb.toml`](../Scarb.toml) raises snforge's step limit to 100M.
+```sh
+npm ci
+npm run check:segments
+npm run check:data
+npm run check:measurements
+scarb --release build
+node scripts/measure_payloads.mjs /path/to/verified-pr57-baseline
+snforge test gas_ --tracked-resource sierra-gas
+(cd examples/beast_consumer && snforge test gas_t4_ --tracked-resource sierra-gas)
+```
 
-## Node limits
+For the baseline, check out the exact recorded #57 head separately, enable `casm = true` in its build target for size measurement, and run this small probe in its Beast `tests/test_gas.cairo`, importing the existing NFT dispatcher trait:
 
-A `token_uri` is a view call (`starknet_call`), so what limits it is the node that serves it, not the protocol.
+```cairo
+#[test]
+fn gas_issue59_baseline_token4() {
+    let (nft, _) = crate::test_token_uri::setup();
+    assert!(nft.token_uri(4).len() > 0);
+}
+```
 
-**No protocol limit applies to a large view call.**
+Run `snforge test gas_issue59_baseline_token4 --tracked-resource sierra-gas` there. The ordinary baseline token-4 SHA-256 assertion adds substantial hash gas and is not a valid token-URI execution comparison. Run browser checks with the pinned Playwright builds and a PulseAudio null sink for Firefox; see [development](development.md).
 
-- `call_contract` and `library_call` have no calldata or retdata cap and no per-felt syscall charge. Their cost is flat: about 91.6K L2 gas for `CallContract` and 89.2K for `LibraryCall`.
-- Moving data costs what the Serde code costs: about 3.3K gas per `felt252` per hop, and about 4.3K per 31-byte `ByteArray` chunk per hop.
-- Call depth is capped at 50.
-- The 1.11B L2 gas cap per transaction and the 5,000-felt calldata cap apply only to transactions, never to `starknet_call`. A view call measured at 5.38B passed.
-
-**Node limits**, from their configuration or code:
-
-| Node | Gas for a view call | Other limits |
-| --- | --- | --- |
-| Pathfinder | 10B, compiled in (`default_initial_gas_cost`) | Top-level `starknet_call` calldata at most 10,000 felts, which `token_uri(token_id)` never approaches; 120 s timeout |
-| Juno | `--rpc-call-max-gas`, 100M by default (raisable) | No cap on a single response |
-| Madara | 10B | Requests and responses at most 15 MiB |
-| jsonrpsee, and StarkWare's `apollo_rpc` | | Responses at most 10 MiB: a returned `ByteArray` of about 4.85 MB, or about 2.7 MB of `SETTINGS` |
-| Katana (development) | 1B by default | |
-| Hosted providers | Undocumented | Each provider runs one of the nodes above with its own configuration, so a full-size token can succeed on one and revert `Out of gas` on another. On Sepolia, with [`examples/stress_nft`](../examples/stress_nft/README.md): zan.top and Cartridge served up to 9.99B and reverted `Out of gas` at 10.1B; dRPC served 600M and reverted at 800M; PublicNode served 60M and reverted at 100.3M, just above Juno's 100M default |
-
-- A full-size token with the reference sounds (290.0M) already needs more than Juno's default.
-- Check a full-size token through the providers your marketplaces and indexers use. The [`token-uri-inspector`](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill shows how. The [stress NFT](../examples/stress_nft/README.md) has twenty tokens from 30M to 10B gas and a script that calls them through any list of providers.
-- **Keep every class in the call chain at Sierra 1.7 or later.** If any class in the chain is Cairo 0 or Sierra before 1.7 (a proxy pointing at an old class, for example), that frame and everything below it switches to Cairo-steps accounting. It is then capped at 10M steps (Juno: 4M), about 1B gas. `midi_segment` alone takes about 22M steps with the largest `SETTINGS` without custom waves.
+RPC call gas/response limits remain provider-specific. The stress example retains its 20 calibrated large tokens and opt-in gas/RPC probes; do not infer public RPC support or a production transaction budget from unit-test execution alone.

@@ -1,47 +1,10 @@
-// Offline reference for the beast_consumer example. Node built-ins only.
-//
-// This module is a deliberately independent JavaScript re-implementation of everything the Cairo
-// side of the example produces:
-//
-//   - the TinySynth class: animation_url_segment, D and midi_segment, from the repository's
-//     JS reference (scripts/page.mjs): the real PAGE, built by scripts/build_page.mjs into
-//     tests/fixtures/page.html, and SETTINGS from player/encode.js, which the root parity tests tie
-//     to Cairo
-//   - BeastLikeNft: token table, render_svg, JSON members, MIDI, TinySynthSettings, and the token_uri
-//     it splices together (the Beasts layout, also from scripts/page.mjs, with the word alignment
-//     of `consumerPieces(..., {align: true})`)
-//   - token 4, a full-size Beast: the Beasts renderer's SVG (tests/fixtures/beasts/), a synthetic
-//     score the size of the largest production score (tests/fixtures/midi/) and the reference
-//     sounds (scripts/settings_fixtures.mjs)
-//
-// gen_fixtures.mjs builds every token's token_uri twice (naive one-pass nesting and the spliced
-// layout), checks they are equal, and writes the golden file the Cairo tests compare against. If
-// the Cairo and the JS ever drift, the golden test fails.
-
+// Independent JS reference for NFT-owned metadata/art/music and complete document composition.
 import { readFileSync } from 'node:fs';
 import { BEAST_SETTINGS } from '../../../scripts/settings_fixtures.mjs';
-import {
-  ART_OPEN, IMAGE_KEY, MIDI_OPEN, SETTINGS_OPEN, URL_KEY, b64, blen, bytes, consumerPieces, decodeTokenUri,
-  dFragment, naiveTokenJson, naiveTokenUri, padLen, pageHtml, pageScripts, segmentFor, settingsText, sha256, spaces,
-  spliceTokenUri, strictB64Decode, withGzipPayload,
-} from '../../../scripts/page.mjs';
-
-export {
-  ART_OPEN, IMAGE_KEY, MIDI_OPEN, SETTINGS_OPEN, URL_KEY, b64, blen, bytes, consumerPieces, decodeTokenUri,
-  dFragment, naiveTokenJson, naiveTokenUri, padLen, pageScripts, segmentFor, sha256, spaces, spliceTokenUri,
-  strictB64Decode, withGzipPayload,
-};
-
-/** PAGE: the real page of this class version (tests/fixtures/page.html), 9-aligned. */
-export const page = () => pageHtml();
-
-/** animation_url_segment(): the segment for this class version's PAGE. */
-export const animationUrlSegment = () => segmentFor(page());
-
-/** SETTINGS, validated and encoded by the repository's JS reference. */
+import { b64, blen, bytes, decodeTokenUri, dFragment, settingsText, sha256, spaces, padLen, strictB64Decode } from '../../../scripts/segments.mjs';
+import { consumerPieces, compositionHtml, spliceTokenUri, naiveTokenUri, naiveTokenJson } from '../../../scripts/composition.mjs';
+export { b64, blen, bytes, decodeTokenUri, dFragment, sha256, spaces, padLen, strictB64Decode, consumerPieces, spliceTokenUri, naiveTokenUri, naiveTokenJson };
 export const settingsAscii = settingsText;
-
-/** midi_segment(midi, settings) = b64(b64(D)). */
 export const midiSegment = (midi, settings) => b64(b64(dFragment(midi, settings).d));
 
 // ---------------------------------------------------------------------------------------------
@@ -179,36 +142,6 @@ export function settingsFor(tier) {
   return { quality: 1, reverb: REVERB_BY_TIER[tier], master_vol: 40, voices: 64, waves: [], timbres: TIMBRES };
 }
 
-/** Checks the MIDI fixture: chunk lengths, End-of-Track on a bar boundary, running status used. */
-export function validateMidi(m) {
-  const tag = (p) => m.toString('latin1', p, p + 4);
-  if (tag(0) !== 'MThd' || m.readUInt32BE(4) !== 6) throw new Error('MThd');
-  const ppq = m.readUInt16BE(12);
-  if (tag(14) !== 'MTrk') throw new Error('MTrk');
-  const end = 22 + m.readUInt32BE(18);
-  if (end !== m.length) throw new Error(`MTrk length ${m.readUInt32BE(18)} != ${m.length - 22}`);
-  let p = 22, tick = 0, run = 0, runningUsed = 0, offByVel0 = 0, eot = -1, notes = 0, drumHits = 0;
-  const vlq = () => { let v = 0, b; do { b = m[p++]; v = v * 128 + (b & 127); } while (b & 128); return v; };
-  while (p < end) {
-    tick += vlq();
-    let st = m[p];
-    if (st & 0x80) p++; else { st = run; runningUsed++; }
-    if (st === 0xff) { const ty = m[p++]; const len = vlq(); if (ty === 0x2f) eot = tick; p += len; run = 0; continue; }
-    // SysEx (F0) and escape (F7) events: VLQ length, then that many bytes. They cancel running status.
-    if (st === 0xf0 || st === 0xf7) { const len = vlq(); p += len; run = 0; continue; }
-    if (!st) throw new Error('running status without a status byte');
-    run = st;
-    const hi = st & 0xf0; const d1 = m[p++]; const d2 = hi === 0xc0 || hi === 0xd0 ? 0 : m[p++];
-    if (hi === 0x90 && d2 === 0) offByVel0++;
-    if (hi === 0x90 && d2 > 0) { if ((st & 0x0f) === 9) drumHits++; else notes++; }
-    void d1;
-  }
-  if (p !== end || eot !== tick) throw new Error('End-of-Track must be the last event');
-  if (eot % (ppq * 4)) throw new Error('End-of-Track not on a 4/4 bar boundary');
-  if (!runningUsed || !offByVel0) throw new Error('fixture should exercise running status and vel-0 note-off');
-  return { ppq, eotTick: eot, bars: eot / (ppq * 4), runningUsed, offByVel0, notes, drumHits };
-}
-
 /**
  * Test variant of MIDI with two complete SysEx events (00 F0 01 F7, and GM System On:
  * 00 F0 05 7E 7F 09 01 F7) inserted after the tempo meta event, MTrk length adjusted. Same notes,
@@ -227,45 +160,8 @@ export function midiWithSysex() {
 // The art rule: the SVG must never contain `</script` (docs/token-uri-layout.md: "Art (SVG) requirements")
 // ---------------------------------------------------------------------------------------------
 
-/**
- * The consumer-side check of the art rule, for tests and tooling (the class never sees the SVG).
- * The SVG is the raw text of the page's last block, `<script type="text/plain" id="art">`, which
- * the HTML parser ends at the first `</script`. Returns `svg`; throws if it contains `</script` in
- * any letter case. tests/test_art_safety.cairo has the same check in Cairo.
- */
-export function assertArtSafe(svg) {
-  const at = svg.search(/<\/script/i);
-  if (at >= 0) throw new Error(`SVG contains ${JSON.stringify(svg.slice(at, at + 8))} at byte ${Buffer.byteLength(svg.slice(0, at))}`);
-  return svg;
-}
-
-/**
- * The art block of a decoded animation_url HTML as the HTML parser reads it: the raw text from the
- * art block's opening tag up to the first `</script` (ASCII case-insensitive) followed by
- * whitespace, `/` or `>`, where the tokenizer ends the element; `rest` is everything after that,
- * which the parser reads as page markup. A model of the one tokenizer rule that applies to a valid
- * page, whose art block runs to the end of the document. It leaves out the `<!--` ... `<script`
- * escape states, which only matter for an SVG that already breaks the rule; browser_check.mjs
- * compares it with Chromium.
- */
-export function parseArtBlock(html) {
-  const at = html.indexOf(ART_OPEN);
-  if (at < 0) throw new Error('no art block');
-  const art = html.slice(at + ART_OPEN.length);
-  const end = art.search(/<\/script[\t\n\f\r />]/i);
-  return end < 0 ? { art, rest: '' } : { art: art.slice(0, end), rest: art.slice(end) };
-}
-
-/**
- * Test variant of render_svg that breaks the art rule: a `<script>` element right after the
- * opening `<svg>` tag. Valid SVG, and harmless in an `<img>`, but its `</script>` ends the page's
- * art block (see parseArtBlock).
- */
-export function unsafeSvg(name, tier) {
-  const svg = renderSvg(name, tier);
-  const at = svg.indexOf('>') + 1;
-  return svg.slice(0, at) + '<script>/* a script in the art */</script>' + svg.slice(at);
-}
+/** Art is isolated as an encoded image, so script-like source bytes are supported. */
+export const scriptTextSvg = (name, tier) => renderSvg(name,tier).replace('</svg>','<script>window.artInjection = true;</script></svg>');
 
 // ---------------------------------------------------------------------------------------------
 // token_uri: spliced (what the contract does) and naive (one pass, standard nesting)
@@ -275,12 +171,12 @@ export function tokenParts(tokenId) {
   const t = TOKENS[tokenId];
   if (!t) throw new Error(`unknown token ${tokenId}`);
   const real = t.real ? realBeast() : null;
-  const svg = assertArtSafe(real ? real.svg : renderSvg(t.name, t.tier));
+  const svg = real ? real.svg : renderSvg(t.name, t.tier);
   const mem = members(tokenId, t.name, t.tier);
   const midi = real ? real.midi : MIDI;
   const settings = real ? real.settings : settingsFor(t.tier);
   const { d, pad: dPad } = dFragment(midi, settings);
-  return { ...t, tokenId, svg, mem, midi, settings, d, dPad, pageHtml: page(), ...consumerPieces(mem, svg, ALIGN) };
+  return { ...t, tokenId, svg, mem, midi, settings, d, dPad, svgB64: b64(svg) };
 }
 
 /** The example's consumer word-aligns its two largest appends (see consumerPieces). */
@@ -289,10 +185,10 @@ export const ALIGN = { align: true };
 /** What the contract assembles, piece by piece. */
 export const tokenUriSpliced = (tokenId) => spliceTokenUri(tokenParts(tokenId), ALIGN);
 
-/** The decoded animation_url HTML: PAGE ++ D ++ SVG. */
+/** The decoded animation_url HTML: the complete NFT-owned document. */
 export const animationHtml = (tokenId) => {
   const p = tokenParts(tokenId);
-  return p.pageHtml + p.d + p.svg;
+  return compositionHtml(p, ALIGN);
 };
 
 export const tokenJsonNaive = (tokenId) => naiveTokenJson(tokenParts(tokenId), ALIGN);

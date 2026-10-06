@@ -1,0 +1,412 @@
+{
+  "date": "2026-10-06",
+  "toolchain": {
+    "scarb": "2.20.1",
+    "snforge": "0.64.0",
+    "node": "24.19.0",
+    "resource": "sierra-gas"
+  },
+  "baseline": {
+    "pr": 57,
+    "state": "open/unmerged",
+    "head": "32f776185370ed519e1f14f94a0975a843069702",
+    "full_token_uri_l2_gas": 303820178,
+    "setup_l2_gas": 872340
+  },
+  "payload": {
+    "version": "0.5.0",
+    "input": {
+      "svg_bytes": 22733,
+      "midi_bytes": 3716,
+      "settings_bytes": 334
+    },
+    "full_token_uri_chars": 167905,
+    "fixed279": {
+      "gunzip": {
+        "source_sha256": "67323cdaf555c82fe2f7972b08f983e54094041feb3ab566f7c9b6192195cc75",
+        "source_len": 4465,
+        "raw_sha256": "0a09fbead9886c2acd67493bd3a286d5f2e82613b7265c59b99ce801d7b26f2f",
+        "raw_len": 4743,
+        "returned_sha256": "2184f37c2f865efcf5375259d3f57ef6db2aef6d30d438249c2def1ccb972fef",
+        "returned_len": 8432,
+        "returned_felts": 275
+      },
+      "engine": {
+        "source_sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74",
+        "source_len": 47212,
+        "raw_sha256": "c1ff91769d9e1913f8e38060352ea8e96cea55808423b732d1cd7d62b0d790d7",
+        "raw_len": 19530,
+        "returned_sha256": "8fb5e2e140f596cbfd3c00ec125e2e9ae47fb54fd8dcbd6c68075d6f55051c82",
+        "returned_len": 34720,
+        "returned_felts": 1123,
+        "gzip_sha256": "04b704009c0b07c6fde9bedabba37aca0b923c5c79bdf4b0428fa4f88065015b",
+        "gzip_len": 14339,
+        "gzip_base64_len": 19120
+      },
+      "player": {
+        "source_sha256": "7975dea6f4fbe547fe12ddfe31777b85b04e91ef5e4fbfdb6925989c7398c567",
+        "source_len": 8245,
+        "raw_sha256": "3c290a2400520257d3ed322d5a6e93164913cec43de9d83058dfeb5c52845cc6",
+        "raw_len": 5580,
+        "returned_sha256": "abea84a5ddf7cc9877eb05859d8bc1485a29935de3e45b3cec43f4daeab4a2d8",
+        "returned_len": 9920,
+        "returned_felts": 323,
+        "gzip_sha256": "50646e4ebf5d92c6ebfc551c2e8fa88fa5d211b8f2608d24a4f530fe9842295e",
+        "gzip_len": 3926,
+        "gzip_base64_len": 5236
+      }
+    },
+    "fixed9": {
+      "gunzip": {
+        "source_sha256": "67323cdaf555c82fe2f7972b08f983e54094041feb3ab566f7c9b6192195cc75",
+        "source_len": 4465,
+        "raw_sha256": "67c6597fbc2ba83c8395c90de755f6c27d0c3e9efefc6f63811d46b35a465146",
+        "raw_len": 4599,
+        "returned_sha256": "e844b85bb2361c6dfd0e180bb79da726781be6852a2df273512cc99471c34d76",
+        "returned_len": 8176,
+        "returned_felts": 266
+      },
+      "engine": {
+        "source_sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74",
+        "source_len": 47212,
+        "raw_sha256": "ac76ce73ea19899df9718be7ba372aec62d79de938642880298d2ff8ab73e1c7",
+        "raw_len": 19332,
+        "returned_sha256": "d63dafbfab50decd23149f686648edc9b5d175fa54e93a4de2d88ef18bb3659b",
+        "returned_len": 34368,
+        "returned_felts": 1111,
+        "gzip_sha256": "04b704009c0b07c6fde9bedabba37aca0b923c5c79bdf4b0428fa4f88065015b",
+        "gzip_len": 14339,
+        "gzip_base64_len": 19120
+      },
+      "player": {
+        "source_sha256": "7975dea6f4fbe547fe12ddfe31777b85b04e91ef5e4fbfdb6925989c7398c567",
+        "source_len": 8245,
+        "raw_sha256": "fd7f4c3db9d90c1a5910199bc4107098d324c26cca3829915a582bc37a05b647",
+        "raw_len": 5346,
+        "returned_sha256": "e1a56a939129574ab40cfef148bf981ed5a69ce8182134f2af7ee3e83c4f3e5e",
+        "returned_len": 9504,
+        "returned_felts": 309,
+        "gzip_sha256": "50646e4ebf5d92c6ebfc551c2e8fa88fa5d211b8f2608d24a4f530fe9842295e",
+        "gzip_len": 3926,
+        "gzip_base64_len": 5236
+      }
+    },
+    "current_class": {
+      "sierra_file_bytes": 983489,
+      "sierra_compact_json_bytes": 983489,
+      "sierra_felts": 18764,
+      "casm_file_bytes": 787215,
+      "casm_compact_json_bytes": 787215,
+      "casm_bytecode_felts": 29962
+    },
+    "baseline_class": {
+      "sierra_file_bytes": 1028322,
+      "sierra_compact_json_bytes": 1028322,
+      "sierra_felts": 20192,
+      "casm_file_bytes": 809039,
+      "casm_compact_json_bytes": 809039,
+      "casm_bytecode_felts": 30565
+    }
+  },
+  "root_gas": {
+    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_threshold_1": 5503580,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_beast_d": 16597858,
+    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_threshold_1_build": 149260,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_max_build": 1032180,
+    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_heaviest_build": 336860,
+    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_threshold_3": 7896370,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_default_no_midi": 1877280,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_script_sha256": 113740,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_slots_build": 7629700,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_beast_full": 58788068,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_six_build": 701160,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_version": 111150,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_default_build": 165200,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_six_build": 368540,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_slots_build": 7297080,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_beast_d": 5855078,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_default_full": 53986910,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_beast_build": 243940,
+    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_heaviest": 12999020,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_six_build": 451920,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_beast_build": 327320,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_beast_d": 8452678,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_beast_full": 27819098,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_six_d": 7136576,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_slots_build": 7380460,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_beast_d": 2482518,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_beast_full": 6689798,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_default_d": 14339180,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_beast_full": 18199058,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_default_build": 352800,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_default_full": 13387650,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_slots_d": 77311400,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_six_d": 9728376,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_filters_heaviest": 62909556,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_beast_heaviest": 61021398,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_six_full": 20883146,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_default_full": 33501900,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_default_d": 8803670,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_license": 2519600,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_slots_d": 83269160,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_six_d": 17844006,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_engine_segment": 5109250,
+    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_veteran": 10256950,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_beast_build": 514920,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_six_full": 60838646,
+    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_veteran_build": 275220,
+    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_threshold_3_build": 213580,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_declare": 17420,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_six_build": 639520,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_six_build": 577880,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_default_d": 11380830,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_slots_full": 154505450,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_beast_d": 13625428,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_slots_build": 7568060,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_six_d": 14902506,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_default_build": 291160,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_default_full": 43547630,
+    "onchain_midi_player_tests::test_composition_gas::gas_composition_279_fixture": 28051688,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_engine": 111250,
+    "onchain_midi_player_tests::test_composition_gas::gas_composition_279_midi_only": 27828578,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_slots_d": 91395340,
+    "onchain_midi_player_tests::test_composition_gas::gas_composition_9_fixture": 28697718,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_slots_d": 85872330,
+    "onchain_midi_player_tests::test_composition_gas::gas_dynamic_data_279": 55997370,
+    "onchain_midi_player_tests::test_composition_gas::gas_dynamic_data_9": 53969010,
+    "onchain_midi_player_tests::test_segment_gas::gas_append_aligned": 2565090,
+    "onchain_midi_player_tests::test_segment_gas::gas_materialize_loader": 62450,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_beast_full": 48536688,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_slots_d": 88442990,
+    "onchain_midi_player_tests::test_segment_gas::gas_lc_player": 1549620,
+    "onchain_midi_player_tests::test_segment_gas::gas_lc_loader": 1336020,
+    "onchain_midi_player_tests::test_segment_gas::gas_materialize_engine": 232050,
+    "onchain_midi_player_tests::test_settings_gas::gas_0_timbres_build": 19810,
+    "onchain_midi_player_tests::test_segment_gas::gas_append_unaligned": 10361090,
+    "onchain_midi_player_tests::test_settings_gas::gas_6_timbres_encode": 3331120,
+    "onchain_midi_player_tests::test_settings_gas::gas_0_timbres_validate": 29980,
+    "onchain_midi_player_tests::test_composition_gas::gas_composition_9_midi_only": 28387168,
+    "onchain_midi_player_tests::test_composition_gas::gas_composition_279_data_first": 27910258,
+    "onchain_midi_player_tests::test_settings_gas::gas_filters_validate": 469026,
+    "onchain_midi_player_tests::test_segment_gas::gas_materialize_player": 72050,
+    "onchain_midi_player_tests::test_settings_gas::gas_every_slot_build": 7296910,
+    "onchain_midi_player_tests::test_settings_gas::gas_6_timbres_build": 368370,
+    "onchain_midi_player_tests::test_settings_gas::gas_0_timbres_encode": 126880,
+    "onchain_midi_player_tests::test_settings_gas::gas_filters_encode": 2962150,
+    "onchain_midi_player_tests::test_settings_gas::gas_every_slot_encode": 65520410,
+    "onchain_midi_player_tests::test_settings_gas::gas_every_slot_validate": 16871240,
+    "onchain_midi_player_tests::test_settings_gas::gas_6_timbres_validate": 613296,
+    "onchain_midi_player_tests::test_settings_gas::gas_filters_build": 275810,
+    "onchain_midi_player_tests::test_settings_gas::gas_one_wave_build": 270210,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_slots_full": 195878230,
+    "onchain_midi_player_tests::test_settings_gas::gas_one_filter_validate": 364138,
+    "onchain_midi_player_tests::test_settings_gas::gas_reference_waves_build": 946040,
+    "onchain_midi_player_tests::test_settings_gas::gas_one_wave_encode": 2544420,
+    "onchain_midi_player_tests::test_settings_gas::gas_reference_waves_encode": 9161280,
+    "onchain_midi_player_tests::test_settings_gas::gas_structural_max_validate": 22842220,
+    "onchain_midi_player_tests::test_settings_gas::gas_structural_max_build": 699390,
+    "onchain_midi_player_tests::test_settings_gas::gas_waves_256_validate": 9135276,
+    "onchain_midi_player_tests::test_settings_gas::gas_waves_256_build": 8511920,
+    "onchain_midi_player_tests::test_settings_gas::gas_reference_waves_validate": 1219238,
+    "onchain_midi_player_tests::test_settings_gas::gas_one_wave_validate": 314816,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_one_filter_heaviest": 61216748,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_slots_full": 186285130,
+    "onchain_midi_player_tests::test_settings_gas::gas_long_lfsr_validate": 277917959,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_one_wave_heaviest": 61478736,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_beast_build": 453280,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_default_build": 229520,
+    "onchain_midi_player_tests::test_settings_gas::gas_waves_256_encode": 73753640,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_reference_waves_heaviest": 77284978,
+    "onchain_midi_player_tests::test_composition_gas::gas_full_base_9": 405435158,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_beast_full": 38495198,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_slots_full": 166364820,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_default_full": 1696500,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_max_build": 699560,
+    "onchain_midi_player_tests::test_composition_gas::gas_composition_runtime_full_page": 328751248,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_default_d": 229210,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_beast_build": 576560,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_six_full": 9055496,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_default_d": 3586150,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_slots_build": 7442100,
+    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_genesis": 3122360,
+    "onchain_midi_player_tests::test_composition_gas::gas_full_fixture_data_first": 405513178,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_default_full": 23607060,
+    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_genesis_build": 87620,
+    "onchain_midi_player_tests::test_composition_gas::gas_full_base_279": 405289968,
+    "onchain_midi_player_tests::test_settings_gas::gas_long_lfsr_build": 277876003,
+    "onchain_midi_player_tests::test_composition_gas::gas_full_fixture_art_first": 405512778,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_six_build": 513560,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_six_full": 50874706,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_default_d": 6194500,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_six_full": 40835176,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_slots_build": 7506420,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_six_d": 3770816,
+    "onchain_midi_player_tests::test_settings_gas::gas_one_filter_build": 244570,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_beast_build": 388960,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_default_build": 20180,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_six_d": 12331546,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_default_build": 103560,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_beast_d": 11062048,
+    "onchain_midi_player_tests::test_settings_gas::gas_one_filter_encode": 2282490,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_six_full": 30975336,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_slots_d": 80677260,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_slots_full": 176070900,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_slots_full": 206760720,
+    "onchain_midi_player_tests::test_settings_gas::gas_long_lfsr_encode": 1112994863,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_max_d": 1381307080,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_max_d": 1367191340,
+    "onchain_midi_player_tests::test_settings_gas::gas_structural_max_encode": 1297230120,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_max_full": 3101190370,
+    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_max_full": 3049092920,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_max_heaviest": 3210559700,
+    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_long_lfsr_heaviest": 2502797829
+  },
+  "beast_gas": {
+    "beast_consumer_tests::test_gas::gas_t4_setup": 872340,
+    "beast_consumer_tests::test_gas::gas_t4_direct_splicing": 429355528,
+    "beast_consumer_tests::test_gas::gas_t4_runtime_full_page": 831613928
+  },
+  "limitations": [
+    "Prerequisite #57 is unmerged; rebase/revalidate against its final merged state.",
+    "Headless null-sink audio; hardware and mobile lock-screen behavior remain device validation.",
+    "One-minute drift probe asserts scheduling; drift is informational under --drift-info.",
+    "Fixture measurements are not p5.js measurements."
+  ],
+  "browsers": {
+    "method": "Full-size MIDI-only NFT, three fresh contexts per build. Startup: init-script timestamp to NFT control enable. First play: click capture timestamp to engine playMIDI call. Offline, null-sink audio. Samples are descriptive, not a performance guarantee.",
+    "versions": {
+      "chromium": "153.0.8010.12",
+      "firefox": "155.0",
+      "webkit": "26.6"
+    },
+    "samples": {
+      "chromium": {
+        "pending_baseline": [
+          {
+            "startup_ms": 9.599999964237213,
+            "first_play_ms": 65.69999998807907
+          },
+          {
+            "startup_ms": 12.600000023841858,
+            "first_play_ms": 53.09999996423721
+          },
+          {
+            "startup_ms": 10.100000023841858,
+            "first_play_ms": 52.30000001192093
+          }
+        ],
+        "current": [
+          {
+            "startup_ms": 15,
+            "first_play_ms": 65
+          },
+          {
+            "startup_ms": 15.5,
+            "first_play_ms": 53.40000003576279
+          },
+          {
+            "startup_ms": 14.5,
+            "first_play_ms": 53.09999996423721
+          }
+        ]
+      },
+      "firefox": {
+        "pending_baseline": [
+          {
+            "startup_ms": 12,
+            "first_play_ms": 689
+          },
+          {
+            "startup_ms": 13,
+            "first_play_ms": 1768
+          },
+          {
+            "startup_ms": 11,
+            "first_play_ms": 1748
+          }
+        ],
+        "current": [
+          {
+            "startup_ms": 31,
+            "first_play_ms": 1100
+          },
+          {
+            "startup_ms": 19,
+            "first_play_ms": 1733
+          },
+          {
+            "startup_ms": 18,
+            "first_play_ms": 1753
+          }
+        ]
+      },
+      "webkit": {
+        "pending_baseline": [
+          {
+            "startup_ms": 12,
+            "first_play_ms": 87
+          },
+          {
+            "startup_ms": 12,
+            "first_play_ms": 91
+          },
+          {
+            "startup_ms": 9,
+            "first_play_ms": 105
+          }
+        ],
+        "current": [
+          {
+            "startup_ms": 10,
+            "first_play_ms": 83
+          },
+          {
+            "startup_ms": 9,
+            "first_play_ms": 80
+          },
+          {
+            "startup_ms": 9,
+            "first_play_ms": 82
+          }
+        ]
+      }
+    },
+    "validation": {
+      "page": "All fixture pages, full NFT art, generic loader lifecycle/errors, independent custom controls, optional-media fallback",
+      "hosting": "Six allow-scripts sandbox cases per engine; blob/blocked/omitted media CSP in data/srcdoc frames",
+      "render": "All retained PCM/reference-timbre/custom-wave/filter/determinism checks passed",
+      "drift": "One minute per engine, schedule/rests/cancellation/restarts asserted; audio/image trend informational under --drift-info"
+    }
+  },
+  "validation": {
+    "root_js": {
+      "passed": 302,
+      "failed": 0
+    },
+    "beast_js": {
+      "passed": 29,
+      "failed": 0
+    },
+    "stress_js": {
+      "passed": 13,
+      "failed": 0
+    },
+    "root_cairo": {
+      "passed": 269,
+      "failed": 0,
+      "ignored": 0
+    },
+    "beast_cairo": {
+      "passed": 27,
+      "failed": 0,
+      "ignored": 1
+    },
+    "stress_cairo": {
+      "passed": 10,
+      "failed": 0,
+      "ignored": 20
+    },
+    "type_checks": "Headless player, loader and NFT-owned UI passed",
+    "generated": "Segments, settings/data, measurement variants and release ABI byte-stable"
+  }
+}

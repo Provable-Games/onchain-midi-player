@@ -1,12 +1,10 @@
 # Syncing the music with the art
 
-## How the player handles the art
+## NFT-owned pass synchronization
 
-On ▶ the player reloads the MIDI from tick 0 and restarts the art when tick 0 is heard: at TinySynth's `startTime` (when tick 0 of the pass sounds) plus the audio output latency, it swaps in a fresh `<img>` with a distinct URL, so the browser starts a new animation timeline. It then does the same at every pass ([`player/player.js`](https://github.com/Provable-Games/onchain-midi-player/blob/main/player/player.js), steps 3–4 of its header; see [The player page](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/token-uri-layout.md#the-player-page)).
+The headless player emits onPassStart at each audible boundary (engine startTime plus outputLatency, in AudioContext seconds). The NFT-owned Beast UI subscribes and swaps a fresh encoded image while retaining the old image until decode completes. Core code never reads or replaces art. Initial events always follow successful start; missed/late later boundaries are skipped and stop invalidates stale events. Browser timers are best effort.
 
-The [browser checks](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#browser-validation) prove the restarts with a probe SVG animation that sweeps once per pass; watch your own art (an embedded GIF, for example) restart in `npm run preview`.
-
-The restart at every pass keeps the art's clock from drifting away from the audio clock over a long session. Its cost is that a pass which is not a whole multiple of the art's periods makes the art jump back to its start at every loop point, and an animation longer than the pass never finishes. So make the pass a whole multiple of every visible period.
+Choose a score pass that is a whole multiple of the art's visible periods to avoid visible resets. Use the composed preview/browser drift probes; matching engine hashes alone says nothing about consumer visuals. Future independent visual libraries can subscribe to the same API.
 
 ## 1. Measure the art's periods
 

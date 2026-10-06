@@ -16,7 +16,7 @@ and the library source has not changed since):
 A class whose engine pin is not a tagged fork release is a test class, without a `v<version>` release tag. A release
 pins a tagged fork release with a published SHA-256.
 
-This is the engine the class embeds: `scripts/build_page.mjs` gzips the minified file's exact bytes into the page (the
+This is the engine the class embeds: `scripts/build_segments.mjs` gzips the minified file's exact bytes into the page (the
 page's gunzip shim inflates them back in the browser), and `script_sha256()` returns the SHA-256 of the decompressed
 bytes. The engine tests and the render and page checks run the same file. The pin is
 the one line `ENGINE_PIN` in [`scripts/engine.mjs`](../../scripts/engine.mjs), which checks both hashes on every load,
@@ -38,7 +38,7 @@ To a later commit, or to a tagged fork release once the fork publishes them:
    commit or the tag) and prints the new `ENGINE_PIN` line. It only reads the checkout.
 3. Replace the `ENGINE_PIN` line in `scripts/engine.mjs`, delete the old files here, and run
    `npm run gen:page -- --record` (the new engine ref is a new `VERSION`). The
-   page (with a new gzip payload), `src/page_data.cairo` (including `VERSION`, `ENGINE_SHA256`, `GZIP_SHA256` and the
+   page (with a new gzip payload), `src/segment_data.cairo` (including `VERSION`, `ENGINE_SHA256`, `GZIP_SHA256` and the
    license text) and the fixtures follow.
 
 ## fflate license
@@ -49,7 +49,7 @@ To a later commit, or to a tagged fork release once the fork publishes them:
 
 The page's gunzip shim, [`player/gunzip.js`](../../player/gunzip.js), is derived from fflate 0.8.3's `gunzipSync`, and the
 build compresses the engine with the same fflate version (pinned in `package-lock.json`). This file goes into the
-class's `license()` text. `SHIM_PIN` in [`scripts/page.mjs`](../../scripts/page.mjs) checks its SHA-256 whenever it is read,
+class's `license()` text. `SHIM_PIN` in [`scripts/segments.mjs`](../../scripts/segments.mjs) checks its SHA-256 whenever it is read,
 and the build checks that it equals the installed fflate's `LICENSE` and that the installed version is 0.8.3. Moving to
 another fflate version means re-deriving and reviewing the shim, vendoring that version's license, and updating
 `SHIM_PIN`.
@@ -63,6 +63,6 @@ another fflate version means re-deriving and reviewing the shim, vendoring that 
 
 The class's base64 encoder is the package `game_components_encoding` (`packages/encoding` of game-components), a Scarb
 dependency pinned in [`Scarb.toml`](../../Scarb.toml). It is compiled into the class, so its license goes into the class's
-`license()` text. `ENCODER_PIN` in [`scripts/page.mjs`](../../scripts/page.mjs) checks the file's SHA-256 whenever it is
+`license()` text. `ENCODER_PIN` in [`scripts/segments.mjs`](../../scripts/segments.mjs) checks the file's SHA-256 whenever it is
 read. To verify: `git -C <game-components> show v3.1.0:LICENSE | sha256sum`. When the dependency moves to another
 release, check this file against that release's `LICENSE`.

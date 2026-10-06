@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import vm from "node:vm";
 import { engineSource } from "./engine.mjs";
-import { smf } from "./page_fixtures.mjs";
+import { smf } from "./data_cases.mjs";
 import { webAudioMock } from "./webaudio_mock.mjs";
 
 const EOT = [0xff, 0x2f, 0x00];

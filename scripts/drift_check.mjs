@@ -35,9 +35,8 @@
 // as an error or requested over the network.
 //
 // The page is the beast_140bpm page fixture: its token_uri is checked against the digest that the
-// class's output is pinned to (scripts/fixture_pages.mjs) and decoded. Its art, the consumer's
-// input and not the class's output, is then replaced by the probe; PAGE ++ D, all the class
-// contributes, is unchanged. It is loaded as an offline data: URI.
+// consumer fixture is pinned to (scripts/fixture_pages.mjs) and decoded. Its art, the consumer's
+// input and not the class's output, is then replaced by the probe; the provider segments and data are unchanged. It is loaded as an offline data: URI.
 //
 // Usage (the engine as in scripts/browsers.mjs; Firefox plays audio only with an output device,
 // which a PulseAudio null sink provides on a machine without one: see docs/development.md, "Browser validation"):
@@ -57,10 +56,11 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { compositionHtml } from "./composition.mjs";
 import { collectErrors, launchBrowser } from "./browsers.mjs";
 import { DRIFT_LIMITS, artOffsetMs, barMoved, barX, checkpointTimes, clockAt, clockDrift, largestStep, leads, median, passGrid, passStarts, trend, withinDriftLimits } from "./drift.mjs";
 import { fixtureCase, tokenPage } from "./fixture_pages.mjs";
-import { ART_OPEN, HTML_PREFIX, VERSION, b64 } from "./page.mjs";
+import { HTML_PREFIX, VERSION, b64 } from "./segments.mjs";
 import { decodePng } from "./png.mjs";
 
 const USAGE = "usage: node scripts/drift_check.mjs [--minutes 10] [--every 10] [--drift-info] [out_dir]";
@@ -100,10 +100,7 @@ const PROBE =
   `<rect width='${W}' height='${H}' fill='#000'/>` +
   `<rect width='10' height='${H}' fill='#fff'><animate attributeName='x' from='0' to='${TRAVEL}' dur='${dur}s' repeatCount='indefinite'/></rect>` +
   "</svg>";
-const { html } = tokenPage(c);
-const artAt = html.lastIndexOf(ART_OPEN) + ART_OPEN.length;
-if (artAt < ART_OPEN.length || html.slice(artAt) !== c.svg) throw new Error("art block not found");
-const URL_ = HTML_PREFIX + b64(html.slice(0, artAt) + PROBE);
+const URL_ = HTML_PREFIX + b64(compositionHtml({ mem: c.members, svg: PROBE, d: c.d }, { fixture: true }));
 
 let failures = 0;
 /** @param {boolean} cond @param {string} msg */
@@ -152,7 +149,7 @@ function instrument() {
 }
 
 const { browser, engine } = await launchBrowser();
-console.log(`${c.name} page (the class's output, art replaced by a probe sweeping once per ${PASS} s pass), offline data: URI; ${minutes} min, a checkpoint every ${every} s`);
+console.log(`${c.name} NFT-owned page (art replaced by a probe sweeping once per ${PASS} s pass), offline data: URI; ${minutes} min, a checkpoint every ${every} s`);
 // WebKit's offline emulation also fails the page's own blob: media, so there every other request is
 // aborted and listed instead.
 const context = await browser.newContext({ viewport: { width: W, height: H }, offline: engine !== "webkit" });

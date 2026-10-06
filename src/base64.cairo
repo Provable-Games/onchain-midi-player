@@ -1,7 +1,7 @@
 //! Standard RFC 4648 base64 (alphabet `A-Z a-z 0-9 + /`, `=` padding, no line breaks): the one
-//! encoder of this crate. `midi_segment` and the `base64` entry point both call
-//! `bytes_base64_encode`, and nothing else in the class encodes base64. Large fixed data (engine,
-//! page) is never encoded here; it is stored pre-encoded in `page_data`.
+//! internal encoder of this crate. `midi_segment` calls `bytes_base64_encode`; consumers
+//! compile their own encoder when they need runtime metadata or art encoding. Large fixed data
+//! (engine, library fragments) is never encoded here; it is stored pre-encoded in `segment_data`.
 //!
 //! The encoder is `bytes_base64_encode(_bytes: ByteArray) -> ByteArray` of
 //! `game_components_encoding`, the maintainer's optimized word-wise encoder: the zero-dependency

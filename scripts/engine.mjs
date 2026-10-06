@@ -1,15 +1,15 @@
 // @ts-check
 // The pinned TinySynth engine: the Provable-Games fork's own minified build
 // (webaudio-tinysynth.min.js) and NOTICE at one commit, vendored in tests/vendor so that the page
-// build and the tests run offline. It is the engine embedded in PAGE (scripts/build_page.mjs) and
+// build and the tests run offline. It is the engine supplied by engine_segment() (scripts/build_segments.mjs) and
 // the one the engine tests and render checks run. Both files are SHA-256 checked on every load, so
 // any mismatch fails before anything is generated.
 //
 // Re-pinning is a one-line change to ENGINE_PIN, after vendoring the new files with
 //   node scripts/vendor_engine.mjs <fork checkout> <commit or tag>
 // which prints the new line. `ref` names the vendored files and is recorded with the VERSION in
-// scripts/page_versions.json; it is the short commit SHA or, once the fork publishes tagged releases,
-// the tag. A re-pin needs a new VERSION (scripts/page.mjs).
+// scripts/library_versions.json; it is the short commit SHA or, once the fork publishes tagged releases,
+// the tag. A re-pin needs a new VERSION (scripts/segments.mjs).
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";

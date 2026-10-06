@@ -1,0 +1,47 @@
+{
+  "format": 1,
+  "toolchain": {
+    "fflate": "0.8.3",
+    "terser": "5.51.2",
+    "minify": {
+      "ecma": 2020,
+      "compress": {
+        "passes": 2,
+        "ecma": 2020
+      },
+      "mangle": true,
+      "format": {
+        "ascii_only": true,
+        "ecma": 2020
+      }
+    },
+    "gzip": {
+      "level": 9,
+      "mtime": 0
+    }
+  },
+  "libraries": {
+    "fixture": {
+      "source_sha256": "e7b72a868862062050bb5b4c48ba2c4308ac75b8567107c78f981c0b52711b63",
+      "source_len": 81,
+      "gzip_sha256": "28090595d32f6e8189c12f9abbfbb5810c5a238d7cbbb6956d6ae413d00d6df6",
+      "gzip_len": 91,
+      "gzip_base64_len": 124,
+      "raw_sha256": "870a2997767c33af12376ba3623e3890566d995e0f37208a93d3bfca2e6b2f91",
+      "raw_len": 279,
+      "returned_sha256": "65a48047adf6cd21d680aa49b3dd317237f74fd7f872149672d509465852663c",
+      "returned_len": 496
+    },
+    "dependent": {
+      "source_sha256": "d00414cf6cfee4d2df1ab345c8290f0ac07de268ff2fc6e30d5fdf66efa8d0e5",
+      "source_len": 72,
+      "gzip_sha256": "4debb4b93c0699309cf54510ca7a02cde1118bef12119de4adf9907d8abe19ab",
+      "gzip_len": 75,
+      "gzip_base64_len": 100,
+      "raw_sha256": "0b1487d1e8ee349cf06862a0af7eeebf4cff0481074265891238787c0f71fb3e",
+      "raw_len": 279,
+      "returned_sha256": "170a39837e731fd549b022a8c012bb7687602696f4a5dfdf6cd26f65f5387741",
+      "returned_len": 496
+    }
+  }
+}
