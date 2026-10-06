@@ -108,7 +108,7 @@ for (const [label, url, expected] of targets) {
   const requests = [], blocked = [];
   await context.route('**/*', (route) => {
     const u = route.request().url();
-    if (u.startsWith('data:') || u.startsWith('file:')) return route.continue();
+    if (u.startsWith('data:') || u.startsWith('file:') || u.startsWith('blob:')) return route.continue(); // blob:: the page's own silent media element
     blocked.push(u);
     return route.abort();
   });

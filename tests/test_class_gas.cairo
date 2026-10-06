@@ -77,7 +77,7 @@ fn gas_lc_declare() {
 
 #[test]
 fn gas_lc_animation_url_segment() {
-    assert(class().animation_url_segment().len() == 53508, 'segment');
+    assert(class().animation_url_segment().len() == 59220, 'segment');
 }
 
 #[test]
@@ -169,7 +169,7 @@ fn gas_lc_version() {
 
 #[test]
 fn gas_lc_license() {
-    assert(class().license().len() == 9450, 'license');
+    assert(class().license().len() == 10657, 'license');
 }
 
 // ------------------------------------------------------------------------------------------------

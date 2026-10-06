@@ -7,5 +7,14 @@
     "script_sha256": "8ad79ab8214e45a601e7d929e676b34b78e3f2b4200fd751d6548cf2b7df7749",
     "gzip_sha256": "61b365e518ad022c344cb60d99ae4d43aa640c6a2121d9605a75f75b28da0b64",
     "gzip_len": 14074
+  },
+  "0.4.0": {
+    "page_sha256": "8fe795df3215dabdd6a8c91ab7c32fecdfbd138d3ee0b1a971eb6e17da42c2ad",
+    "engine_ref": "31fb18d",
+    "engine_commit": "31fb18d8e04125519776773042da0d5b2db591a9",
+    "page": 11,
+    "script_sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74",
+    "gzip_sha256": "04b704009c0b07c6fde9bedabba37aca0b923c5c79bdf4b0428fa4f88065015b",
+    "gzip_len": 14339
   }
 }
