@@ -394,9 +394,9 @@ async function checkArtwork() {
 /**
  * The ▶/■ button sits at the art's `data-play-anchor`: on a card whose art frame (a rounded black
  * rect) is (15, 58) to (235, 202) in a 250x350 viewBox, with the Beast's box (62, 66) to (190, 194)
- * inside it, anchored at "235 202 40" (the frame's bottom-right corner, a 40-unit button), the
- * button's bounding rect lies inside the frame, in its bottom-right quadrant, with a diameter of 40 x
- * the art's scale on screen (44 to 128 px) and its corner max(40 / 8, 6) units in from the anchor,
+ * inside it, anchored at "235 202 32" (the frame's bottom-right corner, a 32-unit button), the
+ * button's bounding rect lies inside the frame, in its bottom-right quadrant, with a diameter of 32 x
+ * the art's scale on screen (44 to 128 px) and its corner max(32 / 8, 6) units in from the anchor,
  * so it clears the frame's 8-unit rounded corner, with its centre to the right of the Beast box:
  * in a portrait viewport the art fills, in larger ones, after a resize, in a landscape one where the
  * art is scaled and centred (object-fit: contain), and with the image displayed at 75%. (The 44 px
@@ -410,7 +410,7 @@ async function checkPlayAnchor() {
   const card = (/** @type {string} */ attrs) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 250 350' ${attrs}><rect width='250' height='350' fill='#1e1e22'/><rect x='15' y='58' width='220' height='144' rx='8' fill='#000'/><rect x='62' y='66' width='128' height='128' fill='#c60'/></svg>`;
   console.log("play button anchored at the art's data-play-anchor (data: URI, offline)");
   const { context, page, logged } = await open({ offline: true, viewport: { width: 250, height: 350 } });
-  await page.goto(dataUrl(PAGE + c.d + card("data-play-anchor='235 202 40'")));
+  await page.goto(dataUrl(PAGE + c.d + card("data-play-anchor='235 202 32'")));
   await ready(page);
   // The button's rect and the art <img>'s own rect, as the page sees them.
   const rect = () => page.evaluate(() => {
@@ -432,7 +432,7 @@ async function checkPlayAnchor() {
     for (let n = 0; n < 40; n++) {
       r = await rect();
       k = Math.min(r.img.width / 250, r.img.height / 350);
-      size = Math.min(128, Math.max(44, 40 * k));
+      size = Math.min(128, Math.max(44, 32 * k));
       x = (/** @type {number} */ v) => r.img.left + (r.img.width - 250 * k) / 2 + v * k;
       y = (/** @type {number} */ v) => r.img.top + (r.img.height - 350 * k) / 2 + v * k;
       if (placed()) break;
@@ -445,16 +445,18 @@ async function checkPlayAnchor() {
     const cornerGap = Math.hypot(x(235) - cx, y(202) - cy) - size / 2;
     const outsideBeast = cx >= x(190);
     check(placed() && inFrame && quadrant && outsideBeast && cornerGap >= 0.414 * 8 * k,
-      `${label}: the ${(r.right - r.left).toFixed(1)} px button (${r.left.toFixed(1)}, ${r.top.toFixed(1)}) to (${r.right.toFixed(1)}, ${r.bottom.toFixed(1)}) is in the bottom-right quadrant of the frame (${x(15).toFixed(1)}, ${y(58).toFixed(1)}) to (${x(235).toFixed(1)}, ${y(202).toFixed(1)}), its centre right of the Beast box (x >= ${x(190).toFixed(1)}), ${cornerGap.toFixed(1)} px from the corner (rounded corner cuts ${(0.414 * 8 * k).toFixed(1)}); expected ${size.toFixed(1)} px (40 x scale ${k.toFixed(2)}, 44 to 128), the corner ${(6 * k).toFixed(1)} px in`);
+      `${label}: the ${(r.right - r.left).toFixed(1)} px button (${r.left.toFixed(1)}, ${r.top.toFixed(1)}) to (${r.right.toFixed(1)}, ${r.bottom.toFixed(1)}) is in the bottom-right quadrant of the frame (${x(15).toFixed(1)}, ${y(58).toFixed(1)}) to (${x(235).toFixed(1)}, ${y(202).toFixed(1)}), its centre right of the Beast box (x >= ${x(190).toFixed(1)}), ${cornerGap.toFixed(1)} px from the corner (rounded corner cuts ${(0.414 * 8 * k).toFixed(1)}); expected ${size.toFixed(1)} px (32 x scale ${k.toFixed(2)}, 44 to 128), the corner ${(6 * k).toFixed(1)} px in`);
   };
   await inBox("portrait 250x350");
   await page.setViewportSize({ width: 500, height: 400 });
   await inBox("landscape 500x400 after a resize");
   await page.setViewportSize({ width: 250, height: 350 });
   await page.setViewportSize({ width: 750, height: 1050 });
-  await inBox("portrait 750x1050 (a 120 px button)");
+  await inBox("portrait 750x1050 (a 96 px button)");
   await page.setViewportSize({ width: 1000, height: 1400 });
-  await inBox("portrait 1000x1400 (clamped to 128 px)");
+  await inBox("portrait 1000x1400 (a 128 px button)");
+  await page.setViewportSize({ width: 1250, height: 1750 });
+  await inBox("portrait 1250x1750 (160 px clamped to 128 px)");
   await page.setViewportSize({ width: 250, height: 350 });
   await inBox("portrait again");
   // A host or a shared copy that displays the image smaller (75%): the ResizeObserver follows it.

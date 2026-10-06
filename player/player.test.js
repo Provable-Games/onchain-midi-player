@@ -420,15 +420,16 @@ describe("the page's player script, fake engine", () => {
 describe("the play button's anchor on the art (playAnchor)", () => {
   const full = (/** @type {number} */ w, /** @type {number} */ h) => ({ left: 0, top: 0, width: w, height: h });
   const card = (/** @type {string} */ attrs) => `<svg xmlns='http://www.w3.org/2000/svg' ${attrs}><rect/></svg>`;
-  const BEAST = "viewBox='0 0 250 350' data-play-anchor='235 202 40'";
-  // The button's bottom-right corner is max(S / 8, 6) units, at the art's scale, inside the anchor (6 units for S = 40).
-  test("a viewport the art fills exactly: the art's scale 1 makes 40 units 40 px, raised to the 44 px minimum", () => {
+  const BEAST = "viewBox='0 0 250 350' data-play-anchor='235 202 32'";
+  // The button's bottom-right corner is max(S / 8, 6) units, at the art's scale, inside the anchor (6 units for S = 32).
+  test("a viewport the art fills exactly: the art's scale 1 makes 32 units 32 px, raised to the 44 px minimum", () => {
     assert.deepEqual(playAnchor(card(BEAST), full(250, 350), 250, 350), { left: 185, top: 152, size: 44 });
   });
   test("the diameter is S times the art's scale, between 44 and 128 px, and the offset follows it", () => {
-    assert.deepEqual(playAnchor(card(BEAST), full(500, 700), 500, 700), { left: 378, top: 312, size: 80 }); // scale 2, inset 12
-    assert.deepEqual(playAnchor(card(BEAST), full(750, 1050), 750, 1050), { left: 567, top: 468, size: 120 }); // scale 3, inset 18
-    assert.deepEqual(playAnchor(card(BEAST), full(1000, 1400), 1000, 1400), { left: 788, top: 656, size: 128 }); // scale 4: 160 clamped to 128, inset 24
+    assert.deepEqual(playAnchor(card(BEAST), full(500, 700), 500, 700), { left: 394, top: 328, size: 64 }); // scale 2, inset 12
+    assert.deepEqual(playAnchor(card(BEAST), full(750, 1050), 750, 1050), { left: 591, top: 492, size: 96 }); // scale 3, inset 18
+    assert.deepEqual(playAnchor(card(BEAST), full(1000, 1400), 1000, 1400), { left: 788, top: 656, size: 128 }); // scale 4: exactly 128, inset 24
+    assert.deepEqual(playAnchor(card(BEAST), full(1250, 1750), 1250, 1750), { left: 1017, top: 852, size: 128 }); // scale 5: 160 clamped to 128, inset 30
   });
   test("a landscape viewport letterboxes the art left and right (object-fit: contain)", () => {
     // 700 x 350: scale 1, the art is centred: offset (700 - 250) / 2 = 225.
@@ -444,8 +445,8 @@ describe("the play button's anchor on the art (playAnchor)", () => {
   });
   test("no viewBox: width and height (with px), and a viewBox with an origin", () => {
     const want = { left: 185, top: 152, size: 44 };
-    assert.deepEqual(playAnchor(card("width='250' height='350' data-play-anchor='235 202 40'"), full(250, 350), 250, 350), want);
-    assert.deepEqual(playAnchor(card("width='250px' height='350px' data-play-anchor='235 202 40'"), full(250, 350), 250, 350), want);
+    assert.deepEqual(playAnchor(card("width='250' height='350' data-play-anchor='235 202 32'"), full(250, 350), 250, 350), want);
+    assert.deepEqual(playAnchor(card("width='250px' height='350px' data-play-anchor='235 202 32'"), full(250, 350), 250, 350), want);
     assert.deepEqual(playAnchor(card("viewBox='-10 -20 250 350' data-play-anchor='225 182 40'"), full(250, 350), 250, 350), want);
   });
   test("the button stays on screen: anchors at the art's corners, and a button larger than the viewport", () => {
@@ -456,7 +457,7 @@ describe("the play button's anchor on the art (playAnchor)", () => {
   for (const [label, attrs] of /** @type {Array<[string, string]>} */ ([
     ["no attribute", "viewBox='0 0 250 350'"],
     ["one number", "viewBox='0 0 250 350' data-play-anchor='235'"],
-    ["four numbers", "viewBox='0 0 250 350' data-play-anchor='235 202 40 1'"],
+    ["four numbers", "viewBox='0 0 250 350' data-play-anchor='235 202 32 1'"],
     ["a zero diameter", "viewBox='0 0 250 350' data-play-anchor='235 202 0'"],
     ["a negative diameter", "viewBox='0 0 250 350' data-play-anchor='235 202 -40'"],
     ["a diameter that is not a number", "viewBox='0 0 250 350' data-play-anchor='235 202 big'"],
@@ -475,7 +476,7 @@ describe("the play button's anchor on the art (playAnchor)", () => {
     });
   }
   test("the art's own box, not the viewport: a 75% display, centred or offset, lands on the frame's corner", () => {
-    // A 250 x 350 viewport with the img at 75%, centred: box (31.25, 43.75) 187.5 x 262.5, scale 0.75 (30 px: 44, inset 4.5).
+    // A 250 x 350 viewport with the img at 75%, centred: box (31.25, 43.75) 187.5 x 262.5, scale 0.75 (24 px: 44, inset 4.5).
     assert.deepEqual(playAnchor(card(BEAST), { left: 31.25, top: 43.75, width: 187.5, height: 262.5 }, 250, 350), { left: 159, top: 147, size: 44 });
     // The same art in a wider box inside a bigger viewport: contain inside the box, centred in it.
     assert.deepEqual(playAnchor(card(BEAST), { left: 100, top: 20, width: 500, height: 350 }, 800, 600), { left: 410, top: 172, size: 44 });
@@ -483,8 +484,8 @@ describe("the play button's anchor on the art (playAnchor)", () => {
     assert.deepEqual(playAnchor(card(BEAST), { left: 200, top: 0, width: 250, height: 350 }, 250, 350), { left: 206, top: 152, size: 44 });
   });
   test("only the root tag counts, and an attribute whose name ends the same does not", () => {
-    assert.equal(playAnchor("<svg viewBox='0 0 250 350'><g data-play-anchor='235 202 40'/></svg>", full(250, 350), 250, 350), null);
-    assert.equal(playAnchor("<svg viewBox='0 0 250 350' x-data-play-anchor='235 202 40'/>", full(250, 350), 250, 350), null);
+    assert.equal(playAnchor("<svg viewBox='0 0 250 350'><g data-play-anchor='235 202 32'/></svg>", full(250, 350), 250, 350), null);
+    assert.equal(playAnchor("<svg viewBox='0 0 250 350' x-data-play-anchor='235 202 32'/>", full(250, 350), 250, 350), null);
     assert.equal(playAnchor("not svg", full(250, 350), 250, 350), null);
     assert.equal(playAnchor(card(BEAST), full(0, 0), 0, 0), null);
   });
