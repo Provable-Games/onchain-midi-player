@@ -29,11 +29,11 @@ fn be128(x: u32, y: u32, z: u32, w: u32) -> u128 {
     ((x.into() * base + y.into()) * base + z.into()) * base + w.into()
 }
 
-/// SHA-256 of PAGE (tests/fixtures/page.html), 31968 bytes.
-pub const PAGE_SHA256: u256 = 0xa7c8f0e036a59d6a097e101958bd05888199981dba805e5b104faa4cec11c9f5;
+/// SHA-256 of PAGE (tests/fixtures/page.html), 31986 bytes.
+pub const PAGE_SHA256: u256 = 0x5b548e9ed1e68d930d150dc5626563fdb24efa16e6f921cf8d5f907574e0361f;
 
-/// SHA-256 of `animation_url_segment()`, 56884 bytes.
-pub const SEGMENT_SHA256: u256 = 0x0eca5992c4055b2dfd20c2528811d364b6563be73fc5f397035a654e2dd6f984;
+/// SHA-256 of `animation_url_segment()`, 56916 bytes.
+pub const SEGMENT_SHA256: u256 = 0x1a34a43ee7d2ec334e4b1d84d2bf2b48fb1e4c16ec853e7f4f33acc785d8f45c;
 
 /// SHA-256 of `license()`, 10657 bytes.
 pub const LICENSE_SHA256: u256 = 0xdfd4f2391adcb507ec3be52eaa65715f8ba094b9c55d478c163ea484ea838570;
@@ -161,14 +161,14 @@ const CASE_DEFAULT_120BPM_MIDI_SEGMENT: [felt252; 20] = [
     0x5a454d3564324a48526e426961556c6e595664524f556c74526e6c6b51306b, 0x72, 1,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 32719 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 32737 bytes.
 pub fn case_default_120bpm_animation_html_digest() -> (u32, u256) {
-    (32719, 0xba8e548a73dff52271d2195abf590c7e757520c98a661d239bd257c20b1d90a6)
+    (32737, 0xe2c279c469aa03055d5abbeced5f63fa8db909df9124a7cba09fd51a6cba60d5)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_default_120bpm_token_uri_digest() -> (u32, u256) {
-    (59145, 0xfb44075715569b1b22f1611561b909e8886aa4c60d23ed7d5d78ec4ca5425af4)
+    (59177, 0x8ea64a4664ee72aab7d8b235791e6daa06609c350cc1ea7e7533a8ed00b8d7b4)
 }
 
 /// SETTINGS for this case's settings.
@@ -320,14 +320,14 @@ const CASE_BEAST_140BPM_MIDI_SEGMENT: [felt252; 38] = [
     0x59305a454d3564324a48526e426961556c6e595664524f556c74526e6c6b51, 0x306b72, 3,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 32835 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 32853 bytes.
 pub fn case_beast_140bpm_animation_html_digest() -> (u32, u256) {
-    (32835, 0x2176140e740e85977cbfca76cf26819db97102938848c0d16b633fefacc810ca)
+    (32853, 0x18b4f0e76cd56d8e740673ad9b012104696def9552e8af9bb39fdd0d43223b5d)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_beast_140bpm_token_uri_digest() -> (u32, u256) {
-    (59045, 0xdf69b10e80da7c14837def28a4cea419157f4b1973543f9d13bafced561b70bf)
+    (59077, 0xbf2e3a1d5096318d428b980a5e44944989fd88dd3e3212a4550dc1417b50b356)
 }
 
 /// SETTINGS for this case's settings.
@@ -500,14 +500,14 @@ const CASE_SIX_TIMBRES_FORMAT1_MIDI_SEGMENT: [felt252; 49] = [
     0x4d3564324a48526e426961556c6e595664524f556c74526e6c6b51306b72, 30,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 33245 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 33263 bytes.
 pub fn case_six_timbres_format1_animation_html_digest() -> (u32, u256) {
-    (33245, 0x3454933082b53f7581e0b425b6a9fe859e6cb872d110e3fd68265756041d488e)
+    (33263, 0xb20bbeb9e74818d61845da89a5a9ee5174e96e32d83a052147cb1b30ea296d37)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_six_timbres_format1_token_uri_digest() -> (u32, u256) {
-    (60149, 0x3e14373fea1fe93a1316273920fd22cdccd0ff4013d95a79c74232356f0807be)
+    (60181, 0xcf110bb57393af6f05e73fb239f890cb5fa04cf13b1581beda9cd5c508c66943)
 }
 
 /// SETTINGS for this case's settings.
@@ -656,14 +656,14 @@ const CASE_UNICODE_ART_MIDI_SEGMENT: [felt252; 39] = [
     0x3159305a454d3564324a48526e426961556c6e595664524f556c74526e6c6b, 0x51306b72, 4,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 32808 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 32826 bytes.
 pub fn case_unicode_art_animation_html_digest() -> (u32, u256) {
-    (32808, 0x705087287b8de52354a85712cb9a6e1b09087e2a4379ae5c3860c6b0a719d131)
+    (32826, 0x01b681af520d714a1e248adf18676dd8690a0718caf677c16c3c525b8fd18135)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_unicode_art_token_uri_digest() -> (u32, u256) {
-    (58869, 0x89a9713ff0084b5290f9c131ae19c0b245f83dc66cc5e06c64852b4a0b5ceff4)
+    (58901, 0x9cf3b8b65f0fa4033702dd58f463125fd9e020df5a0c8bd43b933d7ad91ab7af)
 }
 
 /// SETTINGS for this case's settings.
@@ -801,14 +801,14 @@ const CASE_MIN_FIELDS_MIDI_SEGMENT: [felt252; 24] = [
     0x523159305a454d3564324a48526e426961556c6e595664524f556c74526e6c, 0x6b51306b72, 5,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 32787 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 32805 bytes.
 pub fn case_min_fields_animation_html_digest() -> (u32, u256) {
-    (32787, 0x003544f8f732d7593cba10d89c803a611a11951129961cc0e2fb0a1d2e2bbd44)
+    (32805, 0xe92b106fa687ae4a5a002e5e243737c6f1a06b7b653eb79958b9a25023cf3f4c)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_min_fields_token_uri_digest() -> (u32, u256) {
-    (59261, 0xb4676f876bec40fec361c99e5a144b330349c3eba217f3d59c61cfc9201c6c3b)
+    (59293, 0x139b81cd036755c1670f6912a382d21153463811f295ae46b782ec9660614803)
 }
 
 /// SETTINGS for this case's settings.
@@ -1015,14 +1015,14 @@ const CASE_MAX_FIELDS_MIDI_SEGMENT: [felt252; 80] = [
     13,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 33768 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 33786 bytes.
 pub fn case_max_fields_animation_html_digest() -> (u32, u256) {
-    (33768, 0x1d275b39fe5b375c767775882f74cbd8f7dd67841d3a84c08357ffccec2b8450)
+    (33786, 0xe06fd0ad22da518bae5b15f63854b860f4181965ed67606fb5c183f5541e7923)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_max_fields_token_uri_digest() -> (u32, u256) {
-    (61005, 0x49f8a4f07112c85156128979f318232895b101e7eef950dc27ba109923a87f94)
+    (61037, 0x726cc3ea47b7486d0b334d8878f7f86a21e32e72e13fa6419f3f5f8fab1639fc)
 }
 
 /// SETTINGS for this case's settings.
@@ -1182,14 +1182,14 @@ const CASE_SLOT_EDGES_MIDI_SEGMENT: [felt252; 39] = [
     0x61556c6e595664524f556c74526e6c6b51306b72, 20,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 33059 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 33077 bytes.
 pub fn case_slot_edges_animation_html_digest() -> (u32, u256) {
-    (33059, 0x3a6a662392f0d6408ac76da16587b9835fb3a2cd6058ffab2489d1c48399d323)
+    (33077, 0xca44592469f1a312a48de8e042bdd037a94484568871c4ce3d133ecc9411bc7f)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_slot_edges_token_uri_digest() -> (u32, u256) {
-    (59761, 0x123defa7ea2168ba4fb562d707afaf73c2665148d3b5b86dc28774e60c052138)
+    (59793, 0xb02c17d7bdd1263297269ed9beb5693910327fee7bd958f343954b51779bdca4)
 }
 
 /// SETTINGS for this case's settings.
@@ -1348,14 +1348,14 @@ const CASE_ALL_BUILTIN_WAVES_MIDI_SEGMENT: [felt252; 38] = [
     0x59305a454d3564324a48526e426961556c6e595664524f556c74526e6c6b51, 0x306b72, 3,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 33032 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 33050 bytes.
 pub fn case_all_builtin_waves_animation_html_digest() -> (u32, u256) {
-    (33032, 0x0225c63bbe859b4e08b1dab6d33c96d6b9b2666ec7d0f6df9b0aea42a40dba8f)
+    (33050, 0xfaec69925e8dd350844b4ff281babe7356c740fb0c144a316a0e6097f681e88b)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_all_builtin_waves_token_uri_digest() -> (u32, u256) {
-    (59749, 0x67d5318ca51137e550f3155728b22a0be7f2726324d5a45dd7c14c5939c47d42)
+    (59781, 0xf23d04d250a6ed94c8104d9d9d64d0e865582fd7f78dba4b39610daaa69f2f3e)
 }
 
 /// SETTINGS for this case's settings.
@@ -1587,14 +1587,14 @@ const CASE_CHIP_WAVES_MIDI_SEGMENT: [felt252; 96] = [
     13,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 34048 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 34066 bytes.
 pub fn case_chip_waves_animation_html_digest() -> (u32, u256) {
-    (34048, 0xe95ac77d94489a221f2ec856faf9d626a9ec350707ad206b585382046b4b09e7)
+    (34066, 0xa18629570c7d161669e9ea59124f5575bdea4244f92f3677cabf2fb9520eb5f9)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_chip_waves_token_uri_digest() -> (u32, u256) {
-    (61549, 0x16d2919f3213f230af326be57a955ab99d61d7a5faafda87af944f821b6b9c50)
+    (61581, 0xb7b502bd2489b46f517fa83b3a19970b90ded068de6c4567a45b813a692a9d8f)
 }
 
 /// SETTINGS for this case's settings.
@@ -1763,14 +1763,14 @@ const CASE_FILTERED_MIDI_SEGMENT: [felt252; 45] = [
     0x4a48526e426961556c6e595664524f556c74526e6c6b51306b72, 26,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 33169 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 33187 bytes.
 pub fn case_filtered_animation_html_digest() -> (u32, u256) {
-    (33169, 0x2c786cadac2cab7325890c24dcb11faff866b1f3ce159ede27a52a8a63b7770a)
+    (33187, 0x8b7a865a0cbae5fe284351a46599582b4c24d1f823677012707409afb50f10ac)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_filtered_token_uri_digest() -> (u32, u256) {
-    (60001, 0x79002f35b63df3a106b21cdc77b7d0898e9cec665b5989ec38a28632ce2f2915)
+    (60033, 0x190a17fa63bbf2ffba14be13b9e64fda37ab0a7d6af3b002121a9bcfe66204c9)
 }
 
 /// SETTINGS for this case's settings.
@@ -2604,14 +2604,14 @@ const CASE_EVERY_SLOT_MIDI_SEGMENT: [felt252; 583] = [
     0x61556c6e595664524f556c74526e6c6b51306b72, 20,
 ];
 
-/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 42544 bytes.
+/// The decoded animation_url HTML, PAGE ++ D ++ SVG, as (length, SHA-256): 42562 bytes.
 pub fn case_every_slot_animation_html_digest() -> (u32, u256) {
-    (42544, 0x35d71478d84308b883d15cf17e0fe8f8f9252373c7889973d5951a6ba97e58dc)
+    (42562, 0x1371796ddb5d97b2e509980fcc44da8776803110669cd7c60d8ccc1c528ff038)
 }
 
 /// The Beasts-layout token_uri for this case's members and SVG, as (length, SHA-256).
 pub fn case_every_slot_token_uri_digest() -> (u32, u256) {
-    (76621, 0x577294cae90b39d85d77eb17790db076122f60f4611f7cd167cff30c600425ca)
+    (76653, 0xff89816039c92fc606d4da476880529632bd7681ff11c8e179f4a3cddfcc252d)
 }
 
 /// SETTINGS for this case's settings.

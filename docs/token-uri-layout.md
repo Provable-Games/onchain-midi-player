@@ -54,8 +54,8 @@ Decoded, the `animation_url` value after its `data:text/html;base64,` prefix is 
 
 | Append | Word-aligned | Unaligned |
 | --- | --- | --- |
-| The 56,884-byte `animation_url_segment()` | 2.9M | 12.4M |
-| Every append of the example's full-size token: two 40,420-character `b64(S)`, the segment, `midi_segment` and the small pieces | 16.5M | 33.3M |
+| The 56,916-byte `animation_url_segment()` | 2.9M | 12.4M |
+| Every append of the example's full-size token: two 40,420-character `b64(S)`, the segment, `midi_segment` and the small pieces | 14.9M | 33.3M |
 
 The consumer chooses where its large pieces land by adding spaces between JSON tokens, 3 at a time. Three spaces are one 3-byte group, so they keep every piece a multiple of 3, and they encode to the constant `'ICAg'`, so they are never encoded at call time. It does this in two places:
 

@@ -363,7 +363,7 @@ export function startPlayer() {
       attempt(() => (title = new DOMParser().parseFromString(svg, "image/svg+xml").getElementsByTagName("title")[0].textContent || title));
       meta([]);
       for (const action of /** @type {const} */ (["play", "pause", "stop"])) {
-        attempt(() => navigator.mediaSession.setActionHandler(action, action == "play" ? () => playing || start() : () => playing && stop()));
+        attempt(() => navigator.mediaSession.setActionHandler(action, action == "play" ? () => playing || button.disabled || start() : () => playing && stop()));
       }
       // Artwork: the art's own bitmap (the first embedded PNG, GIF or WebP: a Beast's 32x32 sprite,
       // or the first square frame of a sprite sheet), scaled up with nearest-neighbour on a canvas to

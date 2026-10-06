@@ -646,6 +646,28 @@ describe("background audio: the silent element, the media session, the iOS audio
     assert.equal(h.els.play.disabled, true);
   });
 
+  for (const [label, options] of /** @type {Array<[string, Parameters<typeof runPage>[1]]>} */ ([
+    ["the synth cannot be created", { constructError: "no WebAudio" }],
+    ["the AudioContext will not resume", { resumeError: "resume refused" }],
+  ])) {
+    test(`after the page failed closed (${label}), the media session's play handler does nothing`, async () => {
+      const h = runPage(htmlOf(c), options);
+      h.ready();
+      h.click();
+      await h.flush();
+      assert.equal(h.els.play.disabled, true);
+      const before = h.calls.length;
+      const plays = h.media.audioCalls.filter((x) => x === "play").length;
+      /** @type {Record<string, any>} */ (h.media.session?.handlers).play();
+      await h.flush();
+      assert.equal(h.calls.length, before, "no synth, resume or playback");
+      assert.equal(h.media.audioCalls.filter((x) => x === "play").length, plays, "the element is not played again");
+      assert.equal(h.media.audio.paused, true);
+      assert.equal(h.els.icon.attributes.d, PLAY_ICON);
+      assert.equal(h.consoleErrors.length, 1, "only the first failure is logged");
+    });
+  }
+
   test("an AudioContext that will not resume pauses the silent element", async () => {
     const h = await playing(htmlOf(c), { resumeError: "resume refused" });
     assert.equal(h.media.audio.paused, true);

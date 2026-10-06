@@ -2,7 +2,17 @@
 // Minimal PNG decoder (8-bit RGB/RGBA, non-interlaced), enough for Playwright screenshots in the
 // browser checks. Node built-ins only.
 
-import { crc32, deflateSync, inflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
+
+/** CRC-32 (zlib.crc32 needs Node 22.2). @param {Buffer} buf */
+function crc32(buf) {
+  let c = ~0;
+  for (const b of buf) {
+    c ^= b;
+    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  }
+  return ~c >>> 0;
+}
 
 /** @param {number} a @param {number} b @param {number} c */
 function paeth(a, b, c) {
