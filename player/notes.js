@@ -12,7 +12,7 @@
  * who prefers reduced motion, the opening bars stand still, muted (`idleAlpha`); while playing they
  * scroll with the clock (`playAlpha`), only while the page is visible (the browser pauses animation
  * frames for a hidden page); paused, they hold where they are. The defaults suit the Beasts card (250x350, its art
- * frame at (15, 58), 220x156), so a Beasts page's call is short:
+ * frame at (15, 58), 220x150), so a Beasts page's call is short:
  *
  *   OnchainMidiNotes.mount(canvas, { midi, clock, img })
  *
@@ -38,7 +38,7 @@
  *   it. `null`: no line, notes sound at the left edge.
  * - `beats`: how many beats the box spans, at the song's average tempo.
  * - `palette`: CSS colours, one per channel: channel modulo the array's length, the drum channel
- *   (9) included. The composer chooses them (Beasts passes its card's colours).
+ *   (9) included. The default is the Beasts card's shiny-rim stops.
  * - `idleAlpha`, `playAlpha`: the notes' opacity standing still and playing (times 0.6 to 1 by
  *   velocity); a sounding note is drawn at twice `playAlpha` (at most 1).
  * - `drums`: the drum band's height at the bottom of the box; 0 draws no drums and keeps no band.
@@ -50,11 +50,11 @@ export const DEFAULTS = {
   clock: /** @type {() => number} */ (() => 0),
   img: /** @type {HTMLImageElement | (() => HTMLImageElement | null) | null} */ (null),
   view: [0, 0, 250, 350],
-  box: [15, 58, 220, 156],
+  box: [15, 58, 220, 150],
   hide: /** @type {number[][]} */ ([]),
   playheadX: /** @type {number | null} */ (0.07),
   beats: 24,
-  palette: ["#7a3cff", "#e0a800", "#1fb6a6", "#ff5c8a", "#4a90e2", "#f07b2a", "#8bc34a", "#c06bd6"],
+  palette: ["#73FF73", "#FFFF73", "#FFBE73", "#FF7373", "#C073DC", "#7373FF"],
   idleAlpha: 0.35,
   playAlpha: 0.5,
   drums: 12,

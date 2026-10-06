@@ -512,6 +512,14 @@ describe("the play button's anchor on the art (playAnchor)", () => {
     // A box that is half off screen is clamped to the viewport.
     assert.deepEqual(playAnchor(card(BEAST), { left: 200, top: 0, width: 250, height: 350 }, 250, 350), { left: 206, top: 152, size: 44 });
   });
+  test("top-right: the point is the button's top-right corner; it grows down and left from it", () => {
+    // The Beasts frame's top-right corner (235, 58), S 20: inset 6 units, 44 px at scale 1.
+    assert.deepEqual(playAnchor(card("viewBox='0 0 250 350' data-play-anchor='235 58 20 top-right'"), full(250, 350), 250, 350), { left: 235 - 6 - 44, top: 58 + 6, size: 44 });
+    // Scale 4: 80 px, inset 24.
+    assert.deepEqual(playAnchor(card("viewBox='0 0 250 350' data-play-anchor='235 58 20 top-right'"), full(1000, 1400), 1000, 1400), { left: 940 - 24 - 80, top: 232 + 24, size: 80 });
+    assert.deepEqual(playAnchor(card("viewBox='0 0 250 350' data-play-anchor='235,58,top-right'"), full(250, 350), 250, 350), { left: 235 - 6 - 48, top: 58 + 6, size: 48 });
+    assert.equal(playAnchor(card("viewBox='0 0 250 350' data-play-anchor='235 58 20 top-left'"), full(250, 350), 250, 350), null, "no other keyword");
+  });
   test("only the root tag counts, and an attribute whose name ends the same does not", () => {
     assert.equal(playAnchor("<svg viewBox='0 0 250 350'><g data-play-anchor='235 202 32'/></svg>", full(250, 350), 250, 350), null);
     assert.equal(playAnchor("<svg viewBox='0 0 250 350' x-data-play-anchor='235 202 32'/>", full(250, 350), 250, 350), null);

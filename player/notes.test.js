@@ -86,14 +86,14 @@ describe("screenBox: art units to the screen", () => {
   const VIEW = DEFAULTS.view;
   const full = (/** @type {number} */ w, /** @type {number} */ h) => ({ left: 0, top: 0, width: w, height: h });
   test("the art filling its <img>, scaled, and letterboxed either way (object-fit: contain)", () => {
-    assert.deepEqual(screenBox(BOX, VIEW, full(250, 350)), { left: 15, top: 58, width: 220, height: 156, k: 1 });
-    assert.deepEqual(screenBox(BOX, VIEW, full(500, 700)), { left: 30, top: 116, width: 440, height: 312, k: 2 });
-    assert.deepEqual(screenBox(BOX, VIEW, full(700, 350)), { left: 240, top: 58, width: 220, height: 156, k: 1 });
-    assert.deepEqual(screenBox(BOX, VIEW, full(250, 700)), { left: 15, top: 233, width: 220, height: 156, k: 1 });
+    assert.deepEqual(screenBox(BOX, VIEW, full(250, 350)), { left: 15, top: 58, width: 220, height: 150, k: 1 });
+    assert.deepEqual(screenBox(BOX, VIEW, full(500, 700)), { left: 30, top: 116, width: 440, height: 300, k: 2 });
+    assert.deepEqual(screenBox(BOX, VIEW, full(700, 350)), { left: 240, top: 58, width: 220, height: 150, k: 1 });
+    assert.deepEqual(screenBox(BOX, VIEW, full(250, 700)), { left: 15, top: 233, width: 220, height: 150, k: 1 });
   });
   test("the <img>'s own rectangle (60% of the page, offset), and a viewBox origin", () => {
-    assert.deepEqual(screenBox(BOX, VIEW, { left: 100, top: 140, width: 300, height: 420 }), { left: 118, top: 209.6, width: 264, height: 187.2, k: 1.2 });
-    assert.deepEqual(screenBox([5, 38, 220, 156], [-10, -20, 250, 350], full(250, 350)), { left: 15, top: 58, width: 220, height: 156, k: 1 });
+    assert.deepEqual(screenBox(BOX, VIEW, { left: 100, top: 140, width: 300, height: 420 }), { left: 118, top: 209.6, width: 264, height: 180, k: 1.2 });
+    assert.deepEqual(screenBox([5, 38, 220, 150], [-10, -20, 250, 350], full(250, 350)), { left: 15, top: 58, width: 220, height: 150, k: 1 });
   });
   test("no size: null", () => {
     assert.equal(screenBox(BOX, VIEW, full(0, 0)), null);
@@ -159,7 +159,7 @@ describe("drawNotes: one frame", () => {
     assert.deepEqual([...new Set(fills(ops).map((op) => op[1]))], ["#73FF73", "#FFFF73", "#FF7373", "#fff"], "channel 0, 1 and 9 (9 % 6 = 3), then the playhead");
     const two = recorder();
     drawNotes(two.g, roll, { ...o, palette: ["#0000ff", "#7373ff"], drumColor: "#888" }, 0, false);
-    assert.deepEqual([...new Set(fills(two.ops).map((op) => op[1]))], ["#0000ff", "#7373ff", "#888", "#fff"], "a tier colour and its pastel, alternating; grey drums");
+    assert.deepEqual([...new Set(fills(two.ops).map((op) => op[1]))], ["#0000ff", "#7373ff", "#888", "#fff"], "two colours, alternating; grey drums");
   });
   test("drums: ticks in the band at the bottom, below the melodic rows", () => {
     const { g, ops } = recorder();
@@ -204,10 +204,11 @@ describe("mount: defaults, layout and animation", () => {
   const b64 = Buffer.from(SONG).toString("base64");
 
   test("the defaults are the Beasts card's, and options override them", () => {
-    assert.deepEqual(DEFAULTS.box, [15, 58, 220, 156]);
+    assert.deepEqual(DEFAULTS.box, [15, 58, 220, 150]);
     assert.deepEqual(DEFAULTS.view, [0, 0, 250, 350]);
     assert.deepEqual([DEFAULTS.playheadX, DEFAULTS.beats, DEFAULTS.idleAlpha, DEFAULTS.playAlpha, DEFAULTS.drums, DEFAULTS.background], [0.07, 24, 0.35, 0.5, 12, "#000"]);
     assert.deepEqual(DEFAULTS.hide, []);
+    assert.deepEqual(DEFAULTS.palette, ["#73FF73", "#FFFF73", "#FFBE73", "#FF7373", "#C073DC", "#7373FF"], "the Beasts card's shiny-rim stops");
     const { frames, restore } = browser();
     try {
       const { c } = canvas();
@@ -226,9 +227,9 @@ describe("mount: defaults, layout and animation", () => {
       const { c, img, ops, placed } = canvas();
       mount(c, { midi: " " + b64 + "  ", img: () => img });
       assert.deepEqual(placed, [c], "inserted just before the <img>");
-      assert.deepEqual(c.style, { position: "fixed", background: "#000", left: "118px", top: "209.6px", width: "264px", height: "187.2px" });
-      assert.deepEqual([c.width, c.height], [528, 374]);
-      assert.deepEqual(ops.find((op) => op[0] === "transform"), ["transform", 528 / 220, 0, 0, 374 / 156, 0, 0]);
+      assert.deepEqual(c.style, { position: "fixed", background: "#000", left: "118px", top: "209.6px", width: "264px", height: "180px" });
+      assert.deepEqual([c.width, c.height], [528, 360]);
+      assert.deepEqual(ops.find((op) => op[0] === "transform"), ["transform", 528 / 220, 0, 0, 360 / 150, 0, 0]);
       assert.equal(frames.length, 0);
     } finally {
       restore();
@@ -335,5 +336,5 @@ test("the built script (notesScript): printable ASCII, safe inside <script>, def
   const window = {};
   vm.runInNewContext(code, { window });
   assert.deepEqual(Object.keys(window.OnchainMidiNotes), ["mount", "cutout", "DEFAULTS"]);
-  assert.equal(JSON.stringify(window.OnchainMidiNotes.DEFAULTS.box), "[15,58,220,156]");
+  assert.equal(JSON.stringify(window.OnchainMidiNotes.DEFAULTS.box), "[15,58,220,150]");
 });

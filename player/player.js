@@ -259,6 +259,9 @@ export function artUrl(svg, restart = 0, offset = 0) {
  * the <img> draws it: `box` is the <img>'s own rectangle on screen (its `getBoundingClientRect()`),
  * and the art fills it as `object-fit: contain` does, scaled to fit and centred. The diameter is S
  * times the art's scale on screen, between 44 CSS px (a touch target) and 128; without S it is 48.
+ * With a last word `top-right` (`"X Y S top-right"`), the point is the button's top-right corner
+ * instead, inset the same way, and the button grows down and left from it (the top-right corner of
+ * an art frame, say).
  * The button is kept inside the `vw` x `vh` viewport. Returns `null` (the button stays at the
  * viewport's bottom-right corner) when the attribute is absent, malformed or outside the art, or the
  * SVG or the image has no usable size.
@@ -278,15 +281,17 @@ export function playAnchor(svg, box, vw, vh) {
   const list = (/** @type {string} */ s) => (s ? s.split(/[\s,]+/).map(num) : []);
   const view = list(attr("viewBox"));
   const [x0, y0, w, h] = view.length == 4 ? view : [0, 0, num(attr("width").replace(/px$/i, "")), num(attr("height").replace(/px$/i, ""))];
-  const anchor = list(attr("data-play-anchor"));
+  const tokens = attr("data-play-anchor").split(/[\s,]+/).filter(Boolean);
+  const down = tokens[tokens.length - 1] == "top-right" && !!tokens.pop(); // the point is the button's top-right corner
+  const anchor = tokens.map(num);
   const [ax, ay, diameter] = anchor;
   if (!(w > 0 && h > 0 && box.width > 0 && box.height > 0) || !(anchor.length == 2 || (anchor.length == 3 && diameter > 0)) || !(ax >= x0 && ax <= x0 + w && ay >= y0 && ay <= y0 + h)) return null;
   const k = Math.min(box.width / w, box.height / h);
   const size = anchor.length == 3 ? Math.min(128, Math.max(44, diameter * k)) : 48;
   const inset = anchor.length == 3 ? k * Math.max(diameter / 8, 6) : 6;
-  const place = (/** @type {number} */ a, /** @type {number} */ a0, /** @type {number} */ len, /** @type {number} */ at, /** @type {number} */ span, /** @type {number} */ view) =>
-    Math.round(Math.max(0, Math.min(view - size, at + (span - len * k) / 2 + (a - a0) * k - size - inset)));
-  return { left: place(ax, x0, w, box.left, box.width, vw), top: place(ay, y0, h, box.top, box.height, vh), size: Math.round(size) };
+  const place = (/** @type {number} */ a, /** @type {number} */ a0, /** @type {number} */ len, /** @type {number} */ at, /** @type {number} */ span, /** @type {number} */ view, /** @type {boolean} */ below) =>
+    Math.round(Math.max(0, Math.min(view - size, at + (span - len * k) / 2 + (a - a0) * k + (below ? inset : -size - inset))));
+  return { left: place(ax, x0, w, box.left, box.width, vw, false), top: place(ay, y0, h, box.top, box.height, vh, down), size: Math.round(size) };
 }
 
 /** Fallback title of the media session, for art without a <title>. */
