@@ -242,15 +242,16 @@ export function artUrl(svg, restart = 0) {
 }
 
 /**
- * Where the ▶/■ button goes when the art's root `<svg>` carries `data-play-anchor="X Y"`: a point in
- * the SVG's own units (its `viewBox`, else `width` and `height`), such as the bottom-right corner of
- * a sprite's box. The button's bottom-right corner is placed there, 6 px inside, where the <img>
- * draws that point: `box` is the <img>'s own rectangle on screen (its `getBoundingClientRect()`), and
- * the art fills it as `object-fit: contain` does, scaled to fit and centred. The button is kept
- * inside the `vw` x `vh` viewport, and is 32 px instead of 40 when the anchor is under 120 px from
- * the art's top-left corner on screen. Returns `null` (the button stays at the viewport's
- * bottom-right corner) when the attribute is absent, malformed or outside the art, or the SVG or the
- * image has no usable size.
+ * Where the ▶/■ button goes when the art's root `<svg>` carries `data-play-anchor="X Y"` or
+ * `"X Y S"`: a point in the SVG's own units (its `viewBox`, else `width` and `height`), such as the
+ * bottom-right corner of a sprite's box, and optionally the button's diameter S in the same units.
+ * The button's bottom-right corner is placed at the point, inset by max(S/8, 6) art units (6 px without S: enough to clear a frame's rounded corner), where
+ * the <img> draws it: `box` is the <img>'s own rectangle on screen (its `getBoundingClientRect()`),
+ * and the art fills it as `object-fit: contain` does, scaled to fit and centred. The diameter is S
+ * times the art's scale on screen, between 44 CSS px (a touch target) and 128; without S it is 48.
+ * The button is kept inside the `vw` x `vh` viewport. Returns `null` (the button stays at the
+ * viewport's bottom-right corner) when the attribute is absent, malformed or outside the art, or the
+ * SVG or the image has no usable size.
  * @param {string} svg
  * @param {{left: number, top: number, width: number, height: number}} box
  * @param {number} vw
@@ -267,13 +268,15 @@ export function playAnchor(svg, box, vw, vh) {
   const list = (/** @type {string} */ s) => (s ? s.split(/[\s,]+/).map(num) : []);
   const view = list(attr("viewBox"));
   const [x0, y0, w, h] = view.length == 4 ? view : [0, 0, num(attr("width").replace(/px$/i, "")), num(attr("height").replace(/px$/i, ""))];
-  const [ax, ay, ...extra] = list(attr("data-play-anchor"));
-  if (!(w > 0 && h > 0 && box.width > 0 && box.height > 0) || extra.length || !(ax >= x0 && ax <= x0 + w && ay >= y0 && ay <= y0 + h)) return null;
+  const anchor = list(attr("data-play-anchor"));
+  const [ax, ay, diameter] = anchor;
+  if (!(w > 0 && h > 0 && box.width > 0 && box.height > 0) || !(anchor.length == 2 || (anchor.length == 3 && diameter > 0)) || !(ax >= x0 && ax <= x0 + w && ay >= y0 && ay <= y0 + h)) return null;
   const k = Math.min(box.width / w, box.height / h);
-  const size = Math.min((ax - x0) * k, (ay - y0) * k) < 120 ? 32 : 40;
+  const size = anchor.length == 3 ? Math.min(128, Math.max(44, diameter * k)) : 48;
+  const inset = anchor.length == 3 ? k * Math.max(diameter / 8, 6) : 6;
   const place = (/** @type {number} */ a, /** @type {number} */ a0, /** @type {number} */ len, /** @type {number} */ at, /** @type {number} */ span, /** @type {number} */ view) =>
-    Math.round(Math.max(0, Math.min(view - size, at + (span - len * k) / 2 + (a - a0) * k - 6 - size)));
-  return { left: place(ax, x0, w, box.left, box.width, vw), top: place(ay, y0, h, box.top, box.height, vh), size };
+    Math.round(Math.max(0, Math.min(view - size, at + (span - len * k) / 2 + (a - a0) * k - size - inset)));
+  return { left: place(ax, x0, w, box.left, box.width, vw), top: place(ay, y0, h, box.top, box.height, vh), size: Math.round(size) };
 }
 
 /** Fallback title of the media session, for art without a <title>. */

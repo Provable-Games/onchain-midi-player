@@ -88,9 +88,9 @@ The class compiled with the Scarb version above, at the current `VERSION`, again
 
 | | The class | Limit |
 | --- | --- | --- |
-| Sierra program | 20,168 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 1,027,459 bytes (25% of the limit) | 4,089,446 bytes |
-| CASM bytecode | 30,550 felts (37% of the limit) | 81,920 felts |
+| Sierra program | 20,192 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 1,028,322 bytes (25% of the limit) | 4,089,446 bytes |
+| CASM bytecode | 30,565 felts (37% of the limit) | 81,920 felts |
 
 The base64 encoder accounts for 4,921 Sierra felts, 288 KB and 11,148 CASM felts. Measured from `contract_class.json` without debug info, and the `bytecode` of `compiled_contract_class.json`.
 

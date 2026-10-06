@@ -116,7 +116,7 @@ pub trait ITinySynth<T> {
     ///
     /// Cost: a constant, stored in the class at build time (a string literal). Nothing is
     /// base64-encoded at call time. Materializing it costs about 0.37M L2 gas; through a library
-    /// call about 8.6M, most of it returning the 59,076-byte result.
+    /// call about 8.6M, most of it returning the 59,220-byte result.
     fn animation_url_segment(self: @T) -> ByteArray;
 
     /// Returns the per-token settings and MIDI piece, encoded at both layers, to follow

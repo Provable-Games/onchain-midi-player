@@ -392,18 +392,25 @@ async function checkArtwork() {
 }
 
 /**
- * The ▶/■ button sits at the art's `data-play-anchor`: on a card whose Beast box is (62, 66) to
- * (190, 194) in a 250x350 viewBox, anchored at "190 194", the button's bounding rect lies inside the
- * box at its bottom-right corner (6 px in), in a portrait viewport the art fills and, after a resize,
- * in a landscape one where the art is scaled and centred (object-fit: contain). Clicking it still
- * plays. Without the attribute the button stays at the viewport's bottom-right corner.
+ * The ▶/■ button sits at the art's `data-play-anchor`: on a card whose art frame (a rounded black
+ * rect) is (15, 58) to (235, 202) in a 250x350 viewBox, with the Beast's box (62, 66) to (190, 194)
+ * inside it, anchored at "235 202 40" (the frame's bottom-right corner, a 40-unit button), the
+ * button's bounding rect lies inside the frame, in its bottom-right quadrant, with a diameter of 40 x
+ * the art's scale on screen (44 to 128 px) and its corner max(40 / 8, 6) units in from the anchor,
+ * so it clears the frame's 8-unit rounded corner, with its centre to the right of the Beast box:
+ * in a portrait viewport the art fills, in larger ones, after a resize, in a landscape one where the
+ * art is scaled and centred (object-fit: contain), and with the image displayed at 75%. (The 44 px
+ * minimum and the 6-unit inset need 50 units of room to the Beast at scale 1, and the frame leaves
+ * 45, so the button may overlap the Beast box's right edge by a few px.) Clicking it still plays.
+ * Without a diameter the button is 48 px; without the attribute, or with a malformed one, it stays at
+ * the viewport's bottom-right corner.
  */
 async function checkPlayAnchor() {
   const c = CASES.default_120bpm;
-  const card = (/** @type {string} */ attrs) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 250 350' ${attrs}><rect width='250' height='350' fill='#1e1e22'/><rect x='62' y='66' width='128' height='128' fill='#c60'/></svg>`;
+  const card = (/** @type {string} */ attrs) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 250 350' ${attrs}><rect width='250' height='350' fill='#1e1e22'/><rect x='15' y='58' width='220' height='144' rx='8' fill='#000'/><rect x='62' y='66' width='128' height='128' fill='#c60'/></svg>`;
   console.log("play button anchored at the art's data-play-anchor (data: URI, offline)");
   const { context, page, logged } = await open({ offline: true, viewport: { width: 250, height: 350 } });
-  await page.goto(dataUrl(PAGE + c.d + card("data-play-anchor='190 194'")));
+  await page.goto(dataUrl(PAGE + c.d + card("data-play-anchor='235 202 40'")));
   await ready(page);
   // The button's rect and the art <img>'s own rect, as the page sees them.
   const rect = () => page.evaluate(() => {
@@ -412,28 +419,42 @@ async function checkPlayAnchor() {
     return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, img: { left: i.left, top: i.top, width: i.width, height: i.height } };
   });
   /**
-   * The button lands on the Beast box's bottom-right corner, 6 px in, wherever the <img> draws the
-   * art (object-fit: contain inside the img's own rect). It moves after a resize or a resized image,
-   * so this waits for it, up to 2 s.
+   * The button lands in the bottom-right quadrant of the art frame, wherever the <img> draws the art
+   * (object-fit: contain inside the img's own rect), with the diameter and inset the anchor gives,
+   * clear of the frame's rounded corner. It moves after a resize or a resized image, so this waits
+   * for it, up to 2 s.
    * @param {string} label
    */
   const inBox = async (label) => {
-    /** @type {any} */ let r, x, y;
+    /** @type {any} */ let r, x, y, size, k;
     const near = (/** @type {number} */ a, /** @type {number} */ b) => Math.abs(a - b) <= 1.5;
+    const placed = () => near(r.right, x(235) - 6 * k) && near(r.bottom, y(202) - 6 * k) && near(r.right - r.left, size) && near(r.bottom - r.top, size);
     for (let n = 0; n < 40; n++) {
       r = await rect();
-      const k = Math.min(r.img.width / 250, r.img.height / 350);
+      k = Math.min(r.img.width / 250, r.img.height / 350);
+      size = Math.min(128, Math.max(44, 40 * k));
       x = (/** @type {number} */ v) => r.img.left + (r.img.width - 250 * k) / 2 + v * k;
       y = (/** @type {number} */ v) => r.img.top + (r.img.height - 350 * k) / 2 + v * k;
-      if (near(r.right, x(190) - 6) && near(r.bottom, y(194) - 6)) break;
+      if (placed()) break;
       await page.waitForTimeout(50);
     }
-    check(near(r.right, x(190) - 6) && near(r.bottom, y(194) - 6) && r.left >= x(62) && r.top >= y(66),
-      `${label}: the button (${r.left.toFixed(1)}, ${r.top.toFixed(1)}) to (${r.right.toFixed(1)}, ${r.bottom.toFixed(1)}) is inside the Beast box (${x(62).toFixed(1)}, ${y(66).toFixed(1)}) to (${x(190).toFixed(1)}, ${y(194).toFixed(1)}) of the img (${r.img.width.toFixed(0)}x${r.img.height.toFixed(0)} at ${r.img.left.toFixed(0)}, ${r.img.top.toFixed(0)}), 6 px from its bottom-right corner`);
+    const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const quadrant = cx >= (x(15) + x(235)) / 2 && cy >= (y(58) + y(202)) / 2;
+    const inFrame = r.left >= x(15) && r.top >= y(58) && r.right <= x(235) + 0.5 && r.bottom <= y(202) + 0.5;
+    // The circle's nearest point to the frame's corner is further than the corner the 8-unit radius cuts off.
+    const cornerGap = Math.hypot(x(235) - cx, y(202) - cy) - size / 2;
+    const outsideBeast = cx >= x(190);
+    check(placed() && inFrame && quadrant && outsideBeast && cornerGap >= 0.414 * 8 * k,
+      `${label}: the ${(r.right - r.left).toFixed(1)} px button (${r.left.toFixed(1)}, ${r.top.toFixed(1)}) to (${r.right.toFixed(1)}, ${r.bottom.toFixed(1)}) is in the bottom-right quadrant of the frame (${x(15).toFixed(1)}, ${y(58).toFixed(1)}) to (${x(235).toFixed(1)}, ${y(202).toFixed(1)}), its centre right of the Beast box (x >= ${x(190).toFixed(1)}), ${cornerGap.toFixed(1)} px from the corner (rounded corner cuts ${(0.414 * 8 * k).toFixed(1)}); expected ${size.toFixed(1)} px (40 x scale ${k.toFixed(2)}, 44 to 128), the corner ${(6 * k).toFixed(1)} px in`);
   };
   await inBox("portrait 250x350");
   await page.setViewportSize({ width: 500, height: 400 });
   await inBox("landscape 500x400 after a resize");
+  await page.setViewportSize({ width: 250, height: 350 });
+  await page.setViewportSize({ width: 750, height: 1050 });
+  await inBox("portrait 750x1050 (a 120 px button)");
+  await page.setViewportSize({ width: 1000, height: 1400 });
+  await inBox("portrait 1000x1400 (clamped to 128 px)");
   await page.setViewportSize({ width: 250, height: 350 });
   await inBox("portrait again");
   // A host or a shared copy that displays the image smaller (75%): the ResizeObserver follows it.
@@ -448,8 +469,20 @@ async function checkPlayAnchor() {
   check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   await context.close();
 
+  // No diameter: 48 px, the corner 6 px inside the anchor.
+  {
+    const o = await open({ offline: true, viewport: { width: 250, height: 350 } });
+    await o.page.goto(dataUrl(PAGE + c.d + card("data-play-anchor='235 202'")));
+    await ready(o.page);
+    const r = await o.page.evaluate(() => {
+      const b = /** @type {HTMLElement} */ (document.getElementById("play")).getBoundingClientRect();
+      return { right: b.right, bottom: b.bottom, w: b.width };
+    });
+    check(r.w === 48 && Math.abs(r.right - 229) <= 1.5 && Math.abs(r.bottom - 196) <= 1.5, `an anchor without a diameter: a ${r.w} px button, its corner (${r.right}, ${r.bottom}) 6 px inside (235, 202)`);
+    await o.context.close();
+  }
   // No attribute, and a malformed one: the corner.
-  for (const attrs of ["", "data-play-anchor='190'"]) {
+  for (const attrs of ["", "data-play-anchor='235'", "data-play-anchor='235 202 0'"]) {
     const o = await open({ offline: true, viewport: { width: 250, height: 350 } });
     await o.page.goto(dataUrl(PAGE + c.d + card(attrs)));
     await ready(o.page);
