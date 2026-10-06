@@ -9,6 +9,9 @@ at commit `4bf982994dc3d1187661385726fed2e6595fafbe` on the fork's `improve/inte
   SHA-256 `8ad79ab8214e45a601e7d929e676b34b78e3f2b4200fd751d6548cf2b7df7749`.
 - `webaudio-tinysynth-4bf9829.NOTICE`: the commit's `NOTICE` (the fork's list of modifications), which goes into the
   class's `license()` text. SHA-256 `29b1e003f554d943972c538fd2fc173b2515a5320033016a7fdf938a0181b698`.
+- The source build is pinned independently as `ENGINE_PIN.sourceSha256` in `scripts/engine.mjs`:
+  `6f222de1b3f8a3ef2f6ad0273ba1eb2ed39d1d75e4cea00a04acb75bb9402bec` for `webaudio-tinysynth.js` at this exact commit.
+  The file is not embedded in PAGE; native source-build rows must bind their raw build artifact to this independent hash.
 - License: Apache License 2.0. Copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games (see the fork's NOTICE
   and this repository's [NOTICE](../../NOTICE)).
 
@@ -21,7 +24,8 @@ bytes. The engine tests and the render and page checks run the same file. The pi
 the one line `ENGINE_PIN` in [`scripts/engine.mjs`](../../scripts/engine.mjs), which checks both hashes on every load,
 so a mismatch fails before anything is generated. Nothing needs network access.
 
-To verify: `git -C <fork> show 4bf9829:webaudio-tinysynth.min.js | sha256sum`.
+To verify both engine inputs: `git -C <fork> show 4bf9829:webaudio-tinysynth.min.js | sha256sum` and
+`git -C <fork> show 4bf9829:webaudio-tinysynth.js | sha256sum`.
 
 ## Re-pinning
 
@@ -33,8 +37,9 @@ To a later commit, or to a tagged fork release once the fork publishes them:
    ref is its reproducible build: check out the ref in a clone, then `npm ci && npm run verify` (it rebuilds the file
    with the fork's pinned Terser and compares the bytes; commits before `npm run verify` existed: `npm ci && npm run
    build`, then compare).
-2. `node scripts/vendor_engine.mjs <fork checkout> <commit or tag>` copies the two files here (named after the short
-   commit or the tag) and prints the new `ENGINE_PIN` line. It only reads the checkout.
+2. `node scripts/vendor_engine.mjs <fork checkout> <commit or tag>` copies the minified build and NOTICE here (named
+   after the short commit or the tag), independently hashes the source file, and prints all three hashes in the new
+   `ENGINE_PIN` line. It only reads the checkout.
 3. Replace the `ENGINE_PIN` line in `scripts/engine.mjs`, delete the old files here, and run
    `npm run gen:page -- --record` (the new engine ref is a new `VERSION`). The
    page (with a new gzip payload), `src/page_data.cairo` (including `VERSION`, `ENGINE_SHA256`, `GZIP_SHA256` and the

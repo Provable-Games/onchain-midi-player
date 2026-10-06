@@ -1,9 +1,8 @@
 // @ts-check
 // The pinned TinySynth engine: the Provable-Games fork's own minified build
 // (webaudio-tinysynth.min.js) and NOTICE at one commit, vendored in tests/vendor so that the page
-// build and the tests run offline. It is the engine embedded in PAGE (scripts/build_page.mjs) and
-// the one the engine tests and render checks run. Both files are SHA-256 checked on every load, so
-// any mismatch fails before anything is generated.
+// build and tests run offline. The source hash is independently pinned for source-build
+// certification; it does not change the engine bytes embedded in PAGE.
 //
 // Re-pinning is a one-line change to ENGINE_PIN, after vendoring the new files with
 //   node scripts/vendor_engine.mjs <fork checkout> <commit or tag>
@@ -16,10 +15,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ENGINE_PIN = { ref: "4bf9829", commit: "4bf982994dc3d1187661385726fed2e6595fafbe", sha256: "8ad79ab8214e45a601e7d929e676b34b78e3f2b4200fd751d6548cf2b7df7749", noticeSha256: "29b1e003f554d943972c538fd2fc173b2515a5320033016a7fdf938a0181b698" };
+export const ENGINE_PIN = { ref: "4bf9829", commit: "4bf982994dc3d1187661385726fed2e6595fafbe", sha256: "8ad79ab8214e45a601e7d929e676b34b78e3f2b4200fd751d6548cf2b7df7749", sourceSha256: "6f222de1b3f8a3ef2f6ad0273ba1eb2ed39d1d75e4cea00a04acb75bb9402bec", noticeSha256: "29b1e003f554d943972c538fd2fc173b2515a5320033016a7fdf938a0181b698" };
 
 export const ENGINE_COMMIT = ENGINE_PIN.commit;
 export const ENGINE_SHA256 = ENGINE_PIN.sha256;
+export const ENGINE_SOURCE_SHA256 = ENGINE_PIN.sourceSha256;
 export const VENDOR_DIR = join(dirname(fileURLToPath(import.meta.url)), "../tests/vendor");
 export const ENGINE_PATH = join(VENDOR_DIR, `webaudio-tinysynth-${ENGINE_PIN.ref}.min.js`);
 export const NOTICE_PATH = join(VENDOR_DIR, `webaudio-tinysynth-${ENGINE_PIN.ref}.NOTICE`);

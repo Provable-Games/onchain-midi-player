@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
 import { PAGE_VERSIONS_PATH, isSemVer } from "./page.mjs";
+import { RELEASE_CERTIFICATES_PATH, releaseCertificateDigest, releaseCertificateProblem } from "./certification/release.mjs";
 
 const DIR = new URL("../deployments/", import.meta.url);
 const CHAIN_IDS = /** @type {Record<string, string>} */ ({ sepolia: "SN_SEPOLIA", mainnet: "SN_MAIN" });
@@ -31,6 +32,7 @@ function releaseTagProblem(network, version, tag) {
 
 const files = readdirSync(DIR).filter((name) => name.endsWith(".json"));
 const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
+const releaseCertificates = JSON.parse(readFileSync(RELEASE_CERTIFICATES_PATH, "utf8"));
 
 test("deployments/ has a file for Sepolia, and only known networks", () => {
   assert.ok(files.includes("sepolia.json"));
@@ -50,6 +52,7 @@ for (const name of files) {
     assert.equal(c.contract, "TinySynth", "contract name");
     assert.ok(versions[c.version], `${c.version} is recorded in scripts/page_versions.json`);
     assert.equal(releaseTagProblem(d.network, c.version, c.release_tag), null);
+    assert.equal(releaseCertificateProblem(c.version, c.release_tag, versions, releaseCertificates), null);
     assert.match(c.class_hash, FELT);
     assert.match(c.declare_tx, FELT);
     assert.match(c.built_from, COMMIT);
@@ -77,4 +80,27 @@ test("release_tag: null for a test class off mainnet, otherwise v<version> with 
   assert.match(releaseTagProblem("sepolia", "1.0.0", "1.0.0") ?? "", /not v<SemVer>/);
   assert.match(releaseTagProblem("sepolia", "1.0", "v1.0") ?? "", /not SemVer/);
   assert.match(releaseTagProblem("sepolia", "1.0.0", "v01.0.0") ?? "", /not v<SemVer>/);
+});
+
+test("stable deployment records require the certificate for that exact versioned page", () => {
+  const firstHash = "a".repeat(64);
+  const laterHash = "b".repeat(64);
+  const manifestSha256 = "c".repeat(64);
+  const resultsSha256 = "d".repeat(64);
+  const versions = {
+    "1.0.0": { page_sha256: firstHash },
+    "1.1.0": { page_sha256: laterHash },
+  };
+  const certificates = {
+    "1.0.0": {
+      version: "1.0.0", pageSha256: firstHash, manifestSha256, resultsSha256,
+      certificateSha256: releaseCertificateDigest("1.0.0", firstHash, manifestSha256, resultsSha256),
+    },
+  };
+  assert.equal(releaseCertificateProblem("1.0.0", "v1.0.0", versions, certificates), null);
+  assert.match(releaseCertificateProblem("1.1.0", "v1.1.0", versions, certificates) ?? "", /certificate record is missing/);
+  assert.match(releaseCertificateProblem("1.0.0", "v1.0.0", { ...versions, "1.0.0": { page_sha256: laterHash } }, certificates) ?? "", /page hash differs/);
+  assert.match(releaseCertificateProblem("1.0.0", "v1.1.0", versions, certificates) ?? "", /tag and certificate version/);
+  // A later page does not rewrite the older release's page or certificate binding.
+  assert.equal(releaseCertificateProblem("1.0.0", "v1.0.0", versions, certificates), null);
 });

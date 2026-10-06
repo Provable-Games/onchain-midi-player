@@ -28,6 +28,8 @@
 // Usage (repository root, after `npm ci`):
 //   node scripts/build_page.mjs           write the files and print the sizes   (npm run gen:page)
 //   node scripts/build_page.mjs --check   exit 1 if any file is out of date     (npm run check:page)
+//   node scripts/build_page.mjs --check --check-release-version 1.0.0
+//                                         also require stable-version production evidence
 //   node scripts/build_page.mjs --record  also record a new VERSION in scripts/page_versions.json
 //
 // Every run fails if PAGE or the engine pin changed while VERSION stayed the same
@@ -49,6 +51,7 @@ import {
 } from "./page.mjs";
 import { gunzip } from "../player/gunzip.js";
 import { PLAY_ICON } from "../player/player.js";
+import { checkReleaseEvidenceForBuild } from "./certification/release.mjs";
 
 export const CAIRO_PATH = new URL("../src/page_data.cairo", import.meta.url);
 export const FIXTURES_JSON_PATH = new URL("../tests/fixtures/page.json", import.meta.url);
@@ -209,6 +212,18 @@ export async function build() {
   return { page, cairo, fixtures, classFixtures: classFixturesCairo(page), sizes, segment, gzipSha256 };
 }
 
+/** A preflight target adds checks; it cannot replace the candidate's actual version check. */
+/** @param {string} actualVersion @param {string | null} [requestedVersion] */
+export function releaseVersionsForCheck(actualVersion, requestedVersion = null) {
+  if (!isSemVer(actualVersion)) throw new Error(`actual candidate version ${actualVersion} is not SemVer`);
+  if (requestedVersion === null) return [actualVersion];
+  if (!isSemVer(requestedVersion)) throw new Error(`requested release version ${requestedVersion} is not SemVer`);
+  const actualMajor = BigInt(actualVersion.split(".", 1)[0]);
+  const requestedMajor = BigInt(requestedVersion.split(".", 1)[0]);
+  if (requestedMajor < actualMajor) throw new Error(`requested release version ${requestedVersion} cannot weaken candidate version ${actualVersion}`);
+  return requestedVersion === actualVersion ? [actualVersion] : [actualVersion, requestedVersion];
+}
+
 /**
  * src/page_data.cairo.
  * @param {{page: string, segment: string, license: string, sizes: Record<string, number>, gzipSha256: string, shimSha256: string}} parts
@@ -280,6 +295,16 @@ ${cairoByteArrayConst("license", "LICENSE", license, [
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const releaseVersionIndex = process.argv.indexOf("--check-release-version");
+  const forcedReleaseVersion = releaseVersionIndex >= 0 ? process.argv[releaseVersionIndex + 1] : null;
+  if (releaseVersionIndex >= 0 && (!forcedReleaseVersion || !process.argv.includes("--check") || process.argv[releaseVersionIndex + 2]?.startsWith("--"))) {
+    console.error("--check-release-version VERSION requires --check and a SemVer version");
+    process.exit(2);
+  }
+  if (forcedReleaseVersion && !isSemVer(forcedReleaseVersion)) {
+    console.error(`invalid --check-release-version: ${forcedReleaseVersion}`);
+    process.exit(2);
+  }
   const { page, cairo, fixtures, classFixtures, sizes, gzipSha256 } = await build();
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
   let recorded;
@@ -295,6 +320,19 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     [PAGE_VERSIONS_PATH, JSON.stringify(recorded, null, 2) + "\n"],
   ]);
   if (process.argv.includes("--check")) {
+    let releaseVersions;
+    try { releaseVersions = releaseVersionsForCheck(VERSION, forcedReleaseVersion); }
+    catch (error) {
+      console.error(/** @type {Error} */ (error).message);
+      process.exit(2);
+    }
+    for (const version of releaseVersions) {
+      const certification = await checkReleaseEvidenceForBuild({ version, page });
+      if (certification.required && certification.status !== "pass") {
+        console.error(`release certification ${certification.status} for ${version}: ${JSON.stringify(certification)}`);
+        process.exit(2);
+      }
+    }
     const stale = files.filter(([path, text]) => {
       try {
         return readFileSync(path, "utf8") !== text;

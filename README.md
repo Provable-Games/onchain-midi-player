@@ -44,6 +44,7 @@ build-external-contracts = ["onchain_midi_player::contract::TinySynth"]
 
 - `version()` is the class's [SemVer](https://semver.org) version. Every declared class has its own version, and a declared class never changes. From `1.0.0`, the major number changes only when the call or `TinySynthSettings` layout does, so a later minor or patch class keeps your calls and settings working (it may change the engine, the page or the sound).
 - A release has the tag `v<version>` (`release_tag` in the deployment file), and its class is built from that tag. A class without one is a test class: do not store its hash for production tokens.
+- Before declaring a stable `1.x` release, maintainers must pass the [playback certification and release gate](docs/development.md#playback-certification); fixture checks do not qualify production sound pairs.
 - The ABIs are in [`abi/`](abi): the class's, and `ISoundProvider`'s for providers.
 
 ```cairo
@@ -258,6 +259,8 @@ The tools the skills use need Node 22 or later and a clone whose `VERSION` match
 - [`abi/`](abi): the ABIs of the class and of `ISoundProvider`
 - [`scripts/page_versions.json`](scripts/page_versions.json): the current `version()`'s engine commit, page revision and hashes (earlier versions are in its git history)
 - [Development](docs/development.md): toolchain, build, tests and CI, for contributors
+- [Playback certification](docs/development.md#playback-certification): versioned fixture checks, native evidence and stable-release requirements
+- [Contracts ledger](docs/improvements/contracts.md): checked playback and release invariants
 
 ## License
 

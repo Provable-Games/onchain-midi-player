@@ -1,0 +1,47 @@
+{
+  "schema": "onchain-midi-player.production-certification-manifest",
+  "schemaVersion": 1,
+  "scope": "production",
+  "qualification": "incomplete",
+  "note": "Reviewed pins only. Casey production pair bytes, final timing-policy approval, native browser rows, and physical-device evidence are not present.",
+  "release": {
+    "version": null,
+    "pageVersion": null
+  },
+  "runtime": null,
+  "policy": {
+    "metricVersion": "native-metrics-v1",
+    "toleranceVersion": null,
+    "engines": ["chromium", "firefox", "webkit"],
+    "builds": ["source", "min"],
+    "sampleRates": [44100, 48000],
+    "browserVersions": {
+      "chromium": null,
+      "firefox": null,
+      "webkit": null
+    },
+    "browserToolchain": {
+      "schemaVersion": 1,
+      "playwrightCoreVersion": null,
+      "browsersManifestSha256": null,
+      "identitySha256": null,
+      "browsers": {
+        "chromium": null,
+        "firefox": null,
+        "webkit": null
+      }
+    },
+    "maxPeak": null,
+    "minRms": null,
+    "maxPitchCents": null,
+    "maxTimingErrorSeconds": null,
+    "minSinePurity": null
+  },
+  "deviceEvidence": {
+    "schema": "onchain-midi-player.device-audio-evidence",
+    "schemaVersion": 1,
+    "status": "missing",
+    "cases": []
+  },
+  "pairs": []
+}
