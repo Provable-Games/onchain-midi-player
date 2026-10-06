@@ -73,7 +73,7 @@ examples/beast_consumer/
 - The consumer's pieces (`'{' members ',' <pad>`, `S`, the comma and the image key) are padded with spaces between JSON tokens to multiples of 3 bytes.
 - The class pads `PAGE` and `D` to multiples of 9, because they are spliced at both layers.
 - `S = svg_b64 '"' <pad>` is encoded once and appended twice. The first copy is the `image` value; the second, at the HTML layer, is the SVG that closes the art block, and its `"` closes the `animation_url` string.
-- **Word alignment.** The consumer adds 3 spaces at a time between JSON tokens, so that its two largest appends start on a 31-byte `ByteArray` word: the first `b64(S)` and the segment. Each group is the constant `'ICAg'` (`b64('   ')`), and the image key and the comma are constants too: `b64(' "image":"data:image/svg+xml;base64,')` and `'LCAg'` (`b64(',  ')`). So no alignment space is base64-encoded at call time. For token 4 this saves 16.7M L2 gas of appends (16.7M instead of 33.8M). [Alignment](../../docs/token-uri-layout.md#alignment) explains it.
+- **Word alignment.** The consumer adds 3 spaces at a time between JSON tokens, so that its two largest appends start on a 31-byte `ByteArray` word: the first `b64(S)` and the segment. Each group is the constant `'ICAg'` (`b64('   ')`), and the image key and the comma are constants too: `b64(' "image":"data:image/svg+xml;base64,')` and `'LCAg'` (`b64(',  ')`). So no alignment space is base64-encoded at call time. For token 4 this saves 17.1M L2 gas of appends (16.7M instead of 33.8M). [Alignment](../../docs/token-uri-layout.md#alignment) explains it.
 
 The tokens:
 

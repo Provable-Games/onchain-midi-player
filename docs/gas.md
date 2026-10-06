@@ -60,7 +60,7 @@ Its `token_uri` is 150,101 characters. The whole call is from `snforge test toke
 | The appends (word-aligned layout; 33.8M unaligned) | 16.7M | none |
 | The rest: SVG and score constants, members, name check | about 10M | none |
 
-- **Most of it is the SVG.** The two base64 passes over the SVG are 67% of the total: the same two passes any onchain SVG NFT makes, encoding the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 84M.
+- **Most of it is the SVG.** The two base64 passes over the SVG are 67% of the total: the same two passes any onchain SVG NFT makes, encoding the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 85M.
 - **Each byte of SVG** costs about 9K L2 gas in the full `token_uri`: two base64 passes through the library call, plus appending `b64(S)` twice.
 - **Small tokens are cheap:** the example's sample tokens, with a 1 KB SVG and a 112-byte MIDI, cost 34.1M to 34.3M.
 
