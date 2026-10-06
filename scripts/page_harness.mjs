@@ -255,7 +255,7 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
             width: 0,
             height: 0,
             getContext: () => {
-              const g = { imageSmoothingEnabled: true, drawImage: (/** @type {any[]} */ _img, /** @type {number[]} */ ...r) => { media.canvas.push({ n: canvas.width, op: "draw", rect: r, smoothing: g.imageSmoothingEnabled }); } };
+              const g = { imageSmoothingEnabled: true, fillStyle: "", fillRect: (/** @type {number[]} */ ...r) => { media.canvas.push({ n: canvas.width, op: "fill", style: g.fillStyle, rect: r }); }, drawImage: (/** @type {any[]} */ _img, /** @type {number[]} */ ...r) => { media.canvas.push({ n: canvas.width, op: "draw", rect: r, smoothing: g.imageSmoothingEnabled }); } };
               return g;
             },
             toDataURL: (/** @type {string} */ type) => {

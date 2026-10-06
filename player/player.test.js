@@ -495,7 +495,8 @@ describe("background audio: the silent element, the media session, the iOS audio
     assert.notEqual(MEDIA_TITLE, "TinySynth player");
   });
 
-  test("media session artwork: the art's own bitmap, 32x32 scaled 16x and 8x with smoothing off, as 512 and 256 PNGs", async () => {
+  const BG = "#1e1e22";
+  test("media session artwork: a static frame row on the card colour, 32x32 at 5x (512) and 2x (256), as PNGs", async () => {
     const h = await playing(card());
     assert.equal(h.media.session?.metadata.title, "Beast #7");
     assert.deepEqual(artworkOf(h), [], "until the bitmap has decoded");
@@ -505,17 +506,27 @@ describe("background audio: the silent element, the media session, the iOS audio
       { src: "data:image/png;base64,256", sizes: "256x256", type: "image/png" },
     ]);
     assert.deepEqual(plain(h.media.canvas), [
-      { n: 512, op: "draw", rect: [0, 0, 32, 32, 0, 0, 512, 512], smoothing: false }, { n: 512, op: "export" },
-      { n: 256, op: "draw", rect: [0, 0, 32, 32, 0, 0, 256, 256], smoothing: false }, { n: 256, op: "export" },
+      { n: 512, op: "fill", style: BG, rect: [0, 0, 512, 512] },
+      { n: 512, op: "draw", rect: [0, 0, 32, 32, 176, 176, 160, 160], smoothing: false }, { n: 512, op: "export" },
+      { n: 256, op: "fill", style: BG, rect: [0, 0, 256, 256] },
+      { n: 256, op: "draw", rect: [0, 0, 32, 32, 96, 96, 64, 64], smoothing: false }, { n: 256, op: "export" },
     ]);
     assert.deepEqual(h.consoleErrors, []);
+    // Set once: the artwork is static, the metadata is not updated again.
+    h.loadImages();
+    assert.equal(plain(h.media.canvas).length, 6, "no second composition");
   });
 
   for (const [label, bitmap, rects] of /** @type {Array<[string, number[], number[][]]>} */ ([
-    ["a sprite sheet (frames side by side): the first square frame", [96, 32], [[0, 0, 32, 32, 0, 0, 512, 512], [0, 0, 32, 32, 0, 0, 256, 256]]],
-    ["a size that does not divide: a whole factor, centred", [30, 30], [[0, 0, 30, 30, 1, 1, 510, 510], [0, 0, 30, 30, 8, 8, 240, 240]]],
-    ["a portrait bitmap: centred, letterboxed", [16, 32], [[0, 0, 16, 32, 128, 0, 256, 512], [0, 0, 16, 32, 64, 0, 128, 256]]],
-    ["a bitmap larger than the artwork: scaled down", [1024, 1024], [[0, 0, 1024, 1024, 0, 0, 512, 512], [0, 0, 1024, 1024, 0, 0, 256, 256]]],
+    ["a sprite sheet: its square frames side by side, centred", [96, 32],
+      [[0, 0, 32, 32, 16, 176, 160, 160], [32, 0, 32, 32, 176, 176, 160, 160], [64, 0, 32, 32, 336, 176, 160, 160],
+        [0, 0, 32, 32, 32, 96, 64, 64], [32, 0, 32, 32, 96, 96, 64, 64], [64, 0, 32, 32, 160, 96, 64, 64]]],
+    ["a sheet of 8 frames: the scale drops to fit the row in the width", [256, 32],
+      [...[...Array(8).keys()].map((i) => [i * 32, 0, 32, 32, i * 64, 224, 64, 64]),
+        ...[...Array(8).keys()].map((i) => [i * 32, 0, 32, 32, i * 32, 112, 32, 32])]],
+    ["a size that does not divide: whole scale, centred", [30, 30], [[0, 0, 30, 30, 181, 181, 150, 150], [0, 0, 30, 30, 98, 98, 60, 60]]],
+    ["a portrait bitmap: one frame, centred", [16, 32], [[0, 0, 16, 32, 216, 176, 80, 160], [0, 0, 16, 32, 112, 96, 32, 64]]],
+    ["a bitmap larger than the artwork: scaled down to the band", [1024, 1024], [[0, 0, 1024, 1024, 176, 176, 160, 160], [0, 0, 1024, 1024, 88, 88, 80, 80]]],
   ])) {
     test(`media session artwork: ${label}`, async () => {
       const h = await playing(card(), { bitmap });

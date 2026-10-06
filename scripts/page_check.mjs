@@ -332,47 +332,63 @@ async function barX(/** @type {any} */ page) {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * The media session's artwork is the art's own bitmap, upscaled without smoothing: a Beasts-style
- * card (a 250x350 SVG whose foreignObject holds a 32x32 PNG) gives a 512x512 and a 256x256 PNG in
- * which every source pixel is a solid 16x16 (8x8) block, with no blended colour at any boundary.
+ * The media session's artwork is a static frame row made of the art's own bitmap: on the card's dark
+ * colour, the bitmap's square frames side by side, centred, nearest-neighbour at a whole scale (a
+ * Beasts-style card, a 250x350 SVG whose foreignObject holds a 32x32 PNG, or a sheet of 3 frames).
+ * Android 13+ centre-crops the artwork to a wide panel, so the check is the composition: the
+ * background fills the top and bottom rows, and every source pixel is a solid block in the row,
+ * with no blended colour at any boundary.
  */
 async function checkArtwork() {
   const c = CASES.default_120bpm;
-  console.log("media session artwork: the art's 32x32 bitmap, upscaled without smoothing (data: URI, offline)");
-  // 32x32 source pixels with a different colour from every neighbour, so a blend shows anywhere.
-  const colour = (/** @type {number} */ x, /** @type {number} */ y) => [(x * 37 + y * 11) % 256, (x * 5 + y * 61) % 256, ((x ^ y) * 29) % 256, 255];
-  const png = encodePng(32, 32, colour).toString("base64");
-  const svg = "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xhtml='http://www.w3.org/1999/xhtml' width='250' height='350' viewBox='0 0 250 350'><title>Artwork check</title>" +
-    `<foreignObject x='0' y='0' width='250' height='250'><xhtml:img src='data:image/png;base64,${png}' style='width:100%;height:100%;image-rendering:pixelated'/></foreignObject></svg>`;
-  const { context, page, logged } = await open({ offline: true });
-  await page.goto(dataUrl(PAGE + c.d + svg));
-  await ready(page);
-  await startPlayback(page);
-  const done = await page.waitForFunction(() => {
-    const m = navigator.mediaSession && navigator.mediaSession.metadata;
-    return !navigator.mediaSession || (m && m.artwork.length === 2);
-  }, null, { timeout: 5000 }).then(() => true, () => false);
-  const meta = await page.evaluate(() => {
-    const m = navigator.mediaSession && navigator.mediaSession.metadata;
-    return m && { title: m.title, artwork: Array.from(m.artwork, (a) => ({ src: a.src, sizes: a.sizes, type: a.type })) };
-  });
-  if (!meta) skip("media session artwork: this engine has no navigator.mediaSession");
-  else {
-    check(done && meta.title === "Artwork check", `the title is the art's <title> (${meta.title}) and the artwork is set`);
-    for (const n of [512, 256]) {
-      const a = meta.artwork.find((x) => x.sizes === `${n}x${n}`);
-      check(!!a && a.type === "image/png" && a.src.startsWith("data:image/png;base64,"), `artwork ${n}x${n} is a PNG data URL`);
-      if (!a) continue;
-      const img = decodePng(Buffer.from(a.src.slice("data:image/png;base64,".length), "base64"));
-      const k = n / 32;
-      let blended = 0;
-      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (img.pixel(x, y).join() !== colour(Math.floor(x / k), Math.floor(y / k)).slice(0, 3).join()) blended++;
-      check(img.width === n && img.height === n && blended === 0, `artwork ${n}x${n}: every source pixel is a solid ${k}x${k} block (${blended} of ${n * n} pixels differ from nearest-neighbour)`);
+  for (const frames of [1, 3]) {
+    console.log(`media session artwork: ${frames} frame${frames > 1 ? "s" : ""} of 32x32 as a static row on the card colour (data: URI, offline)`);
+    // Source pixels with a different colour from every neighbour (and from the background), so a blend shows anywhere.
+    const colour = (/** @type {number} */ x, /** @type {number} */ y) => [(x * 37 + y * 11) % 200 + 40, (x * 5 + y * 61) % 200 + 40, (((x % 32) ^ y) * 29) % 200 + 40, 255];
+    const png = encodePng(32 * frames, 32, colour).toString("base64");
+    const svg = "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xhtml='http://www.w3.org/1999/xhtml' width='250' height='350' viewBox='0 0 250 350'><title>Artwork check</title>" +
+      `<foreignObject x='0' y='0' width='250' height='250'><xhtml:img src='data:image/png;base64,${png}' style='width:100%;height:100%;image-rendering:pixelated'/></foreignObject></svg>`;
+    const { context, page, logged } = await open({ offline: true });
+    await page.goto(dataUrl(PAGE + c.d + svg));
+    await ready(page);
+    await startPlayback(page);
+    const done = await page.waitForFunction(() => {
+      const m = navigator.mediaSession && navigator.mediaSession.metadata;
+      return !navigator.mediaSession || (m && m.artwork.length === 2);
+    }, null, { timeout: 5000 }).then(() => true, () => false);
+    const meta = await page.evaluate(() => {
+      const m = navigator.mediaSession && navigator.mediaSession.metadata;
+      return m && { title: m.title, artwork: Array.from(m.artwork, (a) => ({ src: a.src, sizes: a.sizes, type: a.type })) };
+    });
+    if (!meta) skip("media session artwork: this engine has no navigator.mediaSession");
+    else {
+      check(done && meta.title === "Artwork check", `the title is the art's <title> (${meta.title}) and the artwork is set`);
+      for (const n of [512, 256]) {
+        const a = meta.artwork.find((x) => x.sizes === `${n}x${n}`);
+        check(!!a && a.type === "image/png" && a.src.startsWith("data:image/png;base64,"), `artwork ${n}x${n} is a PNG data URL`);
+        if (!a) continue;
+        const img = decodePng(Buffer.from(a.src.slice("data:image/png;base64,".length), "base64"));
+        // 5x for one frame (160 px of 512), fitted to the width for more, and a whole scale of at most half that at 256.
+        const k = Math.max(1, Math.floor(Math.min((n * 160) / 512 / 32, n / (32 * frames))));
+        const x0 = Math.floor((n - 32 * frames * k) / 2), y0 = Math.floor((n - 32 * k) / 2);
+        const background = [0x1e, 0x1e, 0x22].join();
+        let wrong = 0, blank = 0;
+        for (let y = 0; y < n; y++) {
+          for (let x = 0; x < n; x++) {
+            const inRow = x >= x0 && x < x0 + 32 * frames * k && y >= y0 && y < y0 + 32 * k;
+            const want = inRow ? colour(Math.floor((x - x0) / k), Math.floor((y - y0) / k)).slice(0, 3).join() : background;
+            if (img.pixel(x, y).join() !== want) wrong++;
+            if (!inRow && (y === 0 || y === n - 1) && img.pixel(x, y).join() !== background) blank++;
+          }
+        }
+        check(img.width === n && img.height === n && blank === 0 && wrong === 0,
+          `artwork ${n}x${n}: the card colour at the top and bottom edges, ${frames} frame${frames > 1 ? "s" : ""} in a ${32 * frames * k}x${32 * k} row at ${k}x, every source pixel a solid ${k}x${k} block (${wrong} of ${n * n} pixels differ from nearest-neighbour)`);
+      }
     }
+    const errors = await logged();
+    check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
+    await context.close();
   }
-  const errors = await logged();
-  check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
-  await context.close();
 }
 
 /**

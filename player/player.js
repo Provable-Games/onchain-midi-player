@@ -43,7 +43,7 @@
  *    silently): ▶ also plays a silent looping <audio> element (a generated 6 s WAV in a blob: URL),
  *    which gives mobile browsers and desktop media hubs a media session (notification, lock screen,
  *    hardware keys) that keeps the page alive. `navigator.mediaSession` gets the art's title and its
- *    embedded bitmap (nearest-neighbour upscaled, see `arm`) as artwork, and play, pause and stop
+ *    embedded bitmap (a static frame row, see `arm`) as artwork, and play, pause and stop
  *    handlers that run the same code as ▶ and ■. A pause of the element from outside (the
  *    notification, a headset, a call) stops the player. On iOS,
  *    `navigator.audioSession.type = "playback"` makes Web Audio ignore the silent switch. If the
@@ -365,25 +365,34 @@ export function startPlayer() {
       for (const action of /** @type {const} */ (["play", "pause", "stop"])) {
         attempt(() => navigator.mediaSession.setActionHandler(action, action == "play" ? () => playing || button.disabled || start() : () => playing && stop()));
       }
-      // Artwork: the art's own bitmap (the first embedded PNG, GIF or WebP: a Beast's 32x32 sprite,
-      // or the first square frame of a sprite sheet), scaled up with nearest-neighbour on a canvas to
-      // the sizes Chrome Android asks for (512, and 256 on low-end devices), centred, at a whole
-      // factor when it fits. The card SVG itself is not drawn: its foreignObject can taint the
-      // canvas, and it is not square. Art without a bitmap gets no artwork.
+      // Artwork: the art's own bitmap (the first embedded PNG, GIF or WebP: a Beast's 32x32 sprite),
+      // as a static frame row on a dark card colour, at the sizes Chrome Android asks for (512, and
+      // 256 on low-end devices): the frames of a sprite sheet (square, side by side; a GIF or a
+      // plain image gives its one frame) in one row, centred, nearest-neighbour at a whole scale
+      // (5x for one 32 px frame: 160 px of 512). Android 13+ shows the artwork centre-cropped to a
+      // wide panel, so the row stays in the middle band; iOS shows the square as it is. The card SVG
+      // itself is not drawn: its foreignObject can taint the canvas. Art without a bitmap gets no
+      // artwork. The image is static: updating the metadata to animate it would flicker and cost power.
       const raster = /data:image\/(?:png|gif|webp);base64,[A-Za-z0-9+/=]+/.exec(svg);
       if (raster) {
         attempt(() => {
           const img = document.createElement("img");
           img.onload = () => attempt(() => {
             const h = img.naturalHeight;
-            const w = img.naturalWidth % h ? img.naturalWidth : h;
+            const count = img.naturalWidth % h ? 1 : img.naturalWidth / h;
+            const w = img.naturalWidth / count;
             const canvas = document.createElement("canvas");
             meta([512, 256].map((n) => {
               canvas.width = canvas.height = n;
               const g = /** @type {CanvasRenderingContext2D} */ (canvas.getContext("2d"));
+              g.fillStyle = "#1e1e22";
+              g.fillRect(0, 0, n, n);
               g.imageSmoothingEnabled = false;
-              const k = n >= Math.max(w, h) ? Math.floor(n / Math.max(w, h)) : n / Math.max(w, h);
-              g.drawImage(img, 0, 0, w, h, (n - w * k) / 2, (n - h * k) / 2, w * k, h * k);
+              const fit = Math.min((n * 5 * 32) / 512 / h, n / (w * count));
+              const k = fit < 1 ? fit : Math.floor(fit);
+              for (let i = 0; i < count; i++) {
+                g.drawImage(img, i * w, 0, w, h, Math.floor((n - w * k * count) / 2) + i * w * k, Math.floor((n - h * k) / 2), w * k, h * k);
+              }
               return { src: canvas.toDataURL("image/png"), sizes: n + "x" + n, type: "image/png" };
             }));
           });

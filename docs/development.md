@@ -88,9 +88,9 @@ The class compiled with the Scarb version above, at the current `VERSION`, again
 
 | | The class | Limit |
 | --- | --- | --- |
-| Sierra program | 19,836 felts | |
-| Contract class as declared (Sierra, entry points, ABI) | 1,013,470 bytes (25% of the limit) | 4,089,446 bytes |
-| CASM bytecode | 30,343 felts (37% of the limit) | 81,920 felts |
+| Sierra program | 19,865 felts | |
+| Contract class as declared (Sierra, entry points, ABI) | 1,014,816 bytes (25% of the limit) | 4,089,446 bytes |
+| CASM bytecode | 30,361 felts (37% of the limit) | 81,920 felts |
 
 The base64 encoder accounts for 4,921 Sierra felts, 288 KB and 11,148 CASM felts. Measured from `contract_class.json` without debug info, and the `bytecode` of `compiled_contract_class.json`.
 
@@ -105,7 +105,7 @@ The checks run on Playwright's Chromium, Firefox and WebKit. They load the class
 | The art restarts in sync on ▶ and at every pass | `checkDataPage`: screenshots of a probe animation, and each pass's restart timed against that pass's tick 0 |
 | Drift over a session | [`drift_check.mjs`](../scripts/drift_check.mjs) (`npm run drift-check -- --minutes 10`), run for 10 minutes by [`drift.yml`](../.github/workflows/drift.yml) |
 | Background audio: the silent element plays on ▶ and pauses on ■; the media session's play, pause and stop handlers drive ▶/■; with the element blocked (host CSP) the music plays and a hidden page stops | `page_check.mjs`: `checkBackgroundAudio`, `checkCsp`; `hosting_check.mjs`; the page's behaviour in `player.test.js` |
-| Media session artwork is the art's own bitmap, upscaled without smoothing: every source pixel a solid block in the 512×512 and 256×256 PNGs | `page_check.mjs`: `checkArtwork` |
+| Media session artwork is a static frame row of the art's own bitmap on the card colour, upscaled without smoothing: the card colour at the top and bottom edges and every source pixel a solid block in the 512×512 and 256×256 PNGs | `page_check.mjs`: `checkArtwork` |
 | Every failure path keeps the art, ▶ disabled | `checkFailures` (settings, MIDI), `checkEngineFailures` (gzip payload), `checkAudioFailures` (no Web Audio; `resume()` rejects) |
 | No network requests; offline from `data:` and `file://` (on WebKit every request is blocked and listed instead of using the offline emulation, which also blocks the page's own `blob:` media) | every load; `checkDataPage`, `checkFile` |
 | Sandboxed iframe, strict CSP, marketplace-style frames | `page_check.mjs`: `checkIframe`, `checkCsp` with `checkCspControl`, `checkEmbeds`; [`hosting_check.mjs`](../scripts/hosting_check.mjs): `data:` and `srcdoc` frames in a host with a strict CSP, and the hosts where the page cannot run |
