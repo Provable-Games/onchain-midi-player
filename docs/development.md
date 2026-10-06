@@ -100,7 +100,7 @@ The checks run on Playwright's Chromium, Firefox and WebKit. They load the class
 
 | Scope | Check |
 | --- | --- |
-| Playback starts only on a tap; ▶/❚❚ toggles: ❚❚ suspends the `AudioContext` (clock frozen, nothing scheduled), ▶ resumes where it was and restarts the art in phase (a negative SMIL `begin`) | [`page_check.mjs`](../scripts/page_check.mjs): `checkDataPage` (clicks), `checkTouch` (taps); the example's `browser_check.mjs` |
+| Playback starts only on a tap; ▶/❚❚ toggles: ❚❚ suspends the `AudioContext` (clock frozen, nothing scheduled), the art freezes at the music's position (a negative SMIL `begin`, `repeatDur` and `fill='freeze'`), ▶ resumes both from there | [`page_check.mjs`](../scripts/page_check.mjs): `checkDataPage` (clicks), `checkTouch` (taps); the example's `browser_check.mjs` |
 | Seamless End-of-Track loop, correct tempo | `checkLoop`: passes start exactly one pass of the MIDI's own tempo map apart, to 1 µs |
 | The art restarts in sync on ▶ and at every pass | `checkDataPage`: screenshots of a probe animation, and each pass's restart timed against that pass's tick 0 |
 | Drift over a session | [`drift_check.mjs`](../scripts/drift_check.mjs) (`npm run drift-check -- --minutes 10`), run for 10 minutes by [`drift.yml`](../.github/workflows/drift.yml) |

@@ -55,9 +55,10 @@
  *    envelope and scheduled event holds, and TinySynth's sequencer, which schedules against that
  *    clock, schedules nothing more; ▶ resumes it (`resume()`) and all of it carries on from there.
  *    Nothing is stopped or reloaded: to start over, reload the page. ❚❚ also cancels the pending
- *    art restart (its pass is timed again on resume) and the polling. The art keeps animating
- *    while paused; on resume it restarts at once with its timeline started as far into the pass as
- *    the music is (`artUrl`'s offset: a negative SMIL `begin`), so it is in phase again.
+ *    art restart (its pass is timed again on resume) and the polling. The art stands still with it:
+ *    it is restarted at once with every SMIL animation begun as far into the pass as the music is
+ *    and frozen there (`artUrl`'s offset and freeze), and on ▶ restarted from that same point,
+ *    running. Both are plain images, so this works in any frame and engine (a GIF runs on).
  *
  * Plain browser JavaScript: no modules in the page, no eval, no network requests, no storage. Works
  * in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles
@@ -239,13 +240,25 @@ export function checkMidi(u) {
  * image (and animation timeline) rather than reusing the running one. `offset` > 0 starts that
  * timeline `offset` seconds in: every SMIL animation element (`animate`, `animateTransform`,
  * `animateMotion`, `animateColor`, `set`) without a `begin` gets `begin='-<offset>s'`, which SMIL
- * plays as begun that long ago. A GIF in the art always starts at its first frame.
+ * plays as begun that long ago. `freeze` also ends each of them there (`repeatDur` 1 ms past the
+ * offset, as an interval must end after the timeline's start, and `fill='freeze'`, replacing their
+ * own `repeatDur` and `fill`): the image is the frame at `offset`,
+ * standing still. A GIF in the art always starts at its first frame, and runs on.
  * @param {string} svg
  * @param {number} [restart]
  * @param {number} [offset]
+ * @param {boolean} [freeze]
  */
-export function artUrl(svg, restart = 0, offset = 0) {
-  if (offset > 0) svg = svg.replace(/<(animate(?:Transform|Motion|Color)?|set)(?![\w:.-])(?![^>]*\sbegin\s*=)/g, "<$1 begin='-" + offset.toFixed(3) + "s'");
+export function artUrl(svg, restart = 0, offset = 0, freeze = false) {
+  if (offset > 0 || freeze) {
+    const t = offset.toFixed(3) + "s";
+    // A frozen interval must end after the image's timeline begins (at 0), or engines drop it.
+    const end = (offset + 0.001).toFixed(3) + "s";
+    svg = svg.replace(/<(animate(?:Transform|Motion|Color)?|set)(?![\w:.-])([^>]*)>/g, (tag, name, attrs) =>
+      /\sbegin\s*=/.test(attrs) ? tag
+        : freeze ? "<" + name + " begin='-" + t + "' repeatDur='" + end + "' fill='freeze'" + attrs.replace(/\s(?:fill|repeatDur)\s*=\s*(["']).*?\1/g, "") + ">"
+        : "<" + name + " begin='-" + t + "'" + attrs + ">");
+  }
   let bin = "";
   for (const b of new TextEncoder().encode(svg)) bin += String.fromCharCode(b);
   return "data:image/svg+xml;" + (restart ? "r=" + restart + ";" : "") + "base64," + btoa(bin);
@@ -344,8 +357,9 @@ export function startPlayer() {
      * already shown (restarts at every pass can decode out of order).
      * @param {number} current the press that scheduled it
      * @param {number} [offset] seconds into the art's timeline (resuming mid-pass)
+     * @param {boolean} [freeze] the art standing still at `offset` (paused)
      */
-    const restartArt = (current, offset = 0) => {
+    const restartArt = (current, offset = 0, freeze = false) => {
       if (!art) return;
       const n = ++restarts;
       const img = document.createElement("img");
@@ -357,7 +371,7 @@ export function startPlayer() {
         art = img;
         watch(art);
       };
-      img.src = artUrl(svg, n, offset);
+      img.src = artUrl(svg, n, offset, freeze);
     };
 
     /** @param {() => unknown} f best effort: a failure is silent */
@@ -461,8 +475,22 @@ export function startPlayer() {
         sync(current);
       }, Math.max(0, delay * 1000));
     };
+    /**
+     * Seconds heard into the current pass, or null before tick 0 of the first is heard. startTime
+     * may already be the next pass's (see step 4).
+     */
+    const position = () => {
+      const ctx = synth.getAudioContext();
+      const at = synth.getPlayStatus().startTime;
+      let into = ctx.currentTime - (ctx.outputLatency || 0) - at;
+      if (into < 0 && at > origin) into += pass;
+      return started && at !== null && into >= 0 ? into % pass : null;
+    };
     const pause = () => {
+      const at = position();
       ++run;
+      // The art stands still at the music's position: its animations end there, frozen.
+      if (at !== null) restartArt(run, at, true);
       window.clearTimeout(timer);
       window.clearInterval(poll);
       if (timer && synced != null) synced -= pass; // its pass is timed again on resume
@@ -554,13 +582,10 @@ export function startPlayer() {
         ctx.resume().then(() => {
           if (current !== run) return;
           if (started) {
-            // Resumed: the art restarts at once, as far into its timeline as the music is into the
-            // pass (the clock stood still while paused, the art did not). startTime may already be
-            // the next pass's (see step 4); before the first pass is heard, its restart is pending.
-            const at = synth.getPlayStatus().startTime;
-            let into = ctx.currentTime - (ctx.outputLatency || 0) - at;
-            if (into < 0 && at > origin) into += pass;
-            if (at !== null && into >= 0) restartArt(current, into % pass);
+            // Resumed: the art carries on from where it stood still, the music's position in the
+            // pass (the clock stood still too). Before the first pass is heard, its restart is pending.
+            const at = position();
+            if (at !== null) restartArt(current, at);
             sync(current);
           } else {
             synth.loadMIDI(midi);

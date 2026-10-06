@@ -320,7 +320,13 @@ describe("the page's player script, fake engine", () => {
     assert.equal(artUrl(svg, 2, 0), artUrl(svg, 2), "no offset: the art as it is");
   });
 
-  test("▶ after ❚❚: the art restarts at once, offset to the music's position in the pass", async () => {
+  test("artUrl's freeze: every SMIL animation without a begin ends at the offset and holds there", () => {
+    const svg = "<svg><animate a='1' fill='remove'/><set begin='1s'/><animateTransform repeatDur='9s' b='2'/></svg>";
+    const back = (/** @type {string} */ url) => Buffer.from(url.split("base64,")[1], "base64").toString();
+    assert.equal(back(artUrl(svg, 3, 1.5, true)), "<svg><animate begin='-1.500s' repeatDur='1.501s' fill='freeze' a='1'/><set begin='1s'/><animateTransform begin='-1.500s' repeatDur='1.501s' fill='freeze' b='2'/></svg>");
+  });
+
+  test("❚❚ freezes the art at the music's position in the pass; ▶ runs it on from there", async () => {
     const c = CASES.default_120bpm;
     const h = runPage(htmlOf(c), { outputLatency: 0.02 });
     h.ready();
@@ -328,12 +334,15 @@ describe("the page's player script, fake engine", () => {
     await h.flush();
     h.run(1); // the first restart at 1.62, then 0.88 s into the pass
     h.loadImages();
-    h.click(); // ❚❚
+    const into = 2.5 - 0.02 - 1.6;
+    h.click(); // ❚❚: the art stands still at the music's position
+    h.loadImages();
+    assert.equal(h.art()?.src, artUrl(c.svg, 2, into, true), "restart 2, frozen 0.880 s in");
+    assert.match(Buffer.from((h.art()?.src || "").split("base64,")[1], "base64").toString(), /begin='-0\.880s' repeatDur='0\.881s' fill='freeze'/);
     h.click(); // ▶
     await h.flush();
-    const into = 2.5 - 0.02 - 1.6;
     h.loadImages();
-    assert.equal(h.art()?.src, artUrl(c.svg, 2, into), "restart 2, 0.880 s in");
+    assert.equal(h.art()?.src, artUrl(c.svg, 3, into), "restart 3, running from 0.880 s");
     assert.match(Buffer.from((h.art()?.src || "").split("base64,")[1], "base64").toString(), /begin='-0\.880s'/);
     assert.deepEqual(h.consoleErrors, []);
   });

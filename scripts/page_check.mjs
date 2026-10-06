@@ -665,10 +665,11 @@ async function checkDataPage() {
 
   // ❚❚ for 1.5 s: the AudioContext suspended, its clock standing still, nothing more scheduled, the
   // engine not stopped, and no art restart.
+  const imgs = (await state(page)).imgs.length; // the images shown so far: the next is the frozen one
   await page.click("#play");
   await contextState(page, "suspended");
   st = await state(page);
-  const [sends, frozen, imgs] = [st.sends, st.synth.time, st.imgs.length];
+  const [sends, frozen] = [st.sends, st.synth.time];
   await page.waitForTimeout(1500);
   const paused = await state(page);
   // The engine's sequencer may still schedule the events within its look-ahead (0.2 s) of the
@@ -676,24 +677,37 @@ async function checkDataPage() {
   const meanwhile = (await page.evaluate(() => /** @type {any} */ (window).__check.sends)).slice(sends).map((/** @type {number[]} */ m) => m[3]);
   check(isPaused(paused) && paused.icon === PLAY_ICON && paused.synth.time === frozen && meanwhile.every((t) => t <= frozen + 0.2 + 1e-6),
     `❚❚ pauses: AudioContext ${paused.synth.state}, its clock at ${frozen.toFixed(4)} s and ${paused.synth.time.toFixed(4)} s 1.5 s later, the engine ${paused.synth.playing ? "not stopped" : "stopped"}, ${paused.label} shown; ${meanwhile.length} messages scheduled meanwhile, none past its 0.2 s look-ahead${meanwhile.length ? ` (up to ${(Math.max(...meanwhile) - frozen).toFixed(3)} s ahead)` : ""}`);
-  check(paused.imgs.length === imgs, "❚❚: no art restart while paused");
+  // The art stands still: restarted at once (r=imgs) frozen at the music's position, the probe
+  // bar where it was, and the same 1 s later.
+  const pass = c.midi_loop_seconds;
+  const into = (((frozen - (play.outputLatency || 0) - play.startTime) % pass) + pass) % pass;
+  const still = paused.imgs[imgs];
+  const stillSvg = still ? Buffer.from(still.src.split("base64,")[1], "base64").toString("utf8") : "";
+  const frozenAt = /<animate begin='-([0-9.]+)s' repeatDur='([0-9.]+)s' fill='freeze'/.exec(stillSvg);
+  // Frozen when ❚❚ was pressed; the clock read here stopped a little later, once suspend() took.
+  const early = frozenAt ? into - +frozenAt[1] : NaN;
+  check(paused.imgs.length === imgs + 1 && !!frozenAt && Math.abs(+frozenAt[2] - +frozenAt[1] - 0.001) < 1e-9 && early > -1 / 60 && early < 0.1,
+    `❚❚: the art restarted frozen at ${frozenAt ? frozenAt[1] : "?"} s, ${(1000 * early).toFixed(1)} ms before the clock's stop at ${into.toFixed(4)} s into the pass`);
+  const bar1 = await barX(page);
+  await page.waitForTimeout(1000);
+  const bar2 = await barX(page);
+  check(bar1 === bar2 && bar1 > 0 && Math.abs(bar1 - (390 * into) / SWEEP_SECONDS) < 20, `❚❚: the art stands still (probe bar at x = ${bar1}, then ${bar2} 1 s later; ~${Math.round((390 * into) / SWEEP_SECONDS)} expected)`);
 
   // ▶: resumed where it was (no new playMIDI), the clock advancing again, and the art restarted at
   // once with its animations begun as far into the pass as the music is: a negative SMIL begin of
   // the paused position, ((frozen clock - output latency - first startTime) mod pass).
   await page.click("#play");
   await contextState(page, "running");
-  await page.waitForFunction((/** @type {number} */ n) => /** @type {any} */ (window).__check.imgs.length > n, imgs, { timeout: 3000 }).catch(() => {});
+  await page.waitForFunction((/** @type {number} */ n) => /** @type {any} */ (window).__check.imgs.length > n, imgs + 1, { timeout: 3000 }).catch(() => {});
   st = await state(page);
-  const pass = c.midi_loop_seconds;
-  const into = (((frozen - (play.outputLatency || 0) - play.startTime) % pass) + pass) % pass;
-  const resumed = st.imgs[imgs];
+  const resumed = st.imgs[imgs + 1];
   const svg = resumed ? Buffer.from(resumed.src.split("base64,")[1], "base64").toString("utf8") : "";
-  const begin = /<animate begin='-([0-9.]+)s'/.exec(svg);
+  const begin = /<animate begin='-([0-9.]+)s'(?! repeatDur)/.exec(svg);
   // The player reads the clock once resume() has settled, by when it may have run on a little.
   const ahead = begin ? +begin[1] - into : NaN;
-  check(ahead > -1 / 60 && ahead < 0.05 && resumed.src.includes(`;r=${imgs};base64,`),
-    `▶ resumes: the art restarted at once (r=${imgs}) with begin='-${begin ? begin[1] : "?"}s': the paused position ${into.toFixed(4)} s into the ${pass.toFixed(4)} s pass, plus ${(1000 * ahead).toFixed(1)} ms the clock ran before resume() settled`);
+  const bar3 = await barX(page);
+  check(ahead > -1 / 60 && ahead < 0.05 && bar3 >= bar2 && bar3 - bar2 < 20,
+    `▶ resumes: the art runs on from where it stood (bar ${bar2} -> ${bar3}), restarted with begin='-${begin ? begin[1] : "?"}s': the paused position ${into.toFixed(4)} s into the ${pass.toFixed(4)} s pass, plus ${(1000 * ahead).toFixed(1)} ms the clock ran before resume() settled`);
   check(st.label === "Pause" && st.plays.length === 1 && st.constructed === 1, "▶ resumes: ❚❚ shown, the same synth, no new playMIDI");
   await page.waitForTimeout(300);
   const later = await state(page);
