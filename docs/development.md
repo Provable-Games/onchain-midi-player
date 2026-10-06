@@ -123,8 +123,8 @@ GitHub Actions runs on every pull request and on pushes to `main` ([`.github/wor
 
 | Job | What it checks |
 | --- | --- |
-| `cairo` | `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer`; the Scarb lockfiles stay unchanged |
-| `javascript` | The example's Node tests, `npm ci`, `npm test`, and `tsc --checkJs` on `player/` |
+| `cairo` | `scarb fmt --check`, `scarb build` and `snforge test` at the root and in `examples/beast_consumer` and `examples/stress_nft`; the Scarb lockfiles stay unchanged |
+| `javascript` | The examples' Node tests, `npm ci`, `npm test`, and `tsc --checkJs` on `player/` |
 | `generated` | Reruns the fixture generators, `npm run check:settings`, `npm run check:page` and the ABI generator, then fails on any diff |
 | `browser` | One leg per engine (Chromium, Firefox, WebKit): the example's `browser_check.mjs`, `render-check`, `page-check`, `hosting-check` and a 1-minute `drift-check` |
 
@@ -139,8 +139,10 @@ Run the same checks locally from the repository root:
 ```sh
 scarb fmt --check && scarb build && snforge test
 (cd examples/beast_consumer && scarb fmt --check && scarb build && snforge test)
+(cd examples/stress_nft && scarb fmt --check && scarb build && snforge test)
 node scripts/gen_midi_fixtures.mjs
 (cd examples/beast_consumer && node --test scripts/*.test.mjs && node scripts/gen_fixtures.mjs)
+(cd examples/stress_nft && node --test scripts/*.test.mjs && node scripts/gen_fixtures.mjs)
 npm ci && npm test && npm run check:settings && npm run check:page && npm run check:abi
 git diff --exit-code                     # generators left no drift
 
@@ -188,6 +190,7 @@ A release is a tagged commit whose class is declared on Sepolia, then on mainnet
 
    The address depends on the class hash, the salt and, with `--unique`, the deploying account. Once the final class hash is known, a vanity address can be mined offline: compute the address for many salts and deploy with the best one.
 8. **Deploy the example,** if wanted: declare and deploy `BeastLikeNft` from [`examples/beast_consumer`](../examples/beast_consumer) with the class hash as its constructor argument.
+   Deploy [`examples/stress_nft`](../examples/stress_nft) the same way (its constructor also takes an owner), and update its [`sepolia.json`](../examples/stress_nft/sepolia.json): its RPC check builds the reference from the checked-out page, so it matches only a `StressNft` that pins the current class.
 9. **Record each network** in `deployments/<network>.json`: `version`, `release_tag` `v<version>`, class hash, declare and deploy transactions, `built_from` (the tagged commit's full SHA), the inspection instance and the example (`null` if none). Remove the superseded record from `scripts/page_versions.json` (step 2 added the new one beside it). `npm test` checks the files.
 10. **Verify the declared class.** Call `version()`, `engine()` and `script_sha256()` on the inspection instance, and compare them with [`scripts/page_versions.json`](../scripts/page_versions.json). Call a real consumer's `token_uri` (the example's, or the NFT's) through several RPC providers (the [`token-uri-inspector`](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill has the commands) and compare each result byte for byte with the JS reference ([`gen_fixtures.mjs`](../examples/beast_consumer/scripts/gen_fixtures.mjs)). Record any provider that fails, such as an `Out of gas` revert.
 11. **Publish a GitHub release** for the tag. List the class hash and declare transaction per network, the inspection instances, the engine's fork tag and SHA-256, the toolchain versions, and how to reproduce the build: check out the tag, install the versions in `.tool-versions`, run `scarb --release build` and `sncast --scarb-profile release utils class-hash --contract-name TinySynth`, and compare with the class hash. Link [Verifying the engine](verifying.md).

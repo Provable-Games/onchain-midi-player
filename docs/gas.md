@@ -107,8 +107,8 @@ A `token_uri` is a view call (`starknet_call`), so what limits it is the node th
 | Madara | 10B | Requests and responses at most 15 MiB |
 | jsonrpsee, and StarkWare's `apollo_rpc` | | Responses at most 10 MiB: a returned `ByteArray` of about 4.85 MB, or about 2.7 MB of `SETTINGS` |
 | Katana (development) | 1B by default | |
-| Hosted providers | Undocumented | Each provider runs one of the nodes above with its own configuration, so a full-size token can succeed on one and revert `Out of gas` on another |
+| Hosted providers | Undocumented | Each provider runs one of the nodes above with its own configuration, so a full-size token can succeed on one and revert `Out of gas` on another. On Sepolia, with [`examples/stress_nft`](../examples/stress_nft/README.md): zan.top and Cartridge served up to 9.99B and reverted `Out of gas` at 10.1B; dRPC served 600M and reverted at 800M; PublicNode served 60M and reverted at 100.3M, just above Juno's 100M default |
 
 - A full-size token with the reference sounds (288.6M) already needs more than Juno's default.
-- Check a full-size token through the providers your marketplaces and indexers use. The [`token-uri-inspector`](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill shows how.
+- Check a full-size token through the providers your marketplaces and indexers use. The [`token-uri-inspector`](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill shows how. The [stress NFT](../examples/stress_nft/README.md) has twenty tokens from 30M to 10B gas and a script that calls them through any list of providers.
 - **Keep every class in the call chain at Sierra 1.7 or later.** If any class in the chain is Cairo 0 or Sierra before 1.7 (a proxy pointing at an old class, for example), that frame and everything below it switches to Cairo-steps accounting. It is then capped at 10M steps (Juno: 4M), about 1B gas. `midi_segment` alone takes about 22M steps with the largest `SETTINGS` without custom waves.

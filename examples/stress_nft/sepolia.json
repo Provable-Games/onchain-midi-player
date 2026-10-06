@@ -1,0 +1,12 @@
+{
+  "network": "sepolia",
+  "chain_id": "SN_SEPOLIA",
+  "contract": "StressNft",
+  "class_hash": "0x07d4855b5b536276beed81d96cef9c1e288d4954163545a295be1bef978afccd",
+  "declare_tx": "0x0389877fe8f33925ec43ec5fd69fb605c0cd1b5cef648287c39d0546044fc4bf",
+  "address": "0x06f81222502a5421224731965cab4627d5ba66befa6e4818b1d07d60c872d11d",
+  "deploy_tx": "0x012f6a1e9b9ce071b765a7247f2802e1b5690e7b75fc236974223d6e35ff4c81",
+  "tinysynth_class_hash": "0x01f893742bfae85e760a0949d391015d8858d181f9def86ee75d5619d1af83b0",
+  "owner": "0x073ac213ef80739326bc090a48684b247c98f424c2ae968bb819c708ac3a2862",
+  "built_from": "b315423af2c5e1a571822914e1259fd7d61deadf"
+}

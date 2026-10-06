@@ -46,7 +46,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/scarb
-          key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'examples/beast_consumer/Scarb.lock') }}
+          key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'examples/beast_consumer/Scarb.lock', 'examples/stress_nft/Scarb.lock') }}
           restore-keys: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-
 
       # Versions come from .tool-versions: scarb 2.20.1, starknet-foundry 0.64.0.
@@ -78,9 +78,16 @@ jobs:
           scarb build
           snforge test
 
+      - name: examples/stress_nft
+        working-directory: examples/stress_nft
+        run: |
+          scarb fmt --check
+          scarb build
+          snforge test
+
       # Scarb 2.20.1 has no --locked flag; fail if a build rewrote a lockfile.
       - name: Lockfiles unchanged
-        run: git diff --exit-code -- Scarb.lock examples/beast_consumer/Scarb.lock
+        run: git diff --exit-code -- Scarb.lock examples/beast_consumer/Scarb.lock examples/stress_nft/Scarb.lock
 
   javascript:
     name: javascript
@@ -102,8 +109,9 @@ jobs:
           cache-dependency-path: ${{ env.CI_TOOLS }}/package-lock.json
 
       - name: Example Node tests
-        working-directory: examples/beast_consumer
-        run: node --test scripts/*.test.mjs
+        run: |
+          (cd examples/beast_consumer && node --test scripts/*.test.mjs)
+          (cd examples/stress_nft && node --test scripts/*.test.mjs)
 
       - name: Install root dependencies
         if: steps.detect.outputs.has_lockfile == 'true'
@@ -152,8 +160,9 @@ jobs:
 
       # Reads the committed page (tests/fixtures/page.html); needs no npm install.
       - name: Regenerate the example's fixtures
-        working-directory: examples/beast_consumer
-        run: node scripts/gen_fixtures.mjs
+        run: |
+          (cd examples/beast_consumer && node scripts/gen_fixtures.mjs)
+          (cd examples/stress_nft && node scripts/gen_fixtures.mjs)
 
       - name: Install root dependencies
         if: (steps.detect.outputs.has_check_settings == 'true' || steps.detect.outputs.has_check_page == 'true') && steps.detect.outputs.has_lockfile == 'true'
@@ -175,7 +184,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/scarb
-          key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'examples/beast_consumer/Scarb.lock') }}
+          key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'examples/beast_consumer/Scarb.lock', 'examples/stress_nft/Scarb.lock') }}
           restore-keys: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-
 
       - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
