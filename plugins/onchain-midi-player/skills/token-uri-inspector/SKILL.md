@@ -2,7 +2,7 @@
 name: token-uri-inspector
 description: Inspect a deployed or local NFT token_uri built with the onchain MIDI player (Provable-Games/onchain-midi-player). Fetch it with sncast or a raw starknet_call, decode its JSON, image and animation_url page, verify the embedded engine against the published hash, check the embedded MIDI and SETTINGS, check the art is safe, rebuild and view the page in a browser, and find which RPC providers can serve it. Use when a token's animation does not play or looks wrong, when verifying a token against a class version, or when checking RPC call gas caps.
 license: Apache-2.0
-compatibility: Needs Node 22 or later, a clone of https://github.com/Provable-Games/onchain-midi-player whose VERSION in src/page_data.cairo equals the class's version(), curl or sncast, and network access to a Starknet RPC.
+compatibility: Needs Node 22 or later (and npm ci once for npm run validate-token-uri), a clone of https://github.com/Provable-Games/onchain-midi-player whose VERSION in src/page_data.cairo equals the class's version(), curl or sncast, and network access to a Starknet RPC.
 ---
 
 # Inspecting a `token_uri`
@@ -11,7 +11,7 @@ A `token_uri` from this player is `data:application/json;base64,` + JSON whose `
 
 The class's `engine()` names its engine, and so the format of the `SETTINGS` block: `'tinysynth'` is the format these tools decode. RPC can call it only on a deployed instance of the class or through a getter of the NFT. The inspection instance in [`deployments/<network>.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/deployments/sepolia.json) (`class.inspection_instance.address`) answers it, and `version()`, `script_sha256()` and `license()`.
 
-Run everything from a clone whose `grep 'pub const VERSION' src/page_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed (README, [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills)). The same `VERSION` always means the same page bytes, and newer commits have the tools; a released class's tag, `v<version>`, has its page too. `version()` is SemVer. Node 22 or later; no `npm ci`. `I=plugins/onchain-midi-player/skills/token-uri-inspector/scripts` below.
+Run everything from a clone whose `grep 'pub const VERSION' src/page_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed (README, [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills)). The same `VERSION` always means the same page bytes, and newer commits have the tools; a released class's tag, `v<version>`, has its page too. `version()` is SemVer. Node 22 or later; no `npm ci`, except for the validator in step 1. `I=plugins/onchain-midi-player/skills/token-uri-inspector/scripts` below.
 
 ## 1. Fetch
 
@@ -61,6 +61,8 @@ node scripts/verify_engine.mjs token_uri.txt --expect <script_sha256() of the cl
 ```
 
 It prints the SHA-256 and length of the gzip payload, the engine and the fixed `PAGE`, and exits 1 unless the engine matches `--expect`. Compare all three with the class's record in [`scripts/page_versions.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/page_versions.json), keyed by its `version()`: `gzip_sha256` and `gzip_len`, `script_sha256`, and `page_sha256`. A matching `PAGE` also proves the shim and the player around the engine are the class's. If the token's `version()` has no record, report the version as unknown rather than as a mismatch, and look its record up with `git log -p scripts/page_versions.json`.
+
+`npm run validate-token-uri` makes this comparison with the record of `VERSION` itself, and reports a version the record lacks.
 
 ## 4. Split the page, check the MIDI and the art
 

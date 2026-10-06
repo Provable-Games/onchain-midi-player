@@ -211,6 +211,8 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   // Character references: only XML characters; and references are expanded before the checks, as a browser reads them.
   for (const bad of ["&#0;", "&#xD800;", "&#x110000;", "&#8;", "&#xFFFE;"]) assert.ok(failing(svg(`<text>${bad}</text>`)).includes("image.xml"), bad);
   assert.deepEqual(failing(svg("<text>&#65;&#x1F600;&amp;</text>")).filter((i) => i.startsWith("image.")), []);
+  // Text in CDATA and comments is literal: references and declarations there are not markup.
+  assert.deepEqual(failing(svg("<text><![CDATA[&#0; &bogus;]]></text><!-- <!ENTITY e 'x'> &#0; -->")).filter((i) => i.startsWith("image.")), []);
   assert.deepEqual(failing(svg("<defs><linearGradient id='g'/></defs><rect fill='url(&#35;g)'/>")).filter((i) => i.startsWith("image.")), []);
   assert.ok(failing(svg("<rect style='fill:u&#114;l(https://example.com/p)'/>")).includes("image.self_contained"));
   assert.ok(failing(svg("<rect fill='url(&#104;ttps://example.com/p)'/>")).includes("image.self_contained"));
@@ -398,6 +400,18 @@ test("command line: exit codes, --json, stdin, usage errors", async () => {
   assert.match(r.stdout, /FAIL token_uri\.base64 .*"!" at offset 0/);
   assert.equal(cli(["-", "--expect", "00".repeat(32)], golden).status, 1);
   assert.equal(cli(["-", "--expect", "zz"], golden).status, 2);
+  // A saved error response (a file or stdin) is printed as a fetched one is: no payload, in any encoding.
+  const secret = Buffer.from("https://rpc.test/KEY");
+  for (const error of [{ code: 40, message: "see https://rpc.test/KEY", data: { revert_error: ["0x" + secret.toString("hex")] } }, { code: 40, message: "x", data: { revert_error: ["0x" + secret.subarray(0, 9).toString("hex"), "0x" + secret.subarray(9).toString("hex")] } }]) {
+    const saved = JSON.stringify({ jsonrpc: "2.0", id: 1, error });
+    for (const args of [["-"], ["-", "--json"]]) {
+      r = cli(args, `[WARNING] noise\n${saved}`);
+      assert.equal(r.status, 2);
+      assert.doesNotMatch(r.stdout + r.stderr, /rpc\.test|KEY|68747470|7270632e74657374/);
+      assert.match(r.stderr, /starknet_call failed: Contract error \(code 40\)/);
+    }
+  }
+  assert.match(cli(["-"], JSON.stringify({ command: "call", error: "boom https://rpc.test/KEY" })).stderr, /starknet_call failed: error \(code unknown\)/);
   assert.equal(cli([]).status, 2);
   assert.equal(cli(["--bogus"]).status, 2);
   assert.equal(cli(["/nonexistent"]).status, 2);

@@ -178,7 +178,9 @@ export function parseXml(s) {
   const bad = s.search(/[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u);
   const at = (/** @type {number} */ i) => `line ${s.slice(0, i).split("\n").length}, column ${i - s.slice(0, i).lastIndexOf("\n")}`;
   if (bad >= 0) throw new XmlError(`U+${s.charCodeAt(bad).toString(16).toUpperCase().padStart(4, "0")} is not an XML character at ${at(bad)}`);
-  for (const m of s.matchAll(/&#(x[0-9a-fA-F]+|[0-9]+);/g)) {
+  // Comments and CDATA hold literal text: references and declarations in them are not markup.
+  const markup = s.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, (m) => " ".repeat(m.length));
+  for (const m of markup.matchAll(/&#(x[0-9a-fA-F]+|[0-9]+);/g)) {
     const cp = m[1][0] === "x" ? parseInt(m[1].slice(1), 16) : parseInt(m[1], 10);
     if (!(cp === 9 || cp === 10 || cp === 13 || (cp >= 0x20 && cp <= 0xd7ff) || (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff))) {
       throw new XmlError(`character reference ${m[0]} is not an XML character at ${at(m.index ?? 0)}`);
@@ -218,7 +220,7 @@ export function parseXml(s) {
   };
   for (let c = doc.firstChild; c; c = c.nextSibling) walk(c);
   const root = doc.documentElement;
-  return { root: { local: root.localName, ns: root.namespaceURI ?? undefined }, attrs, styles, elements, entities: /<!ENTITY/.test(s) };
+  return { root: { local: root.localName, ns: root.namespaceURI ?? undefined }, attrs, styles, elements, entities: /<!ENTITY/.test(markup) };
 }
 
 /**
@@ -291,6 +293,26 @@ class Report {
 const isObject = (/** @type {unknown} */ v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const kind = (/** @type {unknown} */ v) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
 
+/** Fixed names of the starknet_call error codes (JSON-RPC spec): the node's own wording is never printed. */
+const RPC_ERRORS = /** @type {Record<number, string>} */ ({ 20: "Contract not found", 21: "Invalid message selector", 24: "Block not found", 28: "Class hash not found", 40: "Contract error", [-32602]: "Invalid params", [-32603]: "Internal error" });
+/** Revert reasons that are printed: the nodes' and the runtime's own fixed strings. Any other string could carry the URL. */
+const SAFE_REASONS = new Set(["Out of gas", "ENTRYPOINT_NOT_FOUND", "ENTRYPOINT_FAILED", "CONTRACT_NOT_FOUND", "CLASS_HASH_NOT_FOUND", "Input too long for arguments", "Failed to deserialize param #1", "Failed to deserialize param #2"]);
+
+/**
+ * The text for an RPC error response, fetched or read from a file. Nothing of the error's payload is
+ * printed (its message and data can echo the RPC URL, in any encoding): only its code, a fixed name
+ * for it, and the revert reasons that are known.
+ * @param {unknown} error the `error` of a JSON-RPC response, or sncast's error value
+ * @param {string} [prefix]
+ */
+export function describeRpcError(error, prefix = "") {
+  const code = isObject(error) ? Number(/** @type {any} */ (error).code) : NaN;
+  const reasons = shortStrings(error);
+  const known = [...new Set(reasons.filter((x) => SAFE_REASONS.has(x) || /^TS: [a-z0-9 _:-]{1,40}$/.test(x)))];
+  const hidden = new Set(reasons).size - known.length;
+  return `${prefix}starknet_call failed: ${RPC_ERRORS[code] ?? "error"} (code ${Number.isFinite(code) ? code : "unknown"})${known.length ? `; revert reason: ${known.join(", ")}` : ""}${hidden > 0 ? `; ${hidden} other revert string(s) not shown` : ""}`;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Layers
 // ---------------------------------------------------------------------------------------------
@@ -318,12 +340,18 @@ export function parseInput(buf) {
 
 /** The token_uri in a call's output (see tokenUriFromCall), and its felt count when it is a raw response. */
 function fromCall(/** @type {string} */ text) {
-  let doc;
-  try {
-    doc = JSON.parse(text);
-  } catch {
-    doc = undefined;
+  /** @type {unknown[]} */
+  const docs = [];
+  for (const chunk of [text, ...text.split("\n").filter((l) => l.trim().startsWith("{"))]) {
+    try {
+      docs.push(JSON.parse(chunk));
+    } catch {
+      // not a JSON document or line
+    }
   }
+  const doc = /** @type {any} */ (docs.find((d) => isObject(d) && ["result", "response", "error"].some((k) => k in /** @type {object} */ (d))));
+  // An error response is printed by describeRpcError, as when fetched: never as the file has it.
+  if (doc && doc.error !== undefined) throw new Error(describeRpcError(doc.error));
   const felts = isObject(doc) && Array.isArray(doc.result) ? doc.result.length : undefined;
   return { uri: tokenUriFromCall(text).toString("latin1"), felts };
 }
@@ -694,11 +722,6 @@ function finish(r, opts) {
 // Fetching through RPC
 // ---------------------------------------------------------------------------------------------
 
-/** Fixed names of the starknet_call error codes (JSON-RPC spec): the node's own wording is never printed. */
-const RPC_ERRORS = /** @type {Record<number, string>} */ ({ 20: "Contract not found", 21: "Invalid message selector", 24: "Block not found", 28: "Class hash not found", 40: "Contract error", [-32602]: "Invalid params", [-32603]: "Internal error" });
-/** Revert reasons that are printed: the nodes' and the runtime's own fixed strings. Any other string could carry the URL. */
-const SAFE_REASONS = new Set(["Out of gas", "ENTRYPOINT_NOT_FOUND", "ENTRYPOINT_FAILED", "CONTRACT_NOT_FOUND", "CLASS_HASH_NOT_FOUND", "Input too long for arguments", "Failed to deserialize param #1", "Failed to deserialize param #2"]);
-
 /**
  * Calls `token_uri` (then `tokenURI`, if the contract has no such entry point) with starknet_call.
  * Errors never contain the RPC URL or any of the RPC error's payload (which may echo the URL, which
@@ -734,13 +757,9 @@ export async function fetchTokenUri({ rpc, contract, token, fetchImpl = fetch })
       throw new Error("the RPC response is not JSON");
     }
     if (doc.error) {
-      // Nothing of the error's payload is printed (its message and data can echo the URL, in any
-      // encoding): only its code, a fixed name for it, and the revert reasons that are known.
       const code = Number(doc.error.code);
+      last = describeRpcError(doc.error, `${name}: `);
       const reasons = shortStrings(doc.error);
-      const known = [...new Set(reasons.filter((x) => SAFE_REASONS.has(x) || /^TS: [a-z0-9 _:-]{1,40}$/.test(x)))];
-      const hidden = new Set(reasons).size - known.length;
-      last = `${name}: starknet_call failed: ${RPC_ERRORS[code] ?? "error"} (code ${Number.isFinite(code) ? code : "unknown"})${known.length ? `; revert reason: ${known.join(", ")}` : ""}${hidden > 0 ? `; ${hidden} other revert string(s) not shown` : ""}`;
       if (name === "token_uri" && (code === 21 || reasons.includes("ENTRYPOINT_NOT_FOUND"))) {
         first = last;
         continue;
