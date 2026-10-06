@@ -37,7 +37,18 @@
  *    when reached, or a pass's restart timer that fires more than 50 ms late (the page was
  *    stalled), is skipped, so the art keeps its phase until the next pass rather than restarting
  *    late. The restart on ▶ is never skipped.
- * 5. ■ stops playback (TinySynth's `stopMIDI` cuts every voice, drum hits and notes scheduled
+ * 5. Background audio, best effort (feature-detected, each step in its own try/catch, failing
+ *    silently): ▶ also plays a silent looping <audio> element (a generated 6 s WAV in a blob: URL),
+ *    which gives mobile browsers and desktop media hubs a media session (notification, lock screen,
+ *    hardware keys) that keeps the page alive. `navigator.mediaSession` gets the art's title and its
+ *    embedded bitmap (nearest-neighbour upscaled, see `arm`) as artwork, and play, pause and stop
+ *    handlers that run the same code as ▶ and ■. A pause of the element from outside (the
+ *    notification, a headset, a call) stops the player. On iOS,
+ *    `navigator.audioSession.type = "playback"` makes Web Audio ignore the silent switch. If the
+ *    element cannot play (a host CSP without `media-src blob:`), the player stops when the page
+ *    becomes hidden, as it has no media session to keep it playing. The synth stays on the
+ *    AudioContext's destination: the element carries no sound.
+ * 6. ■ stops playback (TinySynth's `stopMIDI` cuts every voice, drum hits and notes scheduled
  *    ahead included, and cancels the controller changes it had scheduled), and cancels the pending
  *    art restart and the polling. The art keeps running.
  *
@@ -228,6 +239,17 @@ export function artUrl(svg, restart = 0) {
   return "data:image/svg+xml;" + (restart ? "r=" + restart + ";" : "") + "base64," + btoa(bin);
 }
 
+/** Fallback title of the media session, for art without a <title>. */
+export const MEDIA_TITLE = "Onchain music";
+
+/** A silent 6 s WAV (8 kHz, 8-bit mono): long enough for Chrome Android to show media controls (5 s). */
+export function silentWav() {
+  const b = new Uint8Array(48044).fill(128);
+  // RIFF, size 48036, WAVE, "fmt ", 16, PCM, 1 channel, 8000 Hz, 8000 B/s, 1 B/frame, 8 bits, "data", 48000
+  b.set([82, 73, 70, 70, 164, 187, 0, 0, 87, 65, 86, 69, 102, 109, 116, 32, 16, 0, 0, 0, 1, 0, 1, 0, 64, 31, 0, 0, 64, 31, 0, 0, 1, 0, 8, 0, 100, 97, 116, 97, 128, 187, 0, 0]);
+  return b;
+}
+
 /** Wires up the page. Called once, by the page, when the player script runs. */
 export function startPlayer() {
   document.addEventListener("DOMContentLoaded", () => {
@@ -304,22 +326,90 @@ export function startPlayer() {
     let playing = false;
     let timer = 0; // the pending art restart, or 0
     let poll = 0; // the interval that follows startTime to each pass
+    /** @type {HTMLAudioElement | null} the silent element of the media session */
+    let silent = null;
+    let background = false; // the silent element is playing: the page may keep playing when hidden
+    let armed = false; // the media session's metadata and handlers are set
+    /** @param {() => unknown} f best effort: a failure is silent */
+    const attempt = (f) => {
+      try {
+        f();
+      } catch (e) {}
+    };
     /** @param {boolean} on */
     const setPlaying = (on) => {
       playing = on;
       icon.setAttribute("d", on ? STOP_ICON : PLAY_ICON);
       button.setAttribute("aria-label", on ? "Stop" : "Play");
+      if (!on) attempt(() => silent && silent.pause());
+      attempt(() => (navigator.mediaSession.playbackState = on ? "playing" : "paused"));
     };
-    button.onclick = () => {
-      const current = ++run;
+    const stop = () => {
+      ++run;
       window.clearTimeout(timer);
       window.clearInterval(poll);
       timer = 0;
-      if (playing) {
-        setPlaying(false);
-        synth.stopMIDI();
-        return;
+      setPlaying(false);
+      synth.stopMIDI();
+    };
+    /** The media session, once: the title and art, and the handlers that run ▶ and ■. */
+    const arm = () => {
+      armed = true;
+      /** @param {Array<{src: string, sizes: string, type: string}>} artwork */
+      const meta = (artwork) => attempt(() => (navigator.mediaSession.metadata = new MediaMetadata({ title, artwork })));
+      let title = MEDIA_TITLE;
+      attempt(() => (title = new DOMParser().parseFromString(svg, "image/svg+xml").getElementsByTagName("title")[0].textContent || title));
+      meta([]);
+      for (const action of /** @type {const} */ (["play", "pause", "stop"])) {
+        attempt(() => navigator.mediaSession.setActionHandler(action, action == "play" ? () => playing || start() : () => playing && stop()));
       }
+      // Artwork: the art's own bitmap (the first embedded PNG, GIF or WebP: a Beast's 32x32 sprite,
+      // or the first square frame of a sprite sheet), scaled up with nearest-neighbour on a canvas to
+      // the sizes Chrome Android asks for (512, and 256 on low-end devices), centred, at a whole
+      // factor when it fits. The card SVG itself is not drawn: its foreignObject can taint the
+      // canvas, and it is not square. Art without a bitmap gets no artwork.
+      const raster = /data:image\/(?:png|gif|webp);base64,[A-Za-z0-9+/=]+/.exec(svg);
+      if (raster) {
+        attempt(() => {
+          const img = document.createElement("img");
+          img.onload = () => attempt(() => {
+            const h = img.naturalHeight;
+            const w = img.naturalWidth % h ? img.naturalWidth : h;
+            const canvas = document.createElement("canvas");
+            meta([512, 256].map((n) => {
+              canvas.width = canvas.height = n;
+              const g = /** @type {CanvasRenderingContext2D} */ (canvas.getContext("2d"));
+              g.imageSmoothingEnabled = false;
+              const k = n >= Math.max(w, h) ? Math.floor(n / Math.max(w, h)) : n / Math.max(w, h);
+              g.drawImage(img, 0, 0, w, h, (n - w * k) / 2, (n - h * k) / 2, w * k, h * k);
+              return { src: canvas.toDataURL("image/png"), sizes: n + "x" + n, type: "image/png" };
+            }));
+          });
+          img.src = raster[0];
+        });
+      }
+    };
+    /** The iOS audio session and the silent element, inside the gesture, before the AudioContext resumes. */
+    const session = () => {
+      attempt(() => (/** @type {any} */ (navigator).audioSession.type = "playback"));
+      background = false;
+      attempt(() => {
+        if (!silent) {
+          silent = new Audio(URL.createObjectURL(new Blob([silentWav()], { type: "audio/wav" })));
+          silent.loop = true;
+          // Paused from outside (the notification, a headset, a call): the same as ■. It is paused
+          // here only if ▶ has not started it again since.
+          silent.onpause = () => playing && silent && silent.paused && stop();
+        }
+        silent.play().then(() => (background = true), () => {});
+      });
+      if (!armed) attempt(arm);
+    };
+    // Without a media session to keep it playing, a hidden page stops.
+    document.addEventListener("visibilitychange", () => document.hidden && playing && !background && stop());
+    const start = () => {
+      const current = ++run;
+      session();
       try {
         synth = synth || createSynth(/** @type {any} */ (window).WebAudioTinySynth, settings);
         const ctx = synth.getAudioContext();
@@ -369,9 +459,11 @@ export function startPlayer() {
           fail(e);
         });
       } catch (e) {
+        setPlaying(false);
         fail(e);
       }
     };
+    button.onclick = () => (playing ? stop() : start());
     button.disabled = false;
   });
 }

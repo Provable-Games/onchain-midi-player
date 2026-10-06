@@ -35,7 +35,8 @@ test('token_uri decodes to OpenSea-style JSON with the player page and the same 
   ]);
   assert.ok(dec.svg.includes('573 bars') && !/<\/script/i.test(dec.svg));
   assert.ok(dec.html.endsWith(dec.svg), 'the art closes the page');
-  assert.ok(dec.html.includes('<script type="text/plain" id="settings">1,1,30,40,64,0,0</script>'), 'default settings');
+  // PAGE's alignment spaces (0 to 8, whatever the page's length needs) fall inside the settings block.
+  assert.match(dec.html, /<script type="text\/plain" id="settings"> *1,1,30,40,64,0,0<\/script>/, 'default settings');
 });
 
 test('a ByteArray decodes from its felts, and the response size is the size of the JSON', () => {

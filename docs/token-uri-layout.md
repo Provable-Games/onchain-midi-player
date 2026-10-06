@@ -54,8 +54,8 @@ Decoded, the `animation_url` value after its `data:text/html;base64,` prefix is 
 
 | Append | Word-aligned | Unaligned |
 | --- | --- | --- |
-| The 53,508-byte `animation_url_segment()` | 2.7M | 11.7M |
-| Every append of the example's full-size token: two 40,420-character `b64(S)`, the segment, `midi_segment` and the small pieces | 16.4M | 32.6M |
+| The 56,868-byte `animation_url_segment()` | 2.9M | 12.4M |
+| Every append of the example's full-size token: two 40,420-character `b64(S)`, the segment, `midi_segment` and the small pieces | 16.8M | 31.0M |
 
 The consumer chooses where its large pieces land by adding spaces between JSON tokens, 3 at a time. Three spaces are one 3-byte group, so they keep every piece a multiple of 3, and they encode to the constant `'ICAg'`, so they are never encoded at call time. It does this in two places:
 
@@ -152,7 +152,8 @@ The consumer's SVG must never contain `</script`, in any letter case.
 - **▶** (a click or tap) creates the synth on the first press, resumes audio inside the gesture, plays the MIDI from tick 0, and loops at End-of-Track. It restarts the art when tick 0 is heard, using the engine's start time plus the audio output latency, so the browser starts the art's animation again in step with the sound.
 - **Every pass** restarts the art the same way, so the art can drift from the sound only by what builds up within one pass. When the pass is a whole multiple of the art's period, the restart is not seen; otherwise the art jumps back to its start at every loop point.
 - **■** stops playback, cuts every voice, and cancels a pending art restart. The art keeps running.
-- **Safe to embed.** Plain JavaScript with no modules, no `eval`, no network requests, and no storage or cookies. It works in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles and `data:` images.
+- **Background audio and media controls.** ▶ also plays a silent, looping 6-second `<audio>` element (a WAV the page generates, as a `blob:` URL), and ■ pauses it. Browsers treat the page as a media player: Android Chrome and desktop browsers show media controls, and playback continues with the screen locked or the tab hidden. `navigator.mediaSession` carries the title (the art SVG's `<title>`, else "Onchain music"), the art's own bitmap (the first embedded PNG, GIF or WebP, for a sprite sheet its first square frame) scaled up without smoothing to 512×512 and 256×256 PNGs, centred and at a whole factor where it fits (a 32×32 sprite is 16× and 8×), and play, pause and stop handlers that do what ▶ and ■ do. Pausing from the notification, a headset or a call stops the player. On iOS, `navigator.audioSession.type = "playback"` makes the sound ignore the silent switch. The synth still plays through the `AudioContext`, so latency and the art's sync are unchanged. Art without an embedded bitmap gets a title only: the card SVG itself is never drawn to a canvas, because its `<foreignObject>` can taint it. All of this is best effort and fails silently: where the element cannot play (a host CSP without `media-src blob:`), the music still plays, but there are no media controls and playback stops when the page is hidden.
+- **Safe to embed.** Plain JavaScript with no modules, no `eval`, no network requests, and no storage or cookies. It works in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles and `data:` images; add `media-src blob:` for the media controls and background playback.
 
 **The gzipped engine.** A browser neither runs nor fetches a `<script>` of an unknown type, so the `text/javascript+gzip` tag is just data, and its base64 payload cannot close the tag. The shim ([`player/gunzip.js`](../player/gunzip.js), derived from fflate) base64-decodes and gunzips it, checks the gzip CRC-32 and length, and replaces the tag with an inline `<script>`, which runs before the player's script is parsed. On any failure the shim leaves the tag, and the player fails closed.
 

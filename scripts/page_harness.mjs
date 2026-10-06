@@ -31,6 +31,9 @@ class El {
     this.hidden = false;
     this.title = "";
     this.alt = "";
+    // A decoded image's size; the page's tests set the bitmap's with runPage's `bitmap` option.
+    this.naturalWidth = 32;
+    this.naturalHeight = 32;
     this._src = "";
     /** @type {null | (() => void)} */
     this.onclick = null;
@@ -125,12 +128,17 @@ export function parseDocument(html) {
 /**
  * Runs the page's shim and player on `html`. Returns the fake DOM, the engine's record and controls.
  * @param {string} html
- * @param {{engine?: "fake" | "real", outputLatency?: number | null, constructError?: string, resumeError?: string}} [options]
+ * @param {{engine?: "fake" | "real", outputLatency?: number | null, constructError?: string, resumeError?: string,
+ *   silentAudio?: "plays" | "rejects" | "missing", mediaSession?: boolean, audioSession?: boolean, taintedCanvas?: boolean, bitmap?: number[]}} [options]
  *   outputLatency: the AudioContext's, in seconds, or null for a context without the property (an
  *   engine that does not support it); constructError: the fake engine's constructor throws this
- *   message; resumeError: its AudioContext's resume() rejects with this message
+ *   message; resumeError: its AudioContext's resume() rejects with this message; silentAudio: what the
+ *   silent <audio> element of the media session does (default: plays; "rejects": play() rejects, as
+ *   under a CSP that blocks blob: media; "missing": the browser has no Audio); mediaSession and
+ *   audioSession (default true): whether navigator has them; taintedCanvas: toDataURL throws; bitmap: the width and
+ *   height of every decoded image (the art's embedded bitmap, default 32x32)
  */
-export function runPage(html, { engine = "fake", outputLatency = 0.02, constructError, resumeError } = {}) {
+export function runPage(html, { engine = "fake", outputLatency = 0.02, constructError, resumeError, silentAudio = "plays", mediaSession = true, audioSession = true, taintedCanvas = false, bitmap = [32, 32] } = {}) {
   const doc = parseDocument(html);
   /** @type {string[]} errors thrown by inserted scripts, which a browser reports as uncaught */
   const uncaught = [];
@@ -187,13 +195,79 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
   const calls = [];
   /** @type {El[]} */
   const created = [];
+  // Background audio: what the page uses of the browser's media APIs, recorded.
+  const media = {
+    /** @type {any} the silent element: its calls, and whether it is paused */
+    audio: /** @type {any} */ (null),
+    /** @type {string[]} */
+    audioCalls: [],
+    /** @type {string[]} the silent element's play() and the AudioContext's resume(), in call order */
+    order: /** @type {string[]} */ ([]),
+    /** @type {{metadata: any, playbackState: string, handlers: Record<string, any>, setActionHandler: (a: string, h: any) => void} | null} */
+    session: mediaSession ? {
+      metadata: null, playbackState: "none", handlers: /** @type {Record<string, any>} */ ({}),
+      setActionHandler(/** @type {string} */ action, /** @type {any} */ handler) { this.handlers[action] = handler; },
+    } : null,
+    /** @type {{type: string} | null} */
+    audioSession: audioSession ? { type: "auto" } : null,
+    /** @type {string | undefined} the audio session type when the synth was constructed */
+    typeAtNew: undefined,
+    /** @type {any[]} the canvas draws (source and destination rectangles, smoothing) and exports, by canvas size */
+    canvas: [],
+    /** @type {Array<() => void>} the listeners of visibilitychange */
+    visibility: /** @type {Array<() => void>} */ ([]),
+  };
+  const documentState = { hidden: false };
+  class FakeAudio {
+    /** @param {string} src */
+    constructor(src) {
+      this.src = src;
+      this.loop = false;
+      this.paused = true;
+      /** @type {null | (() => void)} */
+      this.onpause = null;
+      media.audio = this;
+    }
+    play() {
+      media.audioCalls.push("play");
+      media.order.push("play");
+      if (silentAudio === "rejects") return Promise.reject(new Error("NotSupportedError"));
+      this.paused = false;
+      return Promise.resolve();
+    }
+    pause() {
+      media.audioCalls.push("pause");
+      if (this.paused) return;
+      this.paused = true;
+      // The pause event, as it fires with the call here, for the page's own and for outside pauses.
+      if (this.onpause) this.onpause();
+    }
+  }
 
   sandbox = {
     document: {
       body: { prepend: (/** @type {El} */ e) => { page.body.unshift(e); e.parent = page.body; page.events.push(["prepend", e.src]); } },
       getElementById: (/** @type {string} */ id) => page.elements[id] || null,
+      get hidden() { return documentState.hidden; },
       createElement: (/** @type {string} */ tag) => {
+        if (tag === "canvas") {
+          const canvas = {
+            width: 0,
+            height: 0,
+            getContext: () => {
+              const g = { imageSmoothingEnabled: true, drawImage: (/** @type {any[]} */ _img, /** @type {number[]} */ ...r) => { media.canvas.push({ n: canvas.width, op: "draw", rect: r, smoothing: g.imageSmoothingEnabled }); } };
+              return g;
+            },
+            toDataURL: (/** @type {string} */ type) => {
+              if (taintedCanvas) throw new Error("SecurityError");
+              media.canvas.push({ n: canvas.width, op: "export" });
+              return `data:${type};base64,${canvas.width}`;
+            },
+          };
+          return canvas;
+        }
         const e = new El(tag, page);
+        [e.naturalWidth, e.naturalHeight] = bitmap;
         created.push(e);
         return e;
       },
@@ -204,8 +278,9 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
         return [...page.head, ...page.body].filter((e) => e.tag === "script" && e.attributes.type === m[1]);
       },
       addEventListener: (/** @type {string} */ type, /** @type {() => void} */ fn) => {
-        page.events.push(["listen", type]);
+        if (type === "DOMContentLoaded") page.events.push(["listen", type]);
         if (type === "DOMContentLoaded") ready.push(fn);
+        else if (type === "visibilitychange") media.visibility.push(fn);
       },
     },
     setTimeout: (/** @type {() => void} */ fn, /** @type {number} */ delay) => {
@@ -218,6 +293,18 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     setInterval: (/** @type {() => void} */ fn, /** @type {number} */ delay) => { intervals.set(++timerId, { fn, delay }); return timerId; },
     clearInterval: (/** @type {number} */ id) => { intervals.delete(id); },
     atob, btoa, TextEncoder, TextDecoder,
+    navigator: { mediaSession: media.session, audioSession: media.audioSession },
+    MediaMetadata: class { constructor(/** @type {any} */ init) { Object.assign(this, init); } },
+    DOMParser: class {
+      // Just the one thing the player reads: the first <title>.
+      parseFromString(/** @type {string} */ text) {
+        const m = /<title>([^<]*)<\/title>/.exec(text);
+        return { getElementsByTagName: () => (m ? [{ textContent: m[1] }] : []) };
+      }
+    },
+    Blob: class { constructor(/** @type {any[]} */ parts, /** @type {any} */ opts) { this.parts = parts; this.type = opts.type; } },
+    URL: { createObjectURL: (/** @type {any} */ blob) => `blob:fake/${blob.type}/${blob.parts[0].length}` },
+    ...(silentAudio === "missing" ? {} : { Audio: FakeAudio }),
     console: { error: (/** @type {any} */ e) => consoleErrors.push(String((e && e.message) || e)), log() {}, warn() {} },
   };
   sandbox.window = sandbox;
@@ -267,10 +354,12 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
   } else {
     sandbox.WebAudioTinySynth = function FakeSynth(/** @type {any} */ opts) {
       if (constructError) throw new Error(constructError);
+      media.typeAtNew = media.audioSession?.type;
       const ctx = {
         state: "suspended", currentTime: 1.5, ...(outputLatency === null ? {} : { outputLatency }),
         resume: () => {
         calls.push(["resume"]);
+        media.order.push("resume");
         if (resumeError) return Promise.reject(new Error(resumeError));
         ctx.state = "running";
         return Promise.resolve();
@@ -306,6 +395,12 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     timers,
     intervals,
     audio,
+    media,
+    /** Hides or shows the page and fires visibilitychange. */
+    setHidden(/** @type {boolean} */ hidden) {
+      documentState.hidden = hidden;
+      for (const fn of media.visibility) fn();
+    },
     /** Whether the inflated engine defined WebAudioTinySynth. */
     engineLoaded: loaded,
     /** The current art <img> (first element of the body), if any. */

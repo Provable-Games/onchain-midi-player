@@ -116,10 +116,14 @@ const RENDER = `window.__render = async (text, notes, dur) => {
     synth.noteOn(ch, note, 127, on);
     if (off) synth.noteOff(ch, note, off);
   }
-  // The generated buffers: the seeded noise and reverb impulse (fork #7), and the custom waves.
+  // The generated buffers: the seeded noise and reverb impulse (fork #7), and the custom waves. The
+  // engine builds n1 lazily (read explicitly here, which builds it) and the impulse only with reverb.
   const data = (b) => [...Array(b.numberOfChannels)].flatMap((_, c) => Array.from(b.getChannelData(c)));
-  const buffers = { conv: data(synth.convBuf), ...Object.fromEntries(Object.entries(synth.noiseBuf).map(([k, b]) => [k, data(b)])) };
-  return { pcm: Array.from((await synth.actx.startRendering()).getChannelData(0)), buffers };
+  const reverb = !!synth.useReverb;
+  const noise = synth.noiseBuf;
+  const buffers = { ...(reverb ? { conv: data(synth.convBuf) } : {}), n0: data(noise.n0), n1: data(noise.n1),
+    ...Object.fromEntries(Object.entries(noise).filter(([k]) => k !== "n0" && k !== "n1").map(([k, b]) => [k, data(b)])) };
+  return { pcm: Array.from((await synth.actx.startRendering()).getChannelData(0)), buffers, reverb, convNull: synth.convBuf === null };
 };`;
 
 /** Mean pitch in cents from A4, from interpolated rising zero crossings between two times (s). */
@@ -291,9 +295,10 @@ try {
 
   // Custom waves (issue #2): the reference waves, registered by the player.
   await page.addScriptTag({ content: RENDER });
-  /** @type {(text: string, notes: number[][], dur: number, on?: any) => Promise<{pcm: number[], buffers: Record<string, number[]>}>} */
+  /** @type {(text: string, notes: number[][], dur: number, on?: any) => Promise<{pcm: number[], buffers: Record<string, number[]>, reverb: boolean, convNull: boolean}>} */
   const render = (text, notes, dur, on = page) => on.evaluate(([t, n, d]) => /** @type {any} */ (window).__render(t, n, d), /** @type {const} */ ([text, notes, dur]));
-  const tri = (await render(dryText, [[0, 0, 69, 0.05, 0]], 1)).pcm;
+  const dry = await render(dryText, [[0, 0, 69, 0.05, 0]], 1);
+  const tri = dry.pcm;
   const smooth = (await render(controlText, [[0, 0, 69, 0.05, 0]], 1)).pcm;
   const pulses = [];
   for (const program of [1, 2, 3]) pulses.push((await render(dryText, [[0, program, 69, 0.05, 0]], 1)).pcm);
@@ -373,6 +378,8 @@ try {
     ])),
     ...[0.125, 0.25, 0.5].map((want, i) => /** @type {[string, number, (v: number) => boolean, string]} */ (
       [`${want * 100}% pulse width`, duty(pulses[i], 0.3, 0.95), (v) => Math.abs(v - want) <= 0.01, `${want} +- 0.01`])),
+    ["reverb 0: no impulse (convBuf is null)", dry.reverb === false && dry.convNull ? 1 : 0, (v) => v === 1, "1"],
+    ["reverb 30: the impulse is built", first.reverb && first.buffers.conv ? 1 : 0, (v) => v === 1, "1"],
     [`two loads: generated buffers that differ (of ${names.length}: ${names.join(", ")})`, buffersDiffer, (v) => v === 0, "0"],
     [`two loads: largest sample difference (${pcmDiffering} of ${first.pcm.length} differ)`, pcmDiff, (v) => v <= pcmTolerance, `<= ${pcmTolerance.toExponential(2)}`],
     ["two loads: the render is not silent (RMS)", songRms, (v) => v > 0.01, "> 0.01"],

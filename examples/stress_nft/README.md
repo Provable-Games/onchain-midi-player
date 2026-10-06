@@ -54,7 +54,7 @@ Measured with snforge 0.64.0 and Scarb 2.20.1 in Sierra gas, as the `token_uri` 
 | 19 | 9.99B | 9,914 | 634,544 | 9,990,341,500 | 1,560,149 | 3,371,988 |
 | 20 | 10.1B | 10,023 | 641,520 | 10,100,192,480 | 1,576,685 | 3,407,726 |
 
-The targets are the limits we know of: Juno's 100M default (token 3 is 0.3% above it), the 288.6M of a full-size Beast (token 5), which PublicNode does not serve, Katana's 1B default, and Pathfinder's 10B. The first live run found PublicNode's limit at about 100M: it serves tokens 1 and 2.
+The targets are the limits we know of: Juno's 100M default (token 3 is 0.3% above it), the 289.7M of a full-size Beast (token 5), which PublicNode does not serve, Katana's 1B default, and Pathfinder's 10B. The first live run found PublicNode's limit at about 100M: it serves tokens 1 and 2.
 
 To recalibrate, edit `repetitions.json`, run `node scripts/gen_fixtures.mjs`, and measure again:
 

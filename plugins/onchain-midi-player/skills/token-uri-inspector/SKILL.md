@@ -94,7 +94,7 @@ Serve the page and open it in a browser; press ▶ to play:
 
 `npm run preview -- … --serve` does the same for a page it builds. In a dev container, forward the port to the host first (VS Code: the Ports panel): a link to a `/tmp` path opens nothing on the host.
 
-If the page plays here but not inside a marketplace's frame, the host is withholding something: a frame sandboxed without `allow-scripts`, or a host CSP without `script-src 'unsafe-inline'` (a `data:` or `srcdoc` frame inherits it), leaves the frame black, and a host CSP with `default-src 'none'` also needs `frame-src data:` for a `data:` frame. The page needs only inline script, inline style and `data:` images; a sandbox without `allow-same-origin` still plays. See [Browser validation](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#browser-validation).
+If the page plays here but not inside a marketplace's frame, the host is withholding something: a frame sandboxed without `allow-scripts`, or a host CSP without `script-src 'unsafe-inline'` (a `data:` or `srcdoc` frame inherits it), leaves the frame black, and a host CSP with `default-src 'none'` also needs `frame-src data:` for a `data:` frame. The page needs only inline script, inline style and `data:` images; a sandbox without `allow-same-origin` still plays. Without `media-src blob:` in a host CSP the music plays, but there are no media controls and it stops when the page is hidden. See [Browser validation](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md#browser-validation).
 
 ## 7. Check RPC call caps
 

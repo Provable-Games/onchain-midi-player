@@ -4,7 +4,7 @@ L2 gas, measured with snforge 0.64.0 and Scarb 2.20.1. The short version, for bu
 
 ## Measure in Sierra gas
 
-Every figure here is Sierra gas, snforge's default. Cairo-steps accounting gives numbers about 2.5× higher. On the example's full-size token (`snforge test gas_t4_token_uri`, the call with its test setup): about 301M with `--tracked-resource sierra-gas` and about 765M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M, because that account's class is Sierra 1.6, which forces Cairo-steps accounting for the whole transaction.
+Every figure here is Sierra gas, snforge's default. Cairo-steps accounting gives numbers about 2.5× higher. On the example's full-size token (`snforge test gas_t4_token_uri`, the call with its test setup): about 303M with `--tracked-resource sierra-gas` and about 769M with `--tracked-resource cairo-steps`. A devnet `starknet_estimateFee` of an INVOKE through devnet's predeployed account measured 740.6M, because that account's class is Sierra 1.6, which forces Cairo-steps accounting for the whole transaction.
 
 - Budget a `token_uri` in Sierra gas: snforge's `--gas-report`, or an estimate through an account whose class is Sierra 1.7 or later.
 - Treat devnet estimates through its predeployed accounts as inflated by about 2.0–2.6×.
@@ -15,13 +15,13 @@ Through `ITinySynthLibraryDispatcher` on the declared class, as a consumer calls
 
 | Entry point | L2 gas |
 | --- | --- |
-| `animation_url_segment()` | 7.8M: 0.35M to materialize the constant, the rest to return its 53,508 bytes |
+| `animation_url_segment()` | 8.3M: 0.37M to materialize the constant, the rest to return its 56,868 bytes |
 | `midi_segment(midi, settings)` | 1.6M with no MIDI and the default settings; 60.7M with a 3,716-byte score and the 3 reference sounds (334 bytes of `SETTINGS`); 3,162.7M with that score and the largest valid `SETTINGS` without custom waves (218,264 bytes) |
 | `base64(data)` | 0.2M for 3 bytes, 3.8M for 1,023 bytes, and about 3.6K per input byte for large inputs |
 | `script_sha256()` | 0.1M |
 | `engine()` | 0.1M |
 | `version()` | 0.1M |
-| `license()` | 2.2M |
+| `license()` | 2.5M |
 
 ## `midi_segment` by MIDI and `SETTINGS` size
 
@@ -49,15 +49,15 @@ Token 4 of the example ([`examples/beast_consumer`](../examples/beast_consumer/R
 - **sounds:** the 3 reference sounds, 334 bytes of `SETTINGS`;
 - **layout:** word-aligned.
 
-Its `token_uri` is 144,389 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
+Its `token_uri` is 147,749 characters. The whole call is from `snforge test token_uri_4 --gas-report`; the pieces are from the example's `gas_t4_*` tests, each net of its inputs:
 
 | Piece | L2 gas | Of which base64 |
 | --- | --- | --- |
-| **Whole `BeastLikeNft.token_uri`** | **288.6M** | **239.5M (83%)** |
-| `animation_url_segment()` (library call) | 7.8M | none |
+| **Whole `BeastLikeNft.token_uri`** | **289.7M** | **239.5M (83%)** |
+| `animation_url_segment()` (library call) | 8.3M | none |
 | `midi_segment()` (library call) | 60.1M | 54.6M |
 | The consumer's base64 (4 library calls): `b64(svg)` 82.6M, `b64(S)` 110.2M, the head and `'}'` about 1M | about 194M | 184.9M |
-| The appends (word-aligned layout; 32.6M unaligned) | 16.4M | none |
+| The appends (word-aligned layout; 31.0M unaligned) | 16.8M | none |
 | The rest: SVG and score constants, members, name check | about 10M | none |
 
 - **Most of it is the SVG.** The two base64 passes over the SVG are 67% of the total: the same two passes any onchain SVG NFT makes, encoding the SVG for `image`, then the whole JSON over it. What sound adds is the segment, `midi_segment` and the appends: about 84M.
@@ -109,6 +109,6 @@ A `token_uri` is a view call (`starknet_call`), so what limits it is the node th
 | Katana (development) | 1B by default | |
 | Hosted providers | Undocumented | Each provider runs one of the nodes above with its own configuration, so a full-size token can succeed on one and revert `Out of gas` on another. On Sepolia, with [`examples/stress_nft`](../examples/stress_nft/README.md): zan.top and Cartridge served up to 9.99B and reverted `Out of gas` at 10.1B; dRPC served 600M and reverted at 800M; PublicNode served 60M and reverted at 100.3M, just above Juno's 100M default |
 
-- A full-size token with the reference sounds (288.6M) already needs more than Juno's default.
+- A full-size token with the reference sounds (289.7M) already needs more than Juno's default.
 - Check a full-size token through the providers your marketplaces and indexers use. The [`token-uri-inspector`](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill shows how. The [stress NFT](../examples/stress_nft/README.md) has twenty tokens from 30M to 10B gas and a script that calls them through any list of providers.
 - **Keep every class in the call chain at Sierra 1.7 or later.** If any class in the chain is Cairo 0 or Sierra before 1.7 (a proxy pointing at an old class, for example), that frame and everything below it switches to Cairo-steps accounting. It is then capped at 10M steps (Juno: 4M), about 1B gas. `midi_segment` alone takes about 22M steps with the largest `SETTINGS` without custom waves.

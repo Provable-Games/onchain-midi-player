@@ -5,7 +5,8 @@
 // snforge pins the class's output to, and decoded as a marketplace decodes it
 // (scripts/fixture_pages.mjs). Their animation_url pages are then loaded these ways:
 //
-//   data:      as a top-level data: URI, with the browser offline
+//   data:      as a top-level data: URI, with the browser offline (on WebKit, whose offline emulation
+//              also blocks the page's own blob: media, with every other request blocked instead)
 //   iframe     inside <iframe sandbox="allow-scripts" src="data:..."> (opaque origin)
 //   csp        served with a CSP that allows only inline scripts and styles and data: images
 //   file://    decoded to a file and opened from disk (every other request blocked and listed)
@@ -60,7 +61,7 @@ import { collectErrors, dataRequestLog, launchBrowser } from "./browsers.mjs";
 import { ENGINE_SHA256 } from "./engine.mjs";
 import { FIXTURES, tokenPage } from "./fixture_pages.mjs";
 import { ART_OPEN, MIDI_OPEN, dFragment, pageHtml, sha256, withGzipPayload } from "./page.mjs";
-import { decodePng } from "./png.mjs";
+import { decodePng, encodePng } from "./png.mjs";
 import { smf } from "./page_fixtures.mjs";
 import { longLfsr } from "./settings_fixtures.mjs";
 import { ENGINE_MISSING } from "../player/player.js";
@@ -77,7 +78,10 @@ const htmlOf = (/** @type {any} */ c, /** @type {string} */ d) => PAGE + d + c.s
 const dataUrl = (/** @type {string} */ html) => "data:text/html;base64," + Buffer.from(html, "utf8").toString("base64");
 const artSrc = (/** @type {string} */ svg) => "data:image/svg+xml;base64," + Buffer.from(svg, "utf8").toString("base64");
 const SWEEP_SECONDS = 8; // the probe art of beast_140bpm: x = 390 * t / 8 for t <= 8 s
-const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:";
+// The recommended host CSP: inline scripts and styles, data: images and blob: media (the silent
+// element of the media session); the page plays without media-src, but without media controls
+// (scripts/hosting_check.mjs).
+const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; media-src blob:";
 
 let failures = 0;
 /** @param {boolean} cond @param {string} msg */
@@ -98,12 +102,29 @@ const NO_CDP = "Chromium-only (DevTools protocol): no other engine shows data: r
  * starts, records ▶'s state when DOMContentLoaded fires (before the player's own listener), CSP
  * violations, when each art <img> enters the document and when ▶ is first enabled, and the order
  * of three events: the engine defining WebAudioTinySynth ("engine"), a script registering a
- * DOMContentLoaded listener ("listener") and DOMContentLoaded itself ("dcl").
+ * DOMContentLoaded listener ("listener") and DOMContentLoaded itself ("dcl"). It also records the
+ * media element the page plays (the silent one of the media session: its play() calls and the
+ * element) and the media session's action handlers, so the checks can call them.
  */
 function instrument() {
   /** @type {any} */
   const st = { constructed: 0, sends: [], notes: [], plays: [], imgs: [], violations: [], readyDisabled: null, order: [], readyAt: null };
   /** @type {any} */ (window).__check = st;
+  st.media = { plays: 0, el: null };
+  st.handlers = {};
+  const mediaPlay = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function () {
+    st.media.plays++;
+    st.media.el = this;
+    return mediaPlay.call(this);
+  };
+  if (window.MediaSession) {
+    const setActionHandler = MediaSession.prototype.setActionHandler;
+    MediaSession.prototype.setActionHandler = function (/** @type {string} */ action, /** @type {any} */ handler) {
+      st.handlers[action] = handler;
+      return setActionHandler.call(this, action, handler);
+    };
+  }
   /** @type {any} */
   let Real;
   function Wrapped(/** @type {any} */ opts) {
@@ -134,9 +155,14 @@ function instrument() {
     };
     const play = synth.playMIDI;
     synth.playMIDI = () => {
+      // The page-clock-to-AudioContext-clock mapping is sampled before the call: playMIDI builds the
+      // engine's noise buffer on its first call (about 46 ms of blocked main thread, fork T8), and
+      // Firefox's currentTime read right after that is stale by about that long.
+      const at = performance.now();
+      const currentTime = ctx.currentTime;
       play();
       const startTime = synth.getPlayStatus().startTime;
-      st.plays.push({ at: performance.now(), currentTime: ctx.currentTime, startTime, delay: startTime - ctx.currentTime + (ctx.outputLatency || 0), outputLatency: ctx.outputLatency });
+      st.plays.push({ at, currentTime, startTime, delay: startTime - currentTime + (ctx.outputLatency || 0), outputLatency: ctx.outputLatency });
     };
     return synth;
   }
@@ -160,7 +186,7 @@ function instrument() {
   }).observe(document, { childList: true, subtree: true, attributes: true });
 }
 
-const { browser } = await launchBrowser();
+const { browser, engine } = await launchBrowser();
 check(Object.keys(TOKENS).length === FIXTURES.valid.length,
   `the ${FIXTURES.valid.length} golden cases' token_uri are the class's output (length and SHA-256), decoded as a marketplace decodes them`);
 
@@ -171,14 +197,17 @@ check(Object.keys(TOKENS).length === FIXTURES.valid.length,
  * @param {{offline?: boolean, serve?: Record<string, {body: string, headers?: Record<string, string>}>, files?: string[], viewport?: {width: number, height: number}, hasTouch?: boolean, init?: () => void}} [o]
  */
 async function open({ offline = false, serve = {}, files = [], viewport = { width: 400, height: 100 }, hasTouch = false, init } = {}) {
-  const context = await browser.newContext({ viewport, offline, hasTouch });
+  // WebKit's offline emulation also fails the page's own blob: media (and logs an error for it), so
+  // there the context stays online: every request that is not data:, blob: or served is aborted
+  // and listed, so the page still shows that it needs no network.
+  const context = await browser.newContext({ viewport, offline: offline && engine !== "webkit", hasTouch });
   await context.addInitScript(instrument);
   if (init) await context.addInitScript(init);
   /** @type {string[]} */
   const blocked = [];
   await context.route("**/*", (/** @type {any} */ route) => {
     const url = route.request().url();
-    if (url.startsWith("data:") || files.includes(url)) return route.continue();
+    if (url.startsWith("data:") || url.startsWith("blob:") || files.includes(url)) return route.continue(); // blob:: the page's own silent media element
     const doc = serve[url];
     if (doc) return route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", headers: doc.headers || {}, body: doc.body });
     blocked.push(url);
@@ -233,6 +262,11 @@ const state = (frame) => frame.evaluate(() => {
     icon: document.getElementById("icon")?.getAttribute("d"), title: b.title, error: err.hidden ? null : err.textContent,
     imgs: st.imgs, img: img && { src: img.src, complete: img.complete, w: img.naturalWidth, h: img.naturalHeight, count: document.querySelectorAll("img").length },
     plays: st.plays, sends: st.sends.length, violations: st.violations, origin: window.origin,
+    media: { plays: st.media.plays, paused: st.media.el ? st.media.el.paused : null, loop: st.media.el ? st.media.el.loop : null, duration: st.media.el ? st.media.el.duration : null, src: st.media.el ? st.media.el.src.slice(0, 5) : null },
+    session: navigator.mediaSession ? {
+      state: navigator.mediaSession.playbackState, handlers: Object.keys(st.handlers).sort(), title: navigator.mediaSession.metadata ? navigator.mediaSession.metadata.title : null,
+      artwork: navigator.mediaSession.metadata ? Array.from(navigator.mediaSession.metadata.artwork, (/** @type {any} */ a) => a.sizes + " " + a.type) : null,
+    } : null,
     synth: synth && { playing: synth.playing, startTime: synth.getPlayStatus().startTime, loop: synth.loop, loopEnd: synth.loopEnd, maxTick: synth.maxTick, tick2Time: synth.tick2Time, state: synth.getAudioContext().state, time: synth.getAudioContext().currentTime },
   };
 });
@@ -301,6 +335,127 @@ async function barX(/** @type {any} */ page) {
 }
 
 // ---------------------------------------------------------------------------------------------
+
+/**
+ * The media session's artwork is the art's own bitmap, upscaled without smoothing: a Beasts-style
+ * card (a 250x350 SVG whose foreignObject holds a 32x32 PNG) gives a 512x512 and a 256x256 PNG in
+ * which every source pixel is a solid 16x16 (8x8) block, with no blended colour at any boundary.
+ */
+async function checkArtwork() {
+  const c = CASES.default_120bpm;
+  console.log("media session artwork: the art's 32x32 bitmap, upscaled without smoothing (data: URI, offline)");
+  // 32x32 source pixels with a different colour from every neighbour, so a blend shows anywhere.
+  const colour = (/** @type {number} */ x, /** @type {number} */ y) => [(x * 37 + y * 11) % 256, (x * 5 + y * 61) % 256, ((x ^ y) * 29) % 256, 255];
+  const png = encodePng(32, 32, colour).toString("base64");
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xhtml='http://www.w3.org/1999/xhtml' width='250' height='350' viewBox='0 0 250 350'><title>Artwork check</title>" +
+    `<foreignObject x='0' y='0' width='250' height='250'><xhtml:img src='data:image/png;base64,${png}' style='width:100%;height:100%;image-rendering:pixelated'/></foreignObject></svg>`;
+  const { context, page, logged } = await open({ offline: true });
+  await page.goto(dataUrl(PAGE + c.d + svg));
+  await ready(page);
+  await startPlayback(page);
+  const done = await page.waitForFunction(() => {
+    const m = navigator.mediaSession && navigator.mediaSession.metadata;
+    return !navigator.mediaSession || (m && m.artwork.length === 2);
+  }, null, { timeout: 5000 }).then(() => true, () => false);
+  const meta = await page.evaluate(() => {
+    const m = navigator.mediaSession && navigator.mediaSession.metadata;
+    return m && { title: m.title, artwork: Array.from(m.artwork, (a) => ({ src: a.src, sizes: a.sizes, type: a.type })) };
+  });
+  if (!meta) skip("media session artwork: this engine has no navigator.mediaSession");
+  else {
+    check(done && meta.title === "Artwork check", `the title is the art's <title> (${meta.title}) and the artwork is set`);
+    for (const n of [512, 256]) {
+      const a = meta.artwork.find((x) => x.sizes === `${n}x${n}`);
+      check(!!a && a.type === "image/png" && a.src.startsWith("data:image/png;base64,"), `artwork ${n}x${n} is a PNG data URL`);
+      if (!a) continue;
+      const img = decodePng(Buffer.from(a.src.slice("data:image/png;base64,".length), "base64"));
+      const k = n / 32;
+      let blended = 0;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (img.pixel(x, y).join() !== colour(Math.floor(x / k), Math.floor(y / k)).slice(0, 3).join()) blended++;
+      check(img.width === n && img.height === n && blended === 0, `artwork ${n}x${n}: every source pixel is a solid ${k}x${k} block (${blended} of ${n * n} pixels differ from nearest-neighbour)`);
+    }
+  }
+  const errors = await logged();
+  check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
+  await context.close();
+}
+
+/**
+ * Background audio (the silent <audio> element and the media session) after ▶ and after ■, in
+ * whatever frame the page is in. The element must play (a looping 6 s blob: WAV) after ▶ and be
+ * paused after ■; where the engine has navigator.mediaSession, the playback state follows, and the
+ * play, pause and stop handlers (and no others) are registered.
+ * @param {any} frame
+ * @param {"playing" | "paused"} now
+ */
+async function checkBackground(frame, now) {
+  // The duration is known once the browser has loaded the element's blob: URL, shortly after play().
+  if (now === "playing") await frame.waitForFunction(() => Number.isFinite(/** @type {any} */ (window).__check.media.el.duration), null, { timeout: 5000 }).catch(() => {});
+  const st = await state(frame);
+  const el = st.media;
+  check(el.plays >= 1 && el.src === "blob:" && el.loop === true && el.paused === (now === "paused"),
+    `silent media element ${now === "playing" ? "playing" : "paused"} (${el.plays} play() calls, ${el.src} URL, loop ${el.loop}, duration ${el.duration} s)`);
+  if (now === "playing") check(el.duration === 6, "the silent element is a 6 s WAV the browser decodes");
+  if (!st.session) return skip("navigator.mediaSession: this engine has none");
+  check(st.session.state === now, `mediaSession.playbackState is ${st.session.state}`);
+  check(st.session.handlers.join() === "pause,play,stop", `mediaSession handlers: ${st.session.handlers.join(", ")}`);
+}
+
+/**
+ * The media session's handlers and a pause from outside drive the page as ▶ and ■ do: while the page
+ * plays, the captured pause handler stops it (the engine stopped, the element paused), the play
+ * handler starts it again, and pausing the silent element (a notification, a headset, a call) stops
+ * it like ■. Ends stopped.
+ * @param {any} frame
+ */
+async function checkMediaControls(frame) {
+  const before = await state(frame);
+  if (!before.session) return skip("media session handlers: this engine has no navigator.mediaSession");
+  const wait = (/** @type {number} */ n) => frame.waitForFunction((/** @type {number} */ n) => /** @type {any} */ (window).__check.plays.length >= n && /** @type {any} */ (window).__check.sends.length > 0, n, { timeout: 15000 });
+  await frame.evaluate(() => /** @type {any} */ (window).__check.handlers.pause());
+  let st = await state(frame);
+  check(st.label === "Play" && st.synth.playing === 0 && st.media.paused === true && st.session.state === "paused", "the pause handler stops: ▶ shown, the engine stopped, the element paused");
+  await frame.evaluate(() => /** @type {any} */ (window).__check.handlers.play());
+  await wait(before.plays.length + 1);
+  st = await state(frame);
+  check(st.label === "Stop" && st.synth.playing === 1 && st.synth.state === "running" && st.media.paused === false && st.session.state === "playing" && st.plays.length === before.plays.length + 1,
+    `the play handler starts: ■ shown, the engine playing (AudioContext ${st.synth.state}), the element playing`);
+  await frame.evaluate(() => /** @type {any} */ (window).__check.media.el.pause());
+  // The element's pause event is delivered asynchronously.
+  await frame.waitForFunction(() => document.getElementById("play")?.getAttribute("aria-label") === "Play", null, { timeout: 5000 }).catch(() => {});
+  st = await state(frame);
+  check(st.label === "Play" && st.synth.playing === 0 && st.session.state === "paused", "pausing the silent element from outside stops the player, as ■ does");
+  await frame.evaluate(() => /** @type {any} */ (window).__check.handlers.play());
+  await wait(before.plays.length + 2);
+  await frame.evaluate(() => /** @type {any} */ (window).__check.handlers.stop());
+  st = await state(frame);
+  check(st.label === "Play" && st.synth.playing === 0 && st.media.paused === true, "the stop handler stops");
+}
+
+/**
+ * Background audio on the data: page: the silent element plays after ▶ and is paused after ■ (and
+ * again after ▶), the media session's handlers drive ▶/■, and a pause from outside stops the player.
+ * Online, with every request still blocked and listed.
+ */
+async function checkBackgroundAudio() {
+  const c = CASES.default_120bpm;
+  console.log(`background audio: silent media element and media session (${c.name}, data: URI)`);
+  const { context, page, blocked, logged } = await open();
+  await page.goto(TOKENS[c.name].url);
+  await ready(page);
+  check((await state(page)).media.plays === 0, "no media element before ▶");
+  await startPlayback(page);
+  await checkBackground(page, "playing");
+  await page.click("#play");
+  await checkBackground(page, "paused");
+  await startPlayback(page, 2);
+  await checkBackground(page, "playing");
+  await checkMediaControls(page);
+  const errors = await logged();
+  check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
+  check(blocked.length === 0, `no network requests${blocked.length ? ": " + blocked.join(" ") : ""}`);
+  await context.close();
+}
 
 /** The data: page with the probe art: everything, including the art restart. */
 async function checkDataPage() {
@@ -429,7 +584,7 @@ async function checkIframe() {
   await context.close();
 }
 
-/** The page served with a strict CSP (inline scripts and styles, data: images; nothing else). */
+/** The page served with a strict CSP (inline scripts and styles, data: images, blob: media; nothing else). */
 async function checkCsp() {
   const c = CASES.six_timbres_format1;
   console.log(`Content-Security-Policy: ${CSP}; sandbox allow-scripts (${c.name})`);
@@ -444,6 +599,7 @@ async function checkCsp() {
   await startPlayback(page);
   st = await state(page);
   check(st.synth?.state === "running" && st.sends > 0, `▶ plays (${st.sends} MIDI messages scheduled)`);
+  await checkBackground(page, "playing");
   await checkLoop(page, c);
   st = await state(page);
   // The CSP allows no data: scripts, so fetching the gzip tag's data: URI would be a script-src
@@ -778,6 +934,8 @@ async function checkExtremes() {
 
 try {
   await checkDataPage();
+  await checkArtwork();
+  await checkBackgroundAudio();
   await checkIframe();
   await checkCsp();
   await checkCspControl();

@@ -82,7 +82,7 @@ The tokens:
 | 1 | Warlock | 68 | 12 bytes | 2 | 4 | 58,449 |
 | 2 | Night's Wyvern | 61 | 6 bytes | 0 | 5 | 58,457 |
 | 3 | Fen-Troll | 66 | 9 bytes | 1 | 6 | 58,453 |
-| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 144,389 |
+| 4 | Shiny Warlock (a full-size Beast) | 62 | 3 bytes | 2 | 3 | 147,749 |
 
 Tokens 1-3 cover every pad length: `len('{' members ',')` and `len(S)` take every remainder mod 3, and `D` three different pads. Only `reverb` varies between them (derived from the tier), which changes `len(SETTINGS)` and so the `D` padding. The head spaces include the alignment groups.
 
@@ -180,8 +180,8 @@ L2 gas, with the class's optimized encoder; [Gas and limits](../../docs/gas.md) 
 
 | Call | Tokens 1-3 (1 KB SVG, 112-byte MIDI) | Token 4 (a full-size Beast) |
 | --- | --- | --- |
-| `BeastLikeNft.token_uri` | 32.7M-32.9M | 288.6M |
-| of which `animation_url_segment` (the class's side) | 3.1M | 3.1M |
+| `BeastLikeNft.token_uri` | 33.5M-33.7M | 289.7M |
+| of which `animation_url_segment` (the class's side) | 3.3M | 3.3M |
 | of which `midi_segment` (the class's side) | 5.8M | 58.9M |
 | of which 4 `base64` calls (the class's side): SVG, `S`, the head, `'}'` | 9.9M-10.0M | 184.9M |
 
@@ -189,10 +189,10 @@ Token 4 piece by piece, in the consumer's context, each net of its inputs (`snfo
 
 | Piece | L2 gas |
 | --- | --- |
-| `animation_url_segment()` through the library call, reading the result included | 7.8M |
+| `animation_url_segment()` through the library call, reading the result included | 8.3M |
 | `midi_segment()` through the library call | 60.1M |
 | `b64(svg)`, 22,733 bytes: through the class's `base64` / with the same encoder compiled in | 82.6M / 75.2M |
 | `b64(S)`, 30,315 bytes, through the class's `base64` | 110.2M |
-| Every append, in the word-aligned layout / without the alignment spaces | 16.4M / 32.6M |
+| Every append, in the word-aligned layout / without the alignment spaces | 16.8M / 31.0M |
 
 Base64 is 83% of token 4's `token_uri`, and the two passes over the SVG alone are 67%. That is 0.29B, well under the 1B target.

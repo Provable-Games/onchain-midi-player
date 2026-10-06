@@ -21,7 +21,7 @@ Your contract holds the class hash and calls the class through `ITinySynthLibrar
 
 `<pad>` is spaces between JSON tokens. They keep each piece a multiple of 3 bytes.
 
-In the browser, the page shows the art at once. ▶ starts the MIDI, which loops at End-of-Track, and the art restarts in step with every pass. If the engine, the settings or the MIDI fails, ▶ stays disabled, the page shows the error, and the art stays. The page works in a sandboxed iframe and under a strict CSP.
+In the browser, the page shows the art at once. ▶ starts the MIDI, which loops at End-of-Track, and the art restarts in step with every pass. If the engine, the settings or the MIDI fails, ▶ stays disabled, the page shows the error, and the art stays. The page works in a sandboxed iframe and under a strict CSP, and plays on with the screen locked or the tab hidden, with media controls, where the host allows `media-src blob:`.
 
 Details: [`token_uri` layout and the player page](docs/token-uri-layout.md).
 
@@ -156,7 +156,7 @@ A marketplace or indexer reads `token_uri` with a view call (`starknet_call`). T
 
 `SETTINGS` is the text form of your `TinySynthSettings`. The defaults are 16 bytes, and three typical custom sounds about 0.3 KB. Each operator adds about 50 bytes, and each wave sample or harmonic 2 to 6 bytes. `SETTINGS` has no size cap: gas and the node's cap are the only limits.
 
-**Example.** A full-size token from [`examples/beast_consumer`](examples/beast_consumer) costs **288.6M** L2 gas: a 22,733-byte animated SVG, a 3,716-byte MIDI file and 334 bytes of `SETTINGS`. A token with a 1 KB SVG and a 112-byte MIDI file costs about 33M.
+**Example.** A full-size token from [`examples/beast_consumer`](examples/beast_consumer) costs **289.7M** L2 gas: a 22,733-byte animated SVG, a 3,716-byte MIDI file and 334 bytes of `SETTINGS`. A token with a 1 KB SVG and a 112-byte MIDI file costs about 33M.
 
 **Node caps** on a view call's gas:
 

@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import vm from "node:vm";
 import { gzipSync } from "node:zlib";
-import { ENGINE_MISSING, PLAY_ICON, STOP_ICON, artUrl, checkMidi, decodeMidi } from "./player.js";
+import { ENGINE_MISSING, MEDIA_TITLE, PLAY_ICON, STOP_ICON, artUrl, checkMidi, decodeMidi, silentWav } from "./player.js";
 import { ENGINE_SHA256, engineSource } from "../scripts/engine.mjs";
 import { runPage } from "../scripts/page_harness.mjs";
 import { webAudioMock } from "../scripts/webaudio_mock.mjs";
@@ -414,6 +414,242 @@ describe("the page's player script, fake engine", () => {
     assert.equal(h.els.error.textContent, "resume refused");
     assert.equal(h.els.icon.attributes.d, PLAY_ICON);
     assert.deepEqual(h.consoleErrors, ["resume refused"]);
+  });
+});
+
+describe("background audio: the silent element, the media session, the iOS audio session", () => {
+  const c = CASES.default_120bpm;
+  /** The page with the art replaced by an SVG that has a title. */
+  const titled = PAGE + c.d + "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'><title>Beast #7</title></svg>";
+  /** What the page gave the fake MediaMetadata, as plain data (the page's arrays come from another realm). */
+  const plain = (/** @type {any} */ x) => JSON.parse(JSON.stringify(x));
+  /** Loads the page, presses ▶ and lets the AudioContext resume. */
+  async function playing(/** @type {string} */ html = htmlOf(c), /** @type {Parameters<typeof runPage>[1]} */ options = {}) {
+    const h = runPage(html, options);
+    h.ready();
+    h.click();
+    await h.flush();
+    return h;
+  }
+
+  test("silentWav: a 6 s, 8 kHz, 8-bit mono PCM WAV of silence (sample value 128)", () => {
+    const b = Buffer.from(silentWav());
+    assert.equal(b.toString("latin1", 0, 4), "RIFF");
+    assert.equal(b.readUInt32LE(4), b.length - 8);
+    assert.equal(b.toString("latin1", 8, 16), "WAVEfmt ");
+    assert.deepEqual([b.readUInt32LE(16), b.readUInt16LE(20), b.readUInt16LE(22), b.readUInt32LE(24), b.readUInt32LE(28), b.readUInt16LE(32), b.readUInt16LE(34)],
+      [16, 1, 1, 8000, 8000, 1, 8]);
+    assert.equal(b.toString("latin1", 36, 40), "data");
+    assert.equal(b.readUInt32LE(40), b.length - 44);
+    assert.equal(b.readUInt32LE(40) / 8000, 6);
+    assert.ok(b.subarray(44).every((v) => v === 128));
+  });
+
+  test("▶: the silent looping element plays inside the click, before the AudioContext resumes; ■ pauses it", async () => {
+    const h = runPage(htmlOf(c));
+    h.ready();
+    assert.equal(h.media.audio === null, true, "nothing is created before a click");
+    h.click();
+    assert.deepEqual(h.media.order, ["play", "resume"], "both synchronously in the click, the element first");
+    assert.equal(h.media.audio.src, "blob:fake/audio/wav/48044");
+    assert.equal(h.media.audio.loop, true);
+    assert.equal(h.media.audio.paused, false);
+    assert.equal(h.media.session?.playbackState, "playing");
+    await h.flush();
+    h.click(); // ■
+    assert.equal(h.media.audio.paused, true);
+    assert.equal(h.media.session?.playbackState, "paused");
+    assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+    h.click(); // ▶ again: the same element
+    assert.equal(h.media.audio.paused, false);
+    assert.equal(h.media.session?.playbackState, "playing");
+    assert.deepEqual(h.consoleErrors, []);
+  });
+
+  test("iOS: audioSession.type is playback before the synth exists, and again at every ▶", async () => {
+    const h = runPage(htmlOf(c));
+    h.ready();
+    assert.equal(h.media.audioSession?.type, "auto");
+    h.click();
+    assert.equal(h.media.typeAtNew, "playback", "set before the synth is constructed");
+    assert.equal(h.media.audioSession?.type, "playback");
+    await h.flush();
+    h.click(); // ■
+    /** @type {any} */ (h.media.audioSession).type = "ambient"; // another page or the system changed it
+    h.click(); // ▶
+    assert.equal(h.media.audioSession?.type, "playback");
+  });
+
+  /** A Beasts-style card: a title, and the sprite as an embedded PNG in a foreignObject (not square, not drawn to the canvas). */
+  const card = (/** @type {string} */ title = "Beast #7") => PAGE + c.d +
+    `<svg xmlns='http://www.w3.org/2000/svg' xmlns:xhtml='http://www.w3.org/1999/xhtml' width='250' height='350' viewBox='0 0 250 350'><title>${title}</title>` +
+    "<foreignObject x='0' y='0' width='250' height='250'><xhtml:img src='data:image/png;base64,iVBORw0KGgo=' style='width:100%;image-rendering:pixelated'/></foreignObject></svg>";
+  /** The meta of the last MediaMetadata, as plain data. */
+  const artworkOf = (/** @type {any} */ h) => plain(h.media.session?.metadata.artwork);
+
+  test("media session: the title from the art's <title>, else a fixed fallback", async () => {
+    const h = await playing(titled);
+    assert.equal(h.media.session?.metadata.title, "Beast #7");
+    const untitled = await playing();
+    assert.equal(untitled.media.session?.metadata.title, MEDIA_TITLE);
+    assert.notEqual(MEDIA_TITLE, "TinySynth player");
+  });
+
+  test("media session artwork: the art's own bitmap, 32x32 scaled 16x and 8x with smoothing off, as 512 and 256 PNGs", async () => {
+    const h = await playing(card());
+    assert.equal(h.media.session?.metadata.title, "Beast #7");
+    assert.deepEqual(artworkOf(h), [], "until the bitmap has decoded");
+    h.loadImages();
+    assert.deepEqual(artworkOf(h), [
+      { src: "data:image/png;base64,512", sizes: "512x512", type: "image/png" },
+      { src: "data:image/png;base64,256", sizes: "256x256", type: "image/png" },
+    ]);
+    assert.deepEqual(plain(h.media.canvas), [
+      { n: 512, op: "draw", rect: [0, 0, 32, 32, 0, 0, 512, 512], smoothing: false }, { n: 512, op: "export" },
+      { n: 256, op: "draw", rect: [0, 0, 32, 32, 0, 0, 256, 256], smoothing: false }, { n: 256, op: "export" },
+    ]);
+    assert.deepEqual(h.consoleErrors, []);
+  });
+
+  for (const [label, bitmap, rects] of /** @type {Array<[string, number[], number[][]]>} */ ([
+    ["a sprite sheet (frames side by side): the first square frame", [96, 32], [[0, 0, 32, 32, 0, 0, 512, 512], [0, 0, 32, 32, 0, 0, 256, 256]]],
+    ["a size that does not divide: a whole factor, centred", [30, 30], [[0, 0, 30, 30, 1, 1, 510, 510], [0, 0, 30, 30, 8, 8, 240, 240]]],
+    ["a portrait bitmap: centred, letterboxed", [16, 32], [[0, 0, 16, 32, 128, 0, 256, 512], [0, 0, 16, 32, 64, 0, 128, 256]]],
+    ["a bitmap larger than the artwork: scaled down", [1024, 1024], [[0, 0, 1024, 1024, 0, 0, 512, 512], [0, 0, 1024, 1024, 0, 0, 256, 256]]],
+  ])) {
+    test(`media session artwork: ${label}`, async () => {
+      const h = await playing(card(), { bitmap });
+      h.loadImages();
+      assert.deepEqual(plain(h.media.canvas.filter((/** @type {any} */ x) => x.op === "draw").map((/** @type {any} */ x) => x.rect)), rects);
+      assert.equal(artworkOf(h).length, 2);
+    });
+  }
+
+  test("media session artwork: art without an embedded bitmap gets none (the whole card is never drawn); the title stays", async () => {
+    const h = await playing(titled);
+    h.loadImages();
+    assert.deepEqual(artworkOf(h), []);
+    assert.deepEqual(h.media.canvas, []);
+    assert.deepEqual(h.consoleErrors, []);
+  });
+
+  test("media session artwork: a canvas that cannot export is skipped silently; the title stays", async () => {
+    const h = await playing(card(), { taintedCanvas: true });
+    h.loadImages();
+    assert.equal(h.media.session?.metadata.title, "Beast #7");
+    assert.deepEqual(artworkOf(h), []);
+    assert.deepEqual(h.consoleErrors, []);
+    assert.deepEqual(h.uncaught, []);
+  });
+
+  test("media session: play, pause and stop handlers run the code of ▶ and ■; no seek or track handlers", async () => {
+    const h = await playing();
+    const handlers = /** @type {Record<string, any>} */ (h.media.session?.handlers);
+    assert.deepEqual(Object.keys(handlers).sort(), ["pause", "play", "stop"]);
+    assert.equal(h.synths.length, 1);
+    handlers.pause();
+    assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+    assert.equal(h.els.icon.attributes.d, PLAY_ICON);
+    assert.equal(h.media.audio.paused, true);
+    assert.equal(h.media.session?.playbackState, "paused");
+    assert.equal(h.timers.size + h.intervals.size, 0);
+    const n = h.calls.length;
+    handlers.pause(); // already stopped: nothing
+    handlers.stop();
+    assert.equal(h.calls.length, n);
+    handlers.play();
+    assert.equal(h.els.icon.attributes.d, STOP_ICON);
+    assert.equal(h.media.audio.paused, false);
+    assert.equal(h.media.session?.playbackState, "playing");
+    await h.flush();
+    assert.deepEqual(h.calls.slice(n).map((x) => x[0]), ["resume", "loadMIDI", "setLoop", "setLoopEnd", "playMIDI"]);
+    handlers.play(); // already playing: nothing
+    await h.flush();
+    assert.equal(h.calls.filter((x) => x[0] === "playMIDI").length, 2);
+    handlers.stop();
+    assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+    assert.equal(h.els.icon.attributes.d, PLAY_ICON);
+    assert.deepEqual(h.consoleErrors, []);
+  });
+
+  test("a pause of the element from outside (notification, headset, call) stops the player once; the page's own ■ does not re-enter", async () => {
+    const h = await playing();
+    h.media.audio.pause(); // from outside
+    assert.equal(h.calls.filter((x) => x[0] === "stopMIDI").length, 1);
+    assert.equal(h.els.icon.attributes.d, PLAY_ICON);
+    assert.equal(h.media.session?.playbackState, "paused");
+    assert.equal(h.timers.size + h.intervals.size, 0);
+    h.click(); // ▶
+    await h.flush();
+    h.click(); // ■: pauses the element, whose pause event must not stop the stopped player again
+    assert.equal(h.calls.filter((x) => x[0] === "stopMIDI").length, 2);
+    h.media.audio.pause(); // a late event while stopped: nothing
+    assert.equal(h.calls.filter((x) => x[0] === "stopMIDI").length, 2);
+  });
+
+  test("a pause event that fires after ▶ has restarted the element does not stop the player", async () => {
+    const h = await playing();
+    h.click(); // ■
+    h.click(); // ▶ before the earlier pause event was delivered
+    const { onpause } = h.media.audio;
+    onpause(); // the stale event
+    assert.equal(h.els.icon.attributes.d, STOP_ICON);
+    assert.equal(h.calls.filter((x) => x[0] === "stopMIDI").length, 1);
+  });
+
+  test("hidden page: playback continues while the silent element plays", async () => {
+    const h = await playing();
+    h.setHidden(true);
+    assert.equal(h.els.icon.attributes.d, STOP_ICON);
+    assert.equal(h.calls.filter((x) => x[0] === "stopMIDI").length, 0);
+    h.setHidden(false);
+    assert.equal(h.els.icon.attributes.d, STOP_ICON);
+  });
+
+  for (const [label, options] of /** @type {Array<[string, Parameters<typeof runPage>[1]]>} */ ([
+    ["the element's play() rejects (a host CSP without media-src blob:)", { silentAudio: "rejects" }],
+    ["the browser has no Audio", { silentAudio: "missing" }],
+  ])) {
+    test(`no media session (${label}): music still plays; a hidden page stops, a visible one does not`, async () => {
+      const h = await playing(htmlOf(c), options);
+      assert.deepEqual(h.calls.slice(-4).map((x) => x[0]), ["loadMIDI", "setLoop", "setLoopEnd", "playMIDI"]);
+      assert.equal(h.els.icon.attributes.d, STOP_ICON);
+      h.setHidden(false);
+      assert.equal(h.els.icon.attributes.d, STOP_ICON, "visible: still playing");
+      h.setHidden(true);
+      assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+      assert.equal(h.els.icon.attributes.d, PLAY_ICON);
+      assert.equal(h.timers.size + h.intervals.size, 0);
+      h.setHidden(false);
+      h.click(); // ▶ again works
+      await h.flush();
+      assert.equal(h.calls.filter((x) => x[0] === "playMIDI").length, 2);
+      assert.deepEqual(h.consoleErrors, []);
+      assert.deepEqual(h.uncaught, []);
+    });
+  }
+
+  test("a browser without mediaSession and audioSession: ▶ and ■ work, nothing is logged", async () => {
+    const h = await playing(htmlOf(c), { mediaSession: false, audioSession: false });
+    assert.equal(h.els.icon.attributes.d, STOP_ICON);
+    h.click();
+    assert.deepEqual(h.calls.at(-1), ["stopMIDI"]);
+    assert.equal(h.media.audio.paused, true);
+    assert.deepEqual(h.consoleErrors, []);
+  });
+
+  test("a synth that cannot be created does not leave the silent element playing", () => {
+    const h = runPage(htmlOf(c), { constructError: "no WebAudio" });
+    h.ready();
+    h.click();
+    assert.equal(h.media.audio.paused, true);
+    assert.equal(h.els.play.disabled, true);
+  });
+
+  test("an AudioContext that will not resume pauses the silent element", async () => {
+    const h = await playing(htmlOf(c), { resumeError: "resume refused" });
+    assert.equal(h.media.audio.paused, true);
+    assert.equal(h.media.session?.playbackState, "paused");
   });
 });
 
