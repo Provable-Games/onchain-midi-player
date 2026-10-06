@@ -7,7 +7,7 @@ The `token_uri` assembly is [`examples/beast_consumer`](../beast_consumer/README
 - **art:** a small fixed SVG card with the token's name and its number of bars;
 - **sound:** `default_settings()`, one preset;
 - **music:** one bar of eight eighth notes (C5 E5 G5 C6 G5 E5 C5 G4), repeated `repetitions(token_id)` times in a format 0 Standard MIDI File of 48 bytes plus 64 per bar, ending with End-of-Track on the last bar line. It passes the [MIDI contract](../../docs/midi-contract.md) (`scripts/check_midi.mjs`);
-- **metadata:** `name` ("Stress #7"), `description`, `image`, `animation_url` (the player with ▶ and ■) and `attributes` (`Token ID`, `Bars`).
+- **metadata:** `name` ("Stress #7"), `description`, `image`, `animation_url` (the player with ▶ and ❚❚) and `attributes` (`Token ID`, `Bars`).
 
 Tokens 1 to 20 exist implicitly. There is no minting, ownership or transfer. The constructor takes the TinySynth class hash, which it checks (`engine() == 'tinysynth'`), and an owner. The owner can retune a token with `set_repetitions(token_id, n)`, without a redeploy.
 

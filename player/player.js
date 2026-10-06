@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * The page's player: shows the token's art, then plays its MIDI with TinySynth behind a ▶/■ toggle.
+ * The page's player: shows the token's art, then plays its MIDI with TinySynth behind a ▶/❚❚ toggle.
  *
  * The page (see scripts/build_page.mjs) is the engine, gzipped in a
  * `<script type="text/javascript+gzip" src="data:...">` that the gunzip shim (`player/gunzip.js`,
@@ -22,9 +22,10 @@
  * 3. ▶ (a click or tap): the first one constructs TinySynth with the settings (`createSynth`) and
  *    builds its noise buffer (`prewarm`), which the engine would otherwise build inside `playMIDI()`,
  *    blocking the page after the clock it starts from was read and shifting the art against the
- *    sound. Every ▶ resumes the AudioContext inside the gesture, reloads the MIDI (back to tick 0 at the
- *    song's starting tempo), loops at End-of-Track (`setLoop(1)`, `setLoopEnd(maxTick)`) and starts
- *    playback. With `loopEnd` set, the engine keeps any rest before the first event on every pass.
+ *    sound. Every ▶ resumes the AudioContext inside the gesture; the first that gets it running loads
+ *    the MIDI (tick 0 at the song's starting tempo), loops at End-of-Track (`setLoop(1)`,
+ *    `setLoopEnd(maxTick)`) and starts playback. With `loopEnd` set, the engine keeps any rest
+ *    before the first event on every pass. Later ones resume where ❚❚ paused (step 6).
  * 4. The art restarts when tick 0 is heard: at `getPlayStatus().startTime` (the AudioContext time
  *    at which tick 0 of the current pass sounds) plus the context's output latency, or at once if
  *    the engine is not playing (a song with no events but tempo, which it leaves stopped). Then it
@@ -44,15 +45,20 @@
  *    which gives mobile browsers and desktop media hubs a media session (notification, lock screen,
  *    hardware keys) that keeps the page alive. `navigator.mediaSession` gets the art's title and its
  *    embedded bitmap (a static frame row, see `arm`) as artwork, and play, pause and stop
- *    handlers that run the same code as ▶ and ■. A pause of the element from outside (the
- *    notification, a headset, a call) stops the player. On iOS,
+ *    handlers that run the same code as ▶ and ❚❚ (stop pauses too). A pause of the element from
+ *    outside (the notification, a headset, a call) pauses the player. On iOS,
  *    `navigator.audioSession.type = "playback"` makes Web Audio ignore the silent switch. If the
- *    element cannot play (a host CSP without `media-src blob:`), the player stops when the page
+ *    element cannot play (a host CSP without `media-src blob:`), the player pauses when the page
  *    becomes hidden, as it has no media session to keep it playing. The synth stays on the
  *    AudioContext's destination: the element carries no sound.
- * 6. ■ stops playback (TinySynth's `stopMIDI` cuts every voice, drum hits and notes scheduled
- *    ahead included, and cancels the controller changes it had scheduled), and cancels the pending
- *    art restart and the polling. The art keeps running.
+ * 6. ❚❚ pauses: the AudioContext is suspended (`suspend()`), which freezes its clock, so every voice,
+ *    envelope and scheduled event holds, and TinySynth's sequencer, which schedules against that
+ *    clock, schedules nothing more; ▶ resumes it (`resume()`) and all of it carries on from there.
+ *    Nothing is stopped or reloaded: to start over, reload the page. ❚❚ also cancels the pending
+ *    art restart (its pass is timed again on resume) and the polling. The art stands still with it:
+ *    it is restarted at once with every SMIL animation begun as far into the pass as the music is
+ *    and frozen there (`artUrl`'s offset and freeze), and on ▶ restarted from that same point,
+ *    running. Both are plain images, so this works in any frame and engine (a GIF runs on).
  *
  * Plain browser JavaScript: no modules in the page, no eval, no network requests, no storage. Works
  * in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles
@@ -61,9 +67,9 @@
 
 import { createSynth, decodeSettings } from "./settings.js";
 
-/** Icon path data (24x24 viewBox) of the toggle: ▶ while stopped, ■ while playing. */
+/** Icon path data (24x24 viewBox) of the toggle: ▶ while paused (or not started), ❚❚ while playing. */
 export const PLAY_ICON = "M8 5v14l11-7z";
-export const STOP_ICON = "M6 6h12v12H6z";
+export const PAUSE_ICON = "M6 5h4v14H6zM14 5h4v14h-4z";
 
 /** The error shown when the engine did not load (it was not inflated, or failed when it ran). */
 export const ENGINE_MISSING = "engine: TinySynth did not load";
@@ -231,24 +237,44 @@ export function checkMidi(u) {
 /**
  * The art as a data URL: the SVG text re-encoded as UTF-8 and base64. `restart` > 0 adds a media
  * type parameter, which gives an equivalent image with a distinct URL, so the browser builds a new
- * image (and animation timeline) rather than reusing the running one.
+ * image (and animation timeline) rather than reusing the running one. `offset` > 0 starts that
+ * timeline `offset` seconds in: every SMIL animation element (`animate`, `animateTransform`,
+ * `animateMotion`, `animateColor`, `set`) without a `begin` gets `begin='-<offset>s'`, which SMIL
+ * plays as begun that long ago. `freeze` also ends each of them there (`repeatDur` 1 ms past the
+ * offset, as an interval must end after the timeline's start, and `fill='freeze'`, replacing their
+ * own `repeatDur` and `fill`): the image is the frame at `offset`,
+ * standing still. A GIF in the art always starts at its first frame, and runs on.
  * @param {string} svg
  * @param {number} [restart]
+ * @param {number} [offset]
+ * @param {boolean} [freeze]
  */
-export function artUrl(svg, restart = 0) {
+export function artUrl(svg, restart = 0, offset = 0, freeze = false) {
+  if (offset > 0 || freeze) {
+    const t = offset.toFixed(3) + "s";
+    // A frozen interval must end after the image's timeline begins (at 0), or engines drop it.
+    const end = (offset + 0.001).toFixed(3) + "s";
+    svg = svg.replace(/<(animate(?:Transform|Motion|Color)?|set)(?![\w:.-])([^>]*)>/g, (tag, name, attrs) =>
+      /\sbegin\s*=/.test(attrs) ? tag
+        : freeze ? "<" + name + " begin='-" + t + "' repeatDur='" + end + "' fill='freeze'" + attrs.replace(/\s(?:fill|repeatDur)\s*=\s*(["']).*?\1/g, "") + ">"
+        : "<" + name + " begin='-" + t + "'" + attrs + ">");
+  }
   let bin = "";
   for (const b of new TextEncoder().encode(svg)) bin += String.fromCharCode(b);
   return "data:image/svg+xml;" + (restart ? "r=" + restart + ";" : "") + "base64," + btoa(bin);
 }
 
 /**
- * Where the ▶/■ button goes when the art's root `<svg>` carries `data-play-anchor="X Y"` or
+ * Where the ▶/❚❚ button goes when the art's root `<svg>` carries `data-play-anchor="X Y"` or
  * `"X Y S"`: a point in the SVG's own units (its `viewBox`, else `width` and `height`), such as the
  * bottom-right corner of a sprite's box, and optionally the button's diameter S in the same units.
  * The button's bottom-right corner is placed at the point, inset by max(S/8, 6) art units (6 px without S: enough to clear a frame's rounded corner), where
  * the <img> draws it: `box` is the <img>'s own rectangle on screen (its `getBoundingClientRect()`),
  * and the art fills it as `object-fit: contain` does, scaled to fit and centred. The diameter is S
  * times the art's scale on screen, between 44 CSS px (a touch target) and 128; without S it is 48.
+ * With a last word `top-right` (`"X Y S top-right"`), the point is the button's top-right corner
+ * instead, inset the same way, and the button grows down and left from it (the top-right corner of
+ * an art frame, say).
  * The button is kept inside the `vw` x `vh` viewport. Returns `null` (the button stays at the
  * viewport's bottom-right corner) when the attribute is absent, malformed or outside the art, or the
  * SVG or the image has no usable size.
@@ -268,15 +294,17 @@ export function playAnchor(svg, box, vw, vh) {
   const list = (/** @type {string} */ s) => (s ? s.split(/[\s,]+/).map(num) : []);
   const view = list(attr("viewBox"));
   const [x0, y0, w, h] = view.length == 4 ? view : [0, 0, num(attr("width").replace(/px$/i, "")), num(attr("height").replace(/px$/i, ""))];
-  const anchor = list(attr("data-play-anchor"));
+  const tokens = attr("data-play-anchor").split(/[\s,]+/).filter(Boolean);
+  const down = tokens[tokens.length - 1] == "top-right" && !!tokens.pop(); // the point is the button's top-right corner
+  const anchor = tokens.map(num);
   const [ax, ay, diameter] = anchor;
   if (!(w > 0 && h > 0 && box.width > 0 && box.height > 0) || !(anchor.length == 2 || (anchor.length == 3 && diameter > 0)) || !(ax >= x0 && ax <= x0 + w && ay >= y0 && ay <= y0 + h)) return null;
   const k = Math.min(box.width / w, box.height / h);
   const size = anchor.length == 3 ? Math.min(128, Math.max(44, diameter * k)) : 48;
   const inset = anchor.length == 3 ? k * Math.max(diameter / 8, 6) : 6;
-  const place = (/** @type {number} */ a, /** @type {number} */ a0, /** @type {number} */ len, /** @type {number} */ at, /** @type {number} */ span, /** @type {number} */ view) =>
-    Math.round(Math.max(0, Math.min(view - size, at + (span - len * k) / 2 + (a - a0) * k - size - inset)));
-  return { left: place(ax, x0, w, box.left, box.width, vw), top: place(ay, y0, h, box.top, box.height, vh), size: Math.round(size) };
+  const place = (/** @type {number} */ a, /** @type {number} */ a0, /** @type {number} */ len, /** @type {number} */ at, /** @type {number} */ span, /** @type {number} */ view, /** @type {boolean} */ below) =>
+    Math.round(Math.max(0, Math.min(view - size, at + (span - len * k) / 2 + (a - a0) * k + (below ? inset : -size - inset))));
+  return { left: place(ax, x0, w, box.left, box.width, vw, false), top: place(ay, y0, h, box.top, box.height, vh, down), size: Math.round(size) };
 }
 
 /** Fallback title of the media session, for art without a <title>. */
@@ -306,7 +334,7 @@ export function startPlayer() {
       console.error(e);
     };
 
-    let run = 0; // every press of ▶/■ invalidates a pending start and art restart
+    let run = 0; // every press of ▶/❚❚ invalidates a pending start or resume and art restart
 
     // 1. Art first, on its own.
     /** @type {HTMLImageElement | null} */
@@ -325,11 +353,13 @@ export function startPlayer() {
     let shown = 0; // the restart whose image is shown
     /**
      * Restarts the art: a new <img> with a distinct URL, swapped in once decoded (so the art never
-     * blinks out), unless ▶/■ was pressed again in the meantime, or a later restart's image is
+     * blinks out), unless ▶/❚❚ was pressed again in the meantime, or a later restart's image is
      * already shown (restarts at every pass can decode out of order).
      * @param {number} current the press that scheduled it
+     * @param {number} [offset] seconds into the art's timeline (resuming mid-pass)
+     * @param {boolean} [freeze] the art standing still at `offset` (paused)
      */
-    const restartArt = (current) => {
+    const restartArt = (current, offset = 0, freeze = false) => {
       if (!art) return;
       const n = ++restarts;
       const img = document.createElement("img");
@@ -341,7 +371,7 @@ export function startPlayer() {
         art = img;
         watch(art);
       };
-      img.src = artUrl(svg, n);
+      img.src = artUrl(svg, n, offset, freeze);
     };
 
     /** @param {() => unknown} f best effort: a failure is silent */
@@ -391,10 +421,14 @@ export function startPlayer() {
       return;
     }
 
-    // 3-5. The ▶/■ toggle, and the art restarts.
+    // 3-6. The ▶/❚❚ toggle, and the art restarts.
     /** @type {any} */
     let synth = null;
     let playing = false;
+    let started = false; // the MIDI is loaded and playing, or paused
+    let origin = 0; // startTime of the first pass
+    /** @type {number | null | undefined} the pass start the art was last timed to (or skipped) */
+    let synced;
     let timer = 0; // the pending art restart, or 0
     let poll = 0; // the interval that follows startTime to each pass
     /** @type {HTMLAudioElement | null} the silent element of the media session */
@@ -404,20 +438,67 @@ export function startPlayer() {
     /** @param {boolean} on */
     const setPlaying = (on) => {
       playing = on;
-      icon.setAttribute("d", on ? STOP_ICON : PLAY_ICON);
-      button.setAttribute("aria-label", on ? "Stop" : "Play");
+      icon.setAttribute("d", on ? PAUSE_ICON : PLAY_ICON);
+      button.setAttribute("aria-label", on ? "Pause" : "Play");
       if (!on) attempt(() => silent && silent.pause());
       attempt(() => (navigator.mediaSession.playbackState = on ? "playing" : "paused"));
     };
-    const stop = () => {
+    /**
+     * Times an art restart to tick 0 of a pass, as heard, unless one is pending. On ▶ (`first`):
+     * the current pass, at once without a pass start. Afterwards (and on resuming): the pass after
+     * the last one synced, once startTime has reached it. On a short loop startTime can move on by
+     * more than one pass between calls, so this walks pass by pass from the last one synced,
+     * skipping any whose start is already past, and takes the engine's own value when it reaches
+     * it. A pass start more than MAX_TIMER_MS ahead (a pass of weeks) is left unsynced, so a later
+     * poll times it once it is within reach.
+     * @param {number} current the press it serves
+     * @param {boolean} [first]
+     */
+    const sync = (current, first) => {
+      const ctx = synth.getAudioContext();
+      const latest = synth.getPlayStatus().startTime;
+      const lag = ctx.outputLatency || 0;
+      let start = latest;
+      if (timer || latest === synced) return;
+      if (!first && latest !== null && synced != null) {
+        start = synced + pass;
+        while (start < latest - 1e-6 && start + lag < ctx.currentTime) start += pass;
+        if (start > latest - 1e-6) start = latest;
+      }
+      const delay = start === null ? 0 : start - ctx.currentTime + lag;
+      if (delay * 1000 > MAX_TIMER_MS) return;
+      synced = start;
+      if (!first && (start === null || delay < 0)) return;
+      timer = window.setTimeout(() => {
+        timer = 0;
+        if (first || ctx.currentTime - start - lag < LATE_SECONDS) restartArt(current);
+        sync(current);
+      }, Math.max(0, delay * 1000));
+    };
+    /**
+     * Seconds heard into the current pass, or null before tick 0 of the first is heard. startTime
+     * may already be the next pass's (see step 4).
+     */
+    const position = () => {
+      const ctx = synth.getAudioContext();
+      const at = synth.getPlayStatus().startTime;
+      let into = ctx.currentTime - (ctx.outputLatency || 0) - at;
+      if (into < 0 && at > origin) into += pass;
+      return started && at !== null && into >= 0 ? into % pass : null;
+    };
+    const pause = () => {
+      const at = position();
       ++run;
+      // The art stands still at the music's position: its animations end there, frozen.
+      if (at !== null) restartArt(run, at, true);
       window.clearTimeout(timer);
       window.clearInterval(poll);
+      if (timer && synced != null) synced -= pass; // its pass is timed again on resume
       timer = 0;
       setPlaying(false);
-      synth.stopMIDI();
+      attempt(() => synth.getAudioContext().suspend().catch(() => {}));
     };
-    /** The media session, once: the title and art, and the handlers that run ▶ and ■. */
+    /** The media session, once: the title and art, and the handlers that run ▶ and ❚❚. */
     const arm = () => {
       armed = true;
       /** @param {Array<{src: string, sizes: string, type: string}>} artwork */
@@ -426,7 +507,7 @@ export function startPlayer() {
       attempt(() => (title = new DOMParser().parseFromString(svg, "image/svg+xml").getElementsByTagName("title")[0].textContent || title));
       meta([]);
       for (const action of /** @type {const} */ (["play", "pause", "stop"])) {
-        attempt(() => navigator.mediaSession.setActionHandler(action, action == "play" ? () => playing || button.disabled || start() : () => playing && stop()));
+        attempt(() => navigator.mediaSession.setActionHandler(action, action == "play" ? () => playing || button.disabled || start() : () => playing && pause()));
       }
       // Artwork: the art's own bitmap (the first embedded PNG, GIF or WebP: a Beast's 32x32 sprite),
       // as a static frame row on a dark card colour, at the sizes Chrome Android asks for (512, and
@@ -471,16 +552,16 @@ export function startPlayer() {
         if (!silent) {
           silent = new Audio(URL.createObjectURL(new Blob([silentWav()], { type: "audio/wav" })));
           silent.loop = true;
-          // Paused from outside (the notification, a headset, a call): the same as ■. It is paused
+          // Paused from outside (the notification, a headset, a call): the same as ❚❚. It is paused
           // here only if ▶ has not started it again since.
-          silent.onpause = () => playing && silent && silent.paused && stop();
+          silent.onpause = () => playing && silent && silent.paused && pause();
         }
         silent.play().then(() => (background = true), () => {});
       });
       if (!armed) attempt(arm);
     };
-    // Without a media session to keep it playing, a hidden page stops.
-    document.addEventListener("visibilitychange", () => document.hidden && playing && !background && stop());
+    // Without a media session to keep it playing, a hidden page pauses.
+    document.addEventListener("visibilitychange", () => document.hidden && playing && !background && pause());
     const start = () => {
       const current = ++run;
       session();
@@ -490,49 +571,32 @@ export function startPlayer() {
           // The engine builds its noise buffer on first need, which blocks for tens of ms: here, in
           // the gesture, rather than in playMIDI(), where it would delay what the clock is read for.
           synth.prewarm();
+          // The engine resumes a suspended AudioContext whenever it sends a message (its _wake,
+          // for autoplay). While paused it must not: its sequencer can still send the events that
+          // fell within its look-ahead just before the clock stopped, which would undo ❚❚.
+          const wake = synth._wake;
+          if (typeof wake == "function") synth._wake = () => playing && wake();
         }
         const ctx = synth.getAudioContext();
         setPlaying(true);
         ctx.resume().then(() => {
           if (current !== run) return;
-          synth.loadMIDI(midi);
-          synth.setLoop(1);
-          synth.setLoopEnd(synth.getPlayStatus().maxTick);
-          synth.playMIDI();
-          /** @type {number | null | undefined} the pass start the art was last timed to (or skipped) */
-          let synced;
-          /**
-           * Times an art restart to tick 0 of a pass, as heard, unless one is pending. On ▶
-           * (`first`): the current pass, at once without a pass start. Afterwards: the pass after
-           * the last one synced, once startTime has reached it. On a short loop startTime can move
-           * on by more than one pass between calls, so this walks pass by pass from the last one
-           * synced, skipping any whose start is already past, and takes the engine's own value
-           * when it reaches it. A pass start more than MAX_TIMER_MS ahead (a pass of weeks) is
-           * left unsynced, so a later poll times it once it is within reach.
-           * @param {boolean} [first]
-           */
-          const sync = (first) => {
-            const latest = synth.getPlayStatus().startTime;
-            const lag = ctx.outputLatency || 0;
-            let start = latest;
-            if (timer || latest === synced) return;
-            if (!first && latest !== null && synced != null) {
-              start = synced + pass;
-              while (start < latest - 1e-6 && start + lag < ctx.currentTime) start += pass;
-              if (start > latest - 1e-6) start = latest;
-            }
-            const delay = start === null ? 0 : start - ctx.currentTime + lag;
-            if (delay * 1000 > MAX_TIMER_MS) return;
-            synced = start;
-            if (!first && (start === null || delay < 0)) return;
-            timer = window.setTimeout(() => {
-              timer = 0;
-              if (first || ctx.currentTime - start - lag < LATE_SECONDS) restartArt(current);
-              sync();
-            }, Math.max(0, delay * 1000));
-          };
-          sync(true);
-          poll = window.setInterval(() => sync(), 50);
+          if (started) {
+            // Resumed: the art carries on from where it stood still, the music's position in the
+            // pass (the clock stood still too). Before the first pass is heard, its restart is pending.
+            const at = position();
+            if (at !== null) restartArt(current, at);
+            sync(current);
+          } else {
+            synth.loadMIDI(midi);
+            synth.setLoop(1);
+            synth.setLoopEnd(synth.getPlayStatus().maxTick);
+            synth.playMIDI();
+            started = true;
+            origin = synth.getPlayStatus().startTime;
+            sync(current, true);
+          }
+          poll = window.setInterval(() => sync(current), 50);
         }).catch((/** @type {unknown} */ e) => {
           setPlaying(false);
           fail(e);
@@ -542,7 +606,7 @@ export function startPlayer() {
         fail(e);
       }
     };
-    button.onclick = () => (playing ? stop() : start());
+    button.onclick = () => (playing ? pause() : start());
     button.disabled = false;
   });
 }

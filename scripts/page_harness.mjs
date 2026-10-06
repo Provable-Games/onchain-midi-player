@@ -385,7 +385,12 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
         if (resumeError) return Promise.reject(new Error(resumeError));
         ctx.state = "running";
         return Promise.resolve();
-      } };
+      },
+        suspend: () => {
+          calls.push(["suspend"]);
+          ctx.state = "suspended";
+          return Promise.resolve();
+        } };
       /** @type {Record<string, any>} */
       const synth = { opts, ctx, maxTick: 0, play: 0, startTime: /** @type {number | null} */ (null), timbres: [] };
       const record = (/** @type {string} */ name, /** @type {(...a: any[]) => void} */ f = () => {}) => (/** @type {any[]} */ ...args) => { calls.push([name, ...args]); f(...args); };
@@ -517,7 +522,7 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
     advance(/** @type {number} */ seconds) {
       const ctx = synths[0].getAudioContext();
       for (let t = 0; t < seconds; t += 0.06) {
-        ctx.currentTime += 0.06;
+        if (ctx.state !== "suspended") ctx.currentTime += 0.06; // a suspended context's clock stands still
         for (const { fn } of [...intervals.values()]) fn();
       }
     },

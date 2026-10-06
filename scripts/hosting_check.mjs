@@ -10,8 +10,8 @@
 //
 // Where the page should run, it checks that the art is drawn (a pixel of the card in a screenshot,
 // before ▶ and after), that ▶ is enabled, that a click starts audio (the AudioContext running,
-// notes scheduled) and ■ stops it, that the silent media element of the media session plays with ▶
-// and pauses with ■ and a hidden page keeps playing, and that nothing is requested over the network,
+// notes scheduled) and ❚❚ pauses it (suspends the AudioContext), that the silent media element of the media session plays with ▶
+// and pauses with ❚❚ and a hidden page keeps playing, and that nothing is requested over the network,
 // nothing is logged as an error and no CSP violation is reported. The hosts:
 //
 //   plain            no CSP: <iframe sandbox="allow-scripts"> with src="data:..." and with srcdoc
@@ -23,7 +23,7 @@
 //                    silent blob: media element that gives the page media controls
 //
 // Where the host's CSP blocks blob: media (media-src 'none', or default-src 'none' with no
-// media-src), the page still plays: the AudioContext runs, ▶ and ■ work, nothing is thrown, and the
+// media-src), the page still plays: the AudioContext runs, ▶ and ❚❚ work, nothing is thrown, and the
 // fallback engages: a hidden page stops, as it has no media session to keep it playing. The browser
 // reports the blocked media (a CSP violation for the blob: URL, and its own console message); that
 // report is expected and is the only one accepted.
@@ -204,8 +204,10 @@ async function run(s) {
     }, null, { timeout: 10000 }).catch(() => {}); // the checks that follow report a start that never came
     info(`▶ to playback: ${Date.now() - t0} ms`);
     st = await state(frame);
-    check(st.constructed === 1 && st.synth?.state === "running" && st.synth.playing === 1 && st.sends > 0 && st.label === "Stop",
-      `click ▶: AudioContext ${st.synth?.state}, ${st.sends} MIDI messages scheduled, ▶ became ■`);
+    check(st.constructed === 1 && st.synth?.state === "running" && st.synth.playing === 1 && st.sends > 0 && st.label === "Pause",
+      `click ▶: AudioContext ${st.synth?.state}, ${st.sends} MIDI messages scheduled, ▶ became ❚❚`);
+    /** Waits for the AudioContext to reach `want` (suspend() and resume() settle asynchronously). */
+    const contextState = (/** @type {string} */ want) => frame.waitForFunction((/** @type {string} */ want) => /** @type {any} */ (window).__check.synth?.getAudioContext().state === want, want, { timeout: 10000 }).catch(() => {});
     await frame.waitForTimeout(500);
     art = await artShown(page);
     check(art.shown, `art still drawn while playing (rgb(${art.rgb.join(", ")}))`);
@@ -213,32 +215,36 @@ async function run(s) {
     // The silent element plays, unless the host's CSP blocks its blob: URL (its play() rejects).
     if (!s.blobBlocked) check(st.mediaPaused === false, "the silent media element is playing");
     // The page hides (a locked screen, another tab): it keeps playing with its media session, and
-    // stops without one. document.hidden is overridden, as headless pages are always visible.
+    // pauses without one. document.hidden is overridden, as headless pages are always visible.
     const hide = (/** @type {boolean} */ hidden) => frame.evaluate((/** @type {boolean} */ hidden) => {
       if (hidden) Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
       else delete (/** @type {any} */ (document)).hidden;
       document.dispatchEvent(new Event("visibilitychange"));
     }, hidden);
     await hide(true);
+    if (s.blobBlocked) await contextState("suspended");
     st = await state(frame);
-    if (s.blobBlocked) check(st.synth?.playing === 0 && st.label === "Play", "hidden, no media session: the page stopped");
-    else check(st.synth?.playing === 1 && st.label === "Stop", "hidden, with its media session: the page keeps playing");
+    if (s.blobBlocked) check(st.synth?.state === "suspended" && st.label === "Play", "hidden, no media session: the page paused");
+    else check(st.synth?.playing === 1 && st.synth?.state === "running" && st.label === "Pause", "hidden, with its media session: the page keeps playing");
     await hide(false);
     if (!s.blobBlocked) {
       await frame.click("#play");
+      await contextState("suspended");
       st = await state(frame);
-      check(st.synth?.playing === 0 && st.label === "Play" && st.mediaPaused === true, "click ■: stopped, the silent media element paused");
+      check(st.synth?.state === "suspended" && st.label === "Play" && st.mediaPaused === true, "click ❚❚: paused, the silent media element paused");
     }
-    // ▶ works again either way (after a stop by hiding, too), then ■.
+    // ▶ resumes after a pause by hiding, then ❚❚.
     if (s.blobBlocked) {
       const sends = st.sends;
       await frame.click("#play");
-      await frame.waitForFunction((/** @type {number} */ n) => /** @type {any} */ (window).__check.sends > n, sends, { timeout: 10000 }).catch(() => {});
+      await contextState("running");
+      await frame.waitForFunction((/** @type {number} */ n) => /** @type {any} */ (window).__check.sends > n, sends + 1, { timeout: 10000 }).catch(() => {});
       st = await state(frame);
-      check(st.synth?.playing === 1 && st.label === "Stop" && st.sends > sends, "▶ again plays");
+      check(st.synth?.state === "running" && st.label === "Pause" && st.sends > sends, `▶ resumes: playing again (AudioContext ${st.synth?.state}, ${st.label} shown, ${st.sends - sends} messages scheduled since)`);
       await frame.click("#play");
+      await contextState("suspended");
       st = await state(frame);
-      check(st.synth?.playing === 0 && st.label === "Play", "click ■: stopped");
+      check(st.synth?.state === "suspended" && st.label === "Play", "click ❚❚: paused");
     }
     const violations = [...(await hostViolations()), ...st.violations];
     if (!s.blobBlocked) check(violations.length === 0, `no CSP violations${violations.length ? ": " + violations.join(" | ") : ""}`);
@@ -248,8 +254,8 @@ async function run(s) {
       check(other.length === 0, `the only CSP report is for the blocked blob: media (${[...new Set(violations)].join(" | ") || "none reported"})`);
     }
     outcome = s.blobBlocked
-      ? "plays; the host's CSP blocks the blob: media element: no media session, and a hidden page stops (reported: the blocked media)"
-      : "plays: art drawn, ▶ starts audio (and the silent media element), ■ stops it, a hidden page keeps playing";
+      ? "plays; the host's CSP blocks the blob: media element: no media session, and a hidden page pauses (reported: the blocked media)"
+      : "plays: art drawn, ▶ starts audio (and the silent media element), ❚❚ pauses it, a hidden page keeps playing";
   } else {
     await page.waitForTimeout(1500); // the frame has loaded or been blocked by now
     const frame = page.frames().find((f) => f !== page.mainFrame());

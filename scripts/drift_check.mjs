@@ -31,7 +31,7 @@
 //                      art against the page clock. The art's offset from the sound is the sum of
 //                      the two, so a failure shows which side moved.
 //
-// It also checks that the page still plays at the end, that ■ stops it, and that nothing is logged
+// It also checks that the page still plays at the end, that ❚❚ pauses it, and that nothing is logged
 // as an error or requested over the network.
 //
 // The page is the beast_140bpm page fixture: its token_uri is checked against the digest that the
@@ -87,7 +87,7 @@ const MAX_GRID_ERROR = 1e-6; // pass starts against the tempo map's grid, in sec
 const SHOTS = 7; // screenshots per checkpoint
 const CLOCK_WINDOW_MS = 3000; // clock samples within this of a screenshot time it (clockAt)
 const W = 400, H = 100, TRAVEL = 390; // the probe: a 10-pixel bar from x = 0 to x = 390
-const ROW = 20; // the strip the screenshots take, clear of the ▶/■ button in the bottom-right corner
+const ROW = 20; // the strip the screenshots take, clear of the ▶/❚❚ button in the bottom-right corner
 const LEAD_NOTE = 72; // the riff's first note, at tick 0 of every pass
 
 const c = fixtureCase("beast_140bpm");
@@ -299,8 +299,8 @@ try {
   await page.click("#play");
   const sent = await page.evaluate(() => /** @type {any} */ (window).__drift.sends.length);
   await page.waitForTimeout(400);
-  const stopped = await page.evaluate(() => ({ sends: /** @type {any} */ (window).__drift.sends.length, playing: /** @type {any} */ (window).__drift.synth.playing }));
-  check(!stopped.playing && stopped.sends === sent, "■ stops: nothing scheduled after it");
+  const stopped = await page.evaluate(() => ({ sends: /** @type {any} */ (window).__drift.sends.length, state: /** @type {any} */ (window).__drift.synth.getAudioContext().state }));
+  check(stopped.state === "suspended" && stopped.sends === sent, "❚❚ pauses: AudioContext suspended, nothing scheduled after it");
   const errors = await logged();
   check(errors.length === 0, `no console errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   check(blocked.length === 0, `no network requests${blocked.length ? ": " + blocked.join(" ") : ""}`);
