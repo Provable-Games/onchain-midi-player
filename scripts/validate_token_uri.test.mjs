@@ -4,7 +4,9 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -70,6 +72,26 @@ test("invalid UTF-8 fails the same through raw JSON and the data URI", () => {
   assert.throws(() => parseInput(bytes), /not valid UTF-8/);
   const viaUri = check({ uri: JSON_PREFIX + bytes.toString("base64") });
   assert.ok(ids(viaUri, "fail").includes("token_uri.utf8"));
+});
+
+test("malformed token JSON is a json.parse failure (exit 1), not an unreadable input", async () => {
+  for (const text of ['{"name":"x",}', '{"name":"x"', '{"name":"a\u0001b"}']) {
+    const input = parseInput(Buffer.from(text));
+    assert.deepEqual(input, { json: text });
+    assert.ok(ids(check(input), "fail").includes("json.parse"), text);
+  }
+  const dir = mkdtempSync(join(tmpdir(), "validate-"));
+  writeFileSync(join(dir, "bad.json"), '{"name":"x",}');
+  const out = [];
+  assert.equal(await run([join(dir, "bad.json")], (l) => out.push(l)), 1);
+  assert.match(out.join("\n"), /FAIL json\.parse +invalid JSON/);
+  rmSync(dir, { recursive: true });
+});
+
+test("the sncast response keeps its characters: a non-ASCII one fails the ASCII check", () => {
+  const input = parseInput(Buffer.from(JSON.stringify({ response: JSON.stringify("\u0164" + golden.slice(1)) })));
+  assert.ok(ids(check(input), "fail").includes("token_uri.ascii"));
+  assert.deepEqual(ids(check(parseInput(Buffer.from(JSON.stringify({ response: JSON.stringify(golden) })))), "fail"), []);
 });
 
 test("the decoded token JSON is accepted without the token_uri layer", () => {
@@ -220,6 +242,12 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   // CSS comments are inert, and split a token; an active rule next to one still fails.
   assert.deepEqual(failing(svg("<style>/* @import 'https://example.com/old.css'; url(https://e.com/x) */ rect{fill:red}</style>")).filter((i) => i.startsWith("image.")), []);
   assert.ok(failing(svg("<style>/* x */ @import 'https://example.com/a.css';</style>")).includes("image.self_contained"));
+  // Foreign HTML's resource attributes (srcset, poster, src) and encoding declarations that do not match the UTF-8 bytes.
+  assert.ok(failing(svg("<foreignObject><img xmlns='http://www.w3.org/1999/xhtml' srcset='https://example.com/a.png 1x'/></foreignObject>")).includes("image.self_contained"));
+  assert.ok(failing(svg("<foreignObject><video xmlns='http://www.w3.org/1999/xhtml' poster='//example.com/p.png' src='https://example.com/v.mp4'/></foreignObject>")).includes("image.self_contained"));
+  assert.deepEqual(failing(svg("<foreignObject><img xmlns='http://www.w3.org/1999/xhtml' srcset='data:image/png;base64,AAAA 1x, #a 2x'/></foreignObject>")).filter((i) => i.startsWith("image.")), []);
+  assert.ok(failing(`<?xml version="1.0" encoding="UTF-16"?>${svg("<rect/>")}`).includes("image.xml"));
+  assert.deepEqual(failing(`<?xml version="1.0" encoding="utf-8"?>${svg("<rect/>")}`).filter((i) => i.startsWith("image.")), []);
   // Character references: only XML characters; and references are expanded before the checks, as a browser reads them.
   for (const bad of ["&#0;", "&#xD800;", "&#x110000;", "&#8;", "&#xFFFE;"]) assert.ok(failing(svg(`<text>${bad}</text>`)).includes("image.xml"), bad);
   assert.deepEqual(failing(svg("<text>&#65;&#x1F600;&amp;</text>")).filter((i) => i.startsWith("image.")), []);
@@ -419,6 +447,12 @@ test("command line: exit codes, --json, stdin, usage errors", async () => {
   assert.match(r.stdout, /FAIL token_uri\.base64 .*"!" at offset 0/);
   assert.equal(cli(["-", "--expect", "00".repeat(32)], golden).status, 1);
   assert.equal(cli(["-", "--expect", "zz"], golden).status, 2);
+  // A URL typed by mistake as a value is not repeated in the error.
+  for (const args of [["-", "--expect", "http://127.0.0.1:1/SECRET_KEY"], ["--rpc", "http://127.0.0.1:1/SECRET_KEY", "--contract", "0x1", "--token", "http://127.0.0.1:1/SECRET_KEY"]]) {
+    r = cli(args, golden);
+    assert.equal(r.status, 2, args.join(" "));
+    assert.doesNotMatch(r.stdout + r.stderr, /SECRET_KEY|127\.0\.0\.1/, args.join(" "));
+  }
   // A saved error response (a file or stdin) is printed as a fetched one is: no payload, in any encoding.
   const secret = Buffer.from("https://rpc.test/KEY");
   for (const error of [{ code: 40, message: "see https://rpc.test/KEY", data: { revert_error: ["0x" + secret.toString("hex")] } }, { code: 40, message: "x", data: { revert_error: ["0x" + secret.subarray(0, 9).toString("hex"), "0x" + secret.subarray(9).toString("hex")] } }]) {

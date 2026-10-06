@@ -29,7 +29,7 @@ Every rule below is fixed per class hash: the checks are `checkMidi` and `decode
 | No other system status bytes as events (`F1`–`F6`, `F8`–`FE`). | `unexpected status byte` |
 | One pass lasts at least 50 ms: `maxTick` (see [Playback](#playback)) under the tempo map, which starts at 120 BPM. | `loop shorter than 50 ms` |
 
-Everything else is accepted: any channel message, other meta events and SysEx of any length, and tempo events in any track. The page also rejects a MIDI block that is not strict base64 (`midi: not base64`). The class always writes valid base64, so only `check_midi.mjs` reports it, for a bad base64 input.
+Everything else is accepted: any channel message, other meta events and SysEx of any length, and tempo events in any track. The page also rejects a MIDI block that is not strict base64 (`midi: not base64`). The class always writes valid base64, so only `check_midi.mjs` and the `token_uri` validator (which passes the page's MIDI block to the same check) report it, for a bad base64 input.
 
 The rules follow from how the TinySynth engine reads a file: it stops reading a track at End-of-Track rather than at the chunk length, keeps running status across tracks and after meta and SysEx events, reads tempo at a fixed offset, and turns F7 events into SysEx. On a loop under 50 ms its scheduler would never catch up, and a longer text event can exceed a browser's argument limit.
 

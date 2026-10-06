@@ -68,6 +68,8 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const FIELDS = ["name", "description", "image", "animation_url", "external_url", "attributes", "background_color"];
 /** Fields older OpenSea documentation listed; the current documentation does not. */
 const LEGACY_FIELDS = ["image_data", "youtube_url"];
+/** Attributes that hold one URL (SVG's href and src, and HTML's, which <foreignObject> allows). */
+const URL_ATTRIBUTES = new Set(["href", "src", "poster", "data", "action", "formaction", "background", "ping", "cite", "longdesc", "manifest"]);
 const DISPLAY_TYPES = ["number", "boost_number", "boost_percentage", "date"];
 
 // ---------------------------------------------------------------------------------------------
@@ -186,6 +188,8 @@ export function parseXml(s) {
       throw new XmlError(`character reference ${m[0]} is not an XML character at ${at(m.index ?? 0)}`);
     }
   }
+  const encoding = /^\uFEFF?<\?xml[^?]*?encoding\s*=\s*["']([^"']*)["']/.exec(s)?.[1];
+  if (encoding !== undefined && !/^utf-?8$/i.test(encoding)) throw new XmlError(`the XML declaration says encoding "${encoding.slice(0, 20)}", but the bytes are UTF-8 (and a browser decodes them as declared)`);
   /** @type {string | null} */
   let problem = null;
   const note = (/** @type {string} */ msg) => {
@@ -239,12 +243,17 @@ function svgReferenceProblems(xml) {
     for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, line]);
     if (/@import/i.test(css)) out.push([`${where} has @import`, line]);
   };
-  for (const el of xml.elements) if (el.name.slice(el.name.indexOf(":") + 1).toLowerCase() === "script") out.push(["<script> element", el.line]);
+  for (const el of xml.elements) {
+    const local = el.name.slice(el.name.indexOf(":") + 1).toLowerCase();
+    if (local === "script") out.push(["<script> element", el.line]);
+  }
   for (const a of xml.attrs) {
     const local = a.name.slice(a.name.indexOf(":") + 1).toLowerCase();
     if (a.name === "xmlns" || a.name.startsWith("xmlns:")) continue; // namespace names are identifiers, not links
     if (/^on/.test(local)) out.push([`event handler attribute ${a.name} on <${a.el}>`, a.line]);
-    if ((local === "href" || local === "src") && external(a.value)) out.push([`${a.name}="${a.value.slice(0, 60)}" on <${a.el}> points outside the document and data: URIs`, a.line]);
+    // Foreign HTML (<foreignObject>) can carry any of HTML's resource attributes; srcset holds several URLs.
+    const urlsIn = local === "srcset" ? a.value.split(/\s+/).filter((t) => t && !/^[\d.]+[wx],?$/.test(t)).map((t) => t.replace(/,+$/, "")) : URL_ATTRIBUTES.has(local) ? [a.value] : [];
+    if (urlsIn.some(external)) out.push([`${a.name}="${a.value.slice(0, 60)}" on <${a.el}> points outside the document and data: URIs`, a.line]);
     urls(a.value, a.line, `attribute ${a.name} on <${a.el}>`);
   }
   for (const st of xml.styles) urls(st.text, st.line, "a <style> element");
@@ -335,7 +344,18 @@ export function parseInput(buf) {
   try {
     doc = JSON.parse(text);
   } catch {
-    doc = undefined; // possibly sncast output with extra lines; tokenUriFromCall reads those
+    doc = undefined; // possibly sncast output with extra lines; fromCall reads those
+  }
+  if (doc === undefined) {
+    // Not one JSON document: call output with lines around it, or token JSON with a syntax error,
+    // which validateTokenUri reports as json.parse with the parser's position.
+    try {
+      return fromCall(text);
+    } catch (e) {
+      if (/^starknet_call failed/.test(/** @type {Error} */ (e).message)) throw e;
+      if (text.startsWith("{")) return { json: text };
+      throw new Error("the input is not a data URI, token JSON or token_uri call output");
+    }
   }
   if (Array.isArray(doc)) return { uri: byteArrayFromFelts(doc).toString("latin1"), felts: doc.length };
   // A call output has none of the token's own fields; a token JSON may carry any extra field, even "result".
@@ -358,6 +378,12 @@ function fromCall(/** @type {string} */ text) {
   // An error response is printed by describeRpcError, as when fetched: never as the file has it.
   if (doc && doc.error !== undefined) throw new Error(describeRpcError(doc.error));
   const felts = isObject(doc) && Array.isArray(doc.result) ? doc.result.length : undefined;
+  // sncast's decoded string is kept as it is (tokenUriFromCall would truncate its characters to bytes),
+  // so a non-ASCII character fails the ASCII check as it does for any other input.
+  if (isObject(doc) && typeof doc.response === "string") {
+    const value = JSON.parse(doc.response);
+    if (typeof value === "string") return { uri: value };
+  }
   return { uri: tokenUriFromCall(text).toString("latin1"), felts };
 }
 
@@ -520,7 +546,7 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
   /** @type {Record<string, any>} */
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
   const record = versions[version];
-  const expect = opts.expect ? normalizeSha256(opts.expect) : null;
+  const expect = opts.expect ? normalizeExpect(opts.expect) : null;
   try {
     const { gzip, engine, page } = verifyEngine(html);
     r.hashes.page_sha256 = page.sha256;
@@ -598,6 +624,15 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
  * @param {{uri?: string, json?: string, felts?: number}} input
  * @param {{expect?: string, version?: string, rpcResponseBytes?: number}} [opts]
  */
+/** The --expect value as 64 hex digits; the error never repeats the argument, which could be a URL typed by mistake. */
+function normalizeExpect(/** @type {string} */ value) {
+  try {
+    return normalizeSha256(value);
+  } catch {
+    throw new Error("--expect is not a SHA-256 in hex (64 digits, with or without 0x)");
+  }
+}
+
 export function validateTokenUri(input, opts = {}) {
   const r = new Report();
   /** @type {string | undefined} */
@@ -735,8 +770,14 @@ function finish(r, opts) {
  * @returns {Promise<{uri: string, felts: number, responseBytes: number}>}
  */
 export async function fetchTokenUri({ rpc, contract, token, fetchImpl = fetch }) {
-  const id = BigInt(token);
-  if (id < 0n || id >= 1n << 256n) throw new Error("--token is not a u256");
+  /** @type {bigint} */
+  let id;
+  try {
+    id = BigInt(token);
+  } catch {
+    id = -1n;
+  }
+  if (id < 0n || id >= 1n << 256n) throw new Error("--token is not a u256 (a decimal or 0x hex number)");
   const calldata = ["0x" + (id & ((1n << 128n) - 1n)).toString(16), "0x" + (id >> 128n).toString(16)];
   let last = "";
   let first = "";
