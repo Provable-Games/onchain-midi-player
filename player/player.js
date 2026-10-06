@@ -19,8 +19,10 @@
  *    decoded and checked (`decodeMidi`). On any failure (spec D9) ▶ stays disabled, the exact
  *    error is shown and put in its title and logged, and no synth is ever created. Otherwise ▶ is
  *    enabled.
- * 3. ▶ (a click or tap): the first one constructs TinySynth with the settings (`createSynth`).
- *    Every ▶ resumes the AudioContext inside the gesture, reloads the MIDI (back to tick 0 at the
+ * 3. ▶ (a click or tap): the first one constructs TinySynth with the settings (`createSynth`) and
+ *    builds its noise buffer (`prewarm`), which the engine would otherwise build inside `playMIDI()`,
+ *    blocking the page after the clock it starts from was read and shifting the art against the
+ *    sound. Every ▶ resumes the AudioContext inside the gesture, reloads the MIDI (back to tick 0 at the
  *    song's starting tempo), loops at End-of-Track (`setLoop(1)`, `setLoopEnd(maxTick)`) and starts
  *    playback. With `loopEnd` set, the engine keeps any rest before the first event on every pass.
  * 4. The art restarts when tick 0 is heard: at `getPlayStatus().startTime` (the AudioContext time
@@ -411,7 +413,12 @@ export function startPlayer() {
       const current = ++run;
       session();
       try {
-        synth = synth || createSynth(/** @type {any} */ (window).WebAudioTinySynth, settings);
+        if (!synth) {
+          synth = createSynth(/** @type {any} */ (window).WebAudioTinySynth, settings);
+          // The engine builds its noise buffer on first need, which blocks for tens of ms: here, in
+          // the gesture, rather than in playMIDI(), where it would delay what the clock is read for.
+          synth.prewarm();
+        }
         const ctx = synth.getAudioContext();
         setPlaying(true);
         ctx.resume().then(() => {

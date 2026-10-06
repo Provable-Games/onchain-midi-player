@@ -155,14 +155,9 @@ function instrument() {
     };
     const play = synth.playMIDI;
     synth.playMIDI = () => {
-      // The page-clock-to-AudioContext-clock mapping is sampled before the call: playMIDI builds the
-      // engine's noise buffer on its first call (about 46 ms of blocked main thread, fork T8), and
-      // Firefox's currentTime read right after that is stale by about that long.
-      const at = performance.now();
-      const currentTime = ctx.currentTime;
       play();
       const startTime = synth.getPlayStatus().startTime;
-      st.plays.push({ at, currentTime, startTime, delay: startTime - currentTime + (ctx.outputLatency || 0), outputLatency: ctx.outputLatency });
+      st.plays.push({ at: performance.now(), currentTime: ctx.currentTime, startTime, delay: startTime - ctx.currentTime + (ctx.outputLatency || 0), outputLatency: ctx.outputLatency });
     };
     return synth;
   }

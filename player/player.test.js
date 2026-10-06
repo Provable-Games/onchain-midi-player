@@ -239,7 +239,7 @@ describe("the page's player script, fake engine", () => {
     assert.deepEqual(h.calls[0], ["new", { quality: 1, useReverb: 0, voices: 64 }]);
     assert.deepEqual(h.calls.slice(1, 5).map((x) => x[0]), ["setQuality", "setMasterVol", "setReverbLev", "setVoices"]);
     assert.equal(h.calls.filter((x) => x[0] === "setTimbre").length, 3);
-    assert.deepEqual(h.calls.at(-1), ["resume"]);
+    assert.deepEqual(h.calls.slice(-2), [["prewarm"], ["resume"]], "the noise buffer is built in the gesture, before resume() and playMIDI()");
     assert.equal(h.els.icon.attributes.d, STOP_ICON);
     assert.equal(h.els.play.attributes["aria-label"], "Stop");
     await h.flush();

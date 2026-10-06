@@ -372,7 +372,7 @@ export function runPage(html, { engine = "fake", outputLatency = 0.02, construct
         // The engine's public status; startTime as TinySynth sets it: tick 0 sounds 0.1 s after playMIDI().
         getPlayStatus: () => ({ play: synth.play, maxTick: synth.maxTick, curTick: 0, startTime: synth.play ? synth.startTime : null }),
         setQuality: record("setQuality"), setMasterVol: record("setMasterVol"), setReverbLev: record("setReverbLev"),
-        setVoices: record("setVoices"), setTimbre: record("setTimbre"), setLoop: record("setLoop"), setLoopEnd: record("setLoopEnd"),
+        setVoices: record("setVoices"), prewarm: record("prewarm"), setTimbre: record("setTimbre"), setLoop: record("setLoop"), setLoopEnd: record("setLoopEnd"),
         loadMIDI: record("loadMIDI", (/** @type {Uint8Array} */ bytes) => { synth.maxTick = 4242; synth.play = 0; synth.midi = bytes; }),
         playMIDI: record("playMIDI", () => { synth.play = 1; synth.startTime = ctx.currentTime + 0.1; }),
         stopMIDI: record("stopMIDI", () => { synth.play = 0; }),

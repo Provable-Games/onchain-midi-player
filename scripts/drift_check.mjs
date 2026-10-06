@@ -153,13 +153,15 @@ function instrument() {
 
 const { browser, engine } = await launchBrowser();
 console.log(`${c.name} page (the class's output, art replaced by a probe sweeping once per ${PASS} s pass), offline data: URI; ${minutes} min, a checkpoint every ${every} s`);
-const context = await browser.newContext({ viewport: { width: W, height: H }, offline: true });
+// WebKit's offline emulation also fails the page's own blob: media, so there every other request is
+// aborted and listed instead.
+const context = await browser.newContext({ viewport: { width: W, height: H }, offline: engine !== "webkit" });
 await context.addInitScript(instrument);
 /** @type {string[]} */
 const blocked = [];
 await context.route("**/*", (/** @type {any} */ route) => {
   const url = route.request().url();
-  if (url.startsWith("data:")) return route.continue();
+  if (url.startsWith("data:") || url.startsWith("blob:")) return route.continue(); // not network: the page's own blob: media
   blocked.push(url);
   return route.abort();
 });
