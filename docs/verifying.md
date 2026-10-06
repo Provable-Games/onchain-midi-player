@@ -62,7 +62,7 @@ What a class hash fixes, and what the consumer supplies:
 
 ```sh
 npm run validate-token-uri -- token_uri.txt                    # a file, or - for stdin
-npm run validate-token-uri -- call.json --json                 # machine-readable report
+npm run -s validate-token-uri -- call.json --json              # machine-readable report (-s keeps npm's banner off stdout)
 ```
 
 The input is a `token_uri`, the token JSON, a raw `starknet_call` response (or its result felts), or `sncast --json call` output. The report lists PASS, WARN and FAIL checks with the source of each, the SHA-256 of `PAGE`, and the size of every layer. It exits 0 unless a check fails, 1 on a failure and 2 for a usage error or an input it cannot read. It doesn't fetch: to check a deployed token, fetch the `token_uri` with the [token-uri-inspector](../plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skill's commands and pass the output in. A saved RPC error response is reported by its code, a fixed name for it and known revert reasons (`Out of gas`, `ENTRYPOINT_NOT_FOUND`, the class's `TS: ...`), never its payload.
@@ -78,7 +78,7 @@ The check for external references in the SVG and the page is a best-effort lint.
 | `image` | an SVG data URI of canonical base64, UTF-8, well-formed XML in the SVG namespace (no `<!ENTITY>` declarations), no `<script>`, event handler or processing instruction, no `</script` in any case, no reference outside the document (`href`, `src`, `url()`, `@import`, with CSS escapes decoded, must be `#fragment` or `data:`); warns above 1 MiB | OpenSea Media and traits, [Art (SVG) requirements](token-uri-layout.md#art-svg-requirements) |
 | `animation_url` | an HTML data URI of canonical base64; no element or CSS reference outside the page, and a warning for network URLs in the page text | OpenSea Media and traits |
 | player page | the engine inflates and its SHA-256, the gzip payload and `PAGE` equal the record of the version in [`page_versions.json`](../scripts/page_versions.json); the settings, MIDI and art blocks follow `PAGE`; `SETTINGS` decodes and passes the class's checks; the MIDI passes [`check_midi`](midi-contract.md)'s check; the art block equals the `image` | steps 2 to 5 above, [Sound settings](sound-settings.md), [MIDI contract](midi-contract.md) |
-| sizes | the JSON-RPC response (measured when fetched, otherwise estimated from the felts) against the 10 MiB cap of jsonrpsee nodes; a warning above 80% of it | [Node limits](gas.md#node-limits) |
+| sizes | the JSON-RPC response (estimated from the `token_uri`'s length) against the 10 MiB cap of jsonrpsee nodes; a warning above 80% of it | [Node limits](gas.md#node-limits) |
 
 OpenSea documents no size limit for data URIs, and shows an `animation_url` HTML page in a sandboxed iframe. A token whose `animation_url` is another media type fails the player checks. An external `image` skips the image checks with a warning, and the art block is checked as an SVG instead.
 

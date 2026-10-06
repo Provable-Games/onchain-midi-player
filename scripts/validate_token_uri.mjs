@@ -193,7 +193,7 @@ function svgReferenceProblems(xml) {
   const urls = (/** @type {string} */ raw, /** @type {number} */ line, /** @type {string} */ where) => {
     const css = unescape(raw.replace(/\/\*[\s\S]*?\*\//g, " ")); // a CSS comment is inert, and splits a token
     for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, line]);
-    if (/@import/i.test(css)) out.push([`${where} has @import`, line]);
+    for (const m of css.matchAll(/@import\s+(?:url\(\s*)?(['"]?)([^'")\s;]*)\1/gi)) if (external(m[2])) out.push([`${where} has @import ${m[2].slice(0, 60)}, outside the document and data: URIs`, line]);
   };
   for (const el of xml.elements) {
     const local = el.name.slice(el.name.indexOf(":") + 1).toLowerCase();
@@ -258,11 +258,11 @@ const kind = (/** @type {unknown} */ v) => (v === null ? "null" : Array.isArray(
 const RPC_ERRORS = /** @type {Record<number, string>} */ ({ 20: "Contract not found", 21: "Invalid message selector", 24: "Block not found", 28: "Class hash not found", 40: "Contract error", [-32602]: "Invalid params", [-32603]: "Internal error" });
 /** Revert reasons that are printed: an explicit list of fixed strings. Any other string could carry the URL. */
 const SAFE_REASONS = new Set(["Out of gas", "ENTRYPOINT_NOT_FOUND", "ENTRYPOINT_FAILED", "CONTRACT_NOT_FOUND", "CLASS_HASH_NOT_FOUND", "Input too long for arguments", "Failed to deserialize param #1", "Failed to deserialize param #2",
-  // The class's own settings errors (src/settings.cairo; the test in scripts/validate_token_uri.test.mjs keeps this list in step).
+  // The class's own settings errors, from src/settings.cairo: add new ones here when it gains them.
   "TS: AM target not earlier", "TS: FM target not earlier", "TS: custom wave unsupported", "TS: drum slot out of range", "TS: duplicate timbre slot", "TS: filter cutoff out of range", "TS: filter on modulator", "TS: filter q out of range", "TS: filter unsupported", "TS: harmonics length", "TS: no operators", "TS: program slot out of range", "TS: quality out of range", "TS: route out of range", "TS: samples length", "TS: too many operators", "TS: too many timbres", "TS: too many waves", "TS: voices out of range", "TS: wave index out of range"]);
 
 /**
- * The text for an RPC error response, fetched or read from a file. Nothing of the error's payload is
+ * The text for an RPC error response read from a file. Nothing of the error's payload is
  * printed (its message and data can echo the RPC URL, in any encoding): only its code, a fixed name
  * for it, and the revert reasons that are known.
  * @param {unknown} error the `error` of a JSON-RPC response, or sncast's error value
