@@ -16,7 +16,7 @@
 // The input file is a token_uri (data:application/json;base64,...), the decoded token JSON, or the
 // output of a token_uri call: a raw starknet_call response (or just its result array of felts), or
 // `sncast --json call` output. To check a deployed token, fetch it with the token-uri-inspector skill's
-// commands (or examples/stress_nft/scripts/rpc_check.mjs) and pipe the output in.
+// commands and pipe the output in.
 //
 // Standards (every check names its source in the report):
 //   OpenSea, Media and traits: https://docs.opensea.io/docs/media-and-traits
@@ -34,7 +34,7 @@ import { validateSettings } from "../player/validate.js";
 import { byteArrayFromFelts, shortStrings, tokenUriFromCall } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/bytearray.mjs";
 import { checkArt, splitPage } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/split_page.mjs";
 import { checkScore } from "./check_midi.mjs";
-import { ART_OPEN, MIDI_OPEN, PAGE_VERSIONS_PATH, SETTINGS_OPEN, VERSION } from "./page.mjs";
+import { ART_OPEN, MIDI_OPEN, PAGE_VERSIONS_PATH, SETTINGS_OPEN, VERSION, isSemVer } from "./page.mjs";
 import { normalizeSha256, verifyEngine } from "./verify_engine.mjs";
 
 /** Where each check comes from. */
@@ -193,7 +193,7 @@ function svgReferenceProblems(xml) {
   const urls = (/** @type {string} */ raw, /** @type {number} */ line, /** @type {string} */ where) => {
     const css = unescape(raw.replace(/\/\*[\s\S]*?\*\//g, " ")); // a CSS comment is inert, and splits a token
     for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, line]);
-    for (const m of css.matchAll(/@import\s+(?:url\(\s*)?(['"]?)([^'")\s;]*)\1/gi)) if (external(m[2])) out.push([`${where} has @import ${m[2].slice(0, 60)}, outside the document and data: URIs`, line]);
+    for (const m of css.matchAll(/@import\s*(?:url\(\s*)?(['"]?)([^'")\s;]*)\1/gi)) if (external(m[2])) out.push([`${where} has @import ${m[2].slice(0, 60)}, outside the document and data: URIs`, line]);
   };
   for (const el of xml.elements) {
     const local = el.name.slice(el.name.indexOf(":") + 1).toLowerCase();
@@ -497,10 +497,10 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
   const version = opts.version ?? VERSION;
   /** @type {Record<string, any>} */
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
+  // The value is printed in the report: only a SemVer string is accepted, and an error never repeats it.
+  if (!isSemVer(version)) throw new Error("--version is not a SemVer version such as 0.3.0");
   const record = Object.hasOwn(versions, version) ? versions[version] : undefined;
   const expect = opts.expect ? normalizeExpect(opts.expect) : null;
-  // The value is printed in the report: only a SemVer string is accepted, and an error never repeats it.
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error("--version is not a SemVer version such as 0.3.0");
   try {
     const { gzip, engine, page } = verifyEngine(html);
     r.hashes.page_sha256 = page.sha256;
