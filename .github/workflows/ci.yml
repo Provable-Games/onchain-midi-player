@@ -1,7 +1,7 @@
 name: CI
 
 # Cairo (format, build, test), JavaScript tests and type checks, generated-file
-# drift (including the page build and the ABIs), and headless browser checks on Chromium,
+# drift (including the segment build and the ABIs), and headless browser checks on Chromium,
 # Firefox and WebKit. Steps that need the root package.json,
 # its scripts or player/ (added by PR #5) are switched on by a detection step
 # after checkout, so this file needs no change when they land. A job-level
@@ -134,7 +134,7 @@ jobs:
           mapfile -d '' files < <(find player -name '*.js' -print0 | sort -z)
           "$tools/.bin/tsc" --noEmit --allowJs --checkJs --target es2022 \
             --module nodenext --moduleResolution nodenext --lib es2022,dom \
-            --typeRoots "$tools/@types" --types node "${files[@]}"
+            --typeRoots "$tools/@types" --types node "${files[@]}" examples/beast_consumer/ui.js
 
   generated:
     name: generated
@@ -153,30 +153,38 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
+        with:
+          tool-versions: .tool-versions
+          cache: false
+
       # The synthetic MIDI scores (tests/fixtures/midi/scores.json), which the example's fixtures and
-      # the class fixtures (check:page) are built from. Node built-ins only; needs no npm install.
+      # the class fixtures (check:segments) are built from. Node built-ins only; needs no npm install.
       - name: Regenerate the synthetic MIDI scores
         run: node scripts/gen_midi_fixtures.mjs
 
-      # Reads the committed page (tests/fixtures/page.html); needs no npm install.
+      # Reads committed segment and NFT-owned assets. Scarb formats generated Cairo.
       - name: Regenerate the example's fixtures
         run: |
           (cd examples/beast_consumer && node scripts/gen_fixtures.mjs)
           (cd examples/stress_nft && node scripts/gen_fixtures.mjs)
 
       - name: Install root dependencies
-        if: (steps.detect.outputs.has_check_settings == 'true' || steps.detect.outputs.has_check_page == 'true') && steps.detect.outputs.has_lockfile == 'true'
+        if: (steps.detect.outputs.has_check_settings == 'true' || steps.detect.outputs.has_check_segments == 'true') && steps.detect.outputs.has_lockfile == 'true'
         run: npm ci --no-audit --no-fund
 
       - name: Settings fixtures are byte-stable
         if: steps.detect.outputs.has_check_settings == 'true'
         run: npm run check:settings
 
-      # The pinned engine's SHA-256, the page, src/page_data.cairo and the page fixtures, rebuilt
+      # The pinned engine SHA-256 and provider/data/alignment fixtures, rebuilt
       # with the pinned Terser and fflate (the gzip payload and the pinned gunzip shim).
-      - name: Page build is byte-stable
-        if: steps.detect.outputs.has_check_page == 'true'
-        run: npm run check:page
+      - name: Segment build is byte-stable
+        if: steps.detect.outputs.has_check_segments == 'true'
+        run: |
+          npm run check:segments
+          npm run check:data
+          npm run check:measurements
 
       # abi/ (scripts/gen_abi.mjs) comes from the release build's Sierra artifacts. Same Scarb
       # download cache as the cairo job.
@@ -186,11 +194,6 @@ jobs:
           path: ~/.cache/scarb
           key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'examples/beast_consumer/Scarb.lock', 'examples/stress_nft/Scarb.lock') }}
           restore-keys: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-
-
-      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
-        with:
-          tool-versions: .tool-versions
-          cache: false
 
       - name: Regenerate the ABIs in abi/
         run: |
@@ -270,15 +273,15 @@ jobs:
           pactl info
           pactl get-default-sink | grep -qx ci_null
 
+      - name: Install root dependencies
+        if: (steps.detect.outputs.has_render_check == 'true' || steps.detect.outputs.has_page_check == 'true') && steps.detect.outputs.has_lockfile == 'true'
+        run: npm ci --no-audit --no-fund
+
       - name: Example browser check
         working-directory: examples/beast_consumer
         run: |
           mkdir -p "$RUNNER_TEMP/screenshots"
           node scripts/browser_check.mjs "$RUNNER_TEMP/screenshots"
-
-      - name: Install root dependencies
-        if: (steps.detect.outputs.has_render_check == 'true' || steps.detect.outputs.has_page_check == 'true') && steps.detect.outputs.has_lockfile == 'true'
-        run: npm ci --no-audit --no-fund
 
       - name: Render check of the reference timbres
         if: steps.detect.outputs.has_render_check == 'true'

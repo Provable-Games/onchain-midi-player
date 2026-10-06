@@ -1,46 +1,4 @@
-//! `BeastLikeNft`: a simplified Beasts-style collectible that renders its own SVG and injects the
-//! onchain MIDI player into `token_uri`.
-//!
-//! # Today's Beasts approach (for contrast)
-//!
-//! `metadata_generator.cairo` renders the SVG, base64-encodes it into the `image` data URI, builds
-//! the whole JSON as one string, then base64-encodes that JSON in one more pass. That last pass
-//! runs over everything, including the already-encoded image.
-//!
-//! # With the TinySynth class
-//!
-//! The JSON gains an `animation_url` holding an HTML page (engine + player + MIDI + the same SVG).
-//! Encoding that page at call time would cost hundreds of millions of gas, so instead `token_uri`
-//! is assembled from base64 pieces that are each encoded on their own and concatenated:
-//!
-//! ```text
-//! "data:application/json;base64,"
-//!   ++ b64('{' members ',' <pad>)                                        [1] consumer
-//!   ++ 'ICAg'...  b64(' "image":"data:image/svg+xml;base64,')            [1] constants
-//!   ++ b64(S)              S = svg_b64 '"' <pad>, encoded once, used twice [2] consumer
-//!   ++ 'LCAg' 'ICAg'...    b64(',' <pad>)                                [3] constants
-//!   ++ animation_url_segment()       pre-encoded page, no runtime work    [4] library call
-//!   ++ midi_segment(midi, settings)  b64(b64(D)): settings + MIDI         [5] library call
-//!   ++ b64(S)                        art: closes both data URIs           [6] reuse of [2]
-//!   ++ b64('}')                                                           [7] consumer
-//! ```
-//!
-//! The rule that makes this valid: `b64(X ++ Y) == b64(X) ++ b64(Y)` when `len(X) % 3 == 0`.
-//! So every piece except the last must be a multiple of 3 bytes before it is encoded; the consumer
-//! pads its own pieces with spaces between JSON tokens (insignificant whitespace), and the class
-//! pads `PAGE` and `D` itself. The result is ordinary standard base64 of ordinary JSON, decoded by
-//! any marketplace without special handling.
-//!
-//! Word alignment: `ByteArray::append` copies whole 31-byte words when the destination ends on a
-//! word boundary, and splits every word in two otherwise (about 4x the cost). The consumer adds
-//! groups of 3 spaces between JSON tokens (`'ICAg'` is `b64('   ')`, a constant) so that its two
-//! largest appends, the first `b64(S)` and the segment, start on a word boundary. None of these
-//! spaces is base64-encoded at call time.
-//!
-//! The renderer is unchanged: `render_svg` returns raw SVG exactly as before. Token 4 is a
-//! full-size Beast instead: the Beasts renderer's own SVG output, a synthetic score the size of the
-//! largest production score and the reference sounds, to measure a full-size `token_uri`.
-
+//! NFT-owned complete document/art/UI from standalone TinySynth segments.
 use core::num::traits::Zero;
 use core::panic_with_felt252;
 use starknet::ClassHash;
@@ -106,10 +64,8 @@ pub fn assert_valid_name(name: @ByteArray) {
 /// same SMIL opacity `<animate>` keep-alive, card styling, the name, and the pixel art embedded via
 /// `foreignObject` + `xhtml:img`.
 ///
-/// It must never contain `</script` (case-insensitive): in the `animation_url` page the SVG is the
-/// contents of an unclosed `<script type="text/plain" id="art">` block that runs to the end of the
-/// document. Every literal here is fixed and reviewed, the name is charset-restricted, the tier is
-/// digits, and the image is a strict base64 data URI, so the SVG cannot contain `</script`.
+/// Original SVG bytes are preserved inside encoded image data URIs. Supplied script-like text
+/// cannot terminate any parent script/data block; bootstrap and closing HTML follow the image.
 pub fn render_svg(name: @ByteArray, tier: u8, image: @ByteArray) -> ByteArray {
     let mut svg: ByteArray =
         "<svg xmlns='http://www.w3.org/2000/svg' width='250' height='350' viewBox='0 0 250 350'>";
@@ -146,7 +102,8 @@ pub fn render_svg(name: @ByteArray, tier: u8, image: @ByteArray) -> ByteArray {
 }
 
 /// The token's SVG: `render_svg` for the sample tokens; for token 4, a real Beast's SVG as the
-/// Beasts renderer produced it (22,733 bytes, `beast_data::warlock_svg`, reviewed: no `</script`).
+/// Beasts renderer produced it (22,733 bytes, `beast_data::warlock_svg`, isolated as an encoded
+/// image).
 pub fn token_svg(token_id: u256, name: @ByteArray, tier: u8) -> ByteArray {
     if token_id == 4 {
         crate::beast_data::warlock_svg()
@@ -169,49 +126,13 @@ pub fn members(token_id: u256, name: @ByteArray, tier: u8) -> ByteArray {
     m
 }
 
-/// Appends spaces until `(s.len() + extra) % 3 == 0`. Spaces are only ever placed between JSON
-/// tokens, where they are insignificant.
-fn pad3(ref s: ByteArray, extra: usize) {
-    while (s.len() + extra) % 3 != 0 {
-        s.append_byte(' ');
-    }
-}
-
-/// `b64('   ')`: three spaces between JSON tokens, as base64.
-pub fn three_spaces_b64() -> ByteArray {
-    "ICAg"
-}
-
-/// `b64(' "image":"data:image/svg+xml;base64,')`: the image key after one space (36 bytes, a
-/// multiple of 3), as base64. A constant, so it is never encoded at call time.
-pub fn image_key_b64() -> ByteArray {
-    "ICJpbWFnZSI6ImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQs"
-}
-
-/// `b64(',  ')`: the comma before `"animation_url"` and two spaces, as base64.
-pub fn comma_b64() -> ByteArray {
-    "LCAg"
-}
-
-/// Appends `'ICAg'` (3 spaces between JSON tokens) until `uri.len() + extra` is a multiple of 31,
-/// so that whatever is appended `extra` bytes later starts on a ByteArray word boundary. Each group
-/// adds 4 bytes, and 4 and 31 are coprime: at most 30 groups.
-pub fn align_to_word(ref uri: ByteArray, extra: usize) {
-    while (uri.len() + extra) % 31 != 0 {
-        uri.append(@three_spaces_b64());
-    }
-}
-
 #[starknet::contract]
 pub mod BeastLikeNft {
     use onchain_midi_player::interface::{ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher};
     use starknet::ClassHash;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use crate::sound;
-    use super::{
-        Zero, align_to_word, assert_valid_name, comma_b64, image_key_b64, members, pad3, token_data,
-        token_svg,
-    };
+    use super::{Zero, assert_valid_name, members, token_data, token_svg};
 
     #[storage]
     struct Storage {
@@ -244,54 +165,14 @@ pub mod BeastLikeNft {
             assert_valid_name(@name);
             let svg = token_svg(token_id, @name, tier);
 
-            // [1] '{' members ',' <pad>: the pad (between JSON tokens) makes the piece a multiple
-            //     of 3 bytes. JSON key order: members, then image, then animation_url, because the
-            //     animation_url string is closed by the art at [6].
-            let mut open: ByteArray = "{";
-            open.append(@members(token_id, @name, tier));
-            open.append_byte(',');
-            pad3(ref open, 0);
-            let mut uri: ByteArray = "data:application/json;base64,";
-            uri.append(@synth.base64(open));
-            //     Then 3 spaces at a time (constant 'ICAg') until b64(S) will start on a word
-            //     boundary, and the constant b64(' "image":"data:image/svg+xml;base64,').
-            let image_key = image_key_b64();
-            align_to_word(ref uri, image_key.len());
-            uri.append(@image_key);
-
-            // [2] S = svg_b64 '"' <pad>. The SVG is base64-encoded exactly once (Beasts already
-            //     does this for `image`); `b64(S)` is then computed once and appended twice.
-            //     First use: the `image` value and its closing quote, at the JSON layer.
-            //     Second use [6]: at the HTML layer, svg_b64 decodes to the raw SVG, the contents
-            //     of the open art block, and '"' closes the animation_url string. The pad after
-            //     '"' is JSON whitespace in both places. svg_b64 may end in '=': it ends the
-            //     HTML-layer stream, where padding is legal.
-            let mut s = synth.base64(svg);
-            s.append_byte('"');
-            pad3(ref s, 0);
-            let s_b64 = synth.base64(s);
-            uri.append(@s_b64); // word-aligned
-
-            // [3] ',' and 2 spaces (constant 'LCAg'), then 3 spaces at a time until the segment
-            //     starts on a word boundary.
-            uri.append(@comma_b64());
-            align_to_word(ref uri, 0);
-            // [4] b64('"animation_url":"data:text/html;base64,' ++ b64(PAGE)). PAGE is 9-byte
-            //     aligned by the class, so this is unpadded and splices at both layers. The
-            //     animation_url string is left open.
-            uri.append(@synth.animation_url_segment()); // word-aligned
-            // [5] b64(b64(D)), D = SETTINGS, MIDI block, then opens the art block. Also 9-byte
-            //     aligned by the class. Settings are validated here; bad ones revert.
-            let (midi, settings) = (
-                sound::token_midi(token_id), sound::token_settings(token_id, tier),
-            );
-            uri.append(@synth.midi_segment(midi, settings));
-            // [6] The art: the same b64(S) again. Closes the art block (at EOF), the HTML data
-            //     URI and the animation_url string.
-            uri.append(@s_b64);
-            // [7] The closing brace. Last piece, so it may be padded ('fQ==').
-            uri.append(@synth.base64("}"));
-            uri
+            crate::assembly::token_uri(
+                synth,
+                members(token_id, @name, tier),
+                svg,
+                sound::token_midi(token_id),
+                sound::token_settings(token_id, tier),
+                "",
+            )
         }
 
         fn tinysynth_class_hash(self: @ContractState) -> ClassHash {

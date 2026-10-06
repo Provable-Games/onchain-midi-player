@@ -1,0 +1,81 @@
+{
+  "0.5.0": {
+    "format": 1,
+    "fixed_alignment": 279,
+    "dynamic_alignment": 9,
+    "toolchain": {
+      "fflate": "0.8.3",
+      "terser": "5.51.2",
+      "minify": {
+        "ecma": 2020,
+        "compress": {
+          "passes": 2,
+          "ecma": 2020
+        },
+        "mangle": true,
+        "format": {
+          "ascii_only": true,
+          "ecma": 2020
+        }
+      },
+      "gzip": {
+        "level": 9,
+        "mtime": 0
+      }
+    },
+    "inputs": {
+      "player/gunzip.js": {
+        "sha256": "f59267fcc6487153fd2978e31f283878c626564e445f1677a78e9589e2aecce3",
+        "bytes": 13269
+      },
+      "player/settings.js": {
+        "sha256": "8a5b085bcfa4f22ccf339c59cdb5cc0c8c7ce7867717d03408a704c2695ff63c",
+        "bytes": 12879
+      },
+      "player/player.js": {
+        "sha256": "632c1de5e0fb3f61bf5f154d6cdd514fbf2e27d0f87f24fa4faec37b2063f482",
+        "bytes": 14771
+      }
+    },
+    "engine_ref": "31fb18d",
+    "engine_commit": "31fb18d8e04125519776773042da0d5b2db591a9",
+    "script_sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74",
+    "artifacts": {
+      "gunzip": {
+        "source_sha256": "67323cdaf555c82fe2f7972b08f983e54094041feb3ab566f7c9b6192195cc75",
+        "source_len": 4465,
+        "raw_sha256": "0a09fbead9886c2acd67493bd3a286d5f2e82613b7265c59b99ce801d7b26f2f",
+        "raw_len": 4743,
+        "returned_sha256": "2184f37c2f865efcf5375259d3f57ef6db2aef6d30d438249c2def1ccb972fef",
+        "returned_len": 8432,
+        "returned_felts": 275
+      },
+      "engine": {
+        "source_sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74",
+        "source_len": 47212,
+        "raw_sha256": "c1ff91769d9e1913f8e38060352ea8e96cea55808423b732d1cd7d62b0d790d7",
+        "raw_len": 19530,
+        "returned_sha256": "8fb5e2e140f596cbfd3c00ec125e2e9ae47fb54fd8dcbd6c68075d6f55051c82",
+        "returned_len": 34720,
+        "returned_felts": 1123,
+        "gzip_sha256": "04b704009c0b07c6fde9bedabba37aca0b923c5c79bdf4b0428fa4f88065015b",
+        "gzip_len": 14339,
+        "gzip_base64_len": 19120
+      },
+      "player": {
+        "source_sha256": "7975dea6f4fbe547fe12ddfe31777b85b04e91ef5e4fbfdb6925989c7398c567",
+        "source_len": 8245,
+        "raw_sha256": "3c290a2400520257d3ed322d5a6e93164913cec43de9d83058dfeb5c52845cc6",
+        "raw_len": 5580,
+        "returned_sha256": "abea84a5ddf7cc9877eb05859d8bc1485a29935de3e45b3cec43f4daeab4a2d8",
+        "returned_len": 9920,
+        "returned_felts": 323,
+        "gzip_sha256": "50646e4ebf5d92c6ebfc551c2e8fa88fa5d211b8f2608d24a4f530fe9842295e",
+        "gzip_len": 3926,
+        "gzip_base64_len": 5236
+      }
+    },
+    "license_sha256": "b8b88aa30a6fbf2a2b1990fe85bfbf7fc2f980609d8ae0b7f9396eb2118f26bb",
+    "license_len": 10683
+  }
+}

@@ -124,38 +124,6 @@ pub fn stress_midi(bars: u32) -> ByteArray {
     midi
 }
 
-/// Appends spaces until `(s.len() + extra) % 3 == 0`. Spaces are only ever placed between JSON
-/// tokens, where they are insignificant.
-fn pad3(ref s: ByteArray, extra: usize) {
-    while (s.len() + extra) % 3 != 0 {
-        s.append_byte(' ');
-    }
-}
-
-/// `b64('   ')`: three spaces between JSON tokens, as base64.
-fn three_spaces_b64() -> ByteArray {
-    "ICAg"
-}
-
-/// `b64(' "image":"data:image/svg+xml;base64,')`: the image key after one space (36 bytes, a
-/// multiple of 3), as base64.
-fn image_key_b64() -> ByteArray {
-    "ICJpbWFnZSI6ImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQs"
-}
-
-/// `b64(',  ')`: the comma before `"animation_url"` and two spaces, as base64.
-fn comma_b64() -> ByteArray {
-    "LCAg"
-}
-
-/// Appends `'ICAg'` until `uri.len() + extra` is a multiple of 31, so that whatever is appended
-/// `extra` bytes later starts on a ByteArray word boundary. At most 30 groups.
-fn align_to_word(ref uri: ByteArray, extra: usize) {
-    while (uri.len() + extra) % 31 != 0 {
-        uri.append(@three_spaces_b64());
-    }
-}
-
 #[starknet::contract]
 pub mod StressNft {
     use core::num::traits::Zero;
@@ -167,10 +135,7 @@ pub mod StressNft {
     };
     use starknet::{ClassHash, ContractAddress, get_caller_address};
     use crate::repetitions::default_repetitions;
-    use super::{
-        TOKEN_COUNT, align_to_word, comma_b64, image_key_b64, members, pad3, render_svg,
-        stress_midi, token_index,
-    };
+    use super::{TOKEN_COUNT, members, render_svg, stress_midi, token_index};
 
     #[storage]
     struct Storage {
@@ -210,33 +175,9 @@ pub mod StressNft {
             let bars = self.repetitions.read(token_index(token_id));
             let svg = render_svg(token_id, bars);
 
-            // The layout of docs/token-uri-layout.md, as in examples/beast_consumer.
-            // [1] '{' members ',' <pad>
-            let mut open: ByteArray = "{";
-            open.append(@members(token_id, bars));
-            open.append_byte(',');
-            pad3(ref open, 0);
-            let mut uri: ByteArray = "data:application/json;base64,";
-            uri.append(@synth.base64(open));
-            let image_key = image_key_b64();
-            align_to_word(ref uri, image_key.len());
-            uri.append(@image_key);
-            // [2] S = svg_b64 '"' <pad>, encoded once and appended twice.
-            let mut s = synth.base64(svg);
-            s.append_byte('"');
-            pad3(ref s, 0);
-            let s_b64 = synth.base64(s);
-            uri.append(@s_b64);
-            // [3] ',' and spaces, so the segment starts on a word boundary.
-            uri.append(@comma_b64());
-            align_to_word(ref uri, 0);
-            // [4] the pre-encoded page, [5] the token's settings and score.
-            uri.append(@synth.animation_url_segment());
-            uri.append(@synth.midi_segment(stress_midi(bars), default_settings()));
-            // [6] the art again, closing both data URIs, and [7] the closing brace.
-            uri.append(@s_b64);
-            uri.append(@synth.base64("}"));
-            uri
+            crate::assembly::token_uri(
+                synth, members(token_id, bars), svg, stress_midi(bars), default_settings(), "",
+            )
         }
 
         fn tinysynth_class_hash(self: @ContractState) -> ClassHash {

@@ -9,7 +9,7 @@ use beast_consumer::beast_like_nft::{
 };
 use core::sha256::compute_sha256_byte_array;
 use onchain_midi_player::interface::{ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher};
-use onchain_midi_player::page_data;
+use onchain_midi_player::segment_data;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ClassHash;
 use crate::golden;
@@ -119,17 +119,14 @@ fn library_call_without_deployment() {
     assert(nft.tinysynth_class_hash() == class_hash, 'class hash not stored');
 
     let synth = ITinySynthLibraryDispatcher { class_hash };
-    let segment = synth.animation_url_segment();
-    assert(segment.len() == page_data::SEGMENT_LEN, 'segment length');
-    assert(segment == page_data::animation_url_segment(), 'segment content');
+    let segment = synth.engine_segment();
+    assert(segment.len() == segment_data::ENGINE_SEGMENT_LEN, 'segment length');
+    assert(segment == segment_data::engine_segment(), 'segment content');
     // The pre-encoded piece splices mid-stream: no '=' padding (which could only end it).
     assert(segment[segment.len() - 1] != '=', 'segment is padded');
-    assert(synth.base64("}") == "fQ==", 'base64 padding');
-    assert(synth.base64("Man") == "TWFu", 'base64');
-    assert(synth.base64("") == "", 'base64 empty');
-    assert(synth.script_sha256() == page_data::ENGINE_SHA256, 'script_sha256');
-    assert(synth.version() == page_data::VERSION, 'version');
-    assert(synth.license() == page_data::license(), 'license');
+    assert(synth.script_sha256() == segment_data::ENGINE_SHA256, 'script_sha256');
+    assert(synth.version() == segment_data::VERSION, 'version');
+    assert(synth.license() == segment_data::license(), 'license');
 }
 
 /// Prints the contract's token_uri for the sample token, to decode the actual Cairo output:

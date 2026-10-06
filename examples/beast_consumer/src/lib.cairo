@@ -9,6 +9,9 @@
 //! - `beast_data` (generated): token 4's real Beast SVG and full-size synthetic score, for the
 //!   full-size measurement.
 
+pub mod assembly;
 pub mod beast_data;
 pub mod beast_like_nft;
+
+pub mod owned_assets;
 pub mod sound;

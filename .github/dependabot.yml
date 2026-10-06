@@ -29,6 +29,6 @@ updates:
 
   # The root package.json has two devDependencies, Terser and fflate, pinned
   # exactly: their versions determine the bytes of the page the class embeds,
-  # so they change only deliberately (npm run gen:page, then a new
-  # PAGE_VERSION; for fflate also a re-derived, re-pinned gunzip shim), not
+  # so they change only deliberately (npm run gen:segments, then a new
+  # SEGMENT_FORMAT; for fflate also a re-derived, re-pinned gunzip shim), not
   # through Dependabot.

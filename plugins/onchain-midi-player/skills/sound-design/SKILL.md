@@ -2,7 +2,7 @@
 name: sound-design
 description: Design the sound of an NFT that uses the onchain MIDI player (Provable-Games/onchain-midi-player) through the TinySynthSettings value its contract passes to midi_segment - quality, reverb, master volume, voices, custom waveforms (single-cycle sample tables and harmonic waves), fixed low-, high- and band-pass filters, and custom FM or chip timbres that replace General MIDI programs or drum notes. Use when choosing or tuning instruments and drums, defining chip waves such as stepped triangles, pulses or LFSR noise, filtering a voice (chip hi-hats, filtered leads and basses), converting a TinySynth soundedit timbre to Cairo fixed point, choosing the per-token subset a sound provider returns, fixing a settings revert from midi_segment (the TS errors), or previewing settings offline before deploying.
 license: Apache-2.0
-compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-midi-player whose VERSION in src/page_data.cairo equals the class's version(); Cairo steps need the Scarb version in its .tool-versions.
+compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-midi-player whose VERSION in src/segment_data.cairo equals the class's version(); Cairo steps need the Scarb version in its .tool-versions.
 ---
 
 # Sound design with `TinySynthSettings`
@@ -23,7 +23,7 @@ Boundary: the [midi-guide](../midi-guide/SKILL.md) skill covers what goes in the
    `preview` runs the JS reference of the class's `settings::validate` and encoder (same checks, order, messages and indices; parity fixtures keep them identical). An invalid value prints `midi_segment would revert with ('TS: …', …)`. A misspelt or missing field fails too.
 3. Port the values to Cairo (below), then test in the consumer that `midi_segment` accepts them.
 
-Get the tools: Node 22 or later, and a clone whose `grep 'pub const VERSION' src/page_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed. The same `VERSION` always means the same page bytes. `preview` needs no `npm ci`. Details: README, [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills).
+Get the tools: Node 22 or later, and a clone whose `rg 'pub const VERSION' src/segment_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed. The same `VERSION` always means the same provider segment bytes. Install the pinned root tool dependencies with `npm ci` before using the preview/inspection tools. Details: README, [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md).
 
 ## What the class checks
 

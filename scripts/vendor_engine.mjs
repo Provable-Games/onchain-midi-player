@@ -25,7 +25,7 @@ const commit = git("rev-parse", "--verify", `${ref}^{commit}`).toString().trim()
 // A tag names itself; a commit is named by its 7-character short SHA.
 const isTag = git("tag", "--list", ref).toString().trim() === ref;
 const label = isTag ? ref : commit.slice(0, 7);
-if (!/^[0-9A-Za-z._-]{1,16}$/.test(label)) throw new Error(`ref label ${JSON.stringify(label)} must be 1-16 of [0-9A-Za-z._-] (it names the vendored files and is recorded in scripts/page_versions.json)`);
+if (!/^[0-9A-Za-z._-]{1,16}$/.test(label)) throw new Error(`ref label ${JSON.stringify(label)} must be 1-16 of [0-9A-Za-z._-] (it names the vendored files and is recorded in scripts/library_versions.json)`);
 const engine = git("show", `${commit}:webaudio-tinysynth.min.js`);
 const notice = git("show", `${commit}:NOTICE`);
 writeFileSync(join(VENDOR_DIR, `webaudio-tinysynth-${label}.min.js`), engine);

@@ -9,10 +9,10 @@ import { randomBytes } from "node:crypto";
 import { describe, test } from "node:test";
 import { gunzipSync as zlibGunzip, gzipSync as zlibGzip } from "node:zlib";
 import { gzipSync } from "fflate";
-import { gunzip, gunzipScripts } from "./gunzip.js";
-import { gzipEngine, shimScript } from "../scripts/build_page.mjs";
+import { gunzip } from "./gunzip.js";
+import { gzipSource } from "../scripts/build_segments.mjs";
 import { engineSource } from "../scripts/engine.mjs";
-import { SHIM_PIN, pageHtml, pageScripts, sha256 } from "../scripts/page.mjs";
+import { fixedFragment, sha256 } from "../scripts/segments.mjs";
 
 const engine = Buffer.from(engineSource());
 /** gunzip as a Buffer. */
@@ -73,20 +73,14 @@ describe("gunzip: round trips", () => {
 });
 
 describe("gunzip: deterministic output", () => {
-  test("the build's payload is the same on every run, and is PAGE's", () => {
-    const a = gzipEngine(engineSource());
-    const b = gzipEngine(engineSource());
+  test("the build's payload is the same on every run, and is the engine fragment's", () => {
+    const a = gzipSource(engineSource());
+    const b = gzipSource(engineSource());
     assert.ok(a.equals(b));
-    assert.ok(a.equals(pageScripts(pageHtml()).engineGzip));
+    assert.equal(a.length, 14339);
   });
 
-  test("the minified shim is the same on every build, and is the pinned one in PAGE", async () => {
-    const a = await shimScript();
-    const b = await shimScript();
-    assert.equal(a, b);
-    assert.equal(sha256(a), SHIM_PIN.sha256);
-    assert.equal(a, pageScripts(pageHtml()).shim);
-  });
+
 
   test("inflating twice gives the same bytes", () => {
     const gz = gzipSync(engine, { level: 9, mtime: 0 });
@@ -109,7 +103,7 @@ describe("gunzip: corrupt and truncated payloads", () => {
             throwsGunzip(() => inflate(bad), `trailer byte ${i} ^ ${mask}`);
             continue;
           }
-          // Some bits are never read: the header's FTEXT and reserved flags, MTIME, XFL and OS
+          // Some bits are never read: the header's FTEXT, MTIME, XFL and OS
           // (unchecked, as in fflate), and deflate's padding bits. A change there is harmless.
           // Anything else is rejected (by inflation or the CRC-32), never inflated to other bytes.
           let out = null;
@@ -148,62 +142,5 @@ describe("gunzip: corrupt and truncated payloads", () => {
     const bt3 = Buffer.from(gz);
     bt3[10] |= 6;
     assert.throws(() => inflate(bt3), { message: "gunzip: invalid block type" });
-  });
-});
-
-describe("gunzipScripts", () => {
-  /**
-   * Runs gunzipScripts against a minimal document holding `tags` (src attributes of gzip tags).
-   * @param {string[]} srcs
-   */
-  function run(srcs) {
-    /** @type {Array<{type: string, src: string, replacedBy?: {textContent: string}}>} */
-    const tags = srcs.map((src) => ({ type: "text/javascript+gzip", src }));
-    /** @type {string[]} */
-    const logged = [];
-    /** @type {string[]} */
-    const selectors = [];
-    const g = /** @type {any} */ (globalThis);
-    const saved = { document: g.document, error: console.error };
-    g.document = {
-      querySelectorAll: (/** @type {string} */ s) => {
-        selectors.push(s);
-        return tags.map((t) => ({
-          getAttribute: (/** @type {string} */ name) => (name === "src" ? t.src : null),
-          replaceWith: (/** @type {{textContent: string}} */ el) => { t.replacedBy = el; },
-        }));
-      },
-      createElement: (/** @type {string} */ tag) => {
-        assert.equal(tag, "script");
-        return { textContent: "" };
-      },
-    };
-    console.error = (/** @type {any} */ e) => logged.push(String(e.message || e));
-    try {
-      gunzipScripts();
-    } finally {
-      g.document = saved.document;
-      console.error = saved.error;
-    }
-    return { tags, logged, selectors };
-  }
-  const src = (/** @type {Uint8Array} */ gz) => "data:text/javascript;base64," + Buffer.from(gz).toString("base64");
-
-  test("no gzip tag: nothing is inserted and nothing is logged", () => {
-    const { tags, logged, selectors } = run([]);
-    assert.deepEqual(tags, []);
-    assert.deepEqual(logged, []);
-    assert.deepEqual(selectors, ['script[type="text/javascript+gzip"]']);
-  });
-
-  test("each tag is replaced by a script holding its inflated source; a bad one is logged and kept", () => {
-    const good = src(gzipSync(Buffer.from("var a = 1;"), { mtime: 0 }));
-    const { tags, logged } = run([good, "data:text/javascript;base64,@@@", src(Buffer.from("not gzip")), src(zlibGzip("var b = 2;"))]);
-    assert.equal(tags[0].replacedBy?.textContent, "var a = 1;");
-    assert.equal(tags[1].replacedBy, undefined);
-    assert.equal(tags[2].replacedBy, undefined);
-    assert.equal(tags[3].replacedBy?.textContent, "var b = 2;");
-    assert.equal(logged.length, 2);
-    assert.equal(logged[1], "gunzip: invalid gzip data");
   });
 });

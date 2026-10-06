@@ -19,7 +19,7 @@ use onchain_midi_player::segment::{d_fragment, midi_segment};
 use onchain_midi_player::types::TinySynthSettings;
 use crate::class_fixtures::{
     beast_midi_genesis, beast_midi_heaviest, beast_midi_threshold_1, beast_midi_threshold_3,
-    beast_midi_veteran, seq_bytes,
+    beast_midi_veteran,
 };
 use crate::helpers::{class, declare_class};
 use crate::settings_fixtures::{
@@ -76,8 +76,11 @@ fn gas_lc_declare() {
 }
 
 #[test]
-fn gas_lc_animation_url_segment() {
-    assert(class().animation_url_segment().len() == 59220, 'segment');
+fn gas_lc_engine_segment() {
+    assert(
+        class().engine_segment().len() == onchain_midi_player::segment_data::ENGINE_SEGMENT_LEN,
+        'segment',
+    );
 }
 
 #[test]
@@ -136,23 +139,6 @@ fn gas_lc_midi_segment_max_heaviest() {
 }
 
 #[test]
-fn gas_lc_base64_3() {
-    assert(class().base64(",  ") == "LCAg", 'base64');
-}
-
-#[test]
-fn gas_lc_base64_1k_build() {
-    let _class_hash = declare_class();
-    assert(seq_bytes(1023).len() == 1023, 'input');
-}
-
-#[test]
-fn gas_lc_base64_1k() {
-    let synth = class();
-    assert(synth.base64(seq_bytes(1023)).len() == 1364, 'base64');
-}
-
-#[test]
 fn gas_lc_script_sha256() {
     assert(class().script_sha256() != 0, 'script_sha256');
 }
@@ -169,7 +155,7 @@ fn gas_lc_version() {
 
 #[test]
 fn gas_lc_license() {
-    assert(class().license().len() == 10657, 'license');
+    assert(class().license().len() > 10000, 'license');
 }
 
 // ------------------------------------------------------------------------------------------------

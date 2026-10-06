@@ -25,7 +25,7 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeByteArray, defaultRepetitions, rpcResponseBytes, tokenUri } from './reference.mjs';
-import { pageHtml, sha256 } from '../../../scripts/page.mjs';
+import { fixedFragment, sha256 } from '../../../scripts/segments.mjs';
 
 /** The most bars a reference is built for (64 MB of MIDI): a larger count is a malformed reply, not a token. */
 export const MAX_BARS = 1_000_000n;
@@ -261,22 +261,22 @@ async function main() {
   const redact = redactor(Object.keys(providers).filter((n) => !(n in PUBLIC_ENDPOINTS) || providers[n] !== PUBLIC_ENDPOINTS[n]).map((n) => providers[n]));
   console.log(`providers: ${names.join(', ')}; tokens ${opt.tokens}; contract ${opt.address}`);
 
-  // The class the contract library-calls. The reference is the page of this checkout, so it matches
-  // only a contract that pins a class with that page: find the class's version in deployments/ and
-  // compare the page's SHA-256 with scripts/page_versions.json.
+  // The class the contract library-calls. The reference is the NFT-owned composition of this checkout, so it matches
+  // only a contract that pins a class with these provider fragments: find the class's version in deployments/ and
+  // compare the page's SHA-256 with scripts/library_versions.json.
   const versionOf = new Map();
-  for (const f of readdirSync(new URL('../../../deployments/', import.meta.url)).filter((f) => f.endsWith('.json'))) {
+  for (const f of readdirSync(new URL('../../../deployments/', import.meta.url)).filter((f) => f.endsWith('.json') && f !== 'historical-builds.json')) {
     const c = JSON.parse(readFileSync(new URL(`../../../deployments/${f}`, import.meta.url), 'utf8')).class;
     versionOf.set(BigInt(c.class_hash), c.version);
   }
-  const pageSha = sha256(pageHtml());
-  const recorded = JSON.parse(readFileSync(new URL('../../../scripts/page_versions.json', import.meta.url), 'utf8'));
+  const engineFragmentSha = sha256(fixedFragment("engine"));
+  const recorded = JSON.parse(readFileSync(new URL('../../../scripts/library_versions.json', import.meta.url), 'utf8'));
   for (const name of names) {
     const pinned = scalar(await call(providers[name], redact, 30, opt.address, 'tinysynth_class_hash', []));
     if (pinned === undefined) continue;
     const version = versionOf.get(pinned);
-    if (version === undefined || recorded[version]?.page_sha256 !== pageSha) {
-      console.log(`warning: the contract pins class 0x${pinned.toString(16)}, ${version === undefined ? 'which is not a class in deployments/' : `version ${version}, whose page is not this checkout's`}: the reference is the page of this checkout, so DIFF may be a page mismatch, not a provider fault`);
+    if (version === undefined || recorded[version]?.artifacts.engine.raw_sha256 !== engineFragmentSha) {
+      console.log(`warning: the contract pins class 0x${pinned.toString(16)}, ${version === undefined ? 'which is not a class in deployments/' : `version ${version}, whose engine fragment is not this checkout's`}: the reference is the composition of this checkout, so DIFF may be a consumer/build mismatch, not a provider fault`);
     }
     break;
   }
