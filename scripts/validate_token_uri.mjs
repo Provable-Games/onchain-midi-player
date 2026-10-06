@@ -545,8 +545,10 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
   const version = opts.version ?? VERSION;
   /** @type {Record<string, any>} */
   const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
-  const record = versions[version];
+  const record = Object.hasOwn(versions, version) ? versions[version] : undefined;
   const expect = opts.expect ? normalizeExpect(opts.expect) : null;
+  // The value is printed in the report: only a SemVer string is accepted, and an error never repeats it.
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error("--version is not a SemVer version such as 0.3.0");
   try {
     const { gzip, engine, page } = verifyEngine(html);
     r.hashes.page_sha256 = page.sha256;

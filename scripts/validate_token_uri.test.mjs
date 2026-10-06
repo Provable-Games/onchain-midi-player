@@ -448,7 +448,7 @@ test("command line: exit codes, --json, stdin, usage errors", async () => {
   assert.equal(cli(["-", "--expect", "00".repeat(32)], golden).status, 1);
   assert.equal(cli(["-", "--expect", "zz"], golden).status, 2);
   // A URL typed by mistake as a value is not repeated in the error.
-  for (const args of [["-", "--expect", "http://127.0.0.1:1/SECRET_KEY"], ["--rpc", "http://127.0.0.1:1/SECRET_KEY", "--contract", "0x1", "--token", "http://127.0.0.1:1/SECRET_KEY"]]) {
+  for (const args of [["-", "--version", "http://127.0.0.1:1/SECRET_KEY"], ["-", "--version", "__proto__"], ["-", "--expect", "http://127.0.0.1:1/SECRET_KEY"], ["--rpc", "http://127.0.0.1:1/SECRET_KEY", "--contract", "0x1", "--token", "http://127.0.0.1:1/SECRET_KEY"]]) {
     r = cli(args, golden);
     assert.equal(r.status, 2, args.join(" "));
     assert.doesNotMatch(r.stdout + r.stderr, /SECRET_KEY|127\.0\.0\.1/, args.join(" "));
