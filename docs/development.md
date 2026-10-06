@@ -16,7 +16,7 @@ snforge test     # Cairo tests, including the generated parity fixtures and the 
 scarb fmt        # format
 ```
 
-The tests and the example need only Node, no `npm install`. Rebuilding the page, and the shim's tests in `npm test`, need the pinned Terser and fflate (`npm ci`, once):
+The tests and the example need only Node, no `npm install`. Rebuilding the page, the shim's tests and the token_uri validator's tests in `npm test` need the pinned Terser, fflate and @xmldom/xmldom (`npm ci`, once):
 
 ```sh
 npm test                 # node --test "player/**/*.test.js" "scripts/**/*.test.mjs"

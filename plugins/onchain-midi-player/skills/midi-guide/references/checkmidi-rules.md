@@ -24,7 +24,7 @@ Errors read `midi: <message> (byte <offset>)`, where the offset is where reading
 | `SysEx continuation or escape (F7) events are not supported` | An `F7` event. | Merge split SysEx into one `F0` event; drop escapes. |
 | `unexpected status byte` | A system status byte (`F1`–`F6`, `F8`–`FE`) used as an event. | Strip real-time and system common bytes from the file. |
 | `loop shorter than 50 ms` | One pass, `maxTick` under the tempo map (120 BPM until the first tempo event), is under 50 ms. | Put End-of-Track at the real loop point, not at tick 0. |
-| `midi: not base64` | The input is not strict base64. Only `check-midi` and `preview` show it, for a bad base64 input; the class always writes valid base64. | Pass the `.mid` file, or base64 without stray characters. |
+| `midi: not base64` | The input is not strict base64. Only `check-midi`, `preview` and `validate-token-uri` show it, for a bad base64 input; the class always writes valid base64. | Pass the `.mid` file, or base64 without stray characters. |
 
 Everything else is accepted: any channel message, other meta events, SysEx of any length, and tempo events in any track.
 
