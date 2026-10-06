@@ -144,6 +144,18 @@ export async function playerScript() {
 }
 
 /**
+ * The notes UI's script: player/notes.js in a function that defines `window.OnchainMidiNotes` (its
+ * `mount`, `cutout` and `DEFAULTS`), minified as the player is. Not part of PAGE: an optional UI
+ * segment that a page injects beside the player (onchain-midi-player #59 wires it into the class).
+ */
+export async function notesScript() {
+  const source = `(function(){"use strict";\n${flatten("../player/notes.js")}\nwindow.OnchainMidiNotes={mount,cutout,DEFAULTS};\n})();\n`;
+  const { code } = await minify(source, TERSER_OPTIONS);
+  if (!code) throw new Error("terser produced no output");
+  return code;
+}
+
+/**
  * PAGE around a given engine gzip payload, shim and player script. The payload goes in as base64,
  * whose alphabet (A-Z a-z 0-9 + / =) has no `<`, `"` or `&`: it can neither end its tag or its
  * attribute nor start a character reference.
