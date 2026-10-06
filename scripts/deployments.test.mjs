@@ -7,6 +7,8 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
+import { RELEASE_CERTIFICATES_PATH, releaseCertificateDigest, releaseCertificateProblem } from "./certification/release.mjs";
+import { libraryHash } from "./certification/composition.mjs";
 import { MANIFEST_PATH, isSemVer } from "./segments.mjs";
 
 const DIR = new URL("../deployments/", import.meta.url);
@@ -30,6 +32,7 @@ function releaseTagProblem(network, version, tag) {
 }
 
 const files = readdirSync(DIR).filter((name) => name.endsWith(".json") && name !== "historical-builds.json");
+const releaseCertificates = JSON.parse(readFileSync(RELEASE_CERTIFICATES_PATH, "utf8"));
 const versions = { ...JSON.parse(readFileSync(new URL("historical-builds.json", DIR), "utf8")), ...JSON.parse(readFileSync(MANIFEST_PATH, "utf8")) };
 
 test("deployments/ has a file for Sepolia, and only known networks", () => {
@@ -50,6 +53,7 @@ for (const name of files) {
     assert.equal(c.contract, "TinySynth", "contract name");
     assert.ok(versions[c.version], `${c.version} is recorded in scripts/library_versions.json`);
     assert.equal(releaseTagProblem(d.network, c.version, c.release_tag), null);
+    assert.equal(releaseCertificateProblem(c.version, c.release_tag, versions, releaseCertificates), null);
     assert.match(c.class_hash, FELT);
     assert.match(c.declare_tx, FELT);
     assert.match(c.built_from, COMMIT);
@@ -77,4 +81,21 @@ test("release_tag: null for a test class off mainnet, otherwise v<version> with 
   assert.match(releaseTagProblem("sepolia", "1.0.0", "1.0.0") ?? "", /not v<SemVer>/);
   assert.match(releaseTagProblem("sepolia", "1.0", "v1.0") ?? "", /not SemVer/);
   assert.match(releaseTagProblem("sepolia", "1.0.0", "v01.0.0") ?? "", /not v<SemVer>/);
+});
+
+
+test("stable deployments bind certificates to their exact versioned library artifacts", () => {
+  const first = { format: 1, artifacts: { player: { raw_sha256: "a".repeat(64) } } };
+  const later = { format: 1, artifacts: { player: { raw_sha256: "b".repeat(64) } } };
+  const versions = { "1.0.0": first, "1.1.0": later };
+  const librarySha256 = libraryHash(first), manifestSha256 = "c".repeat(64), resultsSha256 = "d".repeat(64);
+  const certificates = { "1.0.0": {
+    version: "1.0.0", librarySha256, manifestSha256, resultsSha256,
+    certificateSha256: releaseCertificateDigest("1.0.0", librarySha256, manifestSha256, resultsSha256),
+  }};
+  assert.equal(releaseCertificateProblem("1.0.0", "v1.0.0", versions, certificates), null);
+  assert.match(releaseCertificateProblem("1.1.0", "v1.1.0", versions, certificates) || "", /certificate record is missing/);
+  assert.match(releaseCertificateProblem("1.0.0", "v1.0.0", { ...versions, "1.0.0": later }, certificates) || "", /library hash differs/);
+  assert.match(releaseCertificateProblem("1.0.0", "v1.1.0", versions, certificates) || "", /tag and certificate version/);
+  assert.equal(releaseCertificateProblem("1.0.0", "v1.0.0", versions, certificates), null);
 });

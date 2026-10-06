@@ -3,20 +3,30 @@
 import { readFileSync } from "node:fs";
 import { JSON_PREFIX, HTML_PREFIX, SVG_PREFIX, URL_KEY, b64, blen, padLen, spaces, alignedFragment, segmentFor, fixedFragment, dFragment, decodeTokenUri, decodeTokenUriLayers } from "./segments.mjs";
 export { decodeTokenUri, decodeTokenUriLayers };
+/** @typedef {{mem: string, svg: string, midi?: Uint8Array, settings?: import('../player/settings.js').TinySynthSettings, d?: string}} TokenParts */
+/** @typedef {{midi?: Uint8Array, settings?: import('../player/settings.js').TinySynthSettings, d?: string, fixture?: boolean, dependent?: boolean, align?: boolean, artFirst?: boolean, trustedArt?: boolean, libraries?: [string, string][]}} ConsumerOptions */
+/** @param {string} name */
 export const ownedFragment = (name) => readFileSync(new URL(`../examples/beast_consumer/fixtures/${name}.html`,import.meta.url),"utf8");
 export const fixtureFragment = (name = "fixture") => readFileSync(new URL(`../tests/fixtures/libraries/${name}.html`,import.meta.url),"utf8");
 // Reuse metadata's encoded, quoted image value as the first HTML encoding layer. The complete
 // image fragment is still encoded twice; no padded final-image shortcut is spliced into HTML.
 export const IMAGE_ELEMENT_PREFIX = '<img id="beast-art" alt=""                                    src="data:image/svg+xml;base64,';
+/** @param {string} svg */
 export function imageParts(svg) {
   let value = b64(svg) + '"'; value += spaces(padLen(blen(value),3));
   const raw = alignedFragment(IMAGE_ELEMENT_PREFIX + value + '>');
   return { value, valueB64:b64(value), raw,
     returned:b64(b64(IMAGE_ELEMENT_PREFIX)+b64(value)+b64(raw.slice(blen(IMAGE_ELEMENT_PREFIX)+blen(value)))) };
 }
+/** @param {string} svg */
 export const artFragment = svg => imageParts(svg).raw;
 export const HTML_SPACE_SEGMENT = segmentFor("         ");
-/** JS mirrors direct ByteArray splicing, including actual returned-stream word boundaries. */
+/**
+ * JS mirrors direct ByteArray splicing, including actual returned-stream word boundaries.
+ * @param {string} mem
+ * @param {string} svg
+ * @param {ConsumerOptions} [options]
+ */
 export function consumerPieces(mem, svg, { midi, settings, d, fixture = false, dependent = false, align = true, artFirst = true, trustedArt = false, libraries } = {}) {
   const image = imageParts(svg);
   let head = "{" + mem + ',';
@@ -27,8 +37,9 @@ export function consumerPieces(mem, svg, { midi, settings, d, fixture = false, d
   const tail = ',  ' + URL_KEY;
   const open = head + image.value + tail;
   let uri = JSON_PREFIX + b64(head) + image.valueB64 + b64(tail), html = "";
+  /** @type {{name: string, start: number, residue: number, raw_len: number, returned_len: number}[]} */
   const boundaries = [];
-  const append = (name, raw) => {
+  const append = (/** @type {string} */ name, /** @type {string} */ raw) => {
     boundaries.push({ name, start:uri.length, residue:uri.length%31, raw_len:blen(raw), returned_len:segmentFor(raw).length });
     uri += segmentFor(raw); html += raw;
   };
@@ -49,10 +60,14 @@ export function consumerPieces(mem, svg, { midi, settings, d, fixture = false, d
   uri += b64('"}');
   return { uri, html, open, boundaries, d:data, art };
 }
+/** @param {TokenParts} parts @param {ConsumerOptions} [options] */
 export const spliceTokenUri = ({mem,svg,d,midi,settings},options={}) => consumerPieces(mem,svg,{...options,d,midi,settings}).uri;
+/** @param {TokenParts} parts @param {ConsumerOptions} [options] */
 export const naiveTokenUri = (parts,options={}) => {
   const p=consumerPieces(parts.mem,parts.svg,{...options,d:parts.d,midi:parts.midi,settings:parts.settings});
   return JSON_PREFIX+b64(p.open+b64(p.html)+'"}');
 };
+/** @param {TokenParts} parts @param {ConsumerOptions} [options] */
 export const naiveTokenJson = (parts,options={}) => decodeTokenUri(naiveTokenUri(parts,options)).jsonText;
+/** @param {TokenParts} parts @param {ConsumerOptions} [options] */
 export const compositionHtml = (parts, options={}) => consumerPieces(parts.mem,parts.svg,{...options,d:parts.d,midi:parts.midi,settings:parts.settings}).html;

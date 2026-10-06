@@ -46,6 +46,8 @@ npm run check:abi
 node scripts/validate_token_uri.mjs examples/beast_consumer/fixtures/token_uri.txt
 ```
 
+Before declaring a stable `1.x` class, maintainers must pass the [playback certification and release gate](docs/development.md#playback-certification). Fixture checks alone do not qualify production sound pairs.
+
 ## Agent skills
 
 The repository plugin provides [integration](plugins/onchain-midi-player/skills/integrator-guide/SKILL.md), [MIDI authoring](plugins/onchain-midi-player/skills/midi-guide/SKILL.md), [sound design](plugins/onchain-midi-player/skills/sound-design/SKILL.md) and [token inspection](plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skills; the [marketplace manifest](.claude-plugin/marketplace.json) registers the plugin. Run checkout-based tooling against the targeted class version. `npm ci` installs pinned offchain dependencies for verification and HTML extraction; these are not browser/onchain dependencies.

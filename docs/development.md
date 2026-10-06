@@ -61,10 +61,27 @@ The initial 2026-10-12 restack built on #61 head `6e93957ed7112cca3bd21ae8757f1f
 
 Engine #99 has merged; #98 remains open and aligned on that integration head. The existing provisional source build stays pinned to its recorded original source commit until #98 merges and distribution CI supplies the final pin; no dependency merge or engine-byte rewrite is part of this restack.
 
-
 The final review restack builds on #61 head `5ce9bd9aed9fd895d1d5ffcc81413fe7e7197e0d`. It inherits compiled `VERSION` checks in both reference constructors (0.6.0 for this candidate), two older-version rejection tests, parsed active-resource validation and explicit MIDI-only recovery guidance. Current validation passes 334 root JavaScript, 43 consumer and 306 Cairo cases, generation/ABI/player-UI types/format, and 30 composed-page checks in each browser. The [final review restack record](measurements/issue62.json) verifies unchanged runtime, manifests and prepared assets while preserving all earlier capture identities.
 
 The constructor checks change current NFT compiled artifacts. Historical token URI/NFT/gas captures are not relabeled as current-artifact captures; the separate constructor-review gas evidence remains bound to its recorded 0.5.0 builds. Browser runtime/source-bound evidence stays applicable because its engine, loader, player and NFT bootstrap bytes are unchanged. No long drift or native capture was repeated for this restack.
+
+## Playback certification
+
+`scripts/certification/` keeps an independent MIDI/state/pitch/demand oracle, a deterministic recorder that executes the actual composed NFT page, and a manifest-driven native-evidence validator. The page uses the current shared gunzip loader, combined engine/API payload, complete data blocks and NFT-owned UI. No fixed-page builder or legacy playback harness is retained.
+
+```sh
+npm run certify:fixture
+node scripts/certification/cli.mjs --scope fixture --case bend-known-bad
+npm run certify:production
+```
+
+The supported fixture checks settings installation, three loop passes, event/source timing, UI pause/resume retention and public API stop/replay. Pause/resume must retain the score, voices, run ID, origin and position without reload or new nodes; stop resets the run and the next play reloads. The known-bad RPN bend fixture must exit 1. This recorder provides software scheduling evidence only; it renders no native audio and cannot qualify a production pair.
+
+Production scope reads [`production-manifest.v1.json`](../scripts/certification/production-manifest.v1.json) and a local `scripts/certification/production-results.v1.json`. For every approved pair it hashes the exact MIDI, setup, settings and conversion inputs, requires the reviewed `wire-json-identity` mapping to produce semantically identical setup/settings JSON, and runs that pair through the current composed page. Pins include `segmentFormat`, the versioned library-manifest hash, the complete reference-page hash and each pair's complete composed-page hash. The reference page is an NFT fixture; the class publishes independent segments. There is no `PAGE_VERSION` or whole-page class artifact.
+
+Qualification additionally requires the exact 12 first-attempt browser/build/sample-rate rows, raw float32 stereo audio, source/min engine hashes, timing-policy approval, live/offline voice budgets, versioned metrics/tolerances and physical-device evidence. Every native row binds the reviewed runtime and exact pair inputs. Browser versions alone are insufficient: evidence also pins Playwright Core, its `browsers.json` hash, browser revision and installation bundle. Raw PCM features are recomputed; unsupported analysis, missing evidence and retries remain incomplete or fail. Exit codes are 0 for a complete pass, 1 for observed failure and 2 for incomplete evidence. [Checked invariants](improvements/contracts.md) describe the current bounds.
+
+The checked-in manifest deliberately has zero approved pairs and is incomplete; fixture results cannot make a stable release pass. `npm run check:segments` enforces certification for every candidate with major version >=1, including release candidates, while interim 0.x builds remain usable. From a 0.x checkout, `node scripts/build_segments.mjs --check --check-release-version 1.0.0` exercises the stricter preflight; either flag order works, and the actual candidate's version is always checked too. These repository checks do not prevent a direct `sncast declare`; the administrative release process must require them.
 
 ## Measurements
 
@@ -73,3 +90,5 @@ The constructor checks change current NFT compiled artifacts. Historical token U
 ## Release process
 
 This 0.6.0 candidate is stacked on #61 (0.5.0) and engine PR #98. Its provisional local engine build records exact source/build-recipe/package-lock hashes in ENGINE_BUILD and the manifest; it is not the stale min.js committed at the source-only upstream PR. Before marking #62 ready, repin to the upstream post-merge CI-generated engine commit and revalidate. Release readiness requires a tagged fork release. After the implementation is reviewed/merged, prepare declaration/release artifacts with the release profile, class hash and final manifests/ABI. A declared class or deployment remains a separate maintainer-authorized transaction. Do not merge/deploy/declare or publish a release as part of implementation. Keep `deployments/` truthful: historical network records remain historical, and current build readiness is independent of them.
+
+For a stable release, bump `VERSION` and generate/record all candidate artifacts first. Complete and review the production manifest and native/device results, then require `npm run certify:production` to exit 0. Before tagging, write that version's record in `scripts/certification/release-certificates.v1.json`: `version`, `librarySha256` from `expectedReleasePins()`, the manifest/results byte hashes and `certificateSha256` from `releaseCertificateDigest(version, librarySha256, manifestSha256, resultsSha256)` in `scripts/certification/release.mjs`. The certificate binds the immutable library version and its evidence; historical releases keep their own records. Require `npm run check:segments` and the other generated/ABI/tests to pass, commit the reviewed evidence/certificate with the release candidate, then create the release tag. Check out the tag and rerun production certification and the segment gate before declaration. This order avoids a tag that would immediately fail its own release check.
