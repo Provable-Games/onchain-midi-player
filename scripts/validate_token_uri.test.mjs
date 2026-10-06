@@ -63,6 +63,15 @@ test("decoded token JSON with extra fields named like call output is still token
   assert.deepEqual(ids(asJson, "warn"), ids(asUri, "warn"));
 });
 
+test("invalid UTF-8 fails the same through raw JSON and the data URI", () => {
+  const bytes = Buffer.from(JSON.stringify(goldenJson()));
+  const at = bytes.indexOf("Warlock");
+  bytes[at] = 0xff;
+  assert.throws(() => parseInput(bytes), /not valid UTF-8/);
+  const viaUri = check({ uri: JSON_PREFIX + bytes.toString("base64") });
+  assert.ok(ids(viaUri, "fail").includes("token_uri.utf8"));
+});
+
 test("the decoded token JSON is accepted without the token_uri layer", () => {
   const r = check({ json: JSON.stringify(goldenJson()) });
   assert.deepEqual(ids(r, "fail"), []);
@@ -208,6 +217,9 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   }
   assert.deepEqual(failing(svg("<defs><linearGradient id='g'/></defs><style>rect{fill:u\\72l(#g);b:\\75rl(data:image/png;base64,AAAA)}</style>")).filter((i) => i.startsWith("image.")), []);
   assert.ok(failing("<svg><rect/></svg>").includes("image.svg_root"));
+  // CSS comments are inert, and split a token; an active rule next to one still fails.
+  assert.deepEqual(failing(svg("<style>/* @import 'https://example.com/old.css'; url(https://e.com/x) */ rect{fill:red}</style>")).filter((i) => i.startsWith("image.")), []);
+  assert.ok(failing(svg("<style>/* x */ @import 'https://example.com/a.css';</style>")).includes("image.self_contained"));
   // Character references: only XML characters; and references are expanded before the checks, as a browser reads them.
   for (const bad of ["&#0;", "&#xD800;", "&#x110000;", "&#8;", "&#xFFFE;"]) assert.ok(failing(svg(`<text>${bad}</text>`)).includes("image.xml"), bad);
   assert.deepEqual(failing(svg("<text>&#65;&#x1F600;&amp;</text>")).filter((i) => i.startsWith("image.")), []);
@@ -379,9 +391,16 @@ test("fetch: calls token_uri with the u256 split, falls back to tokenURI, and ne
   let n = 0;
   const msg = await fails(async () => reply({ error: { code: 40, message: "Contract error", data: { revert_error: [n++ === 0 ? nested : "0x4f7574206f6620676173"] } } }));
   assert.match(msg, /token_uri: starknet_call failed[^\n]*revert reason: ENTRYPOINT_NOT_FOUND\nthen tokenURI: starknet_call failed[^\n]*Out of gas/);
-  // The class's own TS: reasons are known strings.
-  const ts = "0x" + Buffer.from("TS: quality out of range").toString("hex");
-  assert.match(await fails(async () => reply({ error: { code: 40, message: "x", data: { revert_error: [ts] } } })), /revert reason: TS: quality out of range/);
+  // The class's own TS: reasons are known strings, every one of src/settings.cairo; any other TS: string is hidden.
+  const tsReasons = [...readFileSync(new URL("../src/settings.cairo", import.meta.url), "utf8").matchAll(/'(TS: [^']+)'/g)].map((m) => m[1]).filter((m) => m !== "TS: ...");
+  assert.ok(tsReasons.length >= 20);
+  for (const reason of tsReasons) {
+    const m = await fails(async () => reply({ error: { code: 40, message: "x", data: { revert_error: ["0x" + Buffer.from(reason).toString("hex")] } } }));
+    assert.ok(m.includes(`revert reason: ${reason}`), reason);
+  }
+  const sneaky = await fails(async () => reply({ error: { code: 40, message: "x", data: { revert_error: ["0x" + Buffer.from("TS: " + Buffer.from("https://r/k").toString("hex")).toString("hex")] } } }));
+  assert.doesNotMatch(sneaky, /68747470|revert reason: TS/);
+  assert.match(sneaky, /1 other revert string\(s\) not shown/);
 });
 
 test("command line: exit codes, --json, stdin, usage errors", async () => {
@@ -414,6 +433,12 @@ test("command line: exit codes, --json, stdin, usage errors", async () => {
   assert.match(cli(["-"], JSON.stringify({ command: "call", error: "boom https://rpc.test/KEY" })).stderr, /starknet_call failed: error \(code unknown\)/);
   assert.equal(cli([]).status, 2);
   assert.equal(cli(["--bogus"]).status, 2);
+  // The CLI never echoes the RPC URL: not in a --flag=value form, not as a mistaken positional, not in a read error.
+  for (const args of [["--rpc=http://127.0.0.1:1/SECRET_KEY", "--contract", "0x1", "--token", "1"], ["http://127.0.0.1:1/SECRET_KEY", "--contract", "0x1", "--token", "1"], ["http://127.0.0.1:1/SECRET_KEY"], ["--rpcx=http://127.0.0.1:1/SECRET_KEY"], ["--bogus=SECRET_KEY"]]) {
+    r = cli(args);
+    assert.equal(r.status, 2, args.join(" "));
+    assert.doesNotMatch(r.stdout + r.stderr, /SECRET_KEY|127\.0\.0\.1/, args.join(" "));
+  }
   assert.equal(cli(["/nonexistent"]).status, 2);
   assert.equal(cli(["-"], "hello").status, 2);
   assert.equal(cli(["--contract", "0x1", "--token", "1"]).status, 2);
