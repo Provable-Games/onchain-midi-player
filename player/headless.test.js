@@ -106,3 +106,7 @@ test("unique foreign-namespace or non-script data elements reject initialization
   const h=harness(options);await assert.rejects(h.api.ready,/expected one text\/plain/);assert.deepEqual(h.calls,[]);
  }
 });
+
+test('new pause cancels resume queued behind a still-pending suspension',async()=>{
+ const suspend=deferred(),h=harness({suspend});await h.api.play();const p=h.api.pause(),r=h.api.resume(),aborted=assert.rejects(r,{name:'AbortError'});assert.equal(h.api.pause(),p);await aborted;suspend.resolve();await p;await flush();assert.equal(h.api.getPlayStatus().state,'paused');assert.equal(h.ctx.state,'suspended');assert.equal(h.calls.filter(c=>c==='resume').length,1);h.api.stop();
+});
