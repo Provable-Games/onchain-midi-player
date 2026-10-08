@@ -7,8 +7,8 @@ export function instrument() {
  const s={synth:null,created:0,passes:[],states:[],media:null,handlers:{},violations:[],readyAt:null,uiReadyAt:null,gestureAt:null,playingAt:null,startedAt:performance.now(),calls:[]};window.__check=s;
  let Real;
  function Wrapped(options){s.created++;const synth=new Real(options);s.synth=synth;
- for(const name of ["prewarm","playMIDI","stopMIDI","loadMIDI"]){const fn=synth[name];synth[name]=(...args)=>{s.calls.push(name);if(name==="playMIDI")s.engineStartedAt=performance.now();return fn.apply(synth,args);};}
- const ctx=synth.getAudioContext(),resume=ctx.resume.bind(ctx);ctx.resume=()=>{s.calls.push("resume");return resume();};return synth;}
+ for(const name of ["prewarm","resume","playMIDI","stopMIDI","loadMIDI"]){const fn=synth[name];synth[name]=(...args)=>{s.calls.push(name);if(name==="playMIDI")s.engineStartedAt=performance.now();return fn.apply(synth,args);};}
+ const ctx=synth.getAudioContext(),resume=ctx.resume.bind(ctx);ctx.resume=()=>{s.calls.push("context.resume");return resume();};return synth;}
  Object.defineProperty(window,"WebAudioTinySynth",{configurable:true,get:()=>Real&&Wrapped,set:value=>{Real=value;}});
  const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(){s.media=this;return play.call(this);};
  if(window.MediaSession){const action=MediaSession.prototype.setActionHandler;MediaSession.prototype.setActionHandler=function(a,h){s.handlers[a]=h;return action.call(this,a,h);};}

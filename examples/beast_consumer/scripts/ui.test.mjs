@@ -1,6 +1,7 @@
+// @ts-nocheck
 import assert from "node:assert/strict";
 import {describe,test} from "node:test";
-import {playAnchor,artUrl,silentWav} from "../ui.js";
+import {playAnchor,artUrl,silentWav,mountArtSync} from "../ui.js";
 describe("the play button's anchor on the art (playAnchor)", () => {
   const full = (/** @type {number} */ w, /** @type {number} */ h) => ({ left: 0, top: 0, width: w, height: h });
   const card = (/** @type {string} */ attrs) => `<svg xmlns='http://www.w3.org/2000/svg' ${attrs}><rect/></svg>`;
@@ -82,4 +83,31 @@ test("NFT-owned isolated art URLs preserve UTF8 bytes and restart timelines",()=
 });
 test("NFT media session owns a six-second silent PCM carrier",()=>{
  const b=Buffer.from(silentWav());assert.equal(b.toString('ascii',0,4),'RIFF');assert.equal(b.readUInt32LE(4),b.length-8);assert.equal(b.readUInt32LE(24),8000);assert.equal(b.readUInt32LE(40),48000);assert.ok(b.subarray(44).every(x=>x===128));
+});
+// @ts-nocheck
+function artHarness(){
+ let status={state:'stopped',audioState:null,positionSeconds:null,originTime:null,startTime:null,audioTime:null,passSeconds:2,latencySeconds:.03,latencyRevision:0};
+ const states=new Set(),passes=new Set(),frames=new Map(),seeks=[],calls=[],notes=[];let seq=0;
+ const host={requestAnimationFrame(fn){frames.set(++seq,fn);return seq;},cancelAnimationFrame(id){frames.delete(id);}};
+ function svg(name){let time=0;return{pauseAnimations(){calls.push(name+':pause');},unpauseAnimations(){calls.push(name+':run');},setCurrentTime(t){seeks.push([name,t]);time=t;},getCurrentTime(){return time;},advance(t){time+=t;}};}
+ const nested=svg('nested'),root=svg('outer');root.querySelectorAll=()=>[nested];
+ const player={getPlayStatus:()=>({...status}),onStateChange(fn){states.add(fn);return()=>states.delete(fn);},onPassStart(fn){passes.add(fn);return()=>passes.delete(fn);}};
+ const note={play(){notes.push('play');},pause(){notes.push('pause');},stop(){notes.push('stop');}};
+ const sync=mountArtSync(root,player,{host,notes:note});
+ return{sync,status,seeks,calls,notes,root,nested,set(next){Object.assign(status,next);for(const fn of states)fn();},frame(){const fs=[...frames.values()];frames.clear();for(const fn of fs)fn();},pass(){for(const fn of passes)fn();}};
+}
+test('trusted outer AND nested SVG hold zero until estimated audible start, then resume at shared position',()=>{
+ const h=artHarness();assert.ok(h.calls.includes('nested:pause'));
+ h.set({state:'playing',audioState:'running',originTime:1,startTime:1,audioTime:1.02,positionSeconds:0});h.frame();assert.ok(!h.calls.includes('outer:run'));assert.ok(!h.notes.includes('play'));
+ h.set({audioTime:1.04,positionSeconds:.01});h.frame();assert.ok(h.calls.includes('nested:run'));assert.ok(Math.abs(h.seeks.at(-1)[1]-.027)<1e-9);assert.ok(Math.abs(h.sync.clock()-.027)<1e-9);
+ h.set({state:'paused',audioState:'suspended'});assert.equal(h.calls.at(-1),'nested:pause');assert.equal(h.notes.at(-1),'pause');
+ h.set({state:'playing',audioState:'running',positionSeconds:.4});assert.equal(h.seeks.at(-1)[1],.41700000000000004);assert.equal(h.calls.at(-1),'nested:run');h.sync.dispose();
+});
+test('drift is read-only between start/resume/pass/latency synchronization points',()=>{
+ const h=artHarness();h.set({state:'playing',audioState:'running',originTime:1,startTime:1,audioTime:1.1,positionSeconds:.07});h.frame();const count=h.seeks.length;
+ for(let i=0;i<50;i++){h.status.positionSeconds+=.02;h.root.advance(.021);h.nested.advance(.021);h.frame();}
+ assert.equal(h.seeks.length,count);assert.ok(h.sync.getMonitor().maxDrift>.049);assert.ok(Object.isFrozen(h.sync.getMonitor()));
+ h.pass();assert.equal(h.seeks.length,count+2);
+ h.set({latencyRevision:2,latencySeconds:.06,positionSeconds:.4});assert.equal(h.seeks.length,count+4);assert.equal(h.sync.getMonitor().latencyEvents.at(-1).latencySeconds,.06);
+ h.set({state:'paused',audioState:'interrupted'});const last=h.seeks.length;h.frame();assert.equal(h.seeks.length,last);h.sync.dispose();
 });

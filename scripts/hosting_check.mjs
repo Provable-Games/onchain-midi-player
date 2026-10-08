@@ -16,7 +16,7 @@ try{for(const media of ["blob:","'none'",null])for(const kind of ["srcdoc","data
  if(blocked)assert.ok(info.violations.every(v=>v.directive==='media-src'&&v.uri==='blob'));
  else{assert.deepEqual(info.violations,[]);assert.equal(info.paused,false);assert.deepEqual(info.handlers.sort(),['pause','play','stop']);}
  await frame.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
- assert.equal(await frame.evaluate(()=>window.OnchainMidiPlayer.getPlayStatus().state),blocked?'stopped':'playing');
+ assert.equal(await frame.evaluate(()=>window.OnchainMidiPlayer.getPlayStatus().state),blocked?'paused':'playing');
  await frame.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});window.OnchainMidiPlayer.stop();});
  const errors=await o.errors();if(!blocked)assert.deepEqual(errors,[]);else assert.ok(errors.every(e=>/blob:|media|Content Security Policy|violat|NotSupportedError/i.test(e)),JSON.stringify(errors));
  assert.deepEqual(o.requests,[]);console.log(`PASS sandbox ${kind}, media-src ${media||'omitted'}: ordinary audio and background policy`);

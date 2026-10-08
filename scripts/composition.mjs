@@ -17,7 +17,7 @@ export function imageParts(svg) {
 export const artFragment = svg => imageParts(svg).raw;
 export const HTML_SPACE_SEGMENT = segmentFor("         ");
 /** JS mirrors direct ByteArray splicing, including actual returned-stream word boundaries. */
-export function consumerPieces(mem, svg, { midi, settings, d, fixture = false, dependent = false, align = true, artFirst = true, libraries } = {}) {
+export function consumerPieces(mem, svg, { midi, settings, d, fixture = false, dependent = false, align = true, artFirst = true, trustedArt = false, libraries } = {}) {
   const image = imageParts(svg);
   let head = "{" + mem + ',';
   const key = '"image":"' + SVG_PREFIX;
@@ -38,7 +38,7 @@ export function consumerPieces(mem, svg, { midi, settings, d, fixture = false, d
     ...(fixture?[["fixture",fixtureFragment()]]:[]),["player",fixedFragment("player")],...(dependent?[["dependent",fixtureFragment("dependent")]]:[])])) {
     word(); append(name,raw);
   }
-  append("body",ownedFragment("body"));
+  append("body",ownedFragment(trustedArt ? "trusted_body" : "body"));
   const data = d ?? dFragment(midi,settings).d, art = image.raw;
   const appendArt = () => {
     boundaries.push({name:"art",start:uri.length,residue:uri.length%31,raw_len:blen(art),returned_len:image.returned.length});
