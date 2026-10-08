@@ -1,3 +1,11 @@
+# Provisional #62 engine dependency
+
+The current unissued 0.6.0 candidate embeds `webaudio-tinysynth-dev-748d777.min.js`, reproducibly built from source commit `748d777ae895e9e07cc84b13012c0fdb586b5c3f` on [engine draft PR #98](https://github.com/Provable-Games/webaudio-tinysynth/pull/98). This is a **provisional local development build**, not the stale min.js stored at that source-only commit. Its companion NOTICE is that source commit's exact NOTICE.
+
+`ENGINE_BUILD` in scripts/engine.mjs and the 0.6.0 manifest record the exact source SHA-256, build recipe SHA-256, package-lock SHA-256 and pinned Terser 5.51.2. To reproduce: check out the source commit in an isolated fork clone, run `npm ci`, then `node scripts/build.js <output-dir>`; compare output SHA-256 `df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65` and NOTICE SHA-256 `9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708`.
+
+Before marking #62 ready, replace this pin with the fork's post-merge CI-generated commit using the established vendor helper and revalidate all artifacts. Release readiness further requires a tagged fork release. No declaration or release is represented by this provisional build. The older 31fb18d files below are retained for the prerequisite 0.5.0 provenance.
+
 # Vendored engine and licenses
 
 The pinned TinySynth engine, from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>,

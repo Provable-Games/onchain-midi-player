@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
+import {ENGINE_PIN,engineSource} from "./engine.mjs";
 import {readFileSync} from "node:fs";
 import {verifyEngine,verifyLibraries,pageFromInput,normalizeSha256} from "./verify_engine.mjs";
 import {fixedFragment,b64,HTML_PREFIX} from "./segments.mjs";
@@ -17,7 +18,7 @@ test("HTML5 self-closing SVG permits subsequent libraries; plaintext consumes su
  assert.throws(()=>verifyLibraries('<!doctype html><body><plaintext>'+libraries),/found 0/);
 });
 test("combined payload reports a separate, exact embedded engine identity",()=>{
- const result=verifyLibraries(token.html);assert.equal(result.engine.length,47212);assert.equal(result.engine.offset,0);
- assert.equal(result.engine.sha256,'bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74');
+ const result=verifyLibraries(token.html);assert.equal(result.engine.length,Buffer.byteLength(engineSource()));assert.equal(result.engine.offset,0);
+ assert.equal(result.engine.sha256,ENGINE_PIN.sha256);
  assert.notEqual(result.libraries.player.sha256,result.engine.sha256);
 });

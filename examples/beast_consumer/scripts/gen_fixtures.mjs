@@ -7,7 +7,7 @@ import { tokenUriSpliced, tokenParts, realBeast } from './reference.mjs';
 let golden='//! Generated independent JS token/document goldens.\npub const TOKEN_IDS: [u256; 3] = [1, 2, 3];\n';
 for(let id=1;id<=4;id++) {
  const parts=tokenParts(id),uri=tokenUriSpliced(id);
- if(uri!==naiveTokenUri(parts))throw new Error('spliced != runtime nesting');
+ if(uri!==naiveTokenUri(parts,{trustedArt:true}))throw new Error('spliced != runtime nesting');
  if(id<4)golden+=cairoByteArrayConst(`token_uri_${id}`,`TOKEN_URI_${id}`,uri,[])+"\n"+cairoByteArrayConst(`svg_${id}`,`SVG_${id}`,parts.svg,[])+"\n";
  else golden+=`pub fn token_uri_4_digest() -> (u32, u256) { (${uri.length}, 0x${sha256(uri)}) }\n`;
 }

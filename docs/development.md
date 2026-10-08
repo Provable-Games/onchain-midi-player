@@ -25,7 +25,7 @@ npm run check:abi
 
 The generator builds standalone shared loader and combined engine/headless-player fragments; the canonical class artifacts are segments. Consumer fixtures are complete pages generated separately. The combined player uses deterministic fflate 0.8.3 level 9, `mtime: 0`, no filename. Terser 5.51.2 minifies the loader and API classic IIFEs. The already minified engine is copied byte for byte, followed by a statement delimiter and the separately compiled API; it is not minified again. Build records contain the exact raw/returned/source/compressed identities. A recorded artifact change without a class-version bump fails. Version 0.5.0 remains unreleased: its manifest was regenerated for the reviewed combined packaging decision, while the generator still rejects overwriting any recorded version. `--record` adds a new version; it cannot overwrite an existing version. The source of the independent fixture provider/dependent library and their records remains separate from the class.
 
-The Beast-owned UI/document assets are generated separately into its own Cairo constants. Consumers compile their own encoder. Generators use the pinned Scarb formatter. Regeneration plus `scarb fmt` must leave the committed tree unchanged. ABI generation builds release/test artifacts and checks the seven-entry interface and sound-provider ABI. Current build assertions never mark 0.5.0 declared.
+The Beast-owned UI/document assets are generated separately into its own Cairo constants. Consumers compile their own encoder. Generators use the pinned Scarb formatter. Regeneration plus `scarb fmt` must leave the committed tree unchanged. ABI generation builds release/test artifacts and checks the seven-entry interface and sound-provider ABI. Current build assertions never mark 0.5.0 or 0.6.0 declared.
 
 ## Browser validation
 
@@ -37,7 +37,7 @@ npm run render-check
 npm run hosting-check
 npm run drift-check -- --minutes 1 --every 10
 node examples/beast_consumer/scripts/browser_check.mjs
-# CI reports image/audio drift while asserting schedule/rests/restarts/cancellation:
+# CI reports trusted SVG/audio drift while asserting pause/resume, boundaries and latency resynchronization:
 npm run drift-check -- --minutes 1 --drift-info
 ```
 
@@ -51,4 +51,4 @@ Headless browsers do not establish Android/iOS lock-screen, silent-switch, calls
 
 ## Release process
 
-After #57 lands, rebase onto its final merged artifacts and revalidate. After this breaking implementation is reviewed/merged, prepare the 0.5.0 declaration/release artifacts with the release profile, class hash and final manifests/ABI. A declared class or deployment remains a separate maintainer-authorized transaction. Do not merge/deploy/declare or publish a release as part of implementation. Keep `deployments/` truthful: historical network records remain historical, and current build readiness is independent of them.
+This 0.6.0 candidate is stacked on #61 (0.5.0) and engine PR #98. Its provisional local engine build records exact source/build-recipe/package-lock hashes in ENGINE_BUILD and the manifest; it is not the stale min.js committed at the source-only upstream PR. Before marking #62 ready, repin to the upstream post-merge CI-generated engine commit and revalidate. Release readiness requires a tagged fork release. After the implementation is reviewed/merged, prepare declaration/release artifacts with the release profile, class hash and final manifests/ABI. A declared class or deployment remains a separate maintainer-authorized transaction. Do not merge/deploy/declare or publish a release as part of implementation. Keep `deployments/` truthful: historical network records remain historical, and current build readiness is independent of them.
