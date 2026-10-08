@@ -1,0 +1,580 @@
+{
+  "issue": 62,
+  "capture_date_utc": "2026-10-08",
+  "validated_source_commit": "5cc50fd152d89a8c4d7133a0cab92d3feefaf742",
+  "base_commit": "6be1c4c129573fb4788300c66e627172c52b3eec",
+  "candidate_version": "0.6.0",
+  "engine_dependency_pr": "https://github.com/Provable-Games/webaudio-tinysynth/pull/98",
+  "engine_build": {
+    "provisional": true,
+    "sourceCommit": "748d777ae895e9e07cc84b13012c0fdb586b5c3f",
+    "sourceSha256": "8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7",
+    "recipe": "node scripts/build.js <output-dir>",
+    "recipeSha256": "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
+    "packageLockSha256": "67402d41acd7d49ed3c1a1f689e7f91a81bff1b7dc1727b355d1d3b3dec4197d",
+    "terser": "5.51.2"
+  },
+  "bindings": {
+    "player": {
+      "source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+      "source_len": 58237,
+      "raw_sha256": "9e781a38a911fcc80cf9f414f7f54f379eb936e19a67d82eeec030c0ee1b3923",
+      "raw_len": 25389,
+      "returned_sha256": "0a6901bb1ac1159ead3d5c3226719e4033aa20be53b53ccec412eda08dd57a38",
+      "returned_len": 45136,
+      "returned_felts": 1459,
+      "embedded_engine": {
+        "offset": 0,
+        "length": 47424,
+        "sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65"
+      },
+      "wrapper": {
+        "offset": 47427,
+        "length": 10810,
+        "sha256": "83d380f8cd7dd79208799e967010593f8d6e8fc5d3583c39c6ed7013aae5733a"
+      },
+      "gzip_sha256": "ab91d57c06773ab956cc92c8641117fa62db7f3882eb95d59dc787fb1bb49340",
+      "gzip_len": 18737,
+      "gzip_base64_len": 24984
+    },
+    "nft_bootstrap_sha256": "d615b5856ccb73c83cf7a92443c72506dcaba9265ab342961b9274d49c71502d"
+  },
+  "environment": {
+    "node": "24.19.0",
+    "scarb": "2.20.1",
+    "cairo": "2.20.0",
+    "snforge": "0.64.0",
+    "browsers": {
+      "chromium": "153.0.8010.12",
+      "firefox": "155.0",
+      "webkit": "26.6"
+    },
+    "audio": "Linux PulseAudio null sink",
+    "sessions": "three engines concurrently; one-minute capture overlapped build/page/render work"
+  },
+  "validation": {
+    "root_js_passed": 331,
+    "consumer_js_passed": 43,
+    "cairo_passed": 304,
+    "cairo_existing_ignored": 21,
+    "page_cases_per_engine": 28,
+    "hosting_cases_per_engine": 6,
+    "render_assertions_per_engine": 45,
+    "generation_abi_types_format": "passed",
+    "upstream_unit_passed": 1060,
+    "upstream_node_passed": 276,
+    "upstream_playback_regressions_passed": 3
+  },
+  "timing_scope": "Read-only SVG versus estimated audible audio-clock position, including provisional NFT display lead. Maximum spans both outer and nested timelines and transport/latency exercises, not only the steady run. Initial alignment is clock alignment after seeking, not physical output/display measurement.",
+  "display_lead_seconds": 0.017,
+  "latency_changes": "Synthetic outputLatency/baseLatency route changes; 1ms noise ignored, >=2ms resynchronizes.",
+  "acceptance": "Cold zero hold, repeated pause/resume, preserved MIDI/voices/origin/run, pending sends while externally suspended, media/background pause, shared latency/pass events, full stop, no external requests/errors, and only two SVG seeks per announced pass during steady runs.",
+  "limitations": [
+    "Physical phone/audio-route/display/lock-screen evidence remains issue52.",
+    "17ms display lead remains provisional.",
+    "SVG/SMIL timeline control cannot pause embedded animated GIFs; unchanged historical Warlock GIF fixture is composition/size evidence.",
+    "Repin to upstream post-merge CI-generated engine before draft readiness; tagged engine release required for release readiness."
+  ],
+  "runs": [
+    {
+      "engine": "chromium",
+      "version": "0.6.0",
+      "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+      "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+      "seconds": 60,
+      "checkpoints": [
+        {
+          "elapsed_seconds": 10,
+          "audioTime": 11.110748299319727,
+          "current_drift_ms": 13.91066666798757,
+          "max_drift_ms": 24.16137502551763
+        },
+        {
+          "elapsed_seconds": 20,
+          "audioTime": 21.118548752834467,
+          "current_drift_ms": 14.240219510664787,
+          "max_drift_ms": 25.24993203885817
+        },
+        {
+          "elapsed_seconds": 30,
+          "audioTime": 31.126349206349207,
+          "current_drift_ms": 7.802806009238772,
+          "max_drift_ms": 26.35012917100532
+        },
+        {
+          "elapsed_seconds": 40,
+          "audioTime": 41.05287981859411,
+          "current_drift_ms": 12.722132621191484,
+          "max_drift_ms": 105.2726844363594
+        },
+        {
+          "elapsed_seconds": 50,
+          "audioTime": 51.07229024943311,
+          "current_drift_ms": 1.5417098323782241,
+          "max_drift_ms": 105.2726844363594
+        },
+        {
+          "elapsed_seconds": 60,
+          "audioTime": 61.08009070294784,
+          "current_drift_ms": 8.491249247835064,
+          "max_drift_ms": 105.2726844363594
+        }
+      ],
+      "initial_alignment_ms": -0.000795970461806017,
+      "max_drift_ms": 105.2726844363594,
+      "current_drift_ms": 8.491249247835064,
+      "latency_events": [
+        {
+          "audioTime": 0.011609977324263039,
+          "latencySeconds": 0.011609977324263039,
+          "revision": 1
+        },
+        {
+          "audioTime": 0.16253968253968254,
+          "latencySeconds": 0.04360997732426304,
+          "revision": 2
+        },
+        {
+          "audioTime": 0.19736961451247165,
+          "latencySeconds": 0.05160997732426304,
+          "revision": 3
+        },
+        {
+          "audioTime": 0.4992290249433107,
+          "latencySeconds": 0.21000000000000002,
+          "revision": 4
+        },
+        {
+          "audioTime": 0.9984580498866213,
+          "latencySeconds": 0.24100000000000002,
+          "revision": 5
+        }
+      ],
+      "steady_passes": 35,
+      "steady_svg_seeks": 70,
+      "physical_audio_verified": false
+    },
+    {
+      "engine": "firefox",
+      "version": "0.6.0",
+      "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+      "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+      "seconds": 60,
+      "checkpoints": [
+        {
+          "elapsed_seconds": 10,
+          "audioTime": 10.84952380952381,
+          "current_drift_ms": 8.497650912859811,
+          "max_drift_ms": 30.464848853264893
+        },
+        {
+          "elapsed_seconds": 20,
+          "audioTime": 20.851519274376418,
+          "current_drift_ms": 4.922157330816468,
+          "max_drift_ms": 30.464848853264893
+        },
+        {
+          "elapsed_seconds": 30,
+          "audioTime": 30.77514739229025,
+          "current_drift_ms": 18.193115604703713,
+          "max_drift_ms": 117.19595941689853
+        },
+        {
+          "elapsed_seconds": 40,
+          "audioTime": 40.78585034013606,
+          "current_drift_ms": 0.09665827526728066,
+          "max_drift_ms": 117.19595941689853
+        },
+        {
+          "elapsed_seconds": 50,
+          "audioTime": 50.79655328798186,
+          "current_drift_ms": 17.19516126212728,
+          "max_drift_ms": 117.19595941689853
+        },
+        {
+          "elapsed_seconds": 60,
+          "audioTime": 60.821768707482995,
+          "current_drift_ms": 16.391243827679425,
+          "max_drift_ms": 117.19595941689853
+        }
+      ],
+      "initial_alignment_ms": 0.46711994363506093,
+      "max_drift_ms": 117.19595941689853,
+      "current_drift_ms": 16.391243827679425,
+      "latency_events": [
+        {
+          "audioTime": 0.0029024943310657597,
+          "latencySeconds": 0.041201814,
+          "revision": 1
+        },
+        {
+          "audioTime": 0.313469387755102,
+          "latencySeconds": 0.21000000000000002,
+          "revision": 2
+        },
+        {
+          "audioTime": 0.8126984126984127,
+          "latencySeconds": 0.24100000000000002,
+          "revision": 3
+        }
+      ],
+      "steady_passes": 35,
+      "steady_svg_seeks": 70,
+      "physical_audio_verified": false
+    },
+    {
+      "engine": "webkit",
+      "version": "0.6.0",
+      "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+      "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+      "seconds": 60,
+      "checkpoints": [
+        {
+          "elapsed_seconds": 10,
+          "audioTime": 11.075918367346938,
+          "current_drift_ms": -0.30820675552689636,
+          "max_drift_ms": 2.8586455711572256
+        },
+        {
+          "elapsed_seconds": 20,
+          "audioTime": 21.086621315192744,
+          "current_drift_ms": 0.17927294421582474,
+          "max_drift_ms": 3.957457047963686
+        },
+        {
+          "elapsed_seconds": 30,
+          "audioTime": 31.088616780045353,
+          "current_drift_ms": -0.29892632696526533,
+          "max_drift_ms": 6.126246904455179
+        },
+        {
+          "elapsed_seconds": 40,
+          "audioTime": 41.09351473922902,
+          "current_drift_ms": 0.23906830921927025,
+          "max_drift_ms": 6.126246904455179
+        },
+        {
+          "elapsed_seconds": 50,
+          "audioTime": 51.10131519274376,
+          "current_drift_ms": -1.4575017362998821,
+          "max_drift_ms": 6.126246904455179
+        },
+        {
+          "elapsed_seconds": 60,
+          "audioTime": 61.11201814058957,
+          "current_drift_ms": 1.648426359831312,
+          "max_drift_ms": 6.126246904455179
+        }
+      ],
+      "initial_alignment_ms": 0.06300086310121952,
+      "max_drift_ms": 6.126246904455179,
+      "current_drift_ms": 1.648426359831312,
+      "latency_events": [
+        {
+          "audioTime": 0.020317460317460317,
+          "latencySeconds": 0.0029024943310657597,
+          "revision": 1
+        },
+        {
+          "audioTime": 0.5282539682539683,
+          "latencySeconds": 0.21000000000000002,
+          "revision": 2
+        },
+        {
+          "audioTime": 1.0303854875283447,
+          "latencySeconds": 0.24100000000000002,
+          "revision": 3
+        }
+      ],
+      "steady_passes": 35,
+      "steady_svg_seeks": 70,
+      "physical_audio_verified": false
+    },
+    {
+      "engine": "chromium",
+      "version": "0.6.0",
+      "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+      "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+      "seconds": 600,
+      "checkpoints": [
+        {
+          "elapsed_seconds": 60,
+          "audioTime": 61.25424036281179,
+          "current_drift_ms": 0.9415783212629592,
+          "max_drift_ms": 26.362342517947113
+        },
+        {
+          "elapsed_seconds": 120,
+          "audioTime": 121.26621315192743,
+          "current_drift_ms": 11.120811908076789,
+          "max_drift_ms": 26.45049604848726
+        },
+        {
+          "elapsed_seconds": 180,
+          "audioTime": 181.2781859410431,
+          "current_drift_ms": 11.02099768674325,
+          "max_drift_ms": 26.45049604848726
+        },
+        {
+          "elapsed_seconds": 240,
+          "audioTime": 241.301768707483,
+          "current_drift_ms": 21.201244552496945,
+          "max_drift_ms": 26.45049604848726
+        },
+        {
+          "elapsed_seconds": 300,
+          "audioTime": 301.3485714285714,
+          "current_drift_ms": 13.151512620033223,
+          "max_drift_ms": 26.88003773760883
+        },
+        {
+          "elapsed_seconds": 360,
+          "audioTime": 361.43020408163267,
+          "current_drift_ms": 26.79190512034957,
+          "max_drift_ms": 26.88003773760883
+        },
+        {
+          "elapsed_seconds": 420,
+          "audioTime": 421.5118367346939,
+          "current_drift_ms": 12.122171713994767,
+          "max_drift_ms": 27.87978514777123
+        },
+        {
+          "elapsed_seconds": 480,
+          "audioTime": 481.5934693877551,
+          "current_drift_ms": 7.631534927462269,
+          "max_drift_ms": 27.87978514777123
+        },
+        {
+          "elapsed_seconds": 540,
+          "audioTime": 541.6751020408163,
+          "current_drift_ms": 4.571898054609669,
+          "max_drift_ms": 27.87978514777123
+        },
+        {
+          "elapsed_seconds": 600,
+          "audioTime": 601.7567346938775,
+          "current_drift_ms": -4.80775011497947,
+          "max_drift_ms": 27.87978514777123
+        }
+      ],
+      "initial_alignment_ms": -0.0007273489926046262,
+      "max_drift_ms": 27.87978514777123,
+      "current_drift_ms": 0.18228533998687624,
+      "latency_events": [
+        {
+          "audioTime": 0.011609977324263039,
+          "latencySeconds": 0.011609977324263039,
+          "revision": 1
+        },
+        {
+          "audioTime": 0.046439909297052155,
+          "latencySeconds": 0.04360997732426304,
+          "revision": 2
+        },
+        {
+          "audioTime": 0.301859410430839,
+          "latencySeconds": 0.05160997732426304,
+          "revision": 3
+        },
+        {
+          "audioTime": 0.626938775510204,
+          "latencySeconds": 0.21000000000000002,
+          "revision": 4
+        },
+        {
+          "audioTime": 1.1261678004535147,
+          "latencySeconds": 0.24100000000000002,
+          "revision": 5
+        }
+      ],
+      "steady_passes": 350,
+      "steady_svg_seeks": 700,
+      "physical_audio_verified": false
+    },
+    {
+      "engine": "firefox",
+      "version": "0.6.0",
+      "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+      "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+      "seconds": 600,
+      "checkpoints": [
+        {
+          "elapsed_seconds": 60,
+          "audioTime": 60.84498866213152,
+          "current_drift_ms": 12.463803324929579,
+          "max_drift_ms": 29.521543865560204
+        },
+        {
+          "elapsed_seconds": 120,
+          "audioTime": 120.85986394557823,
+          "current_drift_ms": 22.918543030803207,
+          "max_drift_ms": 29.521543865560204
+        },
+        {
+          "elapsed_seconds": 180,
+          "audioTime": 180.88344671201813,
+          "current_drift_ms": 14.788235371626435,
+          "max_drift_ms": 31.639458664132647
+        },
+        {
+          "elapsed_seconds": 240,
+          "audioTime": 240.90412698412698,
+          "current_drift_ms": 4.145480375807864,
+          "max_drift_ms": 31.639458664132647
+        },
+        {
+          "elapsed_seconds": 300,
+          "audioTime": 300.9886621315193,
+          "current_drift_ms": 10.9403408773181,
+          "max_drift_ms": 31.639458664132647
+        },
+        {
+          "elapsed_seconds": 360,
+          "audioTime": 361.0673922902494,
+          "current_drift_ms": 15.150186438718904,
+          "max_drift_ms": 31.639458664132647
+        },
+        {
+          "elapsed_seconds": 420,
+          "audioTime": 421.16353741496596,
+          "current_drift_ms": 6.165026861080669,
+          "max_drift_ms": 31.639458664132647
+        },
+        {
+          "elapsed_seconds": 480,
+          "audioTime": 481.24226757369615,
+          "current_drift_ms": 20.764909880163884,
+          "max_drift_ms": 31.639458664132647
+        },
+        {
+          "elapsed_seconds": 540,
+          "audioTime": 541.3268027210885,
+          "current_drift_ms": 7.559789454989918,
+          "max_drift_ms": 31.639458664132647
+        },
+        {
+          "elapsed_seconds": 600,
+          "audioTime": 601.422947845805,
+          "current_drift_ms": 16.67216320289633,
+          "max_drift_ms": 31.639458664132647
+        }
+      ],
+      "initial_alignment_ms": 0.37641694363505646,
+      "max_drift_ms": 31.639458664132647,
+      "current_drift_ms": 11.939729269682786,
+      "latency_events": [
+        {
+          "audioTime": 0.0029024943310657597,
+          "latencySeconds": 0.041111111,
+          "revision": 1
+        },
+        {
+          "audioTime": 0.31927437641723355,
+          "latencySeconds": 0.21000000000000002,
+          "revision": 2
+        },
+        {
+          "audioTime": 0.8214058956916099,
+          "latencySeconds": 0.24100000000000002,
+          "revision": 3
+        }
+      ],
+      "steady_passes": 350,
+      "steady_svg_seeks": 700,
+      "physical_audio_verified": false
+    },
+    {
+      "engine": "webkit",
+      "version": "0.6.0",
+      "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+      "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+      "seconds": 600,
+      "checkpoints": [
+        {
+          "elapsed_seconds": 60,
+          "audioTime": 61.11492063492064,
+          "current_drift_ms": 0.5254421494482742,
+          "max_drift_ms": 2.8666740953422476
+        },
+        {
+          "elapsed_seconds": 120,
+          "audioTime": 121.11818594104308,
+          "current_drift_ms": -0.43003710038114207,
+          "max_drift_ms": 2.897117659997228
+        },
+        {
+          "elapsed_seconds": 180,
+          "audioTime": 181.13015873015874,
+          "current_drift_ms": 0.01896319450711559,
+          "max_drift_ms": 2.9190182505525186
+        },
+        {
+          "elapsed_seconds": 240,
+          "audioTime": 241.16825396825396,
+          "current_drift_ms": -1.9829449519939146,
+          "max_drift_ms": 2.9190182505525186
+        },
+        {
+          "elapsed_seconds": 300,
+          "audioTime": 301.2353741496599,
+          "current_drift_ms": 1.2726822011535077,
+          "max_drift_ms": 2.9190182505525186
+        },
+        {
+          "elapsed_seconds": 360,
+          "audioTime": 361.3053968253968,
+          "current_drift_ms": 1.101313401223436,
+          "max_drift_ms": 2.9190182505525186
+        },
+        {
+          "elapsed_seconds": 420,
+          "audioTime": 421.3725170068027,
+          "current_drift_ms": 0.1254683606335405,
+          "max_drift_ms": 2.9190182505525186
+        },
+        {
+          "elapsed_seconds": 480,
+          "audioTime": 481.4425396825397,
+          "current_drift_ms": -1.2573571944258788,
+          "max_drift_ms": 2.9190182505525186
+        },
+        {
+          "elapsed_seconds": 540,
+          "audioTime": 541.5096598639456,
+          "current_drift_ms": 1.2977096668462806,
+          "max_drift_ms": 2.9190182505525186
+        },
+        {
+          "elapsed_seconds": 600,
+          "audioTime": 601.5796825396825,
+          "current_drift_ms": -0.3586743058452413,
+          "max_drift_ms": 4.014240764363741
+        }
+      ],
+      "initial_alignment_ms": 0.039999683596646934,
+      "max_drift_ms": 4.014240764363741,
+      "current_drift_ms": 1.1489136243323372,
+      "latency_events": [
+        {
+          "audioTime": 0.020317460317460317,
+          "latencySeconds": 0.0029024943310657597,
+          "revision": 1
+        },
+        {
+          "audioTime": 0.5398639455782313,
+          "latencySeconds": 0.21000000000000002,
+          "revision": 2
+        },
+        {
+          "audioTime": 1.0419954648526077,
+          "latencySeconds": 0.24100000000000002,
+          "revision": 3
+        }
+      ],
+      "steady_passes": 350,
+      "steady_svg_seeks": 700,
+      "physical_audio_verified": false
+    }
+  ]
+}

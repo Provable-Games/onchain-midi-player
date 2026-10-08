@@ -41,9 +41,20 @@ node examples/beast_consumer/scripts/browser_check.mjs
 npm run drift-check -- --minutes 1 --drift-info
 ```
 
-Composed pages run offline with request blocking, complete namespaced data and independently provided fixture/dependent libraries. Hosting checks use `sandbox="allow-scripts"` with data/srcdoc frames and strict CSP: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; media-src blob:`. Blocked-blob variants retain ordinary playback and exercise the NFT's hidden-page fallback; only the expected blob-media CSP report is accepted. No eval/network dependency is introduced. Audio render checks retain PCM/engine/noise/reverb comparisons against the pinned engine. Drift probes use the new consumer harness and the existing audio/image clock measurements.
+Composed pages run offline with request blocking, complete namespaced data and independently provided fixture/dependent libraries. Hosting checks use `sandbox="allow-scripts"` with data/srcdoc frames and strict CSP: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; media-src blob:`. Blocked-blob variants retain ordinary playback and exercise the NFT's hidden-page fallback; only the expected blob-media CSP report is accepted. No eval/network dependency is introduced. Audio render checks retain PCM/engine/noise/reverb comparisons against the pinned engine. Drift probes use the new consumer harness and the audio/SVG clock measurements.
 
 Headless browsers do not establish Android/iOS lock-screen, silent-switch, calls/headset or desktop hardware-media behavior. Validate those on devices before making support claims; the outstanding device matrix is recorded with implementation results.
+
+
+The [#62 browser capture](measurements/issue62.json) binds the loaded 0.6.0 player/engine hashes and records both one-minute and ten-minute sessions on Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6 with a Linux PulseAudio null sink. The ten-minute sessions each observed 350 passes and exactly 700 SVG seeks (two timelines per boundary), with no steady-state correction seeks.
+
+| Browser | Initial clock alignment (ms) | Maximum observed drift (ms) | Latency records |
+| --- | ---: | ---: | ---: |
+| chromium | -0.001 | 27.880 | 5 |
+| firefox | 0.376 | 31.639 | 3 |
+| webkit | 0.040 | 4.014 | 3 |
+
+These are SVG versus estimated audible-clock observations, including the provisional display lead and transport/latency exercises. The separate one-minute capture overlapped builds/browser work and reached 105.273 ms in Chromium and 117.196 ms in Firefox; the monitor reports those excursions without correction. Initial alignment measures the timeline after seeking, not physical sound/display output. The unchanged historical Warlock fixture's embedded GIF has its own image clock; controlled animation acceptance uses outer/nested SVG/SMIL timelines.
 
 ## Measurements
 
