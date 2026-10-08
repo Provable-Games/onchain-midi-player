@@ -23,13 +23,13 @@
 //   - the settings with player/validate.js and player/encode.js, the JS reference of the class's
 //     settings::validate and encode (same checks, order, messages and indices; the parity fixtures
 //     are tests/fixtures/settings.json), so an error here is the revert midi_segment would give;
-//   - the art rule: the SVG must never contain `</script`, in any letter case.
+// Supplied SVG is isolated in an encoded image, so script-like text remains harmless to the parent.
 // It then writes the complete NFT-owned document, the decoded animation_url of a token with these inputs, byte for
-// byte as the class and a consumer produce it (scripts/segments.mjs: compositionHtml, dFragment).
+// byte as the class and a consumer produce it (scripts/composition.mjs and scripts/segments.mjs).
 // The page is this checkout's library segments: check out the tag v<version> of a released class, or for a test
 // class a commit whose VERSION equals its version().
 //
-// Exit status: 0 when the page is written, 1 when the MIDI, the settings or the SVG fails its check,
+// Exit status: 0 when the page is written, 1 when MIDI or settings validation fails,
 // 2 on a usage error or an input that cannot be read.
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -198,15 +198,14 @@ export function buildPreview({ midiArg, settings = DEFAULT_SETTINGS, settingsLab
   const midi = score.bytes ?? decodeMidi(/** @type {string} */ (score.b64));
 
   // 2. The settings, as midi_segment validates and encodes them (D carries SETTINGS).
-  let d;
+  let d, settings_len;
   try {
-    ({ d } = dFragment(midi, settings));
+    ({ d, settings_len } = dFragment(midi, settings));
   } catch (e) {
     if (!(e instanceof SettingsError)) throw e;
     throw new PreviewError([...lines, `FAIL ${settingsLabel}`, `  ${e.message}`, `  midi_segment would revert with ${panicData(e)}`], 1);
   }
-  const settingsText = d.slice(0, d.indexOf("<"));
-  lines.push(`PASS ${settingsLabel}`, `  SETTINGS: ${settingsText.length} bytes`);
+  lines.push(`PASS ${settingsLabel}`, `  SETTINGS: ${settings_len} bytes`);
 
   const art = svg ?? Buffer.from(PLACEHOLDER_SVG, "utf8");
   lines.push(`PASS ${svgLabel}`, `  ${art.length} bytes, isolated encoded image`);

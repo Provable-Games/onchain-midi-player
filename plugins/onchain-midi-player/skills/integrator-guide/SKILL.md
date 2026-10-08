@@ -1,8 +1,8 @@
 ---
 name: integrator-guide
-description: Add the onchain MIDI player (Provable-Games/onchain-midi-player) to any Starknet NFT whose token_uri is a base64 JSON data URI. Turn the usual one-pass token_uri into base64 pieces, inject the player's pre-encoded animation_url segment and the token's midi_segment, keep the SVG art safe, decide where the class hash lives (in the NFT or in a small renderer contract), get each token's MIDI and settings from a composer's sound provider with get_sound, handle failures, and test with snforge against the JS reference. Use when integrating the player into an NFT contract, reviewing such an integration, budgeting its gas, or debugging a broken animation_url.
+description: Add the onchain MIDI player (Provable-Games/onchain-midi-player) to any Starknet NFT whose token_uri is a base64 JSON data URI. Turn the usual one-pass token_uri into base64 pieces, inject one shared gunzip_segment, the combined engine/API player_segment and complete midi_segment data into an NFT-owned document, keep the SVG art safe, decide where the class hash lives (in the NFT or in a small renderer contract), get each token's MIDI and settings from a composer's sound provider with get_sound, handle failures, and test with snforge against the JS reference. Use when integrating the player into an NFT contract, reviewing such an integration, budgeting its gas, or debugging a broken animation_url.
 license: Apache-2.0
-compatibility: Needs the Scarb and Starknet Foundry versions in the repository's .tool-versions, and Node 22 or later with a clone of https://github.com/Provable-Games/onchain-midi-player for the offline tools.
+compatibility: Needs the Scarb and Starknet Foundry versions in the repository's .tool-versions, and Node 22 or later with npm ci in a full clone of https://github.com/Provable-Games/onchain-midi-player for the offline tools.
 ---
 
 Use the class through ITinySynthLibraryDispatcher with a pinned class hash, and check engine() == 'tinysynth' when configuring the NFT. The class has no storage or constructor. Preserve ISoundProvider and TinySynthSettings independently of document composition.

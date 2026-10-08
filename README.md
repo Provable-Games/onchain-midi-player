@@ -44,4 +44,6 @@ npm run check:abi
 node scripts/validate_token_uri.mjs examples/beast_consumer/fixtures/token_uri.txt
 ```
 
-Reusable agent guides are under [plugins/onchain-midi-player/skills](plugins/onchain-midi-player/skills). They cover integration, MIDI authoring, sound design and token inspection.
+## Agent skills
+
+The repository plugin provides [integration](plugins/onchain-midi-player/skills/integrator-guide/SKILL.md), [MIDI authoring](plugins/onchain-midi-player/skills/midi-guide/SKILL.md), [sound design](plugins/onchain-midi-player/skills/sound-design/SKILL.md) and [token inspection](plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skills; the [marketplace manifest](.claude-plugin/marketplace.json) registers the plugin. Run checkout-based tooling against the targeted class version. `npm ci` installs pinned offchain dependencies for verification and HTML extraction; these are not browser/onchain dependencies.

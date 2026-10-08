@@ -1,14 +1,12 @@
 // @ts-check
 /**
- * The page's gunzip shim. PAGE carries the TinySynth engine gzipped, as
- * `<script type="text/javascript+gzip" src="data:text/javascript;base64,...">` (the Art Blocks and
- * scripty.sol convention). The browser neither runs nor fetches a script of an unknown type, so
- * this shim, the next `<script>` in PAGE, inflates each such tag and replaces it with an inline
- * `<script>` holding the decompressed source. A script element without `src` that a script inserts
- * runs synchronously on insertion, so the engine has run before the shim returns, and so before the
- * player's `<script>` (after it in the document) is parsed. On any failure (bad base64, bad gzip
- * data, a CRC-32 or length mismatch) it logs the error and leaves the tag in place; the player
- * then finds no engine, shows the error and keeps ▶ disabled (spec D9).
+ * A generic shared loader for complete HTML script elements of type text/javascript+gzip,
+ * carrying data:application/gzip;base64 sources. Foreign-namespace scripts are not libraries.
+ * OnchainLibraries.ready is installed immediately; after document parsing, libraries inflate and
+ * execute synchronously in document order, once. Duplicate library IDs reject before execution.
+ * Failed blocks remain in place and later independent blocks still execute; ready rejects with
+ * the affected IDs. Readiness covers synchronous initialization, not a library's asynchronous work.
+ * Libraries own their APIs; consumers own UI and failure presentation.
  *
  * Plain browser JavaScript: no eval or Function (the source is inserted as a script element's
  * text, which a CSP allowing inline scripts permits), no network requests, deterministic.
@@ -295,7 +293,8 @@ export function gunzipScripts(host = window) {
   ready.catch(() => {});
   host.OnchainLibraries = { ready };
   const execute = () => {
-    const tags = [...host.document.querySelectorAll('script[type="text/javascript+gzip"]')];
+    const tags = [...host.document.querySelectorAll('script[type="text/javascript+gzip"]')]
+      .filter(tag => tag.namespaceURI === "http://www.w3.org/1999/xhtml");
     const ids = new Set();
     for (const tag of tags) {
       const id = tag.getAttribute("id");

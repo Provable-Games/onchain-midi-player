@@ -1,8 +1,10 @@
 # Gas, payload and class measurements
 
-The current unreleased 0.5.0 build combines the unchanged TinySynth engine and headless API in one gzip fragment. The comparison is the recoverable split-fragment head `4a76614193d87f045230693fe972bbd5ac457386`. [Results and bindings](measurements/issue59.json) record the tool binaries, source/input/artifact hashes, complete case inventory and repeated captures from 2026-10-07. Prerequisite #57 remains open at `32f776185370ed519e1f14f94a0975a843069702`; rebase and revalidate against its final merged state before release. No declaration, deployment or release occurred.
+The unreleased 0.5.0 build combines the unchanged TinySynth engine and headless API in one gzip fragment. The original packaging capture compares combined head `f1ee9c5df6cb73a84fcb42f627b9503e26678dab` with the recoverable split-fragment head `4a76614193d87f045230693fe972bbd5ac457386`. [Results and bindings](measurements/issue59.json) record the tool binaries, source/input/artifact hashes, complete case inventory and repeated captures from 2026-10-07. Prerequisite #57 remains open at `32f776185370ed519e1f14f94a0975a843069702`; rebase and revalidate against its final merged state before release. No declaration, deployment or release occurred.
 
 ## Production-shaped comparison
+
+These tables are the 2026-10-07 frozen packaging experiment, bound to the revisions above. The namespace review fixes change browser code bytes; the [review refresh](#review-refresh) records their fresh production capture separately.
 
 Both revisions use Scarb 2.20.1, Cairo/CASM compiler 2.20.0, Sierra 1.9.3 and snforge 0.64.0, default features, release profile and Sierra gas. `--no-optimization` builds separate contract targets, avoiding test-specialized contract artifacts. Each capture ran twice with identical results.
 
@@ -39,12 +41,12 @@ Dynamic data remains at **minimum nine-byte padding**. The unchanged encoding pr
 
 ## Payload and class sizes
 
-| Current provider fragment | Source bytes | Gzip bytes | Raw HTML bytes | Returned bytes / serialized felts |
+| Frozen combined provider fragment | Source bytes | Gzip bytes | Raw HTML bytes | Returned bytes / serialized felts |
 | --- | ---: | ---: | ---: | ---: |
 | Shared loader | 4,465 | inline | 4,743 | 8,432 /275 |
 | Combined engine/headless API | 55,687 | 17,970 | 24,273 | 43,152 /1,395 |
 
-Fixed returns total **51,584 bytes**, down from 53,072 (−1,488; 2.8037%). Minimum9 totals 51,152 bytes. The loader bytes are unchanged. The combined source contains the exact 47,212 engine bytes at offset 0, a three-byte statement delimiter and the separately minified 8,472-byte API. The [manifest](../scripts/library_versions.json) records the combined source/gzip hashes and distinct embedded-engine/API byte ranges and hashes. `script_sha256()` still identifies the original engine: `bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74`.
+Fixed returns total **51,584 bytes**, down from 53,072 (−1,488; 2.8037%). Minimum9 totals 51,152 bytes. The loader bytes are unchanged. The combined source contains the exact 47,212 engine bytes at offset 0, a three-byte statement delimiter and the separately minified 8,472-byte API. The frozen manifest is bound in the [capture record](measurements/issue59.json); the active [manifest](../scripts/library_versions.json) now contains the review refresh below. Both record combined source/gzip hashes and distinct embedded-engine/API byte ranges and hashes. `script_sha256()` still identifies the original engine: `bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74`.
 
 | Separately built release artifact | Split | Combined | Change |
 | --- | ---: | ---: | ---: |
@@ -57,13 +59,50 @@ Fixed returns total **51,584 bytes**, down from 53,072 (−1,488; 2.8037%). Mini
 | Composition consumer CASM JSON bytes | 575,265 | 573,400 | −1,865 |
 | Composition consumer CASM bytecode felts | 23,163 | 23,069 | −94 |
 
-These are emitted compact artifact sizes. The public MIDI ABI now has exactly seven entries. The prior pending 0.4.0 default test-wide measurement of 303,820,178 gas/150,101 URI characters is historical architecture evidence; it was not remeasured for this packaging update and is not the matched comparator above.
+These are emitted compact artifact sizes. The public MIDI ABI has exactly seven entries. The final 0.5.0 composition carries NFT-owned UI, isolated image framing and composability work; the small split-to-combined savings above are **not** a saving over the previous whole-page architecture. The prior pending 0.4.0 default test-wide measurement of 303,820,178 gas/150,101 URI characters is historical architecture evidence; it was not remeasured for this packaging update and is not the matched comparator above.
+
+## Review refresh
+
+The 2026-10-08 namespace review fixes preserve fixed279 returned lengths and the full 166,417-character Beast URI. Fresh production-shaped Beast captures, run twice with the same compiler/profile/resources/setup/input, remain **413,511,218 selector L2 gas** and **428,752,938 test-wide L2 gas**. The [record](measurements/issue59.json) binds the revised sources, emitted artifacts and both captures separately from the frozen packaging experiment.
+
+| Revised provider fragment | Source bytes | Gzip bytes | Raw HTML bytes | Returned bytes / serialized felts |
+| --- | ---: | ---: | ---: | ---: |
+| Shared loader | 4,524 | inline | 4,743 | 8,432 /275 |
+| Combined engine/headless API | 55,739 | 18,008 | 24,273 | 43,152 /1,395 |
+
+The exact 47,212-byte engine remains unchanged; the wrapper is now 8,524 bytes. Fixed279 still totals 51,584 returned bytes; the refreshed minimum9 payload totals 51,360 bytes. Minimum9 gas and the eight-case temporary comparison were not remeasured for these initialization fixes, so their tables remain frozen historical evidence. The default remains 279, with its previously measured small/full trade-off.
+
+The current separately built TinySynth has 973,661 compact Sierra JSON bytes /18,589 program felts and 780,098 compact CASM JSON bytes /29,730 bytecode felts. Compared with the frozen combined class, Sierra grows 406 bytes /8 felts; CASM size is unchanged. Payload hashes and byte values change even where sizes/gas do not.
+
+## A full-size token
+
+Budget the complete NFT selector, including its art and metadata, provider calls and encoding. The production-shaped full Beast example above costs about 413.5 million L2 gas; the smaller isolated `midi_segment` call does not establish its RPC budget. Measure the actual largest token and the service that will fetch it before deployment.
+
+## `midi_segment` by MIDI and SETTINGS size
+
+The frozen production selector captures include a small 32-byte score and 16-byte defaults (`midi_segment`: 8,669,288 L2 gas), and the full 3,716-byte score with 334-byte Beast settings (`midi_segment`: 59,244,958). Both MIDI and settings change between these examples, so they do not define a per-byte slope. Do not apply historical whole-page or settings rates to this replacement.
+
+For your own distribution, run the named root `gas_` probes with fixed compiler/profile/resources and compare matching inputs. The [sound settings fixtures](../scripts/settings_fixtures.mjs) provide defaults, Beast timbres, custom waves and filters. Root helper test-wide totals include their setup; report them separately from nested selector gas. The [Beast selector reproduction](#reproduce) measures the complete NFT path.
+
+## The size of `SETTINGS`
+
+Defaults serialize to 16 bytes; the three Beast sounds serialize to 334 bytes. Every supplied wave/timbre/operator is validated, serialized and encoded at call time; the class imposes no serialized byte cap. Count the actual encoded settings (preview reports that length) and measure both the provider and `midi_segment`. Prefer the per-token subset and short wave tables. A historical per-KB estimate is not a current measurement, and large sample tables also cost the provider work to construct or return.
+
+## Node limits
+
+A successful local snforge call does not establish a hosted `starknet_call` budget. Nodes impose configurable gas/step caps, timeouts and response limits. Juno v0.16.7 defines defaults of 100,000,000 Sierra gas and 4,000,000 VM steps in [its VM source](https://github.com/NethermindEth/juno/blob/v0.16.7/vm/vm.go); [its CLI](https://github.com/NethermindEth/juno/blob/v0.16.7/cmd/juno/juno.go) exposes `rpc-call-max-gas` and `rpc-call-max-steps`. The full Beast capture exceeds that default gas budget; hosted providers may configure a different cap. These source defaults were checked on 2026-10-08, and are not observed budgets for PublicNode, dRPC or any other service.
+
+[Starknet's accounting rules](https://docs.starknet.io/learn/protocol/fees#l2-computation) distinguish Sierra ≥1.7.0 from older Sierra/CairoZero; Sierra gas tracking depends on the parent call's accounting too. Use Sierra ≥1.7.0 across the NFT/renderer/provider library path to reproduce these Sierra-gas measurements; include the account when estimating a transaction. Older paths require VM-resource/step measurements instead. This is measurement guidance, not a new runtime restriction.
+
+Check realistic largest token IDs against the actual provider/marketplace fetch path. Record chain, endpoint, block, call inputs and observed errors; repeat when those conditions change. The stress consumer's opt-in probes support this work. Historical Sepolia deployment/provider observations remain historical and cannot guarantee a new class is served.
 
 ## Browser evidence
 
+The 2026-10-07 frozen packaging revision passed the evidence below. The review revision additionally reran the complete composed/custom-control page checks in all three engines, including SVG gzip decoys, foreignObject HTML libraries, document-wide data collisions, inert template contents and foreign-only data rejection. Audio-render/drift and hosting probes were not repeated for the initialization-only fixes.
+
 Chromium 153.0.8010.12, Firefox 155 and WebKit 26.6 pass composed pages, independent/dependent providers, custom NFT controls, loader lifecycle/errors, parser agreement on normal/self-closing SVG/plaintext, six strict-CSP sandbox/media cases and the retained audio-render suite. A focused one-minute combined Chromium drift probe passes schedule/rest/cancellation/restart checks; the drift trend remains informational. The prior split three-engine drift checks remain historical evidence.
 
-Three fresh full-size MIDI-only contexts per build measure init-script to NFT control enable and captured click to engine `playMIDI`. Median milliseconds:
+In that frozen experiment, three fresh full-size MIDI-only contexts per build measure init-script to NFT control enable and captured click to engine `playMIDI`. Median milliseconds:
 
 | Browser | Split startup | Combined startup | Split first play | Combined first play |
 | --- | ---: | ---: | ---: | ---: |

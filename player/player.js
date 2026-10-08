@@ -314,7 +314,7 @@ export function startPlayer(host = window) {
       if (typeof host.WebAudioTinySynth !== "function") throw new Error(ENGINE_MISSING);
       const block = (/** @type {string} */ id) => {
         const tags = doc.querySelectorAll(`[id="${id}"]`);
-        if (tags.length !== 1 || tags[0].tagName.toLowerCase() !== "script" || tags[0].getAttribute("type") !== "text/plain")
+        if (tags.length !== 1 || tags[0].tagName.toLowerCase() !== "script" || tags[0].namespaceURI !== "http://www.w3.org/1999/xhtml" || tags[0].getAttribute("type") !== "text/plain")
           throw new Error(`player: expected one text/plain #${id} block, found ${tags.length}`);
         return tags[0].textContent || "";
       };

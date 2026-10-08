@@ -6,9 +6,9 @@ import { startPlayer } from "./player.js";
 import { riff,smf } from "../scripts/data_cases.mjs";
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};}
-function harness({loading=false,missing=false,duplicate=false,midi=riff({ppq:96,us:500000}),resume,constructError,playError,latency=0.02,nullStart=false}={}){
+function harness({loading=false,missing=false,duplicate=false,namespaceURI="http://www.w3.org/1999/xhtml",tagName="SCRIPT",midi=riff({ppq:96,us:500000}),resume,constructError,playError,latency=0.02,nullStart=false}={}){
  const calls=[],timers=new Map(),intervals=new Map();let serial=0,domReady;
- const tags={"onchain-midi-settings":{tagName:"SCRIPT",getAttribute:()=>"text/plain",textContent:"1,1,30,40,64,0,0"},"onchain-midi-data":{tagName:"SCRIPT",getAttribute:()=>"text/plain",textContent:midi.toString("base64")}};
+ const tags={"onchain-midi-settings":{tagName,namespaceURI,getAttribute:()=>"text/plain",textContent:"1,1,30,40,64,0,0"},"onchain-midi-data":{tagName,namespaceURI,getAttribute:()=>"text/plain",textContent:midi.toString("base64")}};
  const ctx={currentTime:1,outputLatency:latency,resume(){calls.push("resume");return resume?.promise||Promise.resolve();}};
  const status={curTick:0,maxTick:384,startTime:null};
  const synth={getAudioContext:()=>ctx,getPlayStatus:()=>({...status}),prewarm(){calls.push("prewarm");},loadMIDI(){calls.push("load");},setLoop(){calls.push("loop");},setLoopEnd(){calls.push("end");},playMIDI(){calls.push("play");if(playError)throw Error(playError);status.startTime=nullStart?null:ctx.currentTime+0.1;},stopMIDI(){calls.push("stop");status.startTime=null;}};
@@ -58,4 +58,10 @@ test("pass subscriptions removed during delivery are skipped and snapshots are i
  const h=harness(),seen=[];let remove=()=>{},removedCalls=0;
  h.api.onPassStart(e=>{e.passIndex=99;remove();});remove=h.api.onPassStart(()=>removedCalls++);
  h.api.onPassStart(e=>seen.push(e.passIndex));await h.api.play();h.fire(1.12);assert.deepEqual(seen,[0]);assert.equal(removedCalls,0);h.api.stop();
+});
+
+test("unique foreign-namespace or non-script data elements reject initialization",async()=>{
+ for(const options of [{namespaceURI:"http://www.w3.org/2000/svg"},{tagName:"DIV"}]){
+  const h=harness(options);await assert.rejects(h.api.ready,/expected one text\/plain/);assert.deepEqual(h.calls,[]);
+ }
 });

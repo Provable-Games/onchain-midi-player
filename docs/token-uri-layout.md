@@ -19,7 +19,7 @@ The complete data fragment is exactly:
 <script type="text/plain" id="onchain-midi-settings">SETTINGS</script><script type="text/plain" id="onchain-midi-data">B64(MIDI)</script>ALIGNMENT_WHITESPACE
 ```
 
-Settings use the canonical [validated serialization](sound-settings.md). The class encodes MIDI bytes verbatim; strict [MIDI validation](midi-contract.md) runs in the browser before synth creation. Missing or duplicate data blocks reject player readiness.
+Settings use the canonical [validated serialization](sound-settings.md). The class encodes MIDI bytes verbatim; strict [MIDI validation](midi-contract.md) runs in the browser before synth creation. Each data ID must occur exactly once across document elements and identify a complete HTML-namespace `script` with `type="text/plain"`; non-script/foreign-namespace collisions reject readiness. Inert template contents do not belong to the document.
 
 The NFT's JSON opening includes its own metadata/image and `"animation_url":"data:text/html;base64,`. Its JSON-layer byte length before splicing is a multiple of three. It then appends independently double-encoded HTML fragments and finally its own encoded closing quote/brace:
 
@@ -43,7 +43,7 @@ Direct splicing is the recommended efficient pattern. Consumers may decode fragm
 
 ## Shared loader and dependencies
 
-Library data blocks use `type="text/javascript+gzip"`, unique IDs and `src="data:application/gzip;base64,PAYLOAD"`. The loader is an inline classic script with `id="onchain-gunzip"`. It exposes `window.OnchainLibraries.ready` synchronously, including before payload parsing, and inflates/executes actual selected script elements in document order after parsing. A repeated loader reuses readiness. Duplicate library IDs reject before execution. Corruption, noncanonical base64, invalid UTF-8 and synchronous evaluation failures identify the affected library; independent remaining blocks still execute.
+HTML-namespace library data blocks use `type="text/javascript+gzip"`, unique IDs and `src="data:application/gzip;base64,PAYLOAD"`. The loader is an inline classic script with `id="onchain-gunzip"`. It exposes `window.OnchainLibraries.ready` synchronously, including before payload parsing, and inflates/executes actual selected script elements in document order after parsing. A repeated loader reuses readiness. Duplicate IDs among selected HTML gzip scripts reject before execution. SVG/MathML script decoys and template contents are excluded; HTML scripts inside SVG `foreignObject` remain candidates. Corruption, noncanonical base64, invalid UTF-8 and synchronous evaluation failures identify the affected library; independent remaining blocks still execute.
 
 Readiness covers synchronous classic-script initialization. Each library remains responsible for any asynchronous work it starts. A consumer bootstrap awaits `OnchainLibraries.ready`, then `OnchainMidiPlayer.ready`. Parser-time ordinary scripts cannot assume gzip globals are already available.
 

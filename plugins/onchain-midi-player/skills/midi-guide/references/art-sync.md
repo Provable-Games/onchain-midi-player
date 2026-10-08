@@ -48,7 +48,7 @@ Then look at what each animation does. In that SVG:
 - GIF delays are whole centiseconds (10,000 µs), so an eighth note is a whole number of them only when `Q` is a multiple of 20,000 µs (a sixteenth: 40,000 µs). That includes 60, 75, 100, 120, 125 and 150 BPM, but not 140 (428,571 µs) or 131.87 BPM (455,000 µs).
 - Write the tempo in the file as µs per quarter note (the Set Tempo event). An editor that takes BPM may round it.
 - Use ticks per quarter note that the subdivision divides evenly (480, for example), so every frame boundary lands on a tick.
-- Only the drift within one pass matters, because the player restarts the art at ▶ and at every pass.
+- When NFT code restarts art from `onPassStart`, as the Beast reference does, only drift within one pass matters. The headless player emits timing events and never restarts art itself.
 
 For Beast art, a GIF with 20 cs (200 ms) frames: 150 BPM (400,000 µs) is exactly one frame per eighth note, 75 BPM (800,000 µs) one per sixteenth, and 100 BPM (600,000 µs) one per triplet eighth. At 150 BPM a 4/4 bar is 1.6 s, two loops of the 4-frame GIF, so a whole number of bars keeps the GIF in phase.
 

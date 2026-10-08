@@ -2,7 +2,7 @@
 
 Verification identifies the class-owned loader and combined MIDI player independently, then checks the exact engine bytes embedded inside the player. NFT layout, UI, art and additional library code remain consumer-owned; matching library hashes does not certify their behavior.
 
-From a matching checkout:
+From a matching full repository checkout (the inspector splitter imports the shared parser here, so copying the plugin alone is insufficient):
 
 ```sh
 npm ci
@@ -13,7 +13,7 @@ node scripts/validate_token_uri.mjs token_uri.txt --json
 
 The engine verifier accepts raw HTML, animation data URIs, token JSON and JSON data URIs. The metadata validator additionally handles Cairo ByteArray/RPC/sncast results, checks metadata, UTF-8/base64/XML, settings and strict MIDI, and reports sizes/provider limits. The inspector's [splitter](../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/split_page.mjs) extracts complete unique `onchain-midi-settings` and `onchain-midi-data` blocks without depending on art or document ordering.
 
-`scripts/html_blocks.mjs` uses pinned offchain `parse5` HTML5 parsing to select actual document script blocks, excluding comments, inert data, template contents, raw-text elements and foreign-namespace SVG/MathML scripts. This replaces the handwritten tokenizer so self-closing SVG and `plaintext` follow browser rules. The small parser dependency is used only by Node tooling; the browser payload and onchain class do not include it. Required IDs must be unique and tags complete. Additional gzip blocks and variable NFT heads/body layouts are accepted. Missing/duplicate required blocks, changed wrappers/source/alignment, corrupt gzip and modified class artifacts fail explicitly.
+`scripts/html_blocks.mjs` uses pinned offchain `parse5` HTML5 parsing to select actual document script blocks, excluding comments, inert data, template contents, raw-text elements and foreign-namespace SVG/MathML scripts. This replaces the handwritten tokenizer so self-closing SVG and `plaintext` follow browser rules. The small parser dependency is used only by Node tooling; the browser payload and onchain class do not include it. Library IDs are unique among selected HTML gzip scripts. Player data IDs are unique across all document elements excluding template contents, and must identify complete HTML `text/plain` scripts. HTML scripts inside `foreignObject` count. Additional gzip blocks and variable NFT heads/body layouts are accepted. Missing/duplicate required blocks, changed wrappers/source/alignment, corrupt gzip and modified class artifacts fail explicitly.
 
 The active [segment manifest](../scripts/library_versions.json) records class version, format/alignment, deterministic fflate/Terser toolchain, engine pin/decompressed SHA-256, loader/combined-player source hashes, explicit embedded-engine byte range/hash and wrapper byte range/hash, raw/returned lengths/hashes and gzip lengths/hashes. It contains no class-owned whole-page identity. Independent test libraries have their own [manifest](../tests/fixtures/libraries/manifest.json); future third-party providers maintain theirs separately. [Historical build records](../deployments/historical-builds.json) support already-declared test-class provenance without asserting that those classes implement the new architecture.
 
