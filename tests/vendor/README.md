@@ -16,9 +16,9 @@ and the library source has not changed since):
 A class whose engine pin is not a tagged fork release is a test class, without a `v<version>` release tag. A release
 pins a tagged fork release with a published SHA-256.
 
-This is the engine the class embeds: `scripts/build_page.mjs` gzips the minified file's exact bytes into the page (the
-page's gunzip shim inflates them back in the browser), and `script_sha256()` returns the SHA-256 of the decompressed
-bytes. The engine tests and the render and page checks run the same file. The pin is
+This is the engine the class embeds: `scripts/build_segments.mjs` gzips the minified file's exact bytes, a statement delimiter and a separately compiled headless API into one player fragment (the
+shared loader inflates it in the browser), and `script_sha256()` returns the SHA-256 of the exact embedded engine
+bytes, independently of the combined source/gzip hashes. The engine tests and the render and page checks run the same file. The pin is
 the one line `ENGINE_PIN` in [`scripts/engine.mjs`](../../scripts/engine.mjs), which checks both hashes on every load,
 so a mismatch fails before anything is generated. Nothing needs network access.
 
@@ -36,10 +36,27 @@ To a later commit, or to a tagged fork release once the fork publishes them:
    build`, then compare).
 2. `node scripts/vendor_engine.mjs <fork checkout> <commit or tag>` copies the two files here (named after the short
    commit or the tag) and prints the new `ENGINE_PIN` line. It only reads the checkout.
-3. Replace the `ENGINE_PIN` line in `scripts/engine.mjs`, delete the old files here, and run
-   `npm run gen:page -- --record` (the new engine ref is a new `VERSION`). The
-   page (with a new gzip payload), `src/page_data.cairo` (including `VERSION`, `ENGINE_SHA256`, `GZIP_SHA256` and the
-   license text) and the fixtures follow.
+3. Replace the `ENGINE_PIN` line in `scripts/engine.mjs`, delete the old vendored engine/NOTICE files,
+   and choose a new `VERSION` in `scripts/segments.mjs` for a new engine release. Released records in
+   `scripts/library_versions.json` remain immutable.
+4. From the full checkout with `npm ci` installed, regenerate:
+
+   ```sh
+   npm run gen:segments -- --record
+   npm run gen:data
+   npm run gen:settings
+   npm run gen:measurements
+   (cd examples/beast_consumer && node scripts/gen_fixtures.mjs)
+   (cd examples/stress_nft && node scripts/gen_fixtures.mjs)
+   npm run gen:abi
+   ```
+
+   The combined player payload, `src/segment_data.cairo` (`VERSION`, `ENGINE_SHA256`, segments and
+   license), consumer fixtures and ABI follow. The manifest records separate combined source/gzip
+   hashes and exact embedded-engine/API ranges and hashes; there is no whole-page gzip constant.
+5. Run the generated-file checks, full JS/Cairo suites and documented browser/audio checks in
+   [Development](../../docs/development.md), and remeasure affected payload/class/gas rows in
+   [Gas](../../docs/gas.md). Updating the pin or generated files does not authorize a declaration or release.
 
 ## fflate license
 
@@ -47,9 +64,9 @@ To a later commit, or to a tagged fork release once the fork publishes them:
   in its npm package (Copyright (c) 2026 Arjun Barrett). SHA-256
   `0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551`.
 
-The page's gunzip shim, [`player/gunzip.js`](../../player/gunzip.js), is derived from fflate 0.8.3's `gunzipSync`, and the
+The shared gunzip loader, [`player/gunzip.js`](../../player/gunzip.js), is derived from fflate 0.8.3's `gunzipSync`, and the
 build compresses the engine with the same fflate version (pinned in `package-lock.json`). This file goes into the
-class's `license()` text. `SHIM_PIN` in [`scripts/page.mjs`](../../scripts/page.mjs) checks its SHA-256 whenever it is read,
+class's `license()` text. `SHIM_PIN` in [`scripts/segments.mjs`](../../scripts/segments.mjs) checks its SHA-256 whenever it is read,
 and the build checks that it equals the installed fflate's `LICENSE` and that the installed version is 0.8.3. Moving to
 another fflate version means re-deriving and reviewing the shim, vendoring that version's license, and updating
 `SHIM_PIN`.
@@ -63,6 +80,6 @@ another fflate version means re-deriving and reviewing the shim, vendoring that 
 
 The class's base64 encoder is the package `game_components_encoding` (`packages/encoding` of game-components), a Scarb
 dependency pinned in [`Scarb.toml`](../../Scarb.toml). It is compiled into the class, so its license goes into the class's
-`license()` text. `ENCODER_PIN` in [`scripts/page.mjs`](../../scripts/page.mjs) checks the file's SHA-256 whenever it is
+`license()` text. `ENCODER_PIN` in [`scripts/segments.mjs`](../../scripts/segments.mjs) checks the file's SHA-256 whenever it is
 read. To verify: `git -C <game-components> show v3.1.0:LICENSE | sha256sum`. When the dependency moves to another
 release, check this file against that release's `LICENSE`.

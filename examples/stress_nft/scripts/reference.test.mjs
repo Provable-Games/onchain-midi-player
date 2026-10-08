@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { checkMidi } from '../../../player/player.js';
-import { byteArrayFelts, decodeTokenUri } from '../../../scripts/page.mjs';
+import { byteArrayFelts, decodeTokenUri } from '../../../scripts/segments.mjs';
 import { TOKEN_COUNT, decodeByteArray, defaultRepetitions, rpcResponseBytes, stressMidi, tokenUri } from './reference.mjs';
 import { isFelts, label, redactor, scalar, selector, withText } from './rpc_check.mjs';
 
@@ -26,7 +26,7 @@ test('the score is 48 bytes plus 64 per bar and passes the page MIDI check, endi
   }
 });
 
-test('token_uri decodes to OpenSea-style JSON with the player page and the same art twice', () => {
+test('token_uri decodes to OpenSea-style JSON with a complete NFT document and isolated art', () => {
   const dec = decodeTokenUri(tokenUri(7, 573));
   assert.equal(dec.json.name, 'Stress #7');
   assert.deepEqual(dec.json.attributes, [
@@ -34,9 +34,11 @@ test('token_uri decodes to OpenSea-style JSON with the player page and the same 
     { trait_type: 'Bars', display_type: 'number', value: 573 },
   ]);
   assert.ok(dec.svg.includes('573 bars') && !/<\/script/i.test(dec.svg));
-  assert.ok(dec.html.endsWith(dec.svg), 'the art closes the page');
-  // PAGE's alignment spaces (0 to 8, whatever the page's length needs) fall inside the settings block.
-  assert.match(dec.html, /<script type="text\/plain" id="settings"> *1,1,30,40,64,0,0<\/script>/, 'default settings');
+  assert.match(dec.html, /<img id="beast-art"[^>]+src="data:image\/svg\+xml;base64,/);
+  assert.ok(dec.html.indexOf('beast-bootstrap') > dec.html.indexOf('beast-art'));
+  assert.ok(dec.html.trimEnd().endsWith('</body></html>'));
+  assert.match(dec.html, /<script type="text\/plain" id="onchain-midi-settings">1,1,30,40,64,0,0<\/script>/);
+
 });
 
 test('a ByteArray decodes from its felts, and the response size is the size of the JSON', () => {

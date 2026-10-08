@@ -6,5 +6,8 @@
 //!   `examples/beast_consumer`: the same `token_uri` assembly, library calls and alignment.
 //! - `repetitions` (generated from `repetitions.json`): bars of music per token.
 
+pub mod assembly;
+
+pub mod owned_assets;
 pub mod repetitions;
 pub mod stress_nft;

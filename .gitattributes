@@ -1,0 +1,4 @@
+# Encoded-fragment fixtures deliberately end with HTML alignment spaces.
+tests/fixtures/segments/*.html whitespace=-blank-at-eol
+tests/fixtures/libraries/*.html whitespace=-blank-at-eol
+examples/beast_consumer/fixtures/*.html whitespace=-blank-at-eol

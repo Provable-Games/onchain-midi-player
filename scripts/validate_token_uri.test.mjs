@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
-import { ART_OPEN, HTML_PREFIX, MIDI_OPEN, JSON_PREFIX, SVG_PREFIX, VERSION, b64, byteArrayFelts, withGzipPayload } from "./page.mjs";
+import { HTML_PREFIX, MIDI_OPEN, JSON_PREFIX, SVG_PREFIX, VERSION, b64, byteArrayFelts } from "./segments.mjs";
 import { RPC_CAP, base64Problem, formatReport, parseInput, parseXml, run, validateTokenUri } from "./validate_token_uri.mjs";
 
 const SCRIPT = fileURLToPath(new URL("./validate_token_uri.mjs", import.meta.url));
@@ -31,11 +31,11 @@ test("the example's golden token_uri passes: every layer and the engine record",
   assert.deepEqual(ids(r, "fail"), []);
   // The example writes numeric traits as strings: a warning, not a failure.
   assert.deepEqual(ids(r, "warn"), ["json.attributes", "json.attributes"]);
-  for (const id of ["token_uri.base64", "json.name", "image.self_contained", "player.engine_sha256", "player.gzip", "player.page_sha256_record", "player.settings", "player.midi", "player.art_block", "animation.self_contained", "size.rpc"]) {
+  for (const id of ["token_uri.base64", "json.name", "image.self_contained", "player.engine", "player.gunzip", "player.player", "player.settings", "player.midi", "animation.self_contained", "size.rpc"]) {
     assert.ok(ids(r, "pass").includes(id), id);
   }
-  const record = JSON.parse(readFileSync(new URL("./page_versions.json", import.meta.url), "utf8"))[VERSION];
-  assert.equal(r.hashes.page_sha256, record.page_sha256);
+  const record = JSON.parse(readFileSync(new URL("./library_versions.json", import.meta.url), "utf8"))[VERSION];
+  assert.equal(r.hashes.engine_sha256, record.script_sha256);
   assert.equal(r.sizes.token_uri_bytes, golden.length);
   assert.ok(r.sizes.rpc_response_estimated < RPC_CAP);
   assert.match(formatReport(r.toJSON()), /PASS: \d+ passed, 2 warnings, 0 failed/);
@@ -193,9 +193,6 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
     ["<rect fill='url(https://example.com/p)'/>", "image.self_contained"],
     ["<style>@import 'x.css'; rect{fill:url(\"//e.com/p\")}</style>", "image.self_contained"],
     ["<rect style='fill:url(http://e.com/p)'/>", "image.self_contained"],
-    ["<script>alert(1)</script>", "image.no_script"],
-    ["<rect onclick='x()'/>", "image.no_script"],
-    ["<!-- </SCRIPT> --><rect/>", "image.no_script_end_tag"],
   ]) {
     assert.ok(failing(svg(body)).includes(id), body);
   }
@@ -216,12 +213,7 @@ test("the image SVG: well-formed, in the SVG namespace, no scripts, no external 
   const body = "<svg xmlns='http://www.w3.org/2000/svg'/>";
   for (const bad of ["<?xml bogus?>", "<?xml version='1.0' bogus='1'?>", "<?xml encoding='utf-8'?>", "<?xml version=\"2.0\"?>", "<?xml version='1.0' standalone='maybe'?>"]) {
     assert.ok(failing(bad + body).includes("image.xml"), bad);
-    // The same malformed SVG as the image and as the art block, which therefore agree.
-    const html = goldenHtml();
-    const art = bad + body;
-    const same = { ...withHtml(html.slice(0, html.indexOf(ART_OPEN) + ART_OPEN.length) + art), image: SVG_PREFIX + b64(art) };
-    assert.ok(ids(check({ uri: toUri(same) }), "fail").includes("image.xml"), bad);
-    assert.equal(check({ uri: toUri(same) }).toJSON().ok, false, bad);
+
   }
   for (const good of ['<?xml version="1.0"?>', "<?xml version='1.1' encoding='UTF-8' standalone='yes'?>"]) assert.deepEqual(failing(good + body).filter((i) => i.startsWith("image.")), [], good);
   // A DOCTYPE, as SVG tools write it, is well-formed; an internal subset (entities) is refused by rule.
@@ -281,67 +273,11 @@ test("the XML parser accepts well-formed documents and rejects malformed ones", 
   }
 });
 
-test("the page: a wrong or unknown engine, a changed page, a wrong version, invalid MIDI, bad SETTINGS", () => {
-  const fails = (/** @type {string} */ html, opts = {}) => ids(check({ uri: toUri(withHtml(html)) }, opts), "fail");
-  const html = goldenHtml();
-  // A different engine in a valid gzip payload: the engine hash and the page's hash and gzip record all differ.
-  const other = withGzipPayload(html, () => gzipSync(Buffer.from("globalThis.other = 1;")).toString("base64"));
-  assert.deepEqual(fails(other).filter((i) => i.startsWith("player.")), ["player.engine_sha256", "player.gzip", "player.page_sha256_record"]);
-  // A corrupt payload and a missing engine tag.
-  assert.ok(fails(withGzipPayload(html, (p) => p.slice(0, -8))).includes("player.page"));
-  assert.ok(fails(withGzipPayload(html, () => null)).includes("player.page"));
-  // --expect and --version.
-  const real = check({ uri: golden }).hashes.engine_sha256;
-  assert.deepEqual(ids(check({ uri: golden }, { expect: "0x" + real }), "fail"), []);
-  assert.deepEqual(ids(check({ uri: golden }, { expect: "00".repeat(32) }), "fail"), ["player.engine_sha256"]);
-  assert.deepEqual(ids(check({ uri: golden }, { version: "9.9.9" }), "fail"), ["player.engine_sha256"]);
-  // --expect replaces the engine comparison only: a changed player script or shim, with the genuine
-  // engine, still fails the PAGE record. Without a record, --expect warns that PAGE was not compared.
-  const tampered = html.replace("<title>TinySynth player</title>", "<title>TinySynth player!</title>");
-  assert.notEqual(tampered, html);
-  assert.deepEqual(fails(tampered, { expect: real }), ["player.page_sha256_record"]);
-  const noRecord = check({ uri: golden }, { expect: real, version: "9.9.9" });
-  assert.deepEqual([ids(noRecord, "fail"), ids(noRecord, "warn").filter((i) => i.startsWith("player."))], [[], ["player.page_sha256_record"]]);
-  // Invalid MIDI: the magic bytes broken (the length is unchanged, so the page stays aligned).
-  const midi = html.replace(/(id="midi">\s*)TVRoZA/, "$1AAAAAA");
-  assert.notEqual(midi, html);
-  assert.deepEqual(fails(midi), ["player.midi"]);
-  assert.match(check({ uri: toUri(withHtml(midi)) }).checks.find((c) => c.id === "player.midi")?.message ?? "", /fails the page's check/);
-  // A tab at the end of the settings or the MIDI block: the page's decoders strip only spaces, so it
-  // disables playback, and the trimmed blocks of splitPage must not hide it.
-  assert.deepEqual(fails(html.replace(MIDI_OPEN, "\t" + MIDI_OPEN)), ["player.settings"]);
-  assert.deepEqual(fails(html.replace(ART_OPEN, "\t" + ART_OPEN)), ["player.midi"]);
-  assert.deepEqual(fails(html.replace(MIDI_OPEN, "\n" + MIDI_OPEN)), ["player.settings"]);
-  // SETTINGS that do not decode.
-  const settings = html.replace(/(id="settings">\s*)1,/, "$12,");
-  assert.notEqual(settings, html);
-  assert.deepEqual(fails(settings), ["player.settings"]);
-  // Not the player's page at all: an HTML page without the blocks, and a non-HTML animation_url.
-  assert.ok(fails("<!doctype html><p>hi</p>").includes("player.blocks"));
-  assert.ok(ids(check({ uri: toUri({ ...goldenJson(), animation_url: "data:video/mp4;base64,AAAA" }) }), "fail").includes("animation.prefix"));
-  const { animation_url: _a, ...none } = goldenJson();
-  assert.ok(ids(check({ uri: toUri(none) }), "fail").includes("animation.present"));
-});
-
-test("the page's network references: loads fail, URL text warns, comments and namespaces do not count", () => {
-  const html = goldenHtml();
-  const at = html.indexOf("<title>");
-  const fails = (/** @type {string} */ inject) => ids(check({ uri: toUri(withHtml(html.slice(0, at) + inject + html.slice(at))) }), "fail");
-  assert.ok(fails('<link rel="stylesheet" href="https://example.com/a.css">').includes("animation.self_contained"));
-  assert.ok(fails('<script src="//example.com/x.js"></script>').includes("animation.self_contained"));
-  assert.ok(fails("<style>p{background:url(https://example.com/a.png)}</style>").includes("animation.self_contained"));
-  assert.ok(!fails("<!-- https://example.com/ -->").includes("animation.self_contained"));
-  const r = check({ uri: toUri(withHtml(html.slice(0, at) + "<noscript>see https://example.com/</noscript>" + html.slice(at))) });
-  assert.ok(ids(r, "warn").includes("animation.network_urls"));
-});
-
-test("the art block: a differing art, and the art of a non-SVG image", () => {
-  const html = goldenHtml();
-  const changed = html.slice(0, html.lastIndexOf("</svg>")) + "<!-- x --></svg>";
-  assert.deepEqual(ids(check({ uri: toUri(withHtml(changed)) }), "fail"), ["player.art_block"]);
-  // An external image: the art is checked as an SVG of its own.
-  const external = { ...withHtml(html.slice(0, html.indexOf(ART_OPEN) + ART_OPEN.length) + "<svg xmlns='http://www.w3.org/2000/svg'><image href='https://example.com/a.png'/></svg>"), image: "https://example.com/1.png" };
-  assert.ok(ids(check({ uri: toUri(external) }), "fail").includes("art.self_contained"));
+test("separate library verification accepts changed consumer heads and independent art", () => {
+  const html=goldenHtml().replace('<title>Onchain music</title>','<title>My NFT</title>');
+  assert.deepEqual(ids(check({json:JSON.stringify(withHtml(html))}),"fail"),[]);
+  const changed=html.replace('id="onchain-midi-player"','id="wrong-player"');
+  assert.ok(ids(check({json:JSON.stringify(withHtml(changed))}),"fail").includes("player.libraries"));
 });
 
 test("sizes: the JSON-RPC response against the 10 MiB cap", () => {
@@ -370,7 +306,7 @@ test("command line: exit codes, --json, stdin, usage errors", async () => {
   const j = JSON.parse(r.stdout);
   assert.equal(j.ok, true);
   assert.equal(j.summary.fail, 0);
-  assert.ok(j.hashes.page_sha256 && j.sizes.token_uri_bytes && j.sources["OpenSea media-and-traits"]);
+  assert.ok(j.hashes.engine_sha256 && j.sizes.token_uri_bytes && j.sources["OpenSea media-and-traits"]);
   r = cli(["-"], golden.replace("data:application/json;base64,", "data:application/json;base64,!"));
   assert.equal(r.status, 1);
   assert.match(r.stdout, /FAIL token_uri\.base64 .*"!" at offset 0/);

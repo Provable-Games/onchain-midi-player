@@ -11,7 +11,7 @@
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { decodeTokenUriLayers } from '../../../scripts/page.mjs';
+import { decodeTokenUriLayers } from '../../../scripts/segments.mjs';
 
 const [src, outDir = '.'] = process.argv.slice(2);
 if (!src) {

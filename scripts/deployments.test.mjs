@@ -1,13 +1,13 @@
 // @ts-check
 // Node tests for deployments/<network>.json: what is declared and deployed on each network. Every
-// file has the same shape, its class's version is recorded in scripts/page_versions.json, its
+// file has the same shape, its class's version is recorded in scripts/library_versions.json, its
 // release_tag is null (a test class) or v<version>, and the example, when there is one, library-calls
 // the class listed beside it. Mainnet holds releases only.
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
-import { PAGE_VERSIONS_PATH, isSemVer } from "./page.mjs";
+import { MANIFEST_PATH, isSemVer } from "./segments.mjs";
 
 const DIR = new URL("../deployments/", import.meta.url);
 const CHAIN_IDS = /** @type {Record<string, string>} */ ({ sepolia: "SN_SEPOLIA", mainnet: "SN_MAIN" });
@@ -29,8 +29,8 @@ function releaseTagProblem(network, version, tag) {
   return tag === `v${version}` ? null : `release_tag ${tag} is not v${version}`;
 }
 
-const files = readdirSync(DIR).filter((name) => name.endsWith(".json"));
-const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
+const files = readdirSync(DIR).filter((name) => name.endsWith(".json") && name !== "historical-builds.json");
+const versions = { ...JSON.parse(readFileSync(new URL("historical-builds.json", DIR), "utf8")), ...JSON.parse(readFileSync(MANIFEST_PATH, "utf8")) };
 
 test("deployments/ has a file for Sepolia, and only known networks", () => {
   assert.ok(files.includes("sepolia.json"));
@@ -48,7 +48,7 @@ for (const name of files) {
     assert.deepEqual(Object.keys(c), ["package", "contract", "version", "release_tag", "class_hash", "declare_tx", "built_from", "inspection_instance"]);
     assert.equal(c.package, "onchain_midi_player");
     assert.equal(c.contract, "TinySynth", "contract name");
-    assert.ok(versions[c.version], `${c.version} is recorded in scripts/page_versions.json`);
+    assert.ok(versions[c.version], `${c.version} is recorded in scripts/library_versions.json`);
     assert.equal(releaseTagProblem(d.network, c.version, c.release_tag), null);
     assert.match(c.class_hash, FELT);
     assert.match(c.declare_tx, FELT);
