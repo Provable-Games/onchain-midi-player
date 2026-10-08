@@ -75,5 +75,91 @@
     },
     "license_sha256": "33b37ff908b7e7aaf9b2324f67d9e7d2aea266dff68adf3afd77de8937d4aa05",
     "license_len": 10692
+  },
+  "0.6.0": {
+    "format": 1,
+    "fixed_alignment": 279,
+    "dynamic_alignment": 9,
+    "toolchain": {
+      "fflate": "0.8.3",
+      "terser": "5.51.2",
+      "minify": {
+        "ecma": 2020,
+        "compress": {
+          "passes": 2,
+          "ecma": 2020
+        },
+        "mangle": true,
+        "format": {
+          "ascii_only": true,
+          "ecma": 2020
+        }
+      },
+      "gzip": {
+        "level": 9,
+        "mtime": 0
+      }
+    },
+    "inputs": {
+      "player/gunzip.js": {
+        "sha256": "17945521b35cd5cf1e454518ac8d849e47ea8bcfd9d796eb7cfc685ab9bb43f1",
+        "bytes": 13156
+      },
+      "player/settings.js": {
+        "sha256": "b054bbac7bfacb5f3778ce5a08cc407bdf2ce657a974c81595d2ba8b4be6542e",
+        "bytes": 12898
+      },
+      "player/player.js": {
+        "sha256": "e912cf963edeb9d4fe89cb803da8693678b42725dce86d378225911401869804",
+        "bytes": 21606
+      }
+    },
+    "engine_build": {
+      "provisional": true,
+      "sourceCommit": "748d777ae895e9e07cc84b13012c0fdb586b5c3f",
+      "sourceSha256": "8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7",
+      "recipe": "node scripts/build.js <output-dir>",
+      "recipeSha256": "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
+      "packageLockSha256": "67402d41acd7d49ed3c1a1f689e7f91a81bff1b7dc1727b355d1d3b3dec4197d",
+      "terser": "5.51.2"
+    },
+    "engine_ref": "dev-748d777",
+    "engine_commit": "748d777ae895e9e07cc84b13012c0fdb586b5c3f",
+    "script_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+    "artifacts": {
+      "gunzip": {
+        "source_sha256": "9077d45fe8ad01be4379f4e4a7eaabcc0318aa429ef256160be2e194ae888052",
+        "source_len": 4524,
+        "raw_sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+        "raw_len": 4743,
+        "returned_sha256": "869be0afd09b9b8416b1f306a166a518e48ce4397d4d01b82ef004e934f6e7d7",
+        "returned_len": 8432,
+        "returned_felts": 275
+      },
+      "player": {
+        "source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+        "source_len": 58237,
+        "raw_sha256": "9e781a38a911fcc80cf9f414f7f54f379eb936e19a67d82eeec030c0ee1b3923",
+        "raw_len": 25389,
+        "returned_sha256": "0a6901bb1ac1159ead3d5c3226719e4033aa20be53b53ccec412eda08dd57a38",
+        "returned_len": 45136,
+        "returned_felts": 1459,
+        "embedded_engine": {
+          "offset": 0,
+          "length": 47424,
+          "sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65"
+        },
+        "wrapper": {
+          "offset": 47427,
+          "length": 10810,
+          "sha256": "83d380f8cd7dd79208799e967010593f8d6e8fc5d3583c39c6ed7013aae5733a"
+        },
+        "gzip_sha256": "ab91d57c06773ab956cc92c8641117fa62db7f3882eb95d59dc787fb1bb49340",
+        "gzip_len": 18737,
+        "gzip_base64_len": 24984
+      }
+    },
+    "license_sha256": "87fc3b6fff9cf17788dcfd925f7fcf4b03d0171d1b7098e1f167886070aa8709",
+    "license_len": 11033
   }
 }

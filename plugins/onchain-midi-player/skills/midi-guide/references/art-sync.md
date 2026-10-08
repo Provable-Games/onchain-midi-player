@@ -2,7 +2,9 @@
 
 ## NFT-owned pass synchronization
 
-The headless player emits onPassStart at each audible boundary (engine startTime plus outputLatency, in AudioContext seconds). The NFT-owned Beast UI subscribes and swaps a fresh encoded image while retaining the old image until decode completes. Core code never reads or replaces art. Initial events always follow successful start; missed/late later boundaries are skipped and stop invalidates stale events. Browser timers are best effort.
+The headless player emits onPassStart at each audible boundary (engine startTime plus the shared latencySeconds estimate, in AudioContext seconds). The NFT-owned trusted Genesis UI controls inline outer and nested SVG timelines, pausing every timeline with audio and seeking on start, resume, pass boundaries and accepted latency changes. Arbitrary/community art stays isolated in an encoded image. Core code never reads or replaces art. The shared estimate is outputLatency + baseLatency, polled every 250 ms with a 2 ms update threshold. The reference monitor is read-only; there is no continuous drift-correction path. The 17 ms NFT display lead remains provisional pending issue #52 hardware evidence. Initial events always follow successful start; missed/late later boundaries are skipped and stop invalidates stale events. Browser timers are best effort.
+
+SVG timeline APIs do not pause or seek an embedded animated GIF. Use an SVG/SMIL sprite timeline for transport-controlled animation; the historical GIF fixture below remains useful for measuring periods.
 
 Choose a score pass that is a whole multiple of the art's visible periods to avoid visible resets. Use the composed preview/browser drift probes; matching engine hashes alone says nothing about consumer visuals. Future independent visual libraries can subscribe to the same API.
 
@@ -48,7 +50,7 @@ Then look at what each animation does. In that SVG:
 - GIF delays are whole centiseconds (10,000 µs), so an eighth note is a whole number of them only when `Q` is a multiple of 20,000 µs (a sixteenth: 40,000 µs). That includes 60, 75, 100, 120, 125 and 150 BPM, but not 140 (428,571 µs) or 131.87 BPM (455,000 µs).
 - Write the tempo in the file as µs per quarter note (the Set Tempo event). An editor that takes BPM may round it.
 - Use ticks per quarter note that the subdivision divides evenly (480, for example), so every frame boundary lands on a tick.
-- When NFT code restarts art from `onPassStart`, as the Beast reference does, only drift within one pass matters. The headless player emits timing events and never restarts art itself.
+- When NFT code seeks trusted SVG from `onPassStart`, only drift within one pass matters. The headless player emits timing events and never controls art itself.
 
 For Beast art, a GIF with 20 cs (200 ms) frames: 150 BPM (400,000 µs) is exactly one frame per eighth note, 75 BPM (800,000 µs) one per sixteenth, and 100 BPM (600,000 µs) one per triplet eighth. At 150 BPM a 4/4 bar is 1.6 s, two loops of the 4-frame GIF, so a whole number of bars keeps the GIF in phase.
 
@@ -66,7 +68,7 @@ The example's token 4 is a full-size Beast on Sepolia (the example in [`deployme
 - 55,510 ms / 800 ms = 69.39 GIF loops per pass, so a pass ends 0.39 of the way through a GIF loop.
 - The 455 ms beat and the 800 ms GIF loop line up every lcm(455, 800) = 72,800 ms, longer than the pass. Within a pass, the beat never lines up with the GIF again.
 
-The GIF therefore jumps from 0.39 of the way through its loop back to its first frame at every loop point, and within a pass the beat drifts across the GIF's frames. The fix is the numbers, not the player:
+The GIF and beat therefore have different periods. An embedded GIF continues on its independent image clock even when SVG timelines pause or seek. For a transport-controlled SVG sprite with the same frame durations, choose matching music/art periods:
 
 - At 100 BPM, a pass of whole bars keeps the GIF in phase (3 GIF loops per 2.4 s bar). Retune the wrapper's 3 s and 6 s animations to 2.4 s and 4.8 s, or keep them and make the pass a multiple of 12 s (5 bars), the lcm of 2.4, 3 and 6 s.
 - At 120 BPM (500,000 µs, the other production tempo), make the pass a multiple of 4 s for the GIF; 3 s and 6 s then need a multiple of 12 s (6 bars).

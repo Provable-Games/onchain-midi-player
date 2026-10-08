@@ -45,7 +45,7 @@ pub fn naive_token_uri(token_id: u256) -> ByteArray {
     append(ref html, ref length, @golden::gunzip());
     align(ref html, ref length);
     append(ref html, ref length, @golden::player());
-    append(ref html, ref length, @golden::body());
+    append(ref html, ref length, @golden::trusted_body());
     let mut art: ByteArray =
         "<img id=\"beast-art\" alt=\"\"                                    src=\"data:image/svg+xml;base64,";
     art.append(@image_value);

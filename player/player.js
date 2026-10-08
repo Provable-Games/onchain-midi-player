@@ -163,24 +163,41 @@ export function startPlayer(host = window) {
   /** @type {import("./settings.js").TinySynthSettings} */ let settings;
   /** @type {Uint8Array} */ let midi;
   /** @type {{maxTick: number, seconds: number} | undefined} */ let score;
-  let runId = 0, timer = 0, poll = 0;
+  let runId = 0, operationId = 0, timer = 0, poll = 0, latencyPoll = 0;
+  let origin = /** @type {number | null} */ (null), latencySeconds = 0, latencyRevision = 0;
+  let nextPass = 0, resumeRequests = 0, holdSuspension = false;
+  /** @type {() => void} */ let syncBoundary = () => {};
+  /** @type {Promise<void> | null} */ let pausing = null;
   /** @type {{promise: Promise<void>, reject: (cause: Error) => void} | null} */ let pending = null;
   /** @type {Set<(e: import("./api.d.ts").PassStart) => void>} */ const passes = new Set();
   /** @type {Set<(s: import("./api.d.ts").PlayStatus) => void>} */ const states = new Set();
   const number = (/** @type {any} */ x) => typeof x === "number" && Number.isFinite(x) ? x : null;
   const audio = () => synth && synth.getAudioContext();
-  const latency = () => Math.max(0, number(audio()?.outputLatency) || 0);
+  // Browser estimates only: discard malformed/implausible components independently.
+  const component = (/** @type {any} */ x) => number(x) !== null && x >= 0 && x <= 1 ? x : 0;
+  const estimateLatency = () => component(audio()?.outputLatency) + component(audio()?.baseLatency);
+  const refreshLatency = () => {
+    const value = estimateLatency();
+    if (Math.abs(value - latencySeconds) < 0.002 - 1e-9) return;
+    latencySeconds = value; ++latencyRevision;
+    host.clearTimeout(timer); timer = 0;
+    transition(state, true); syncBoundary();
+  };
   const snapshot = () => {
     const s = synth && synth.getPlayStatus();
     return { state, tick: number(s?.curTick), maxTick: number(s?.maxTick) ?? number(score?.maxTick),
-      startTime: number(s?.startTime), audioTime: number(audio()?.currentTime),
-      passSeconds: number(score?.seconds), outputLatency: latency(), runId, error };
+      startTime: number(s?.startTime), originTime: origin, audioTime: number(audio()?.currentTime),
+      passSeconds: number(score?.seconds), outputLatency: component(audio()?.outputLatency),
+      baseLatency: component(audio()?.baseLatency), latencySeconds, latencyRevision,
+      audioState: audio()?.state ?? null,
+      positionSeconds: origin === null ? null : Math.max(0, (number(audio()?.currentTime) ?? origin) - origin - latencySeconds),
+      runId, error };
   };
   /** @type {{value: import("./api.d.ts").PlayStatus, listeners: ((s: import("./api.d.ts").PlayStatus) => void)[]}[]} */
   const transitions = [];
   let notifying = false;
-  const transition = (/** @type {import("./api.d.ts").PlayStatus["state"]} */ next) => {
-    if (state === next) return;
+  const transition = (/** @type {import("./api.d.ts").PlayStatus["state"]} */ next, notify = false) => {
+    if (state === next && !notify) return;
     state = next;
     transitions.push({ value: snapshot(), listeners: [...states] });
     if (notifying) return;
@@ -195,7 +212,7 @@ export function startPlayer(host = window) {
     } finally { notifying = false; }
   };
   const cancelTimers = () => {
-    host.clearTimeout(timer); host.clearInterval(poll); timer = poll = 0;
+    host.clearTimeout(timer); host.clearInterval(poll); host.clearInterval(latencyPoll); timer = poll = latencyPoll = 0; syncBoundary = () => {};
   };
   const fail = (/** @type {unknown} */ cause) => {
     error = cause instanceof Error ? cause : new Error(String(cause));
@@ -211,51 +228,75 @@ export function startPlayer(host = window) {
     return () => { set.delete(subscription); };
   };
   const boundaries = (/** @type {number} */ current) => {
+    if (current !== runId || (state !== "playing" && state !== "paused")) return;
     const ctx = audio();
-    /** @type {number | null | undefined} */ let synced;
-    let passIndex = -1;
-    const sync = (initial = false) => {
-      if (current !== runId || state !== "playing" || timer) return;
+    syncBoundary = () => {
+      if (current !== runId || state !== "playing" || ctx.state !== "running" || timer) return;
       const latest = number(synth.getPlayStatus().startTime);
-      if (!initial && (latest === null || latest === synced)) return;
-      let start = latest, index = passIndex + 1;
-      const lag = latency();
-      if (!initial && synced != null && latest != null) {
-        start = synced + /** @type {{seconds:number}} */ (score).seconds;
-        // Skip already missed boundaries without walking arbitrarily many short passes.
-        const ahead = Math.max(0, Math.min(latest - start, ctx.currentTime - lag - start));
-        const skipped = Math.max(0, Math.ceil((ahead - 1e-6) / /** @type {{seconds:number}} */ (score).seconds));
-        start += skipped * /** @type {{seconds:number}} */ (score).seconds; index += skipped;
-        if (start >= latest - 1e-6) start = latest;
+      if (origin === null) {
+        if (nextPass) return;
+        ++nextPass;
+        const event = { runId: current, passIndex: 0, initial: true, startTime: null, audibleTime: null,
+          audioTime: number(ctx.currentTime), outputLatency: component(ctx.outputLatency),
+          baseLatency: component(ctx.baseLatency), latencySeconds };
+        for (const callback of [...passes]) {
+          if (current !== runId || state !== "playing") break;
+          if (passes.has(callback)) { try { callback({ ...event }); } catch (_) {} }
+        }
+        return;
       }
-      const delay = start === null ? 0 : start + lag - ctx.currentTime;
+      const seconds = /** @type {{seconds:number}} */ (score).seconds;
+      // Preserve the pending boundary across pause. Skip late subsequent passes in O(1).
+      if (nextPass > 0) {
+        const heard = ctx.currentTime - latencySeconds - origin;
+        nextPass = Math.max(nextPass, Math.ceil((heard - 1e-6) / seconds));
+      }
+      const index = nextPass, start = origin + index * seconds;
+      if (latest === null || start > latest + 1e-6) return;
+      const delay = start + latencySeconds - ctx.currentTime;
       if (delay * 1000 > MAX_TIMER_MS) return;
-      synced = start; passIndex = index;
-      if (!initial && delay < 0) return;
       const dispatch = () => {
         timer = 0;
-        if (current !== runId || state !== "playing") return;
-        const audibleTime = start === null ? null : start + lag;
-        const remaining = audibleTime === null ? 0 : audibleTime - ctx.currentTime;
+        if (current !== runId || state !== "playing" || ctx.state !== "running") return;
+        const audibleTime = start + latencySeconds, remaining = audibleTime - ctx.currentTime;
         if (remaining > 0.001) {
           timer = host.setTimeout(dispatch, Math.min(MAX_TIMER_MS, remaining * 1000)); return;
         }
-        if (initial || remaining > -LATE_SECONDS) {
-          const event = { runId: current, passIndex: index, initial, startTime: start, audibleTime,
-            audioTime: number(ctx.currentTime), outputLatency: lag };
+        ++nextPass;
+        if (!index || remaining > -LATE_SECONDS) {
+          const event = { runId: current, passIndex: index, initial: !index, startTime: start, audibleTime,
+            audioTime: number(ctx.currentTime), outputLatency: component(ctx.outputLatency),
+            baseLatency: component(ctx.baseLatency), latencySeconds };
           for (const callback of [...passes]) {
             if (current !== runId || state !== "playing") break;
             if (passes.has(callback)) { try { callback({ ...event }); } catch (_) {} }
           }
         }
-        sync();
+        syncBoundary();
       };
-      if (start === null) dispatch();
-      else timer = host.setTimeout(dispatch, Math.max(0, delay * 1000));
+      timer = host.setTimeout(dispatch, Math.max(0, delay * 1000));
     };
-    sync(true);
-    if (synth.getPlayStatus().startTime !== null && current === runId && state === "playing")
-      poll = host.setInterval(() => sync(), 50);
+    syncBoundary();
+    if (origin !== null && current === runId && (/** @type {string} */ (state) === "playing" || /** @type {string} */ (state) === "paused"))
+      poll = host.setInterval(() => syncBoundary(), 50);
+    if (current === runId && (state === "playing" || state === "paused"))
+      latencyPoll = host.setInterval(refreshLatency, 250);
+  };
+  const abortPending = () => {
+    if (!pending) return;
+    const abort = new Error("player: transport cancelled"); abort.name = "AbortError";
+    pending.reject(abort); pending = null;
+  };
+  const contextChanged = () => {
+    const ctx = audio();
+    if (ctx.state === "closed" && (state === "playing" || state === "paused" || state === "starting")) {
+      ++operationId; abortPending(); fail(new Error("player: AudioContext closed"));
+    } else if (state === "playing" && ctx.state !== "running") {
+      host.clearTimeout(timer); timer = 0; transition("paused");
+    } else if (state === "paused" && ctx.state === "running" && !pausing && !resumeRequests) {
+      // An external resume is an actual clock transition; never reload the score.
+      holdSuspension = false; transition("playing"); syncBoundary();
+    }
   };
   /** @type {() => void} */ let resolveReady = () => {};
   /** @type {(cause: Error) => void} */ let rejectReady = () => {};
@@ -265,42 +306,114 @@ export function startPlayer(host = window) {
   const api = {
     ready,
     play() {
+      if (state === "paused") return api.resume();
       if (state === "failed") return Promise.reject(error);
       if (state === "loading") return Promise.reject(new Error("player: await OnchainMidiPlayer.ready before play()"));
-      if (state === "starting") return /** @type {NonNullable<typeof pending>} */ (pending).promise;
+      if (pending) return pending.promise;
       if (state === "playing") return Promise.resolve();
-      const current = ++runId;
+      holdSuspension = false;
+      const current = ++runId, operation = ++operationId;
       /** @type {() => void} */ let resolve = () => {};
       /** @type {(cause: Error) => void} */ let reject = () => {};
       const promise = new Promise(/** @param {(value?: void) => void} yes */ (yes, no) => { resolve = yes; reject = no; });
       pending = { promise, reject };
       transition("starting");
-      if (current !== runId || /** @type {string} */ (state) !== "starting") return promise;
+      if (operation !== operationId || state !== "starting") return promise;
+      const begin = () => {
+        if (operation !== operationId) return;
+        try {
+          if (!synth) {
+            synth = createSynth(host.WebAudioTinySynth, settings); synth.prewarm();
+            audio().addEventListener("statechange", contextChanged);
+          }
+          // The public engine resume happens synchronously in the user's gesture.
+          ++resumeRequests;
+          const resumed = synth.resume();
+          Promise.resolve(resumed).then(() => {
+            --resumeRequests;
+            if (operation !== operationId || state !== "starting") {
+              if (holdSuspension && !pending) Promise.resolve(audio().suspend()).catch(fail);
+              return;
+            }
+            try {
+              synth.loadMIDI(midi); synth.setLoop(1);
+              synth.setLoopEnd(synth.getPlayStatus().maxTick); synth.playMIDI();
+              origin = number(synth.getPlayStatus().startTime); nextPass = 0;
+              latencySeconds = estimateLatency(); ++latencyRevision;
+              pending = null; transition(audio().state === "running" ? "playing" : "paused");
+              boundaries(current); resolve();
+            } catch (cause) { pending = null; reject(fail(cause)); }
+          }, (cause) => {
+            --resumeRequests;
+            if (operation !== operationId) return;
+            pending = null; reject(fail(cause));
+          });
+        } catch (cause) { pending = null; reject(fail(cause)); }
+      };
+      if (pausing) pausing.then(begin, cause => { if (operation === operationId) { pending = null; reject(fail(cause)); } });
+      else begin();
+      return promise;
+    },
+    pause() {
+      if (pausing) {
+        // A newer pause also cancels a resume/play queued behind the current suspension.
+        if (pending) { ++operationId; holdSuspension = true; abortPending(); transition(state === "starting" ? "stopped" : "paused"); }
+        return pausing;
+      }
+      if (state !== "playing" && state !== "starting" && !(state === "paused" && pending)) return Promise.resolve();
+      holdSuspension = true;
+      const wasStarting = state === "starting", operation = ++operationId;
+      abortPending(); host.clearTimeout(timer); timer = 0;
+      // Install the promise before notification, so reentrant resume waits for suspension.
+      /** @type {() => void} */ let resolve = () => {};
+      /** @type {(cause: Error) => void} */ let reject = () => {};
+      const promise = new Promise(/** @param {(value?: void) => void} yes */ (yes, no) => { resolve = yes; reject = no; });
+      pausing = promise;
       try {
-        if (!synth) { synth = createSynth(host.WebAudioTinySynth, settings); synth.prewarm(); }
-        // Invoke resume synchronously in the user's gesture, before any await/microtask.
-        const resumed = audio().resume();
-        Promise.resolve(resumed).then(() => {
-          if (current !== runId || state !== "starting") return;
-          try {
-            synth.loadMIDI(midi); synth.setLoop(1);
-            synth.setLoopEnd(synth.getPlayStatus().maxTick); synth.playMIDI();
-            pending = null; transition("playing"); boundaries(current); resolve();
-          } catch (cause) { pending = null; reject(fail(cause)); }
-        }, (cause) => {
-          if (current !== runId || state !== "starting") return;
-          pending = null; reject(fail(cause));
+        const suspended = synth ? audio().suspend() : Promise.resolve();
+        transition(wasStarting ? "stopped" : "paused");
+        Promise.resolve(suspended).then(() => { if (pausing === promise) pausing = null; resolve(); }, cause => {
+          if (pausing === promise) pausing = null;
+          reject(operation === operationId ? fail(cause) : cause);
         });
-      } catch (cause) { pending = null; reject(fail(cause)); }
+      } catch (cause) { pausing = null; reject(fail(cause)); }
+      return promise;
+    },
+    resume() {
+      if (state !== "paused") return api.play();
+      if (pending) return pending.promise;
+      holdSuspension = false;
+      const operation = ++operationId;
+      /** @type {() => void} */ let resolve = () => {};
+      /** @type {(cause: Error) => void} */ let reject = () => {};
+      const promise = new Promise(/** @param {(value?: void) => void} yes */ (yes, no) => { resolve = yes; reject = no; });
+      pending = { promise, reject };
+      const begin = () => {
+        if (operation !== operationId) return;
+        try {
+          // No loadMIDI, playMIDI, prewarm, seek or voice construction on resume.
+          ++resumeRequests;
+          Promise.resolve(synth.resume()).then(() => {
+            --resumeRequests;
+            if (operation !== operationId) {
+              if (holdSuspension && !pending) Promise.resolve(audio().suspend()).catch(fail);
+              return;
+            }
+            refreshLatency();
+            if (operation !== operationId) return;
+            pending = null;
+            transition(audio().state === "running" ? "playing" : "paused"); syncBoundary(); resolve();
+          }, cause => { --resumeRequests; if (operation === operationId) { pending = null; reject(fail(cause)); } });
+        } catch (cause) { pending = null; reject(fail(cause)); }
+      };
+      if (pausing) pausing.then(begin, cause => { if (operation === operationId) { pending = null; reject(fail(cause)); } });
+      else begin();
       return promise;
     },
     stop() {
-      if (state !== "starting" && state !== "playing") return;
-      ++runId; cancelTimers();
-      if (pending) {
-        const abort = new Error("player: start cancelled"); abort.name = "AbortError";
-        pending.reject(abort); pending = null;
-      }
+      if (state !== "starting" && state !== "playing" && state !== "paused") return;
+      holdSuspension = false;
+      ++runId; ++operationId; cancelTimers(); abortPending(); origin = null;
       try { synth?.stopMIDI(); } catch (cause) { fail(cause); return; }
       transition("stopped");
     },

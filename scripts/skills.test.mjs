@@ -370,14 +370,18 @@ describe("the skills' helper scripts", () => {
     assert.throws(() => tokenUriFromCall(""), /empty input/);
   });
 
-  test("split_page: complete data plus NFT-supplied art rebuild the reference preview", () => {
+  test("split_page: complete data plus NFT-supplied art rebuild an isolated preview", () => {
     const page = readFileSync(join(ROOT, "examples/beast_consumer/fixtures/animation.html"));
     const image = readFileSync(join(ROOT, "examples/beast_consumer/fixtures/image.svg"));
     const blocks = splitPage(page);
     assert.deepEqual(Object.keys(blocks), ["settings", "midi"]);
     const midi = file(dir, "midi.b64", blocks.midi + "\n");
     const settings = settingsFromText("settings.txt", blocks.settings + "\n");
-    assert.ok(buildPreview({ midiArg: midi, settings, svg: image }).html.equals(page));
+    const preview = buildPreview({ midiArg: midi, settings, svg: image }).html;
+    // Metadata extraction conveys bytes, never the NFT renderer's inline-art trust decision.
+    assert.ok(preview.equals(Buffer.from(compositionHtml({ mem: '"name":"Preview"', svg: image.toString(), d: dFragment(Buffer.from(blocks.midi, "base64"), settings).d }))));
+    assert.ok(!preview.toString().includes('data-trusted-art="inline-svg"'));
+    assert.ok(page.toString().includes('data-trusted-art="inline-svg"'));
     assert.throws(() => splitPage(Buffer.from("<html></html>")), /found 0/);
   });
 

@@ -2,6 +2,12 @@
 
 The unreleased 0.5.0 build combines the unchanged TinySynth engine and headless API in one gzip fragment. The original packaging capture compares combined head `f1ee9c5df6cb73a84fcb42f627b9503e26678dab` with the recoverable split-fragment head `4a76614193d87f045230693fe972bbd5ac457386`. [Results and bindings](measurements/issue59.json) record the tool binaries, source/input/artifact hashes, complete case inventory and repeated captures from 2026-10-07. Prerequisite #57 remains open at `32f776185370ed519e1f14f94a0975a843069702`; rebase and revalidate against its final merged state before release. No declaration, deployment or release occurred.
 
+## Unissued 0.6.0 pause candidate
+
+The #62 draft builds on #61's reviewed 0.5.0 artifacts and uses the explicitly provisional engine build described in [vendor provenance](../tests/vendor/README.md). Its current manifest records a 47,424-byte exact engine and 10,810-byte public API wrapper, combined 58,237 bytes and 18,737 gzipped bytes. The player HTML fragment is 25,389 bytes and its returned segment 45,136 bytes /1,459 serialized felts; the shared loader remains 8,432 returned bytes /275 felts. Total fixed returns are 53,568 bytes. These candidate sizes do not represent a published or declared class.
+
+The matched production-shaped gas captures above remain historical 0.5.0 evidence; they were not rerun as a #62 architecture benchmark. Routine current Cairo tests cover library calls, full metadata composition, direct/runtime byte equality and gas probe paths. A final upstream post-merge engine pin requires regenerating and checking these candidate artifacts again.
+
 ## Production-shaped comparison
 
 These tables are the 2026-10-07 frozen packaging experiment, bound to the revisions above. The namespace review fixes change browser code bytes; the [review refresh](#review-refresh) records their fresh production capture separately.

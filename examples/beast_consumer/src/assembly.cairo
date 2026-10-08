@@ -22,6 +22,7 @@ pub fn token_uri(
     midi: ByteArray,
     settings: TinySynthSettings,
     fixture: ByteArray,
+    trusted_art: bool,
 ) -> ByteArray {
     let mut image_value = bytes_base64_encode(svg);
     image_value.append_byte('"');
@@ -55,7 +56,11 @@ pub fn token_uri(
     }
     align_to_word(ref uri);
     uri.append(@synth.player_segment());
-    uri.append(@owned_assets::body_segment());
+    if trusted_art {
+        uri.append(@owned_assets::trusted_body_segment());
+    } else {
+        uri.append(@owned_assets::body_segment());
+    }
     // First HTML layer reuses the metadata image attribute. Prefix is 93 raw bytes so its
     // encoded length is word-aligned; the suffix closes the element before external whitespace.
     let mut inner: ByteArray =

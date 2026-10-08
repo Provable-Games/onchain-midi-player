@@ -172,6 +172,7 @@ pub mod BeastLikeNft {
                 sound::token_midi(token_id),
                 sound::token_settings(token_id, tier),
                 "",
+                true // Only this contract's trusted renderer is eligible for inline SVG.
             )
         }
 

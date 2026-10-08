@@ -16,7 +16,17 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ENGINE_PIN = { ref: "31fb18d", commit: "31fb18d8e04125519776773042da0d5b2db591a9", sha256: "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74", noticeSha256: "c9c18d9103a8759d3d8048dd5847044c6d779fdb5b06e8d359af6a79b29dd914" };
+// PROVISIONAL: local build of source-only upstream draft dependency; repin to its post-merge CI build before marking #62 ready.
+export const ENGINE_PIN = { ref: "dev-748d777", commit: "748d777ae895e9e07cc84b13012c0fdb586b5c3f", sha256: "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65", noticeSha256: "9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708" };
+export const ENGINE_BUILD = {
+  provisional: true,
+  sourceCommit: ENGINE_PIN.commit,
+  sourceSha256: "8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7",
+  recipe: "node scripts/build.js <output-dir>",
+  recipeSha256: "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
+  packageLockSha256: "67402d41acd7d49ed3c1a1f689e7f91a81bff1b7dc1727b355d1d3b3dec4197d",
+  terser: "5.51.2"
+};
 
 export const ENGINE_COMMIT = ENGINE_PIN.commit;
 export const ENGINE_SHA256 = ENGINE_PIN.sha256;
