@@ -1156,5 +1156,226 @@
       "9": 53969010,
       "279": 55997370
     }
+  },
+  "comparison_combined": {
+    "head": "f1ee9c5df6cb73a84fcb42f627b9503e26678dab",
+    "scope": "Frozen 2026-10-07 packaging captures; subsequent review fixes are recorded separately below."
+  },
+  "review_refresh": {
+    "date": "2026-10-08",
+    "parent_head": "f1ee9c5df6cb73a84fcb42f627b9503e26678dab",
+    "scope": "HTML-namespace loader/data fixes; source bytes/hashes changed and captures are fresh. Frozen eight-case composition/alignment and browser timing tables are not relabeled as current.",
+    "command": "cd examples/beast_consumer && snforge test --release --no-optimization --tracked-resource sierra-gas --gas-report gas_t4_direct_splicing",
+    "toolchain": "Same resolved binary hashes, release/default profile and Sierra-gas accounting as toolchain above.",
+    "payload": {
+      "version": "0.5.0",
+      "input": {
+        "svg_bytes": 22733,
+        "midi_bytes": 3716,
+        "settings_bytes": 334
+      },
+      "full_token_uri_chars": 166417,
+      "fixed279": {
+        "gunzip": {
+          "source_sha256": "9077d45fe8ad01be4379f4e4a7eaabcc0318aa429ef256160be2e194ae888052",
+          "source_len": 4524,
+          "raw_sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+          "raw_len": 4743,
+          "returned_sha256": "869be0afd09b9b8416b1f306a166a518e48ce4397d4d01b82ef004e934f6e7d7",
+          "returned_len": 8432,
+          "returned_felts": 275
+        },
+        "player": {
+          "source_sha256": "dc864bb005162fc9a717af37f49a1943fee91c9f311dbc52a24c04c37c420605",
+          "source_len": 55739,
+          "raw_sha256": "3bde52b0cec938a0d633c441cc9468ff03202561f2189c7444e67674b83b792b",
+          "raw_len": 24273,
+          "returned_sha256": "e76a86f89eb6bfb10d39c8cb5d2fbd2946caa275b6b29d1d97f0745fea01a1db",
+          "returned_len": 43152,
+          "returned_felts": 1395,
+          "embedded_engine": {
+            "offset": 0,
+            "length": 47212,
+            "sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74"
+          },
+          "wrapper": {
+            "offset": 47215,
+            "length": 8524,
+            "sha256": "e660a952eacba7d1281d73e633eaa92b069d7f11bf1b73d28951315e39a33856"
+          },
+          "gzip_sha256": "d7b5684138caa370c3a0a03056902bf85bd915e7f2e4b6c0db9203ed9038cd92",
+          "gzip_len": 18008,
+          "gzip_base64_len": 24012
+        }
+      },
+      "fixed9": {
+        "gunzip": {
+          "source_sha256": "9077d45fe8ad01be4379f4e4a7eaabcc0318aa429ef256160be2e194ae888052",
+          "source_len": 4524,
+          "raw_sha256": "dcab490c454634964ba81eea309c6cba38cc3bef225cacd6ee891ef93cc650f1",
+          "raw_len": 4662,
+          "returned_sha256": "8471d937c79178dc903e821d172be4fb2d6938767a1e7a262a1e4feef1725446",
+          "returned_len": 8288,
+          "returned_felts": 270
+        },
+        "player": {
+          "source_sha256": "dc864bb005162fc9a717af37f49a1943fee91c9f311dbc52a24c04c37c420605",
+          "source_len": 55739,
+          "raw_sha256": "9303872a1d99e9a7b179e5e4c3658defe6e5de92548278879dd46e834b438a6f",
+          "raw_len": 24228,
+          "returned_sha256": "dc57d726dc1f8882f84c4671c50b7732b55ca32464cccf7d852135f7252c4ee0",
+          "returned_len": 43072,
+          "returned_felts": 1392,
+          "embedded_engine": {
+            "offset": 0,
+            "length": 47212,
+            "sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74"
+          },
+          "wrapper": {
+            "offset": 47215,
+            "length": 8524,
+            "sha256": "e660a952eacba7d1281d73e633eaa92b069d7f11bf1b73d28951315e39a33856"
+          },
+          "gzip_sha256": "d7b5684138caa370c3a0a03056902bf85bd915e7f2e4b6c0db9203ed9038cd92",
+          "gzip_len": 18008,
+          "gzip_base64_len": 24012
+        }
+      },
+      "current_class": {
+        "sierra_file_bytes": 973661,
+        "sierra_compact_json_bytes": 973661,
+        "sierra_felts": 18589,
+        "casm_file_bytes": 780098,
+        "casm_compact_json_bytes": 780098,
+        "casm_bytecode_felts": 29730
+      },
+      "baseline_class": {
+        "sierra_file_bytes": 983489,
+        "sierra_compact_json_bytes": 983489,
+        "sierra_felts": 18764,
+        "casm_file_bytes": 787215,
+        "casm_compact_json_bytes": 787215,
+        "casm_bytecode_felts": 29962
+      }
+    },
+    "captures": [
+      {
+        "path": "/tmp/issue61-review-beast-gas-1.txt",
+        "bytes": 2512,
+        "sha256": "1dde303b868ca7d7f58bd74492b585ffe95503335e9b32e0a5e3d160c9f463ce",
+        "selector_l2_gas": 413511218,
+        "test_wide_l2_gas": 428752938
+      },
+      {
+        "path": "/tmp/issue61-review-beast-gas-2.txt",
+        "bytes": 2513,
+        "sha256": "9a134760ca178d4762fe5240d7537115bf3553d938c9e0be1210d2b31ab2fb66",
+        "selector_l2_gas": 413511218,
+        "test_wide_l2_gas": 428752938
+      }
+    ],
+    "source_bindings": {
+      "player/gunzip.js": {
+        "bytes": 13156,
+        "sha256": "17945521b35cd5cf1e454518ac8d849e47ea8bcfd9d796eb7cfc685ab9bb43f1"
+      },
+      "player/player.js": {
+        "bytes": 15481,
+        "sha256": "67d9501e51b5c216f6a3e13b82e44303d89aa125ce2eeea092fe4f21dee53adb"
+      },
+      "scripts/build_segments.mjs": {
+        "bytes": 9210,
+        "sha256": "cb8e78555afc0eb55540ba9cfeb8a2fe42b7714dbcc1bd8da9d32fad03a7c529"
+      },
+      "scripts/segments.mjs": {
+        "bytes": 13559,
+        "sha256": "bf2cea9dcf84885a9f84b5642f7cb4ef8e538443ee7651580dc79f7a2a076959"
+      },
+      "scripts/library_versions.json": {
+        "bytes": 2595,
+        "sha256": "d52c756d9a1d22ea1eab427bf67238ea6983a50d302f093e2cf30a2fe4d85d68"
+      },
+      "src/segment_data.cairo": {
+        "bytes": 76477,
+        "sha256": "45585189793e943ab8da93af0ff3df7b3494218226c22ee89db3dfb127ec56d2"
+      },
+      "examples/beast_consumer/src/assembly.cairo": {
+        "bytes": 2810,
+        "sha256": "23ad05a7fe4329fd6133aae388a4c2316d86d32f4a043f070e265a31df26b322"
+      },
+      "examples/beast_consumer/tests/test_gas.cairo": {
+        "bytes": 544,
+        "sha256": "ee42122f0fed5a91c899e4cc0d7b3db4506eea0ad0b9fda4449bb71cc9b476e5"
+      },
+      "examples/beast_consumer/tests/golden.cairo": {
+        "bytes": 545236,
+        "sha256": "0c7bd5da0da594e443db94889fb868ea42beb0ae41ea7c011956af915901241f"
+      },
+      "examples/beast_consumer/tests/test_token_uri.cairo": {
+        "bytes": 5566,
+        "sha256": "3874b7898724773535b35ddfdc9a2e9e3b7411bf91574776256c703c769fcc07"
+      },
+      "examples/beast_consumer/scripts/reference.mjs": {
+        "bytes": 12970,
+        "sha256": "82ba06eb7ed0143d19a24da877c8627af874bb6f8e701c5c2f3c52470ad7877a"
+      },
+      "scripts/html_blocks.mjs": {
+        "bytes": 2286,
+        "sha256": "6f0d4cd20a939e724db365d279eac17706f8f6802c37e9d4396299849a1714bb"
+      },
+      "scripts/page_check.mjs": {
+        "bytes": 13982,
+        "sha256": "83892d9157ed6222aa7bed4bc2e4d8130056263b3521b250eaa88be8928d61a6"
+      }
+    },
+    "production_artifacts": {
+      "target/release/onchain_midi_player_TinySynth.contract_class.json": {
+        "bytes": 973661,
+        "sha256": "f06a2337d9084f8ddbdd2a0142f2eb0876bac7e5475bf17fd4c9c732de0d0fca"
+      },
+      "target/release/onchain_midi_player_TinySynth.compiled_contract_class.json": {
+        "bytes": 780098,
+        "sha256": "1a1de65482959434b59911316bea2be2f0d9aa1eb73f65dc5ef7c104fea077db"
+      },
+      "examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json": {
+        "bytes": 746224,
+        "sha256": "bba5147943d628d232f72c4fab5237c50c76789cf6ae96d9a05ab167087c9f7d"
+      }
+    },
+    "limits": "Beast selector and payload/library class refreshed. Historical eight-case temporary lab, minimum9 gas and audio-render/drift probes not repeated for initialization-only fixes.",
+    "validation": {
+      "js": {
+        "root": 332,
+        "beast": 29,
+        "stress": 13
+      },
+      "cairo": {
+        "root_passed": 267,
+        "beast_passed": 27,
+        "beast_ignored": 1,
+        "stress_passed": 10,
+        "stress_ignored": 20
+      },
+      "composed_browser_checks": {
+        "chromium": {
+          "status": "passed",
+          "path": "/tmp/issue61-review-page-chromium.txt",
+          "bytes": 3521,
+          "sha256": "dab2d0297be6e61a30699db6d7ca4f3a32e8c54f6e89416dcbe1e35e25518a86"
+        },
+        "firefox": {
+          "status": "passed",
+          "path": "/tmp/issue61-review-page-firefox-2.txt",
+          "bytes": 3177,
+          "sha256": "88e1ee7d244fa2f6628ef5539fc9a27e4e0d2f4d1feb928a853fc823d2498be8"
+        },
+        "webkit": {
+          "status": "passed",
+          "path": "/tmp/issue61-review-page-webkit.txt",
+          "bytes": 3045,
+          "sha256": "4701b96a0222bd676470e7c1eaf9c6a09a1bbe8d8790eb5ad7db380fda5868ec"
+        }
+      }
+    }
   }
 }

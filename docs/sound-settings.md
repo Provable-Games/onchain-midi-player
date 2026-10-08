@@ -20,7 +20,7 @@ The consumer passes a typed `TinySynthSettings` value with every `midi_segment` 
 - **Size.** `SETTINGS` is base64-encoded at call time along with the MIDI.
   - It is 16 bytes with the defaults (`1,1,30,40,64,0,0`), plus about 6 bytes per timbre, 50 bytes per operator, 8 to 26 more per filter (a typical one 15 to 18), and 2 to 6 bytes per wave sample or harmonic (about 4.5 per sample at full scale).
   - The three Beast reference sounds (a 2-operator lead, kick and snare) come to 334 bytes.
-  - There is no byte cap. Each 1,000 bytes costs about 14.5M L2 gas through `midi_segment` (see [Gas and limits](gas.md#the-size-of-settings)).
+  - There is no byte cap. Larger settings add validation, serialization and encoding work to `midi_segment` (see [Gas and limits](gas.md#the-size-of-settings)).
 
 ## The `SETTINGS` format
 
@@ -66,16 +66,16 @@ The crate exports:
 - **Noise tables** are set by their step rate: a table of `N` samples steps `N` times per cycle, so use `ratio` 0 and `offset_hz` = steps per second / `N`. The reference snare and hat step the short LFSR at 20 and 40 kHz (`offset_hz` 215.0538 and 430.1075 Hz), and the long-LFSR snare at 48 kHz (1.4649 Hz).
 - **Retuning a noise table tuned at the 440 Hz basis.** TinySynth's built-in noise, and a table written straight into the engine's internal `noiseBuf`, play one sample per frame at `playbackRate = f / 440`, so their step rate depends on the sample rate `R` they were tuned at: `R × f / 440`. As a `Samples` wave, the same table steps at `f × N` at every sample rate. To keep the sound, set `f_new = f_old × R / (440 × N)`.
 
-**Cost.** Short chip waves are cheap; long noise tables are not. `midi_segment` through the library call, with a 3,716-byte score:
+**Size and cost.** Measure current gas with the [settings-size guidance](gas.md#the-size-of-settings). These serialized sizes remain useful fixture inputs; historical gas figures are not current replacement-architecture measurements:
 
-| Settings (fixtures in [`scripts/settings_fixtures.mjs`](../scripts/settings_fixtures.mjs)) | `SETTINGS` bytes | `midi_segment` |
-| --- | --- | --- |
-| The 3 Beast reference sounds, no custom wave (`beast_reference`) | 334 | 60.7M |
-| One wave: the reference lead on the 64-sample stepped triangle (`one_wave`) | 365 | 61.3M |
-| The six short reference waves on eight timbres (`reference_waves`) | 1,356 | 77.2M |
-| The long LFSR, 32,767 samples, on one drum timbre (`longLfsr`), net of the 277.9M that builds the table | 147,532 | 2,192.8M |
+| Settings (fixtures in [`scripts/settings_fixtures.mjs`](../scripts/settings_fixtures.mjs)) | `SETTINGS` bytes |
+| --- | ---: |
+| The 3 Beast reference sounds, no custom wave (`beast_reference`) | 334 |
+| One wave: the reference lead on the 64-sample stepped triangle (`one_wave`) | 365 |
+| The six short reference waves on eight timbres (`reference_waves`) | 1,356 |
+| The long LFSR, 32,767 samples, on one drum timbre (`longLfsr`) | 147,532 |
 
-The long LFSR adds about 2.1B to a `token_uri`, which fits Pathfinder's 10B call cap but not every RPC provider's (see [Node limits](gas.md#node-limits)). `WhiteNoise` needs no table and is the cheap alternative.
+Long sample tables require substantial provider construction/return and data encoding work. Prefer short tables or `WhiteNoise` when they fit the sound, and check the actual [node limits](gas.md#node-limits) for large outputs.
 
 **In Cairo.** A 12.5% pulse lead and a harmonic organ:
 
@@ -108,7 +108,7 @@ An audio-output operator (`route` 0) can carry a fixed filter, `filter: Option::
 - **`q`:** a conventional linear Q, fixed point: 0.7071 (`7_071`) gives a flat (Butterworth) low- or high-pass, and higher values a resonant peak at the cutoff. A band-pass's bandwidth is the centre frequency ÷ `q`.
 - **Validation:** an audio output, and a cutoff and a Q above 0 (`'TS: filter cutoff out of range'`, `'TS: filter q out of range'`). Any `u32` value above 0 is accepted.
 - **The Nyquist clamp:** the engine clamps the computed cutoff to 0.45 × the sample rate (21,600 Hz at 48 kHz, 19,845 Hz at 44.1 kHz), so a higher cutoff, or a key-tracked one on high notes, plays as that frequency.
-- **Cost:** a filter adds 8 to 26 bytes of `SETTINGS`. Six filtered voices (the `filters` fixture, 465 bytes) cost 62.4M through `midi_segment` with a 3,716-byte score, against 60.7M for the reference sounds.
+- **Cost:** a filter adds 8 to 26 bytes of `SETTINGS`. Six filtered voices serialize to 465 bytes (the `filters` fixture); measure the actual score/settings through the current class.
 - **Hi-hats:** metallic noise through a 3 kHz high-pass gives a chip hi-hat, as in the `filters` fixture.
 
 **In Cairo.** A closed chip hi-hat and a key-tracked sawtooth lead:

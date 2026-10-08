@@ -163,9 +163,10 @@ export function fixedFragment(name) {
 }
 export function settingsText(settings) { return encodeSettings(validateSettings(settings)); }
 export function dFragment(midi, settings) {
-  const body = SETTINGS_OPEN + settingsText(settings) + MIDI_OPEN + b64(midi) + DATA_CLOSE;
+  const text = settingsText(settings);
+  const body = SETTINGS_OPEN + text + MIDI_OPEN + b64(midi) + DATA_CLOSE;
   const d = alignedFragment(body);
-  return { d, pad: blen(d) - blen(body) };
+  return { d, pad: blen(d) - blen(body), settings_len: blen(text) };
 }
 export const midiSegment = (midi, settings) => segmentFor(dFragment(midi, settings).d);
 /** Immutable per-version records: a recorded artifact change requires a version bump. */

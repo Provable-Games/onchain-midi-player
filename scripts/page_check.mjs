@@ -7,6 +7,7 @@ import { compositionHtml } from "./composition.mjs";
 import { FIXTURES,fixtureCase } from "./fixture_pages.mjs";
 import { fixedFragment,alignedFragment,b64 } from "./segments.mjs";
 import { gzipFragment,gzipSource } from "./build_segments.mjs";
+import { splitPage } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/split_page.mjs";
 import { scriptBlocks } from "./html_blocks.mjs";
 import { verifyLibraries } from "./verify_engine.mjs";
 const run=await openBrowser(),measurements=[];
@@ -36,6 +37,34 @@ try {
    if(mode==="plaintext"){assert.deepEqual(ids,[]);assert.throws(()=>verifyLibraries(html),/found 0/);}
    else{verifyLibraries(html);await o.page.evaluate(async()=>{await OnchainLibraries.ready;await OnchainMidiPlayer.ready;});}
    assert.deepEqual(await o.errors(),[]);console.log(`PASS HTML5 extraction/browser agreement ${mode}`);
+ }finally{await o.context.close();}}
+ // SVG gzip decoys are inert; HTML libraries inside foreignObject remain loader candidates.
+ {const o=await run.page();try{
+   const extra=alignedFragment(gzipFragment('foreign-object-library',gzipSource('window.ForeignObjectRuns=(window.ForeignObjectRuns||0)+1')));
+   const html=composed().replace('</body>','<svg>'+fixedFragment('player')+'<foreignObject>'+extra+'</foreignObject></svg></body>');
+   verifyLibraries(html);await o.page.goto(dataUrl(html));await waitReady(o.page);
+   assert.equal(await o.page.evaluate(()=>window.ForeignObjectRuns),1);
+   assert.equal(await o.page.evaluate(()=>window.DependentFixture),'fixture:dependent');
+   assert.deepEqual(await o.errors(),[]);console.log('PASS SVG gzip decoy ignored; foreignObject HTML library executes once');
+ }finally{await o.context.close();}}
+ // Data-ID collisions fail offchain and at runtime; template contents do not enter the document.
+ for(const decoy of ['<div id="onchain-midi-data"></div>','<svg><g id="onchain-midi-data"/></svg>','<template><div id="onchain-midi-data"></div></template>']){
+   const o=await run.page();try{const html=composed().replace('</body>',decoy+'</body>');
+     if(decoy.startsWith('<template>'))splitPage(Buffer.from(html));else assert.throws(()=>splitPage(Buffer.from(html)),/found 2/);
+     await o.page.goto(dataUrl(html));
+     const result=await o.page.evaluate(async()=>{await OnchainLibraries.ready;try{await OnchainMidiPlayer.ready;return 'ready';}catch(e){return e.message;}});
+     if(decoy.startsWith('<template>'))assert.equal(result,'ready');else assert.match(result,/onchain-midi-data.*found 2/);
+     assert.equal(await o.page.evaluate(()=>window.__check.created),0);
+     console.log('PASS document data-ID selection '+(decoy.startsWith('<template>')?'inert template':'collision'));
+   }finally{await o.context.close();}
+ }
+ // A unique SVG script is not a player data block, matching the offchain extractor.
+ {const o=await run.page();try{let html=composed();const block=scriptBlocks(html).find(b=>b.attrs.id==='onchain-midi-data');
+   html=html.slice(0,block.start)+'<svg>'+block.html+'</svg>'+html.slice(block.end);
+   assert.throws(()=>splitPage(Buffer.from(html)),/complete HTML text\/plain script/);
+   await o.page.goto(dataUrl(html));const result=await o.page.evaluate(async()=>{await OnchainLibraries.ready;try{await OnchainMidiPlayer.ready;return 'ready';}catch(e){return e.message;}});
+   assert.match(result,/onchain-midi-data.*found 1/);assert.equal(await o.page.evaluate(()=>window.__check.created),0);
+   console.log('PASS unique SVG data rejected by extractor and player');
  }finally{await o.context.close();}}
  // The NFT-owned button follows a supplied SVG anchor, including object-fit scaling.
  {const o=await run.page();try{await o.page.setViewportSize({width:500,height:700});const c=fixtureCase("beast_140bpm"),svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350" data-play-anchor="235 202 32"><rect width="250" height="350" fill="black"/></svg>';await o.page.goto(dataUrl(composed({...c,svg})));await waitReady(o.page);const box=await o.page.locator('#play').boundingBox();assert.deepEqual(box,{x:394,y:328,width:64,height:64});assert.deepEqual(await o.errors(),[]);console.log("PASS NFT button anchor and scaled touch target");}finally{await o.context.close();}}
