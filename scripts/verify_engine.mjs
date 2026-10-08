@@ -16,18 +16,27 @@ export function pageFromInput(input) {
   if(text.startsWith("data:"))throw new Error("unsupported data URI");return text;
 }
 const digest=(bytes)=>({sha256:sha256(bytes),length:Buffer.byteLength(bytes)});
-export function verifyEngine(html) {
-  const block=requiredBlock(html,"onchain-midi-engine","text/javascript+gzip");
+function inflatePlayer(html) {
+  const block=requiredBlock(html,"onchain-midi-player","text/javascript+gzip");
   const prefix="data:application/gzip;base64,";
-  if(!block.attrs.src?.startsWith(prefix))throw new Error("onchain-midi-engine: wrong gzip data URI");
-  const gzip=strictB64Decode(block.attrs.src.slice(prefix.length)),engine=gunzipSync(gzip);
-  new TextDecoder("utf-8",{fatal:true}).decode(engine);
-  return {gzip:digest(gzip),engine:digest(engine)};
+  if(!block.attrs.src?.startsWith(prefix))throw new Error("onchain-midi-player: wrong gzip data URI");
+  const gzip=strictB64Decode(block.attrs.src.slice(prefix.length)),source=gunzipSync(gzip);
+  new TextDecoder("utf-8",{fatal:true}).decode(source);
+  return {gzip,source};
+}
+export function verifyEngine(html,version=VERSION) {
+  const record=JSON.parse(readFileSync(MANIFEST_PATH,"utf8"))[version];
+  if(!record)throw new Error(`no segment manifest for ${version}`);
+  const {gzip,source}=inflatePlayer(html),range=record.artifacts.player.embedded_engine;
+  const engine=source.subarray(range.offset,range.offset+range.length);
+  if(engine.length!==range.length||sha256(engine)!==range.sha256||range.sha256!==record.script_sha256)
+    throw new Error("onchain-midi-player: embedded engine differs from pinned script_sha256");
+  return {gzip:digest(gzip),engine:{...digest(engine),offset:range.offset}};
 }
 export function verifyLibraries(html,version=VERSION) {
   const record=JSON.parse(readFileSync(MANIFEST_PATH,"utf8"))[version];if(!record)throw new Error(`no segment manifest for ${version}`);
   const verified={};
-  for(const [name,id] of [["gunzip","onchain-gunzip"],["engine","onchain-midi-engine"],["player","onchain-midi-player"]]){
+  for(const [name,id] of [["gunzip","onchain-gunzip"],["player","onchain-midi-player"]]){
     const expected=record.artifacts[name],block=requiredBlock(html,id,name==="gunzip"?undefined:"text/javascript+gzip");
     const raw=fixedFragment(name),reference=requiredBlock(raw,id);
     if(block.html!==reference.html)throw new Error(`#${id}: fragment wrapper or library payload differs from ${version}`);
@@ -44,7 +53,7 @@ export function verifyLibraries(html,version=VERSION) {
     if(sha256(source)!==expected.source_sha256||Buffer.byteLength(source)!==expected.source_len)throw new Error(`#${id}: source differs from manifest`);
     verified[name]={id,...digest(source),...(gzip?{gzip:digest(gzip)}:{})};
   }
-  return {version,libraries:verified,additionalScripts:scriptBlocks(html).filter(b=>!Object.values(verified).some(v=>v.id===b.attrs.id)).map(b=>({id:b.attrs.id||null,type:b.attrs.type||"classic"})),
+  return {version,libraries:verified,engine:verifyEngine(html,version).engine,additionalScripts:scriptBlocks(html).filter(b=>!Object.values(verified).some(v=>v.id===b.attrs.id)).map(b=>({id:b.attrs.id||null,type:b.attrs.type||"classic"})),
     scope:"Verified library identities only; consumer-owned scripts, layout and art are not certified."};
 }
 export function normalizeSha256(value){const s=value.trim().replace(/^0x/i,"").toLowerCase();if(!/^[0-9a-f]{1,64}$/.test(s))throw new Error("not a SHA-256 in hex");return s.padStart(64,"0");}
@@ -52,6 +61,6 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const args=process.argv.slice(2),at=args.indexOf("--expect"),expect=at<0?null:normalizeSha256(args.splice(at,2)[1]||"");
  if(args.length!==1)throw new Error("usage: verify_engine.mjs <file | -> [--expect sha256]");
  const html=pageFromInput(readFileSync(args[0]==="-"?0:args[0])),result=verifyLibraries(html);
- if(expect&&result.libraries.engine.sha256!==expect)throw new Error("engine SHA-256 differs from --expect");
+ if(expect&&result.engine.sha256!==expect)throw new Error("engine SHA-256 differs from --expect");
  console.log(JSON.stringify(result,null,2));
 }

@@ -3,7 +3,7 @@
 // Optional headless check: renders the Beast reference timbres with the real TinySynth in a headless
 // browser (Chromium, Firefox or WebKit), through the player's own decodeSettings + createSynth, into
 // an OfflineAudioContext, and
-// measures the audio. The engine is loaded from the standalone engine gzip fragment and shared loader,
+// measures the audio. The engine is loaded from the combined MIDI gzip fragment and shared loader,
 // which inflate the vendored fork build (scripts/engine.mjs) in the browser; the check first confirms
 // that the shim replaced the tag with the engine, byte for byte. Then:
 //
@@ -224,16 +224,18 @@ try {
   const errors = /** @type {string[]} */ ([]);
   page.on("pageerror", (e) => errors.push(String(e)));
   // The engine's gzip tag and the shim, exactly as served by their provider fragments.
-  const tag = fixedFragment("engine");
-  await page.setContent(`<!doctype html><title>render check</title>${fixedFragment("gunzip")}${tag}`);
+  const tag = fixedFragment("player");
+  const html = `<!doctype html><title>render check</title>${fixedFragment("gunzip")}${tag}<script type="text/plain" id="onchain-midi-settings">1,1,30,40,64,0,0</script><script type="text/plain" id="onchain-midi-data">TVRoZAAAAAYAAAABAGBNVHJrAAAADACQPGRggDwAAP8vAA==</script>`;
+  await page.setContent(html);
+  await page.evaluate(async()=>{await window.OnchainLibraries.ready;await window.OnchainMidiPlayer.ready;});
   const loaded = await page.evaluate(() => ({
     tags: document.querySelectorAll('script[type="text/javascript+gzip"]').length,
-    engine: document.getElementById("onchain-midi-engine")?.textContent,
+    engine: document.getElementById("onchain-midi-player")?.textContent,
     defined: typeof (/** @type {any} */ (window).WebAudioTinySynth),
   }));
-  const inflated = loaded.tags === 0 && loaded.engine === engineSource() && loaded.defined === "function";
+  const inflated = loaded.tags === 0 && loaded.engine?.slice(0, engineSource().length) === engineSource() && loaded.defined === "function";
   if (!inflated) failed++;
-  console.log(`${inflated ? "PASS" : "FAIL"}  engine inflated from provider-owned engine/loader segments (${loaded.engine?.length} bytes)`);
+  console.log(`${inflated ? "PASS" : "FAIL"}  engine inflated from combined MIDI and shared loader segments (${loaded.engine?.length} bytes)`);
   await page.addScriptTag({ type: "module", content: playerModule });
   await page.waitForFunction(() => "__player" in window);
 
@@ -311,7 +313,7 @@ try {
   const first = await render(wavesText, song, 1.5);
   const again = await browser.newPage();
   again.on("pageerror", (/** @type {unknown} */ e) => errors.push(String(e)));
-  await again.setContent(`<!doctype html><title>render check</title>${fixedFragment("gunzip")}${tag}`);
+  await again.setContent(html);
   await again.addScriptTag({ type: "module", content: playerModule });
   await again.waitForFunction(() => "__player" in window);
   await again.addScriptTag({ content: RENDER });

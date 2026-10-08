@@ -44,8 +44,6 @@ pub fn naive_token_uri(token_id: u256) -> ByteArray {
     align(ref html, ref length);
     append(ref html, ref length, @golden::gunzip());
     align(ref html, ref length);
-    append(ref html, ref length, @golden::engine());
-    align(ref html, ref length);
     append(ref html, ref length, @golden::player());
     append(ref html, ref length, @golden::body());
     let mut art: ByteArray =

@@ -176,13 +176,23 @@ export function startPlayer(host = window) {
       startTime: number(s?.startTime), audioTime: number(audio()?.currentTime),
       passSeconds: number(score?.seconds), outputLatency: latency(), runId, error };
   };
-  const emit = (/** @type {Set<any>} */ listeners, /** @type {() => any} */ value) => {
-    for (const callback of [...listeners]) { try { callback(value()); } catch (_) {} }
-  };
+  /** @type {{value: import("./api.d.ts").PlayStatus, listeners: ((s: import("./api.d.ts").PlayStatus) => void)[]}[]} */
+  const transitions = [];
+  let notifying = false;
   const transition = (/** @type {import("./api.d.ts").PlayStatus["state"]} */ next) => {
     if (state === next) return;
     state = next;
-    emit(states, snapshot);
+    transitions.push({ value: snapshot(), listeners: [...states] });
+    if (notifying) return;
+    notifying = true;
+    try {
+      while (transitions.length) {
+        const event = /** @type {NonNullable<ReturnType<typeof transitions.shift>>} */ (transitions.shift());
+        for (const callback of event.listeners) {
+          if (states.has(callback)) { try { callback({ ...event.value }); } catch (_) {} }
+        }
+      }
+    } finally { notifying = false; }
   };
   const cancelTimers = () => {
     host.clearTimeout(timer); host.clearInterval(poll); timer = poll = 0;
@@ -230,9 +240,14 @@ export function startPlayer(host = window) {
         if (remaining > 0.001) {
           timer = host.setTimeout(dispatch, Math.min(MAX_TIMER_MS, remaining * 1000)); return;
         }
-        if (initial || remaining > -LATE_SECONDS) emit(passes, () => ({ runId: current,
-          passIndex: index, initial, startTime: start, audibleTime,
-          audioTime: number(ctx.currentTime), outputLatency: lag }));
+        if (initial || remaining > -LATE_SECONDS) {
+          const event = { runId: current, passIndex: index, initial, startTime: start, audibleTime,
+            audioTime: number(ctx.currentTime), outputLatency: lag };
+          for (const callback of [...passes]) {
+            if (current !== runId || state !== "playing") break;
+            if (passes.has(callback)) { try { callback({ ...event }); } catch (_) {} }
+          }
+        }
         sync();
       };
       if (start === null) dispatch();

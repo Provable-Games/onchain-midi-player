@@ -1,26 +1,23 @@
 // @ts-check
-// Conservative HTML script tokenizer: skip comments, raw-text elements, SVG/MathML and template
-// contents. Offchain checks select actual document scripts instead of regex-searching art/data.
+// Offchain HTML5 parsing follows browser foreign-content, raw-text and plaintext rules.
+// Template contents are not document scripts; only HTML script elements can supply our libraries.
+import { parse } from "parse5";
 export function scriptBlocks(html) {
-  const blocks=[]; let at=0; const inert=[];
-  const tags=/<(?:!--[\s\S]*?--\s*|!doctype[^>]*|\/?[A-Za-z][^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*)>/g;
-  while(at<html.length){tags.lastIndex=at;const m=tags.exec(html);if(!m)break;
-    const comment=html.indexOf("<!--",at);
-    if(comment>=0 && comment<=m.index){const end=html.indexOf("-->",comment+4);if(end<0)break;at=end+3;continue;}
-    at=tags.lastIndex;
-    const text=m[0];if(/^<!/i.test(text))continue;
-    const t=/^<(\/?)\s*([\w:-]+)/.exec(text);if(!t)continue;
-    const closing=!!t[1],name=t[2].toLowerCase();
-    if(closing){if(inert[inert.length-1]===name)inert.pop();continue;}
-    if(["template","svg","math"].includes(name)){inert.push(name);continue;}
-    const attrs={};for(const a of text.slice(t[0].length,-1).matchAll(/([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g))attrs[a[1].toLowerCase()]=a[2]??a[3]??a[4]??"";
-    if(["script","style","textarea","title","xmp","iframe","noembed","noframes","noscript"].includes(name)){
-      const end=new RegExp(`<\\/${name}\\s*>`,"ig");end.lastIndex=at;const close=end.exec(html);const contentEnd=close?.index??html.length;
-      if(name==="script"&&!inert.length)blocks.push({attrs,text:html.slice(at,contentEnd),start:m.index,end:close?end.lastIndex:html.length,closed:!!close,html:html.slice(m.index,close?end.lastIndex:html.length)});
-      at=close?end.lastIndex:html.length;
+  const blocks = [];
+  const visit = node => {
+    if (node.tagName === "script" && node.namespaceURI === "http://www.w3.org/1999/xhtml") {
+      const location = node.sourceCodeLocation;
+      if (location?.startTag) {
+        const start = location.startOffset, end = location.endOffset;
+        blocks.push({ attrs: Object.fromEntries(node.attrs.map(a => [a.name, a.value])),
+          text: html.slice(location.startTag.endOffset, location.endTag?.startOffset ?? end),
+          start, end, closed: !!location.endTag, html: html.slice(start, end) });
+      }
     }
-  }
-  return blocks;
+    for (const child of node.childNodes || []) visit(child);
+  };
+  visit(parse(html, { sourceCodeLocationInfo: true, scriptingEnabled: true }));
+  return blocks.sort((a, b) => a.start - b.start);
 }
 export function requiredBlock(html,id,type) {
   const blocks=scriptBlocks(html).filter(b=>b.attrs.id===id);

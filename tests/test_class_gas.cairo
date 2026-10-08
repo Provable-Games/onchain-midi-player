@@ -76,14 +76,6 @@ fn gas_lc_declare() {
 }
 
 #[test]
-fn gas_lc_engine_segment() {
-    assert(
-        class().engine_segment().len() == onchain_midi_player::segment_data::ENGINE_SEGMENT_LEN,
-        'segment',
-    );
-}
-
-#[test]
 fn gas_lc_midi_segment_default_no_midi() {
     let s = valid_default();
     assert(class().midi_segment("", s).len() > 0, 'midi_segment');

@@ -127,7 +127,7 @@ export function licenseText() {
     "implied. See the License for the specific language governing permissions and limitations under the",
     "License.",
     "",
-    `This class (version ${VERSION}) embeds in its engine segment the minified build of commit ${ENGINE_PIN.commit}`,
+    `This class (version ${VERSION}) embeds in its combined player segment the minified build of commit ${ENGINE_PIN.commit}`,
     `of https://github.com/Provable-Games/webaudio-tinysynth (SHA-256 ${ENGINE_PIN.sha256},`,
     "returned by script_sha256()). The NOTICE of that repository follows.",
     "",

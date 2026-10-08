@@ -1,17 +1,43 @@
 {
-  "date": "2026-10-06",
-  "toolchain": {
-    "scarb": "2.20.1",
-    "snforge": "0.64.0",
-    "node": "24.19.0",
-    "resource": "sierra-gas"
-  },
-  "baseline": {
+  "date": "2026-10-07",
+  "version": "0.5.0",
+  "prerequisite": {
     "pr": 57,
     "state": "open/unmerged",
-    "head": "32f776185370ed519e1f14f94a0975a843069702",
-    "full_token_uri_l2_gas": 303820178,
-    "setup_l2_gas": 872340
+    "head": "32f776185370ed519e1f14f94a0975a843069702"
+  },
+  "comparison_baseline": {
+    "head": "4a76614193d87f045230693fe972bbd5ac457386",
+    "packaging": "independently injected engine and API"
+  },
+  "toolchain": {
+    "scarb": "2.20.1 (dd18779a1 2026-08-21)",
+    "cairo": "2.20.0",
+    "sierra": "1.9.3",
+    "casm_compiler_version": "2.20.0 (verified in emitted artifact)",
+    "snforge": "0.64.0",
+    "node": "24.19.0",
+    "profile": "release",
+    "features": "default",
+    "resource": "sierra-gas",
+    "contract_target": "separately compiled via snforge --no-optimization",
+    "binaries": {
+      "scarb": {
+        "path": "/home/ubuntu/.asdf/installs/scarb/2.20.1/bin/scarb",
+        "bytes": 57410376,
+        "sha256": "ab9e550b0e0ee10f524958c95c9f0b27aac476cb5141cad4dba755b233c6ff55"
+      },
+      "snforge": {
+        "path": "/home/ubuntu/.asdf/installs/starknet-foundry/0.64.0/bin/snforge",
+        "bytes": 81856536,
+        "sha256": "e9406081ba0d48f311544c3e0ca306b7054794d0bf8a4621e3a4bf2b26665344"
+      },
+      "node": {
+        "path": "/home/ubuntu/.asdf/installs/nodejs/24.19.0/bin/node",
+        "bytes": 125989464,
+        "sha256": "bc17c508ffeed0ec622934f9b7fa72f8e78da65350e63c3eceb56fa688aa5e12"
+      }
+    }
   },
   "payload": {
     "version": "0.5.0",
@@ -20,7 +46,7 @@
       "midi_bytes": 3716,
       "settings_bytes": 334
     },
-    "full_token_uri_chars": 167905,
+    "full_token_uri_chars": 166417,
     "fixed279": {
       "gunzip": {
         "source_sha256": "67323cdaf555c82fe2f7972b08f983e54094041feb3ab566f7c9b6192195cc75",
@@ -31,29 +57,27 @@
         "returned_len": 8432,
         "returned_felts": 275
       },
-      "engine": {
-        "source_sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74",
-        "source_len": 47212,
-        "raw_sha256": "c1ff91769d9e1913f8e38060352ea8e96cea55808423b732d1cd7d62b0d790d7",
-        "raw_len": 19530,
-        "returned_sha256": "8fb5e2e140f596cbfd3c00ec125e2e9ae47fb54fd8dcbd6c68075d6f55051c82",
-        "returned_len": 34720,
-        "returned_felts": 1123,
-        "gzip_sha256": "04b704009c0b07c6fde9bedabba37aca0b923c5c79bdf4b0428fa4f88065015b",
-        "gzip_len": 14339,
-        "gzip_base64_len": 19120
-      },
       "player": {
-        "source_sha256": "7975dea6f4fbe547fe12ddfe31777b85b04e91ef5e4fbfdb6925989c7398c567",
-        "source_len": 8245,
-        "raw_sha256": "3c290a2400520257d3ed322d5a6e93164913cec43de9d83058dfeb5c52845cc6",
-        "raw_len": 5580,
-        "returned_sha256": "abea84a5ddf7cc9877eb05859d8bc1485a29935de3e45b3cec43f4daeab4a2d8",
-        "returned_len": 9920,
-        "returned_felts": 323,
-        "gzip_sha256": "50646e4ebf5d92c6ebfc551c2e8fa88fa5d211b8f2608d24a4f530fe9842295e",
-        "gzip_len": 3926,
-        "gzip_base64_len": 5236
+        "source_sha256": "81293142cfd5734f5135e4204c6783a12e4d086029f516546759598d81294e18",
+        "source_len": 55687,
+        "raw_sha256": "5a3279a05621c7d3768c14ba2d073615c5a97375c5b5fda5dc72f8e9687c83b2",
+        "raw_len": 24273,
+        "returned_sha256": "da57c7084d1f388f7ea1a45fc08a55ce67c554ce771b42f107d2795f8fd4dac0",
+        "returned_len": 43152,
+        "returned_felts": 1395,
+        "embedded_engine": {
+          "offset": 0,
+          "length": 47212,
+          "sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74"
+        },
+        "wrapper": {
+          "offset": 47215,
+          "length": 8472,
+          "sha256": "2b053432f3a9001b78283d1f53838c71a1fafa359912f6c76570908d7692813b"
+        },
+        "gzip_sha256": "5aa6ccee6d37d2c12bdfea53f2ac35bae737f1acf0358e134a446932841e6257",
+        "gzip_len": 17970,
+        "gzip_base64_len": 23960
       }
     },
     "fixed9": {
@@ -66,321 +90,923 @@
         "returned_len": 8176,
         "returned_felts": 266
       },
-      "engine": {
-        "source_sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74",
-        "source_len": 47212,
-        "raw_sha256": "ac76ce73ea19899df9718be7ba372aec62d79de938642880298d2ff8ab73e1c7",
-        "raw_len": 19332,
-        "returned_sha256": "d63dafbfab50decd23149f686648edc9b5d175fa54e93a4de2d88ef18bb3659b",
-        "returned_len": 34368,
-        "returned_felts": 1111,
-        "gzip_sha256": "04b704009c0b07c6fde9bedabba37aca0b923c5c79bdf4b0428fa4f88065015b",
-        "gzip_len": 14339,
-        "gzip_base64_len": 19120
-      },
       "player": {
-        "source_sha256": "7975dea6f4fbe547fe12ddfe31777b85b04e91ef5e4fbfdb6925989c7398c567",
-        "source_len": 8245,
-        "raw_sha256": "fd7f4c3db9d90c1a5910199bc4107098d324c26cca3829915a582bc37a05b647",
-        "raw_len": 5346,
-        "returned_sha256": "e1a56a939129574ab40cfef148bf981ed5a69ce8182134f2af7ee3e83c4f3e5e",
-        "returned_len": 9504,
-        "returned_felts": 309,
-        "gzip_sha256": "50646e4ebf5d92c6ebfc551c2e8fa88fa5d211b8f2608d24a4f530fe9842295e",
-        "gzip_len": 3926,
-        "gzip_base64_len": 5236
+        "source_sha256": "81293142cfd5734f5135e4204c6783a12e4d086029f516546759598d81294e18",
+        "source_len": 55687,
+        "raw_sha256": "f3cf68ff586c3556536a2481cd4cc6a16555a037c427331974d0f2b64b18e557",
+        "raw_len": 24174,
+        "returned_sha256": "2ceaf3d8e1b8a17f67d93d6ad203cacb7205835986f956f8f3b8f514d8cb6b98",
+        "returned_len": 42976,
+        "returned_felts": 1389,
+        "embedded_engine": {
+          "offset": 0,
+          "length": 47212,
+          "sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74"
+        },
+        "wrapper": {
+          "offset": 47215,
+          "length": 8472,
+          "sha256": "2b053432f3a9001b78283d1f53838c71a1fafa359912f6c76570908d7692813b"
+        },
+        "gzip_sha256": "5aa6ccee6d37d2c12bdfea53f2ac35bae737f1acf0358e134a446932841e6257",
+        "gzip_len": 17970,
+        "gzip_base64_len": 23960
       }
     },
     "current_class": {
+      "sierra_file_bytes": 973255,
+      "sierra_compact_json_bytes": 973255,
+      "sierra_felts": 18581,
+      "casm_file_bytes": 780098,
+      "casm_compact_json_bytes": 780098,
+      "casm_bytecode_felts": 29730
+    },
+    "baseline_class": {
       "sierra_file_bytes": 983489,
       "sierra_compact_json_bytes": 983489,
       "sierra_felts": 18764,
       "casm_file_bytes": 787215,
       "casm_compact_json_bytes": 787215,
       "casm_bytecode_felts": 29962
-    },
-    "baseline_class": {
-      "sierra_file_bytes": 1028322,
-      "sierra_compact_json_bytes": 1028322,
-      "sierra_felts": 20192,
-      "casm_file_bytes": 809039,
-      "casm_compact_json_bytes": 809039,
-      "casm_bytecode_felts": 30565
     }
   },
-  "root_gas": {
-    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_threshold_1": 5503580,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_beast_d": 16597858,
-    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_threshold_1_build": 149260,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_max_build": 1032180,
-    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_heaviest_build": 336860,
-    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_threshold_3": 7896370,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_default_no_midi": 1877280,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_script_sha256": 113740,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_slots_build": 7629700,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_beast_full": 58788068,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_six_build": 701160,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_version": 111150,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_default_build": 165200,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_six_build": 368540,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_slots_build": 7297080,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_beast_d": 5855078,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_default_full": 53986910,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_beast_build": 243940,
-    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_heaviest": 12999020,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_six_build": 451920,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_beast_build": 327320,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_beast_d": 8452678,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_beast_full": 27819098,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_six_d": 7136576,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_slots_build": 7380460,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_beast_d": 2482518,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_beast_full": 6689798,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_default_d": 14339180,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_beast_full": 18199058,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_default_build": 352800,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_default_full": 13387650,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_slots_d": 77311400,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_six_d": 9728376,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_filters_heaviest": 62909556,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_beast_heaviest": 61021398,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_six_full": 20883146,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_default_full": 33501900,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_default_d": 8803670,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_license": 2519600,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_slots_d": 83269160,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_six_d": 17844006,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_engine_segment": 5109250,
-    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_veteran": 10256950,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_beast_build": 514920,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_six_full": 60838646,
-    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_veteran_build": 275220,
-    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_threshold_3_build": 213580,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_declare": 17420,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_six_build": 639520,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_six_build": 577880,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_default_d": 11380830,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_slots_full": 154505450,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_beast_d": 13625428,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_slots_build": 7568060,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_six_d": 14902506,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_default_build": 291160,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_default_full": 43547630,
-    "onchain_midi_player_tests::test_composition_gas::gas_composition_279_fixture": 28051688,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_engine": 111250,
-    "onchain_midi_player_tests::test_composition_gas::gas_composition_279_midi_only": 27828578,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_slots_d": 91395340,
-    "onchain_midi_player_tests::test_composition_gas::gas_composition_9_fixture": 28697718,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_slots_d": 85872330,
-    "onchain_midi_player_tests::test_composition_gas::gas_dynamic_data_279": 55997370,
-    "onchain_midi_player_tests::test_composition_gas::gas_dynamic_data_9": 53969010,
-    "onchain_midi_player_tests::test_segment_gas::gas_append_aligned": 2565090,
-    "onchain_midi_player_tests::test_segment_gas::gas_materialize_loader": 62450,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_beast_full": 48536688,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_slots_d": 88442990,
-    "onchain_midi_player_tests::test_segment_gas::gas_lc_player": 1549620,
-    "onchain_midi_player_tests::test_segment_gas::gas_lc_loader": 1336020,
-    "onchain_midi_player_tests::test_segment_gas::gas_materialize_engine": 232050,
-    "onchain_midi_player_tests::test_settings_gas::gas_0_timbres_build": 19810,
-    "onchain_midi_player_tests::test_segment_gas::gas_append_unaligned": 10361090,
-    "onchain_midi_player_tests::test_settings_gas::gas_6_timbres_encode": 3331120,
-    "onchain_midi_player_tests::test_settings_gas::gas_0_timbres_validate": 29980,
-    "onchain_midi_player_tests::test_composition_gas::gas_composition_9_midi_only": 28387168,
-    "onchain_midi_player_tests::test_composition_gas::gas_composition_279_data_first": 27910258,
-    "onchain_midi_player_tests::test_settings_gas::gas_filters_validate": 469026,
-    "onchain_midi_player_tests::test_segment_gas::gas_materialize_player": 72050,
-    "onchain_midi_player_tests::test_settings_gas::gas_every_slot_build": 7296910,
-    "onchain_midi_player_tests::test_settings_gas::gas_6_timbres_build": 368370,
-    "onchain_midi_player_tests::test_settings_gas::gas_0_timbres_encode": 126880,
-    "onchain_midi_player_tests::test_settings_gas::gas_filters_encode": 2962150,
-    "onchain_midi_player_tests::test_settings_gas::gas_every_slot_encode": 65520410,
-    "onchain_midi_player_tests::test_settings_gas::gas_every_slot_validate": 16871240,
-    "onchain_midi_player_tests::test_settings_gas::gas_6_timbres_validate": 613296,
-    "onchain_midi_player_tests::test_settings_gas::gas_filters_build": 275810,
-    "onchain_midi_player_tests::test_settings_gas::gas_one_wave_build": 270210,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_slots_full": 195878230,
-    "onchain_midi_player_tests::test_settings_gas::gas_one_filter_validate": 364138,
-    "onchain_midi_player_tests::test_settings_gas::gas_reference_waves_build": 946040,
-    "onchain_midi_player_tests::test_settings_gas::gas_one_wave_encode": 2544420,
-    "onchain_midi_player_tests::test_settings_gas::gas_reference_waves_encode": 9161280,
-    "onchain_midi_player_tests::test_settings_gas::gas_structural_max_validate": 22842220,
-    "onchain_midi_player_tests::test_settings_gas::gas_structural_max_build": 699390,
-    "onchain_midi_player_tests::test_settings_gas::gas_waves_256_validate": 9135276,
-    "onchain_midi_player_tests::test_settings_gas::gas_waves_256_build": 8511920,
-    "onchain_midi_player_tests::test_settings_gas::gas_reference_waves_validate": 1219238,
-    "onchain_midi_player_tests::test_settings_gas::gas_one_wave_validate": 314816,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_one_filter_heaviest": 61216748,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_slots_full": 186285130,
-    "onchain_midi_player_tests::test_settings_gas::gas_long_lfsr_validate": 277917959,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_one_wave_heaviest": 61478736,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_beast_build": 453280,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_default_build": 229520,
-    "onchain_midi_player_tests::test_settings_gas::gas_waves_256_encode": 73753640,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_reference_waves_heaviest": 77284978,
-    "onchain_midi_player_tests::test_composition_gas::gas_full_base_9": 405435158,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_beast_full": 38495198,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_slots_full": 166364820,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_default_full": 1696500,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_max_build": 699560,
-    "onchain_midi_player_tests::test_composition_gas::gas_composition_runtime_full_page": 328751248,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_default_d": 229210,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_beast_build": 576560,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_six_full": 9055496,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_default_d": 3586150,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_slots_build": 7442100,
-    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_genesis": 3122360,
-    "onchain_midi_player_tests::test_composition_gas::gas_full_fixture_data_first": 405513178,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_default_full": 23607060,
-    "onchain_midi_player_tests::test_class_gas::gas_b64_midi_genesis_build": 87620,
-    "onchain_midi_player_tests::test_composition_gas::gas_full_base_279": 405289968,
-    "onchain_midi_player_tests::test_settings_gas::gas_long_lfsr_build": 277876003,
-    "onchain_midi_player_tests::test_composition_gas::gas_full_fixture_art_first": 405512778,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_six_build": 513560,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_veteran_six_full": 50874706,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_default_d": 6194500,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_six_full": 40835176,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_slots_build": 7506420,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_six_d": 3770816,
-    "onchain_midi_player_tests::test_settings_gas::gas_one_filter_build": 244570,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_beast_build": 388960,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_default_build": 20180,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_six_d": 12331546,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_default_build": 103560,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_3_beast_d": 11062048,
-    "onchain_midi_player_tests::test_settings_gas::gas_one_filter_encode": 2282490,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_six_full": 30975336,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_genesis_slots_d": 80677260,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_threshold_1_slots_full": 176070900,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_slots_full": 206760720,
-    "onchain_midi_player_tests::test_settings_gas::gas_long_lfsr_encode": 1112994863,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_max_d": 1381307080,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_max_d": 1367191340,
-    "onchain_midi_player_tests::test_settings_gas::gas_structural_max_encode": 1297230120,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_heaviest_max_full": 3101190370,
-    "onchain_midi_player_tests::test_class_gas::gas_ms_empty_max_full": 3049092920,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_max_heaviest": 3210559700,
-    "onchain_midi_player_tests::test_class_gas::gas_lc_midi_segment_long_lfsr_heaviest": 2502797829
-  },
-  "beast_gas": {
-    "beast_consumer_tests::test_gas::gas_t4_setup": 872340,
-    "beast_consumer_tests::test_gas::gas_t4_direct_splicing": 429355528,
-    "beast_consumer_tests::test_gas::gas_t4_runtime_full_page": 831613928
-  },
-  "limitations": [
-    "Prerequisite #57 is unmerged; rebase/revalidate against its final merged state.",
-    "Headless null-sink audio; hardware and mobile lock-screen behavior remain device validation.",
-    "One-minute drift probe asserts scheduling; drift is informational under --drift-info.",
-    "Fixture measurements are not p5.js measurements."
-  ],
-  "browsers": {
-    "method": "Full-size MIDI-only NFT, three fresh contexts per build. Startup: init-script timestamp to NFT control enable. First play: click capture timestamp to engine playMIDI call. Offline, null-sink audio. Samples are descriptive, not a performance guarantee.",
-    "versions": {
-      "chromium": "153.0.8010.12",
-      "firefox": "155.0",
-      "webkit": "26.6"
-    },
-    "samples": {
-      "chromium": {
-        "pending_baseline": [
-          {
-            "startup_ms": 9.599999964237213,
-            "first_play_ms": 65.69999998807907
-          },
-          {
-            "startup_ms": 12.600000023841858,
-            "first_play_ms": 53.09999996423721
-          },
-          {
-            "startup_ms": 10.100000023841858,
-            "first_play_ms": 52.30000001192093
-          }
-        ],
-        "current": [
-          {
-            "startup_ms": 15,
-            "first_play_ms": 65
-          },
-          {
-            "startup_ms": 15.5,
-            "first_play_ms": 53.40000003576279
-          },
-          {
-            "startup_ms": 14.5,
-            "first_play_ms": 53.09999996423721
-          }
-        ]
+  "production_captures": {
+    "split": {
+      "small_midi_9": {
+        "test_wide_l2_gas": 1632429628,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 31686758,
+          "MinimumAlignedTinySynth.engine_segment": 1966000,
+          "MinimumAlignedTinySynth.gunzip_segment": 470350,
+          "MinimumAlignedTinySynth.midi_segment": 8669288,
+          "MinimumAlignedTinySynth.player_segment": 546460
+        }
       },
-      "firefox": {
-        "pending_baseline": [
-          {
-            "startup_ms": 12,
-            "first_play_ms": 689
-          },
-          {
-            "startup_ms": 13,
-            "first_play_ms": 1768
-          },
-          {
-            "startup_ms": 11,
-            "first_play_ms": 1748
-          }
-        ],
-        "current": [
-          {
-            "startup_ms": 31,
-            "first_play_ms": 1100
-          },
-          {
-            "startup_ms": 19,
-            "first_play_ms": 1733
-          },
-          {
-            "startup_ms": 18,
-            "first_play_ms": 1753
-          }
-        ]
+      "small_fixture_279": {
+        "test_wide_l2_gas": 1656001623,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 31387298,
+          "FixtureProvider.library_segment": 32960,
+          "TinySynth.engine_segment": 1987240,
+          "TinySynth.gunzip_segment": 486280,
+          "TinySynth.midi_segment": 8669288,
+          "TinySynth.player_segment": 571240
+        }
       },
-      "webkit": {
-        "pending_baseline": [
-          {
-            "startup_ms": 12,
-            "first_play_ms": 87
-          },
-          {
-            "startup_ms": 12,
-            "first_play_ms": 91
-          },
-          {
-            "startup_ms": 9,
-            "first_play_ms": 105
-          }
-        ],
-        "current": [
-          {
-            "startup_ms": 10,
-            "first_play_ms": 83
-          },
-          {
-            "startup_ms": 9,
-            "first_play_ms": 80
-          },
-          {
-            "startup_ms": 9,
-            "first_play_ms": 82
-          }
-        ]
+      "small_midi_279": {
+        "test_wide_l2_gas": 1644247198,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 31153288,
+          "TinySynth.engine_segment": 1987240,
+          "TinySynth.gunzip_segment": 486280,
+          "TinySynth.midi_segment": 8669288,
+          "TinySynth.player_segment": 571240
+        }
+      },
+      "small_fixture_9": {
+        "test_wide_l2_gas": 1645113928,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 32008208,
+          "MinimumAlignedTinySynth.engine_segment": 1966000,
+          "MinimumAlignedTinySynth.gunzip_segment": 470350,
+          "MinimumAlignedTinySynth.midi_segment": 8669288,
+          "MinimumAlignedTinySynth.player_segment": 546460,
+          "MinimumFixtureProvider.library_segment": 27650
+        }
+      },
+      "full_midi_9": {
+        "test_wide_l2_gas": 4512065218,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 413902488,
+          "MinimumAlignedTinySynth.engine_segment": 1966000,
+          "MinimumAlignedTinySynth.gunzip_segment": 470350,
+          "MinimumAlignedTinySynth.midi_segment": 59244958,
+          "MinimumAlignedTinySynth.player_segment": 546460
+        }
+      },
+      "full_fixture_9": {
+        "test_wide_l2_gas": 4524749518,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 414223938,
+          "MinimumAlignedTinySynth.engine_segment": 1966000,
+          "MinimumAlignedTinySynth.gunzip_segment": 470350,
+          "MinimumAlignedTinySynth.midi_segment": 59244958,
+          "MinimumAlignedTinySynth.player_segment": 546460,
+          "MinimumFixtureProvider.library_segment": 27650
+        }
+      },
+      "full_midi_279": {
+        "test_wide_l2_gas": 4524296188,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 413782418,
+          "TinySynth.engine_segment": 1987240,
+          "TinySynth.gunzip_segment": 486280,
+          "TinySynth.midi_segment": 59244958,
+          "TinySynth.player_segment": 571240
+        }
+      },
+      "full_fixture_279": {
+        "test_wide_l2_gas": 4536893048,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 414016428,
+          "FixtureProvider.library_segment": 32960,
+          "TinySynth.engine_segment": 1987240,
+          "TinySynth.gunzip_segment": 486280,
+          "TinySynth.midi_segment": 59244958,
+          "TinySynth.player_segment": 571240
+        }
       }
     },
-    "validation": {
-      "page": "All fixture pages, full NFT art, generic loader lifecycle/errors, independent custom controls, optional-media fallback",
-      "hosting": "Six allow-scripts sandbox cases per engine; blob/blocked/omitted media CSP in data/srcdoc frames",
-      "render": "All retained PCM/reference-timbre/custom-wave/filter/determinism checks passed",
-      "drift": "One minute per engine, schedule/rests/cancellation/restarts asserted; audio/image trend informational under --drift-info"
+    "combined": {
+      "small_midi_9": {
+        "test_wide_l2_gas": 1607267518,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 31226728,
+          "MinimumAlignedTinySynth.gunzip_segment": 470350,
+          "MinimumAlignedTinySynth.midi_segment": 8669288,
+          "MinimumAlignedTinySynth.player_segment": 2458060
+        }
+      },
+      "small_midi_279": {
+        "test_wide_l2_gas": 1606720128,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 30679338,
+          "TinySynth.gunzip_segment": 486280,
+          "TinySynth.midi_segment": 8669288,
+          "TinySynth.player_segment": 2468680
+        }
+      },
+      "small_fixture_9": {
+        "test_wide_l2_gas": 1619951818,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 31548178,
+          "MinimumAlignedTinySynth.gunzip_segment": 470350,
+          "MinimumAlignedTinySynth.midi_segment": 8669288,
+          "MinimumAlignedTinySynth.player_segment": 2458060,
+          "MinimumFixtureProvider.library_segment": 27650
+        }
+      },
+      "small_fixture_279": {
+        "test_wide_l2_gas": 1619316988,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 30913348,
+          "FixtureProvider.library_segment": 32960,
+          "TinySynth.gunzip_segment": 486280,
+          "TinySynth.midi_segment": 8669288,
+          "TinySynth.player_segment": 2468680
+        }
+      },
+      "full_midi_279": {
+        "test_wide_l2_gas": 4487611553,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 413308468,
+          "TinySynth.gunzip_segment": 486280,
+          "TinySynth.midi_segment": 59244958,
+          "TinySynth.player_segment": 2468680
+        }
+      },
+      "full_midi_9": {
+        "test_wide_l2_gas": 4474722883,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 412770838,
+          "MinimumAlignedTinySynth.gunzip_segment": 470350,
+          "MinimumAlignedTinySynth.midi_segment": 59244958,
+          "MinimumAlignedTinySynth.player_segment": 2458060
+        }
+      },
+      "full_fixture_9": {
+        "test_wide_l2_gas": 4487407183,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 413092288,
+          "MinimumAlignedTinySynth.gunzip_segment": 470350,
+          "MinimumAlignedTinySynth.midi_segment": 59244958,
+          "MinimumAlignedTinySynth.player_segment": 2458060,
+          "MinimumFixtureProvider.library_segment": 27650
+        }
+      },
+      "full_fixture_279": {
+        "test_wide_l2_gas": 4500208413,
+        "selectors_l2_gas": {
+          "CompositionProbe.token_uri": 413542478,
+          "FixtureProvider.library_segment": 32960,
+          "TinySynth.gunzip_segment": 486280,
+          "TinySynth.midi_segment": 59244958,
+          "TinySynth.player_segment": 2468680
+        }
+      }
+    },
+    "beast_split": {
+      "gas_t4_direct_splicing": {
+        "test_wide_l2_gas": 429355528,
+        "selectors_l2_gas": {
+          "BeastLikeNft.constructor": 155980,
+          "BeastLikeNft.token_uri": 413985168,
+          "TinySynth.engine": 1570,
+          "TinySynth.engine_segment": 1987240,
+          "TinySynth.gunzip_segment": 486280,
+          "TinySynth.midi_segment": 59244958,
+          "TinySynth.player_segment": 571240
+        }
+      }
+    },
+    "beast_combined": {
+      "gas_t4_direct_splicing": {
+        "test_wide_l2_gas": 428752938,
+        "selectors_l2_gas": {
+          "BeastLikeNft.constructor": 155980,
+          "BeastLikeNft.token_uri": 413511218,
+          "TinySynth.engine": 1570,
+          "TinySynth.gunzip_segment": 486280,
+          "TinySynth.midi_segment": 59244958,
+          "TinySynth.player_segment": 2468680
+        }
+      }
+    },
+    "split_inputs": [
+      {
+        "name": "small_midi_279",
+        "large": false,
+        "fixture": false,
+        "min": false,
+        "uri_len": 65853,
+        "uri_sha256": "0e7f9e1a860d75ea488907116a335f280a664da807f8b45cc92fabca2f7845b5",
+        "midi_sha256": "8d519d02968ca2ca0a6fd081517813ddb7fa4b1aa7e74d34530fe22833de75ca",
+        "svg_sha256": "5ced016425c24b865a1ae0ef838217c14afcc156f7448fe4212fe34e09994b62",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "small_midi_9",
+        "large": false,
+        "fixture": false,
+        "min": true,
+        "uri_len": 65357,
+        "uri_sha256": "b0e381e5b77fc5ef40aca4122e89c10e08716f8a894521ecf83a745d241ada6d",
+        "midi_sha256": "8d519d02968ca2ca0a6fd081517813ddb7fa4b1aa7e74d34530fe22833de75ca",
+        "svg_sha256": "5ced016425c24b865a1ae0ef838217c14afcc156f7448fe4212fe34e09994b62",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "small_fixture_279",
+        "large": false,
+        "fixture": true,
+        "min": false,
+        "uri_len": 66349,
+        "uri_sha256": "fdce53e84f0486c78ed8bde486d8e65efd5f9107efcc15c2a60833330dc93d0f",
+        "midi_sha256": "8d519d02968ca2ca0a6fd081517813ddb7fa4b1aa7e74d34530fe22833de75ca",
+        "svg_sha256": "5ced016425c24b865a1ae0ef838217c14afcc156f7448fe4212fe34e09994b62",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "small_fixture_9",
+        "large": false,
+        "fixture": true,
+        "min": true,
+        "uri_len": 65853,
+        "uri_sha256": "0c5863a71a45ccb72cb0390635477ae325753881bee5ff4be261347019c5a68c",
+        "midi_sha256": "8d519d02968ca2ca0a6fd081517813ddb7fa4b1aa7e74d34530fe22833de75ca",
+        "svg_sha256": "5ced016425c24b865a1ae0ef838217c14afcc156f7448fe4212fe34e09994b62",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "full_midi_279",
+        "large": true,
+        "fixture": false,
+        "min": false,
+        "uri_len": 167905,
+        "uri_sha256": "71d413f130f7d923419e09c81a83c30a15ec3da82f9c74d024b996ae610dd163",
+        "midi_sha256": "c7e21d9e2e28f794c4b5deff7916821845980e1a9fa04449e5f16e3538ae02c9",
+        "svg_sha256": "6ad6b67b75f45d04831c03c9167965c288e5729153a933e9f8c31168421dd658",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "full_midi_9",
+        "large": true,
+        "fixture": false,
+        "min": true,
+        "uri_len": 167409,
+        "uri_sha256": "d54136c107c7bac35ea034e0715ca38b98dd60b3ec45d831a36e86b53b68da78",
+        "midi_sha256": "c7e21d9e2e28f794c4b5deff7916821845980e1a9fa04449e5f16e3538ae02c9",
+        "svg_sha256": "6ad6b67b75f45d04831c03c9167965c288e5729153a933e9f8c31168421dd658",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "full_fixture_279",
+        "large": true,
+        "fixture": true,
+        "min": false,
+        "uri_len": 168401,
+        "uri_sha256": "242d81ee15cf1fe80b9e936306294dfd8faea515ab6f11895222c2da0c8fc477",
+        "midi_sha256": "c7e21d9e2e28f794c4b5deff7916821845980e1a9fa04449e5f16e3538ae02c9",
+        "svg_sha256": "6ad6b67b75f45d04831c03c9167965c288e5729153a933e9f8c31168421dd658",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "full_fixture_9",
+        "large": true,
+        "fixture": true,
+        "min": true,
+        "uri_len": 167905,
+        "uri_sha256": "707f880072674585ca0734fad1f921b38f08401b0ab5d230dd18c4f1553babf9",
+        "midi_sha256": "c7e21d9e2e28f794c4b5deff7916821845980e1a9fa04449e5f16e3538ae02c9",
+        "svg_sha256": "6ad6b67b75f45d04831c03c9167965c288e5729153a933e9f8c31168421dd658",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      }
+    ],
+    "combined_inputs": [
+      {
+        "name": "small_midi_279",
+        "large": false,
+        "fixture": false,
+        "min": false,
+        "uri_len": 64365,
+        "uri_sha256": "3ef153379bf39bd65119e3dcfedd0984d2e89147db6c57208ff2d78ac2448d59",
+        "midi_sha256": "8d519d02968ca2ca0a6fd081517813ddb7fa4b1aa7e74d34530fe22833de75ca",
+        "svg_sha256": "5ced016425c24b865a1ae0ef838217c14afcc156f7448fe4212fe34e09994b62",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "small_midi_9",
+        "large": false,
+        "fixture": false,
+        "min": true,
+        "uri_len": 64365,
+        "uri_sha256": "059a0fb289cf0ce3c2d5bffe4034c68a5c0a12c43c135e0e8af95c917000ac45",
+        "midi_sha256": "8d519d02968ca2ca0a6fd081517813ddb7fa4b1aa7e74d34530fe22833de75ca",
+        "svg_sha256": "5ced016425c24b865a1ae0ef838217c14afcc156f7448fe4212fe34e09994b62",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "small_fixture_279",
+        "large": false,
+        "fixture": true,
+        "min": false,
+        "uri_len": 64861,
+        "uri_sha256": "72553544e871e2daf9de38875a0a5b299076c02edcac6ee6e2a26455309a7e44",
+        "midi_sha256": "8d519d02968ca2ca0a6fd081517813ddb7fa4b1aa7e74d34530fe22833de75ca",
+        "svg_sha256": "5ced016425c24b865a1ae0ef838217c14afcc156f7448fe4212fe34e09994b62",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "small_fixture_9",
+        "large": false,
+        "fixture": true,
+        "min": true,
+        "uri_len": 64861,
+        "uri_sha256": "2719e6387fe7e094a041b1a8f3f2e1ec548f0b9410adc9ff2fd07023b0e631b3",
+        "midi_sha256": "8d519d02968ca2ca0a6fd081517813ddb7fa4b1aa7e74d34530fe22833de75ca",
+        "svg_sha256": "5ced016425c24b865a1ae0ef838217c14afcc156f7448fe4212fe34e09994b62",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "full_midi_279",
+        "large": true,
+        "fixture": false,
+        "min": false,
+        "uri_len": 166417,
+        "uri_sha256": "e09063f9dc5a652837427175e36ff8a32868d630afd5a9d4351097210a9e8831",
+        "midi_sha256": "c7e21d9e2e28f794c4b5deff7916821845980e1a9fa04449e5f16e3538ae02c9",
+        "svg_sha256": "6ad6b67b75f45d04831c03c9167965c288e5729153a933e9f8c31168421dd658",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "full_midi_9",
+        "large": true,
+        "fixture": false,
+        "min": true,
+        "uri_len": 165921,
+        "uri_sha256": "12f99760be553e910a8c8a0f1ee9b2fb5ebc0370743c4d802cd5563924e46ace",
+        "midi_sha256": "c7e21d9e2e28f794c4b5deff7916821845980e1a9fa04449e5f16e3538ae02c9",
+        "svg_sha256": "6ad6b67b75f45d04831c03c9167965c288e5729153a933e9f8c31168421dd658",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "full_fixture_279",
+        "large": true,
+        "fixture": true,
+        "min": false,
+        "uri_len": 166913,
+        "uri_sha256": "5ea4a0b6e0ac1ce2a0eb770f060f940f07d1bd13267ba9146da6e4dcad70a9de",
+        "midi_sha256": "c7e21d9e2e28f794c4b5deff7916821845980e1a9fa04449e5f16e3538ae02c9",
+        "svg_sha256": "6ad6b67b75f45d04831c03c9167965c288e5729153a933e9f8c31168421dd658",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      },
+      {
+        "name": "full_fixture_9",
+        "large": true,
+        "fixture": true,
+        "min": true,
+        "uri_len": 166417,
+        "uri_sha256": "af81024007dd4630434d3ced9851fc5c6b817f56c339317b9773aef98a052fec",
+        "midi_sha256": "c7e21d9e2e28f794c4b5deff7916821845980e1a9fa04449e5f16e3538ae02c9",
+        "svg_sha256": "6ad6b67b75f45d04831c03c9167965c288e5729153a933e9f8c31168421dd658",
+        "settings_sha256": "2846222e3ee6c9907c87bdfb3a08478cc4d83c85cf679685af4465ab5033d489"
+      }
+    ]
+  },
+  "capture_method": {
+    "repetitions": 2,
+    "all_repetitions_equal": true,
+    "lab_command": "snforge test --release --no-optimization --tracked-resource sierra-gas --gas-report test_measure",
+    "beast_command": "snforge test --release --no-optimization --tracked-resource sierra-gas --gas-report gas_t4_direct_splicing",
+    "lab_route": "CompositionProbe.token_uri returns the complete ByteArray; runtime class hashes choose actual TinySynth/fixture library calls, and the large boolean chooses fixed small/full inputs. Each test deploys fresh empty-storage probe, calls once and validates output length plus whole-URI SHA-256 against the independent JS composition/nesting reference. Selectors include nested library costs; do not add them again. Test-wide totals include deployment and expensive full-output hashing and are not route gas.",
+    "beast_setup": "Same setup(), caller, default local block context, deployed empty NFT fixture state, token 4, and call order for both builds. No forks/RPC.",
+    "mutation_control": "A separately compiled same-length jsox versus json URI prefix is rejected by the full-output SHA-256 assertion; the correct control passes.",
+    "workspace_lab_files": [
+      "/tmp/issue61-prepare-lab.mjs",
+      "/tmp/issue61-trim-lab.py",
+      "/tmp/issue61-parse-captures.py",
+      "/tmp/issue61-lab-split",
+      "/tmp/issue61-lab-combined"
+    ],
+    "production_target_caveat": "Prior default test-wide figures are not substituted for these separately compiled per-selector captures.",
+    "reproduction_scope": "Eight-case temporary snapshot: audit retained preparation/source/golden/capture bindings in this shared review workspace. The checked-in Beast production test is the permanent clone-and-run reproduction route."
+  },
+  "bindings": {
+    "core": {
+      "player/player.js": {
+        "path": "/tmp/onchain-midi-issue59-worktree/player/player.js",
+        "bytes": 15422,
+        "sha256": "dd13a05df92e39a1b48acb26816345949d27256825d7bc78eb143fc846696874"
+      },
+      "scripts/build_segments.mjs": {
+        "path": "/tmp/onchain-midi-issue59-worktree/scripts/build_segments.mjs",
+        "bytes": 9210,
+        "sha256": "cb8e78555afc0eb55540ba9cfeb8a2fe42b7714dbcc1bd8da9d32fad03a7c529"
+      },
+      "scripts/library_versions.json": {
+        "path": "/tmp/onchain-midi-issue59-worktree/scripts/library_versions.json",
+        "bytes": 2595,
+        "sha256": "8ed9e3568a4693d9d4b63636eab02282e71a6d6582ced1a0c53c4fe932a42d3d"
+      },
+      "src/segment_data.cairo": {
+        "path": "/tmp/onchain-midi-issue59-worktree/src/segment_data.cairo",
+        "bytes": 76477,
+        "sha256": "fff2a075fd42ece7288480ead20af4563a0ea65a0b3b2f641a9ae6701e16391f"
+      },
+      "abi/TinySynth.json": {
+        "path": "/tmp/onchain-midi-issue59-worktree/abi/TinySynth.json",
+        "bytes": 8494,
+        "sha256": "e93d02b80a1b7f31be698ff0ea0c4fef8d004fb16618483ecf06864b63b16f00"
+      },
+      "Scarb.lock": {
+        "path": "/tmp/onchain-midi-issue59-worktree/Scarb.lock",
+        "bytes": 766,
+        "sha256": "87c2870172cbc4b0fb0bf0824e887909d7d379522e84a94d5a204e0b00627e2f"
+      }
+    },
+    "temporary_lab": {
+      "split": {
+        "wrapper": {
+          "path": "/tmp/issue61-lab-split/src/lib.cairo",
+          "bytes": 1511,
+          "sha256": "0672f5f8ad0cf286d1e220b7a39216b853c60cef0e9f07290f539a2f3c68eca2"
+        },
+        "golden_inputs": {
+          "path": "/tmp/issue61-lab-split/cases.json",
+          "bytes": 3755,
+          "sha256": "a1c293044edb7613951be2abccd5861d738c0b980fa83eb729436e3572e74334"
+        },
+        "manifest": {
+          "path": "/tmp/issue61-lab-split/Scarb.toml",
+          "bytes": 471,
+          "sha256": "3ecf1a50ce80f548c5ef380e17397ce98d3bf0aa403f0e8be673701c4df088df"
+        },
+        "lockfile": {
+          "path": "/tmp/issue61-lab-split/Scarb.lock",
+          "bytes": 865,
+          "sha256": "93a39f99628b41e7b1e3cc57f2fe68066a80d9fd362837b4365624ea413d70b5"
+        },
+        "sources": {
+          "assembly.cairo": {
+            "path": "/tmp/issue61-lab-split/src/assembly.cairo",
+            "bytes": 2851,
+            "sha256": "43f347dc6731d871f699e5aff3a4bc6fad17ec74366f73119765ac2ffa6598ee"
+          },
+          "class_fixtures.cairo": {
+            "path": "/tmp/issue61-lab-split/src/class_fixtures.cairo",
+            "bytes": 37387,
+            "sha256": "3de8c032a1155485d0708b5082ab87297816ea5cd7035eb7f9dcb56ba16347f6"
+          },
+          "data_fixtures.cairo": {
+            "path": "/tmp/issue61-lab-split/src/data_fixtures.cairo",
+            "bytes": 220414,
+            "sha256": "8366cebb063210b307fcf09d854e16f26c2ce30535b12836b213cfa1050fdc1a"
+          },
+          "fixture_provider.cairo": {
+            "path": "/tmp/issue61-lab-split/src/fixture_provider.cairo",
+            "bytes": 926,
+            "sha256": "b1a3f935d13ad8249d23f31341743df29de2ac833a6eb4ce6e47a74570522169"
+          },
+          "lib.cairo": {
+            "path": "/tmp/issue61-lab-split/src/lib.cairo",
+            "bytes": 1511,
+            "sha256": "0672f5f8ad0cf286d1e220b7a39216b853c60cef0e9f07290f539a2f3c68eca2"
+          },
+          "minimum_alignment.cairo": {
+            "path": "/tmp/issue61-lab-split/src/minimum_alignment.cairo",
+            "bytes": 54365,
+            "sha256": "a038278b1659034c17c1af07fdd8b6c4dbca9dca9a0ea37e8c5bd04ec90ec067"
+          },
+          "owned_assets.cairo": {
+            "path": "/tmp/issue61-lab-split/src/owned_assets.cairo",
+            "bytes": 10061,
+            "sha256": "3a63d6e49a5cf591185d2454cd849a50de3825f4ca6216f5759e845a90246d54"
+          },
+          "raw_assets.cairo": {
+            "path": "/tmp/issue61-lab-split/src/raw_assets.cairo",
+            "bytes": 134081,
+            "sha256": "dc41178eb712c1ec4ab53965113b906d166177a46d739d268443eded98e035f1"
+          },
+          "settings_fixtures.cairo": {
+            "path": "/tmp/issue61-lab-split/src/settings_fixtures.cairo",
+            "bytes": 127178,
+            "sha256": "4d5cecad35a75155aaea031d4f151e9f8733ce2227da3ba76cea84e84e33a7c6"
+          }
+        },
+        "artifacts": {
+          "composition_lab_CompositionProbe.compiled_contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_CompositionProbe.compiled_contract_class.json",
+            "bytes": 575265,
+            "sha256": "846032befa6a90f832d5d9e8f131b4df3b9906fad6defcd4d7c2b05345bd98d9"
+          },
+          "composition_lab_CompositionProbe.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_CompositionProbe.contract_class.json",
+            "bytes": 710451,
+            "sha256": "f8c2fa2d3bdb9014352c40c74329879714951366699cce6ba1c6c297603b1da1"
+          },
+          "composition_lab_FixtureProvider.compiled_contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_FixtureProvider.compiled_contract_class.json",
+            "bytes": 5234,
+            "sha256": "612a5f4e60fffa01c14672480c97bf9e3cf2adc5666a4dedcbf038c61710214a"
+          },
+          "composition_lab_FixtureProvider.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_FixtureProvider.contract_class.json",
+            "bytes": 9281,
+            "sha256": "91260ed7de3a0f1cec35340a965cf3d2a6114305abcbd3bc8b8af391682acc88"
+          },
+          "composition_lab_MinimumAlignedTinySynth.compiled_contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_MinimumAlignedTinySynth.compiled_contract_class.json",
+            "bytes": 783517,
+            "sha256": "f03cbf913940f619a0fd54095073cc8ba14d97728c9edef21ad1c6ca4d53684f"
+          },
+          "composition_lab_MinimumAlignedTinySynth.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_MinimumAlignedTinySynth.contract_class.json",
+            "bytes": 979591,
+            "sha256": "6db56f4aef88883d381cb6058ec40ef42bf1e46826a390201912cd4f531c83b8"
+          },
+          "composition_lab_MinimumFixtureProvider.compiled_contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_MinimumFixtureProvider.compiled_contract_class.json",
+            "bytes": 4930,
+            "sha256": "bdff6b86b7a4b4beae9253fbee438e1d3c8b9799e4a58e84c4a62f0306c9b79e"
+          },
+          "composition_lab_MinimumFixtureProvider.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_MinimumFixtureProvider.contract_class.json",
+            "bytes": 8878,
+            "sha256": "1c84d41c774ea1e5420074085dff1850326fc5fab1d71c98d3d93bb7b83118fc"
+          },
+          "composition_lab_TinySynth.compiled_contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_TinySynth.compiled_contract_class.json",
+            "bytes": 787215,
+            "sha256": "6a6312e2331d6a0572bd10a244998a175be96a920c89ebbfae6e59d50bb42c42"
+          },
+          "composition_lab_TinySynth.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_TinySynth.contract_class.json",
+            "bytes": 983489,
+            "sha256": "3bffe9cf4cad0b9d4324117a17f8bac9863d4e68b3871cb8e71bb3e2d41f0871"
+          },
+          "composition_lab_integrationtest_CompositionProbe.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_integrationtest_CompositionProbe.test.contract_class.json",
+            "bytes": 710451,
+            "sha256": "f8c2fa2d3bdb9014352c40c74329879714951366699cce6ba1c6c297603b1da1"
+          },
+          "composition_lab_integrationtest_FixtureProvider.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_integrationtest_FixtureProvider.test.contract_class.json",
+            "bytes": 9281,
+            "sha256": "91260ed7de3a0f1cec35340a965cf3d2a6114305abcbd3bc8b8af391682acc88"
+          },
+          "composition_lab_integrationtest_MinimumAlignedTinySynth.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_integrationtest_MinimumAlignedTinySynth.test.contract_class.json",
+            "bytes": 979591,
+            "sha256": "6db56f4aef88883d381cb6058ec40ef42bf1e46826a390201912cd4f531c83b8"
+          },
+          "composition_lab_integrationtest_MinimumFixtureProvider.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_integrationtest_MinimumFixtureProvider.test.contract_class.json",
+            "bytes": 8878,
+            "sha256": "1c84d41c774ea1e5420074085dff1850326fc5fab1d71c98d3d93bb7b83118fc"
+          },
+          "composition_lab_integrationtest_TinySynth.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_integrationtest_TinySynth.test.contract_class.json",
+            "bytes": 983489,
+            "sha256": "3bffe9cf4cad0b9d4324117a17f8bac9863d4e68b3871cb8e71bb3e2d41f0871"
+          },
+          "composition_lab_unittest_CompositionProbe.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_unittest_CompositionProbe.test.contract_class.json",
+            "bytes": 710451,
+            "sha256": "f8c2fa2d3bdb9014352c40c74329879714951366699cce6ba1c6c297603b1da1"
+          },
+          "composition_lab_unittest_FixtureProvider.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_unittest_FixtureProvider.test.contract_class.json",
+            "bytes": 9281,
+            "sha256": "91260ed7de3a0f1cec35340a965cf3d2a6114305abcbd3bc8b8af391682acc88"
+          },
+          "composition_lab_unittest_MinimumAlignedTinySynth.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_unittest_MinimumAlignedTinySynth.test.contract_class.json",
+            "bytes": 979591,
+            "sha256": "6db56f4aef88883d381cb6058ec40ef42bf1e46826a390201912cd4f531c83b8"
+          },
+          "composition_lab_unittest_MinimumFixtureProvider.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_unittest_MinimumFixtureProvider.test.contract_class.json",
+            "bytes": 8878,
+            "sha256": "1c84d41c774ea1e5420074085dff1850326fc5fab1d71c98d3d93bb7b83118fc"
+          },
+          "composition_lab_unittest_TinySynth.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-split/target/release/composition_lab_unittest_TinySynth.test.contract_class.json",
+            "bytes": 983489,
+            "sha256": "3bffe9cf4cad0b9d4324117a17f8bac9863d4e68b3871cb8e71bb3e2d41f0871"
+          }
+        }
+      },
+      "combined": {
+        "wrapper": {
+          "path": "/tmp/issue61-lab-combined/src/lib.cairo",
+          "bytes": 1511,
+          "sha256": "0672f5f8ad0cf286d1e220b7a39216b853c60cef0e9f07290f539a2f3c68eca2"
+        },
+        "golden_inputs": {
+          "path": "/tmp/issue61-lab-combined/cases.json",
+          "bytes": 3755,
+          "sha256": "29a98cc3e1d9540ada36e12a1a71b37e2328eaa25e3815fd32aeff95ab9a1d57"
+        },
+        "manifest": {
+          "path": "/tmp/issue61-lab-combined/Scarb.toml",
+          "bytes": 465,
+          "sha256": "1546a30d35489ee7dddaebb50cab4e778544ad0b1515f880bbba257f6bb54b8a"
+        },
+        "lockfile": {
+          "path": "/tmp/issue61-lab-combined/Scarb.lock",
+          "bytes": 865,
+          "sha256": "93a39f99628b41e7b1e3cc57f2fe68066a80d9fd362837b4365624ea413d70b5"
+        },
+        "sources": {
+          "assembly.cairo": {
+            "path": "/tmp/issue61-lab-combined/src/assembly.cairo",
+            "bytes": 2810,
+            "sha256": "23ad05a7fe4329fd6133aae388a4c2316d86d32f4a043f070e265a31df26b322"
+          },
+          "class_fixtures.cairo": {
+            "path": "/tmp/issue61-lab-combined/src/class_fixtures.cairo",
+            "bytes": 37387,
+            "sha256": "3de8c032a1155485d0708b5082ab87297816ea5cd7035eb7f9dcb56ba16347f6"
+          },
+          "data_fixtures.cairo": {
+            "path": "/tmp/issue61-lab-combined/src/data_fixtures.cairo",
+            "bytes": 220414,
+            "sha256": "8366cebb063210b307fcf09d854e16f26c2ce30535b12836b213cfa1050fdc1a"
+          },
+          "fixture_provider.cairo": {
+            "path": "/tmp/issue61-lab-combined/src/fixture_provider.cairo",
+            "bytes": 926,
+            "sha256": "b1a3f935d13ad8249d23f31341743df29de2ac833a6eb4ce6e47a74570522169"
+          },
+          "lib.cairo": {
+            "path": "/tmp/issue61-lab-combined/src/lib.cairo",
+            "bytes": 1511,
+            "sha256": "0672f5f8ad0cf286d1e220b7a39216b853c60cef0e9f07290f539a2f3c68eca2"
+          },
+          "minimum_alignment.cairo": {
+            "path": "/tmp/issue61-lab-combined/src/minimum_alignment.cairo",
+            "bytes": 53381,
+            "sha256": "17c75628e0ddbfff8cbee7900626aae51171d5ad271698f9173a1438a6e01fa9"
+          },
+          "owned_assets.cairo": {
+            "path": "/tmp/issue61-lab-combined/src/owned_assets.cairo",
+            "bytes": 10061,
+            "sha256": "3a63d6e49a5cf591185d2454cd849a50de3825f4ca6216f5759e845a90246d54"
+          },
+          "raw_assets.cairo": {
+            "path": "/tmp/issue61-lab-combined/src/raw_assets.cairo",
+            "bytes": 131991,
+            "sha256": "cd09362a8e1966b95ed3df881bfb08cd656efd84cc9e297aa0c390b30ffc93b4"
+          },
+          "settings_fixtures.cairo": {
+            "path": "/tmp/issue61-lab-combined/src/settings_fixtures.cairo",
+            "bytes": 127178,
+            "sha256": "4d5cecad35a75155aaea031d4f151e9f8733ce2227da3ba76cea84e84e33a7c6"
+          }
+        },
+        "artifacts": {
+          "composition_lab_CompositionProbe.compiled_contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_CompositionProbe.compiled_contract_class.json",
+            "bytes": 573400,
+            "sha256": "9fb84fa5949773b447ea3ef5847272e4bb8f90979f504d7e90296600dbb29408"
+          },
+          "composition_lab_CompositionProbe.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_CompositionProbe.contract_class.json",
+            "bytes": 705788,
+            "sha256": "6ba145e5c8b1edf210fb91f21145fcb9e022f389d9a6391048ecdeb4ca2a32b1"
+          },
+          "composition_lab_FixtureProvider.compiled_contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_FixtureProvider.compiled_contract_class.json",
+            "bytes": 5234,
+            "sha256": "612a5f4e60fffa01c14672480c97bf9e3cf2adc5666a4dedcbf038c61710214a"
+          },
+          "composition_lab_FixtureProvider.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_FixtureProvider.contract_class.json",
+            "bytes": 9281,
+            "sha256": "91260ed7de3a0f1cec35340a965cf3d2a6114305abcbd3bc8b8af391682acc88"
+          },
+          "composition_lab_MinimumAlignedTinySynth.compiled_contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_MinimumAlignedTinySynth.compiled_contract_class.json",
+            "bytes": 778526,
+            "sha256": "e5a4e8c7a4155c2c981d4a0420a482de0c2958079b8580242c2db43c3bd2dac5"
+          },
+          "composition_lab_MinimumAlignedTinySynth.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_MinimumAlignedTinySynth.contract_class.json",
+            "bytes": 971517,
+            "sha256": "1249c180811b2553458f4ea10c52c03e285163ce341a0a6cd13f11e053e9de78"
+          },
+          "composition_lab_MinimumFixtureProvider.compiled_contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_MinimumFixtureProvider.compiled_contract_class.json",
+            "bytes": 4930,
+            "sha256": "bdff6b86b7a4b4beae9253fbee438e1d3c8b9799e4a58e84c4a62f0306c9b79e"
+          },
+          "composition_lab_MinimumFixtureProvider.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_MinimumFixtureProvider.contract_class.json",
+            "bytes": 8878,
+            "sha256": "1c84d41c774ea1e5420074085dff1850326fc5fab1d71c98d3d93bb7b83118fc"
+          },
+          "composition_lab_TinySynth.compiled_contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_TinySynth.compiled_contract_class.json",
+            "bytes": 780098,
+            "sha256": "5aed1b7c521a9d097723648e719456a190700bc01747692f148f4ac5662c7962"
+          },
+          "composition_lab_TinySynth.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_TinySynth.contract_class.json",
+            "bytes": 973255,
+            "sha256": "f2b0c946e4a0293fc940e2f5ca56074caf7e589a4ab7cd4290d609b97959fb86"
+          },
+          "composition_lab_integrationtest_CompositionProbe.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_integrationtest_CompositionProbe.test.contract_class.json",
+            "bytes": 705788,
+            "sha256": "6ba145e5c8b1edf210fb91f21145fcb9e022f389d9a6391048ecdeb4ca2a32b1"
+          },
+          "composition_lab_integrationtest_FixtureProvider.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_integrationtest_FixtureProvider.test.contract_class.json",
+            "bytes": 9281,
+            "sha256": "91260ed7de3a0f1cec35340a965cf3d2a6114305abcbd3bc8b8af391682acc88"
+          },
+          "composition_lab_integrationtest_MinimumAlignedTinySynth.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_integrationtest_MinimumAlignedTinySynth.test.contract_class.json",
+            "bytes": 971517,
+            "sha256": "1249c180811b2553458f4ea10c52c03e285163ce341a0a6cd13f11e053e9de78"
+          },
+          "composition_lab_integrationtest_MinimumFixtureProvider.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_integrationtest_MinimumFixtureProvider.test.contract_class.json",
+            "bytes": 8878,
+            "sha256": "1c84d41c774ea1e5420074085dff1850326fc5fab1d71c98d3d93bb7b83118fc"
+          },
+          "composition_lab_integrationtest_TinySynth.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_integrationtest_TinySynth.test.contract_class.json",
+            "bytes": 973255,
+            "sha256": "f2b0c946e4a0293fc940e2f5ca56074caf7e589a4ab7cd4290d609b97959fb86"
+          },
+          "composition_lab_unittest_CompositionProbe.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_unittest_CompositionProbe.test.contract_class.json",
+            "bytes": 705788,
+            "sha256": "6ba145e5c8b1edf210fb91f21145fcb9e022f389d9a6391048ecdeb4ca2a32b1"
+          },
+          "composition_lab_unittest_FixtureProvider.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_unittest_FixtureProvider.test.contract_class.json",
+            "bytes": 9281,
+            "sha256": "91260ed7de3a0f1cec35340a965cf3d2a6114305abcbd3bc8b8af391682acc88"
+          },
+          "composition_lab_unittest_MinimumAlignedTinySynth.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_unittest_MinimumAlignedTinySynth.test.contract_class.json",
+            "bytes": 971517,
+            "sha256": "1249c180811b2553458f4ea10c52c03e285163ce341a0a6cd13f11e053e9de78"
+          },
+          "composition_lab_unittest_MinimumFixtureProvider.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_unittest_MinimumFixtureProvider.test.contract_class.json",
+            "bytes": 8878,
+            "sha256": "1c84d41c774ea1e5420074085dff1850326fc5fab1d71c98d3d93bb7b83118fc"
+          },
+          "composition_lab_unittest_TinySynth.test.contract_class.json": {
+            "path": "/tmp/issue61-lab-combined/target/release/composition_lab_unittest_TinySynth.test.contract_class.json",
+            "bytes": 973255,
+            "sha256": "f2b0c946e4a0293fc940e2f5ca56074caf7e589a4ab7cd4290d609b97959fb86"
+          }
+        }
+      }
+    },
+    "production_artifacts": {
+      "split": {
+        "onchain_midi_player_TinySynth.compiled_contract_class.json": {
+          "path": "/tmp/onchain-midi-issue61-split-baseline/target/release/onchain_midi_player_TinySynth.compiled_contract_class.json",
+          "bytes": 787215,
+          "sha256": "6a6312e2331d6a0572bd10a244998a175be96a920c89ebbfae6e59d50bb42c42"
+        },
+        "onchain_midi_player_TinySynth.contract_class.json": {
+          "path": "/tmp/onchain-midi-issue61-split-baseline/target/release/onchain_midi_player_TinySynth.contract_class.json",
+          "bytes": 983489,
+          "sha256": "3bffe9cf4cad0b9d4324117a17f8bac9863d4e68b3871cb8e71bb3e2d41f0871"
+        }
+      },
+      "combined": {
+        "onchain_midi_player_TinySynth.compiled_contract_class.json": {
+          "path": "/tmp/onchain-midi-issue59-worktree/target/release/onchain_midi_player_TinySynth.compiled_contract_class.json",
+          "bytes": 780098,
+          "sha256": "5aed1b7c521a9d097723648e719456a190700bc01747692f148f4ac5662c7962"
+        },
+        "onchain_midi_player_TinySynth.contract_class.json": {
+          "path": "/tmp/onchain-midi-issue59-worktree/target/release/onchain_midi_player_TinySynth.contract_class.json",
+          "bytes": 973255,
+          "sha256": "f2b0c946e4a0293fc940e2f5ca56074caf7e589a4ab7cd4290d609b97959fb86"
+        },
+        "onchain_midi_player_tests_MinimumAlignedTinySynth.test.contract_class.json": {
+          "path": "/tmp/onchain-midi-issue59-worktree/target/release/onchain_midi_player_tests_MinimumAlignedTinySynth.test.contract_class.json",
+          "bytes": 971527,
+          "sha256": "fb7ca5e3298e96206fe6fcb0a6735cfae27655190b173ca98ee2dc316a4aa577"
+        },
+        "onchain_midi_player_tests_TinySynth.test.contract_class.json": {
+          "path": "/tmp/onchain-midi-issue59-worktree/target/release/onchain_midi_player_tests_TinySynth.test.contract_class.json",
+          "bytes": 973255,
+          "sha256": "f2b0c946e4a0293fc940e2f5ca56074caf7e589a4ab7cd4290d609b97959fb86"
+        },
+        "onchain_midi_player_unittest_TinySynth.test.contract_class.json": {
+          "path": "/tmp/onchain-midi-issue59-worktree/target/release/onchain_midi_player_unittest_TinySynth.test.contract_class.json",
+          "bytes": 973255,
+          "sha256": "f2b0c946e4a0293fc940e2f5ca56074caf7e589a4ab7cd4290d609b97959fb86"
+        }
+      }
+    },
+    "beast_artifacts": {
+      "split": {
+        "beast_consumer_BeastLikeNft.contract_class.json": {
+          "path": "/tmp/onchain-midi-issue61-split-baseline/examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json",
+          "bytes": 750871,
+          "sha256": "004eda78fb3e31ae4d5fe26cf0613ea4a61a3005212ed0b81f4cdc291bbe9d17"
+        }
+      },
+      "combined": {
+        "beast_consumer_BeastLikeNft.contract_class.json": {
+          "path": "/tmp/onchain-midi-issue59-worktree/examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json",
+          "bytes": 746224,
+          "sha256": "bba5147943d628d232f72c4fab5237c50c76789cf6ae96d9a05ab167087c9f7d"
+        }
+      }
+    },
+    "captures": {
+      "split-capture1": {
+        "path": "/tmp/issue61-split-capture1.log",
+        "bytes": 20826,
+        "sha256": "686a6205e9d1ef4ed37d06c668de58898e911899b0591ee7857f2225d028c034"
+      },
+      "split-capture2": {
+        "path": "/tmp/issue61-split-capture2.log",
+        "bytes": 20826,
+        "sha256": "8d074f12c82076e2ce4bd97eba078dd2cd942406c799ae6c9c8710cc44c9802d"
+      },
+      "combined-capture1": {
+        "path": "/tmp/issue61-combined-capture1.log",
+        "bytes": 19573,
+        "sha256": "75b3be7ae98e3d501c84219ecb267a3e763f1ea90a0d44c65f7d52a244922f74"
+      },
+      "combined-capture2": {
+        "path": "/tmp/issue61-combined-capture2.log",
+        "bytes": 19573,
+        "sha256": "7942ce6ab54ff931a89c4850d90754c8ef55b19d0d0f4814c7a13fdf0b21d01a"
+      },
+      "beast-production-split": {
+        "path": "/tmp/issue61-beast-production-split.log",
+        "bytes": 2682,
+        "sha256": "173fe15732bf484255351c9483aac85fe60d189f913037cbc6576d8bcd236446"
+      },
+      "beast-production-split-repeat": {
+        "path": "/tmp/issue61-beast-production-split-repeat.log",
+        "bytes": 2683,
+        "sha256": "93533372ef0cacbc89716d974d13375ab3582c65f1531cb7b0001e0d9453c3a8"
+      },
+      "beast-production-combined": {
+        "path": "/tmp/issue61-beast-production-combined.log",
+        "bytes": 2568,
+        "sha256": "06a5bfbc9322fabda31b057061a7bb272b2568a0df9fd79a27365e78d6c3e9f3"
+      },
+      "beast-production-combined-repeat": {
+        "path": "/tmp/issue61-beast-production-combined-repeat.log",
+        "bytes": 2513,
+        "sha256": "9a134760ca178d4762fe5240d7537115bf3553d938c9e0be1210d2b31ab2fb66"
+      }
     }
+  },
+  "historical_pending_04": {
+    "date": "2026-10-06",
+    "test_wide_l2_gas": 303820178,
+    "token_uri_chars": 150101,
+    "method": "Prior default test target; historical architecture comparison, not remeasured for this packaging update."
   },
   "validation": {
     "root_js": {
-      "passed": 302,
+      "passed": 307,
       "failed": 0
     },
     "beast_js": {
@@ -392,7 +1018,7 @@
       "failed": 0
     },
     "root_cairo": {
-      "passed": 269,
+      "passed": 267,
       "failed": 0,
       "ignored": 0
     },
@@ -406,7 +1032,129 @@
       "failed": 0,
       "ignored": 20
     },
-    "type_checks": "Headless player, loader and NFT-owned UI passed",
-    "generated": "Segments, settings/data, measurement variants and release ABI byte-stable"
+    "types": "player, loader and NFT UI passed",
+    "generation": "segments, settings/data, measurement fixtures, release ABI and all Cairo formatting passed",
+    "production_lab": "8 cases per revision \u00d7 2 captures, all complete-output checks passed",
+    "actual_nft": "one full-size token_uri per revision \u00d7 2 captures, matching selectors/test-wide gas",
+    "semantic_comparison": "Independent JS nesting/splicing plus decoded small/full MIDI-only and independent+dependent compositions: metadata, original SVG, settings, MIDI and exact engine bytes match; URI bytes intentionally change.",
+    "drift": "One-minute combined Chromium scheduling/rest/cancellation/restart check passed; drift trend informational."
+  },
+  "limitations": [
+    "Prerequisite #57 is open; rebase/revalidate after its final merge before release.",
+    "No class declaration/deployment/release occurred.",
+    "Headless/null-sink browser audio does not establish device/mobile lock-screen/silent-switch/headset/call support.",
+    "Fixed279 and minimum9 have a small/full trade-off;279 remains the default with word-aligned returns.",
+    "Independent fixture only; no real p5.js packaging/integration/benchmark.",
+    "One-minute combined Chromium drift scheduling check; retained engine bytes and full three-engine render/playback checks cover packaging. Previous split three-engine drift evidence is historical."
+  ],
+  "browsers": {
+    "versions": {
+      "chromium": "153.0.8010.12",
+      "firefox": "155.0",
+      "webkit": "26.6"
+    },
+    "method": "Full-size MIDI-only page, three fresh contexts per build. Startup is init-script timestamp to NFT control enable; first play is captured click to engine playMIDI. Offline local null-sink audio. Descriptive samples only.",
+    "samples": {
+      "chromium": {
+        "split": [
+          {
+            "startup_ms": 16.300000071525574,
+            "first_play_ms": 80.39999997615814
+          },
+          {
+            "startup_ms": 9.800000071525574,
+            "first_play_ms": 59.89999997615814
+          },
+          {
+            "startup_ms": 9.799999952316284,
+            "first_play_ms": 57.299999952316284
+          }
+        ],
+        "combined": [
+          {
+            "startup_ms": 25.799999952316284,
+            "first_play_ms": 76.89999997615814
+          },
+          {
+            "startup_ms": 15,
+            "first_play_ms": 53.299999952316284
+          },
+          {
+            "startup_ms": 17.299999952316284,
+            "first_play_ms": 67.89999997615814
+          }
+        ]
+      },
+      "firefox": {
+        "split": [
+          {
+            "startup_ms": 15,
+            "first_play_ms": 725
+          },
+          {
+            "startup_ms": 15,
+            "first_play_ms": 1735
+          },
+          {
+            "startup_ms": 20,
+            "first_play_ms": 1749
+          }
+        ],
+        "combined": [
+          {
+            "startup_ms": 23,
+            "first_play_ms": 1660
+          },
+          {
+            "startup_ms": 19,
+            "first_play_ms": 1748
+          },
+          {
+            "startup_ms": 18,
+            "first_play_ms": 1753
+          }
+        ]
+      },
+      "webkit": {
+        "split": [
+          {
+            "startup_ms": 8,
+            "first_play_ms": 90
+          },
+          {
+            "startup_ms": 8,
+            "first_play_ms": 90
+          },
+          {
+            "startup_ms": 8,
+            "first_play_ms": 98
+          }
+        ],
+        "combined": [
+          {
+            "startup_ms": 9,
+            "first_play_ms": 88
+          },
+          {
+            "startup_ms": 10,
+            "first_play_ms": 85
+          },
+          {
+            "startup_ms": 12,
+            "first_play_ms": 91
+          }
+        ]
+      }
+    },
+    "validation": "All three engines pass composed/independent/custom-control/lifecycle/parser-agreement, six strict-CSP sandbox/media cases, and retained full audio-render checks."
+  },
+  "padding": {
+    "default": 279,
+    "reason": "Neither alignment dominates.279 saves547390 on small MIDI-only;9 saves537630 on full. Retain straightforward word-aligned fixed returns and document both cases.",
+    "dynamic": 9,
+    "dynamic_test_wide_l2_gas": {
+      "9": 53969010,
+      "279": 55997370
+    }
   }
 }

@@ -7,8 +7,7 @@ The implementation is stacked on [PR #57](https://github.com/Provable-Games/onch
 | `ITinySynth` entry point | Result |
 | --- | --- |
 | `gunzip_segment()` | Generic inline loader fragment |
-| `engine_segment()` | Pinned TinySynth gzip fragment |
-| `player_segment()` | Headless player gzip fragment |
+| `player_segment()` | Pinned TinySynth engine and headless API in one gzip fragment |
 | `midi_segment(midi, settings)` | Complete validated-settings/verbatim-MIDI data fragments |
 | `engine()` | `'tinysynth'` |
 | `version()` | Class SemVer |
@@ -17,7 +16,7 @@ The implementation is stacked on [PR #57](https://github.com/Provable-Games/onch
 
 Every segment is `B64(B64(F))`, where `F` is a complete HTML fragment with external whitespace bringing its UTF-8 byte length to a multiple of nine. Fixed library fragments additionally use 279-byte alignment. Both returned encoding layers are canonical and unpadded. NFT-owned JSON framing and HTML fragments can be directly spliced around these constants. Decoding, reconstructing and re-encoding a valid page also works, with additional encoding gas.
 
-A consumer includes the loader once, then engine, optional independent libraries, player, complete settings/MIDI blocks and its own art/bootstrap. The generic loader defines `OnchainLibraries.ready` synchronously, waits for parsing and executes gzip blocks once in document order. Consumer code awaits that promise and `OnchainMidiPlayer.ready` before attaching controls.
+A consumer includes the loader once, then optional independent libraries, the combined MIDI player, complete settings/MIDI blocks and its own art/bootstrap. The generic loader defines `OnchainLibraries.ready` synchronously, waits for parsing and executes gzip blocks once in document order. Consumer code awaits that promise and `OnchainMidiPlayer.ready` before attaching controls.
 
 ```js
 await OnchainLibraries.ready;

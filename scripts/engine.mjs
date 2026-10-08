@@ -1,7 +1,7 @@
 // @ts-check
 // The pinned TinySynth engine: the Provable-Games fork's own minified build
 // (webaudio-tinysynth.min.js) and NOTICE at one commit, vendored in tests/vendor so that the page
-// build and the tests run offline. It is the engine supplied by engine_segment() (scripts/build_segments.mjs) and
+// build and the tests run offline. It is the engine embedded in player_segment() (scripts/build_segments.mjs) and
 // the one the engine tests and render checks run. Both files are SHA-256 checked on every load, so
 // any mismatch fails before anything is generated.
 //
