@@ -1,7 +1,7 @@
 // @ts-nocheck
 import assert from "node:assert/strict";
 import {describe,test} from "node:test";
-import {playAnchor,artUrl,silentWav,mountArtSync} from "../ui.js";
+import {playAnchor,silentWav,mountArtSync} from "../ui.js";
 describe("the play button's anchor on the art (playAnchor)", () => {
   const full = (/** @type {number} */ w, /** @type {number} */ h) => ({ left: 0, top: 0, width: w, height: h });
   const card = (/** @type {string} */ attrs) => `<svg xmlns='http://www.w3.org/2000/svg' ${attrs}><rect/></svg>`;
@@ -75,11 +75,6 @@ describe("the play button's anchor on the art (playAnchor)", () => {
     assert.equal(playAnchor(card(BEAST), full(0, 0), 0, 0), null);
   });
 
-});
-test("NFT-owned isolated art URLs preserve UTF8 bytes and restart timelines",()=>{
- const svg='<svg><title>音楽 🐉</title><desc>script-like &lt;/script&gt;</desc></svg>';
- assert.equal(artUrl(svg),'data:image/svg+xml;base64,'+Buffer.from(svg).toString('base64'));
- assert.equal(artUrl(svg,3),'data:image/svg+xml;r=3;base64,'+Buffer.from(svg).toString('base64'));
 });
 test("NFT media session owns a six-second silent PCM carrier",()=>{
  const b=Buffer.from(silentWav());assert.equal(b.toString('ascii',0,4),'RIFF');assert.equal(b.readUInt32LE(4),b.length-8);assert.equal(b.readUInt32LE(24),8000);assert.equal(b.readUInt32LE(40),48000);assert.ok(b.subarray(44).every(x=>x===128));

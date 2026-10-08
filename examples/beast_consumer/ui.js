@@ -3,19 +3,6 @@
 export const PLAY_ICON = "M8 5v14l11-7z";
 export const PAUSE_ICON = "M6 5h4v14H6zM14 5h4v14h-4z";
 /**
- * The art as a data URL: the SVG text re-encoded as UTF-8 and base64. `restart` > 0 adds a media
- * type parameter, which gives an equivalent image with a distinct URL, so the browser builds a new
- * image (and animation timeline) rather than reusing the running one.
- * @param {string} svg
- * @param {number} [restart]
- */
-export function artUrl(svg, restart = 0) {
-  let bin = "";
-  for (const b of new TextEncoder().encode(svg)) bin += String.fromCharCode(b);
-  return "data:image/svg+xml;" + (restart ? "r=" + restart + ";" : "") + "base64," + btoa(bin);
-}
-
-/**
  * Where the ▶/❚❚ button goes when the art's root `<svg>` carries `data-play-anchor="X Y"` or
  * `"X Y S"`: a point in the SVG's own units (its `viewBox`, else `width` and `height`), such as the
  * bottom-right corner of a sprite's box, and optionally the button's diameter S in the same units.
