@@ -355,7 +355,11 @@ export function startPlayer(host = window) {
       return promise;
     },
     pause() {
-      if (pausing) return pausing;
+      if (pausing) {
+        // A newer pause also cancels a resume/play queued behind the current suspension.
+        if (pending) { ++operationId; holdSuspension = true; abortPending(); transition(state === "starting" ? "stopped" : "paused"); }
+        return pausing;
+      }
       if (state !== "playing" && state !== "starting" && !(state === "paused" && pending)) return Promise.resolve();
       holdSuspension = true;
       const wasStarting = state === "starting", operation = ++operationId;

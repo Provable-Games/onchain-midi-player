@@ -9,6 +9,7 @@ const {values,positionals}=parseArgs({allowPositionals:true,options:{
 const minutes=Number(values.minutes),every=Number(values.every);
 if(!(minutes>0&&minutes<=60&&every>0)||positionals.length>1)throw Error("usage: drift_check.mjs [--minutes 10] [--every 10] [--drift-info] [out_dir]");
 process.env.SYNC_SECONDS=String(minutes*60);
+process.env.SYNC_SAMPLE_SECONDS=String(every);
 if(positionals[0])process.env.SYNC_RESULTS=positionals[0];
-// The monitor samples each animation frame; --every and --drift-info remain CLI report preferences.
+// The monitor samples each frame; --every records checkpoints. Drift is always informational.
 await import("./sync_check.mjs");
