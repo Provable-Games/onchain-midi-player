@@ -7,6 +7,8 @@ import { compositionHtml } from "./composition.mjs";
 import { FIXTURES,fixtureCase } from "./fixture_pages.mjs";
 import { fixedFragment,alignedFragment,b64 } from "./segments.mjs";
 import { gzipFragment,gzipSource } from "./build_segments.mjs";
+import { scriptBlocks } from "./html_blocks.mjs";
+import { verifyLibraries } from "./verify_engine.mjs";
 const run=await openBrowser(),measurements=[];
 try {
  for(const c of [...FIXTURES.valid,{...tokenParts(4),name:"full_warlock",members:tokenParts(4).mem}]){const o=await run.page();try{await o.page.goto(dataUrl(composed(c)));await waitReady(o.page);
@@ -24,14 +26,25 @@ try {
  assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);measurements.push({case:c.name,startup_ms:ready.ms,first_play_ms:played.firstPlay});
  console.log(`PASS ${c.name}: independent/dependent providers, lazy audio, pass event and NFT controls`);
  }finally{await o.context.close();}}
+ // HTML5 parser agreement on the two reproduced context bugs, using real provider fragments.
+ for(const mode of ["normal","svg","plaintext"]){const o=await run.page();try{
+   const prefix=mode==="svg"?"<svg/>":mode==="plaintext"?"<plaintext>":"";
+   const html="<!doctype html><body>"+prefix+fixedFragment("gunzip")+fixedFragment("player")+fixtureCase("beast_140bpm").d;
+   await o.page.goto(dataUrl(html));
+   const ids=await o.page.evaluate(()=>[...document.querySelectorAll("script")].filter(s=>s.namespaceURI==="http://www.w3.org/1999/xhtml").map(s=>s.id));
+   assert.deepEqual(scriptBlocks(html).map(s=>s.attrs.id),ids);
+   if(mode==="plaintext"){assert.deepEqual(ids,[]);assert.throws(()=>verifyLibraries(html),/found 0/);}
+   else{verifyLibraries(html);await o.page.evaluate(async()=>{await OnchainLibraries.ready;await OnchainMidiPlayer.ready;});}
+   assert.deepEqual(await o.errors(),[]);console.log(`PASS HTML5 extraction/browser agreement ${mode}`);
+ }finally{await o.context.close();}}
  // The NFT-owned button follows a supplied SVG anchor, including object-fit scaling.
  {const o=await run.page();try{await o.page.setViewportSize({width:500,height:700});const c=fixtureCase("beast_140bpm"),svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350" data-play-anchor="235 202 32"><rect width="250" height="350" fill="black"/></svg>';await o.page.goto(dataUrl(composed({...c,svg})));await waitReady(o.page);const box=await o.page.locator('#play').boundingBox();assert.deepEqual(box,{x:394,y:328,width:64,height:64});assert.deepEqual(await o.errors(),[]);console.log("PASS NFT button anchor and scaled touch target");}finally{await o.context.close();}}
  // A changed consumer head and isolated script-like art are accepted by the real HTML parser.
  {const c=fixtureCase("beast_140bpm"),svg=c.svg.replace('</svg>','<script>window.artInjection=true</script><desc><![CDATA[</SCRIPT>]]></desc></svg>');
  const o=await run.page();try{await o.page.goto(dataUrl(composed({...c,svg})));await waitReady(o.page);assert.equal(await o.page.evaluate(()=>window.artInjection),undefined);assert.equal(await o.page.locator('#beast-art').count(),1);assert.deepEqual(await o.errors(),[]);}finally{await o.context.close();}}
- for(const name of ["engine","player"]){const o=await run.page();try{await o.page.goto(dataUrl(withoutBlock(composed(),name)));await o.page.waitForFunction(()=>!document.getElementById("error").hidden);assert.equal(await o.page.locator('#beast-art').count(),1);assert.ok(await o.page.locator('#play').isDisabled());assert.equal(await o.page.evaluate(()=>window.__check.created),0);}finally{await o.context.close();}console.log(`PASS missing ${name}: art stays visible`);}
+ for(const name of ["player"]){const o=await run.page();try{await o.page.goto(dataUrl(withoutBlock(composed(),name)));await o.page.waitForFunction(()=>!document.getElementById("error").hidden);assert.equal(await o.page.locator('#beast-art').count(),1);assert.ok(await o.page.locator('#play').isDisabled());assert.equal(await o.page.evaluate(()=>window.__check.created),0);}finally{await o.context.close();}console.log(`PASS missing ${name}: art stays visible`);}
  // Synchronous library failure does not prevent an independent later provider from executing.
- {const o=await run.page();try{const bad=alignedFragment(gzipFragment('broken-library',gzipSource('throw Error("fixture evaluation failure")'))),html=composed().replace(fixedFragment('engine'),fixedFragment('engine')+bad);
+ {const o=await run.page();try{const bad=alignedFragment(gzipFragment('broken-library',gzipSource('throw Error("fixture evaluation failure")'))),html=composed().replace(fixedFragment('player'),fixedFragment('player')+bad);
  await o.page.goto(dataUrl(html));const result=await o.page.evaluate(async()=>{try{await window.OnchainLibraries.ready;return "resolved";}catch(e){return e.message;}});assert.match(result,/broken-library/);assert.equal(await o.page.evaluate(()=>window.DependentFixture),'fixture:dependent');}finally{await o.context.close();}}
  // Real browser parsing/evaluation checks for the generic loader, including late installation.
  for(const mode of ["late","repeat","duplicate","corrupt"]){const o=await run.page();try{let html=composed();
@@ -40,17 +53,17 @@ try {
      html=html.replace(loader,'<script>document.addEventListener("DOMContentLoaded",()=>{const s=document.createElement("script");s.id="onchain-gunzip";s.textContent='+JSON.stringify(source)+';document.head.append(s)});</script>');
      // The ordinary NFT bootstrap must await the loader's existence when choosing late installation.
      html=html.replace('await window.OnchainLibraries.ready','await new Promise(r=>document.addEventListener("DOMContentLoaded",r)),await window.OnchainLibraries.ready');
-   }else if(mode==="repeat")html=html.replace(fixedFragment("engine"),fixedFragment("gunzip")+fixedFragment("engine"));
-   else if(mode==="duplicate")html=html.replace(fixedFragment("engine"),fixedFragment("engine")+fixedFragment("engine"));
-   else {const engine=fixedFragment("engine"),payload=/base64,([^" ]+)/.exec(engine)[1],gzip=Buffer.from(payload,"base64");gzip[gzip.length-8]^=1;html=html.replace(engine,engine.replace(payload,gzip.toString("base64")));}
+   }else if(mode==="repeat")html=html.replace(fixedFragment("player"),fixedFragment("gunzip")+fixedFragment("player"));
+   else if(mode==="duplicate")html=html.replace(fixedFragment("player"),fixedFragment("player")+fixedFragment("player"));
+   else {const engine=fixedFragment("player"),payload=/base64,([^" ]+)/.exec(engine)[1],gzip=Buffer.from(payload,"base64");gzip[gzip.length-8]^=1;html=html.replace(engine,engine.replace(payload,gzip.toString("base64")));}
    await o.page.goto(dataUrl(html));
-   if(mode==="late"||mode==="repeat"){await waitReady(o.page);assert.equal(await o.page.evaluate(()=>window.DependentFixture),"fixture:dependent");assert.equal(await o.page.locator('script#onchain-midi-engine').count(),1);assert.deepEqual(await o.errors(),[]);}
-   else{const error=await o.page.evaluate(async()=>{try{await window.OnchainLibraries.ready;return"resolved";}catch(e){return e.message;}});assert.match(error,/onchain-midi-engine/);assert.equal(await o.page.evaluate(()=>window.DependentFixture),mode==="duplicate"?undefined:"fixture:dependent");assert.equal(await o.page.evaluate(()=>window.__check.created),0);}
+   if(mode==="late"||mode==="repeat"){await waitReady(o.page);assert.equal(await o.page.evaluate(()=>window.DependentFixture),"fixture:dependent");assert.equal(await o.page.locator('script#onchain-midi-player').count(),1);assert.deepEqual(await o.errors(),[]);}
+   else{const error=await o.page.evaluate(async()=>{try{await window.OnchainLibraries.ready;return"resolved";}catch(e){return e.message;}});assert.match(error,/onchain-midi-player/);assert.equal(await o.page.evaluate(()=>window.DependentFixture),mode==="duplicate"?undefined:"fixture:dependent");assert.equal(await o.page.evaluate(()=>window.__check.created),0);}
    assert.deepEqual(o.requests,[]);console.log(`PASS generic loader ${mode}`);
  }finally{await o.context.close();}}
  // A consumer with its own control and visual names only uses the six-method headless API.
  {const o=await run.page();try{const data=fixtureCase("beast_140bpm").d;
- const html='<!doctype html><html><head>'+fixedFragment("gunzip")+fixedFragment("engine")+fixedFragment("player")+'</head><body><button id="transport" disabled>Sound</button><output id="pulse">0</output>'+data+'<script>(async()=>{await OnchainLibraries.ready;await OnchainMidiPlayer.ready;const a=OnchainMidiPlayer,b=document.getElementById("transport");let count=0;a.onPassStart(()=>document.getElementById("pulse").textContent=String(++count));a.onPassStart(()=>{throw Error("consumer subscriber")});b.onclick=()=>a.getPlayStatus().state==="playing"?a.stop():a.play();b.disabled=false;})();</script></body></html>';
+ const html='<!doctype html><html><head>'+fixedFragment("gunzip")+fixedFragment("player")+'</head><body><button id="transport" disabled>Sound</button><output id="pulse">0</output>'+data+'<script>(async()=>{await OnchainLibraries.ready;await OnchainMidiPlayer.ready;const a=OnchainMidiPlayer,b=document.getElementById("transport");let count=0;a.onPassStart(()=>document.getElementById("pulse").textContent=String(++count));a.onPassStart(()=>{throw Error("consumer subscriber")});b.onclick=()=>a.getPlayStatus().state==="playing"?a.stop():a.play();b.disabled=false;})();</script></body></html>';
  await o.page.goto(dataUrl(html));await o.page.waitForFunction(()=>!document.getElementById("transport").disabled);assert.equal(await o.page.evaluate(()=>window.__check.created),0);
  await o.page.click("#transport");await o.page.waitForFunction(()=>document.getElementById("pulse").textContent!=="0");assert.equal(await o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus().state),"playing");await o.page.click("#transport");assert.equal(await o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus().state),"stopped");assert.equal(await o.page.locator('#play,#beast-art,#settings,#midi,#art').count(),0);assert.deepEqual(await o.errors(),[]);assert.deepEqual(o.requests,[]);console.log("PASS independent NFT controls and visuals with headless API");
  }finally{await o.context.close();}}

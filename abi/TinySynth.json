@@ -329,17 +329,6 @@
       },
       {
         "type": "function",
-        "name": "engine_segment",
-        "inputs": [],
-        "outputs": [
-          {
-            "type": "core::byte_array::ByteArray"
-          }
-        ],
-        "state_mutability": "view"
-      },
-      {
-        "type": "function",
         "name": "player_segment",
         "inputs": [],
         "outputs": [

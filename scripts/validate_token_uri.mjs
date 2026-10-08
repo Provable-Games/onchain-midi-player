@@ -508,7 +508,10 @@ function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
       r.sizes[`${name}_bytes`] = library.length;
       r.pass(`player.${name}`, `${library.id}: ${library.sha256} (${library.length} bytes)`, "verifying");
     }
-    if (opts.expect) r.check(result.libraries.engine.sha256 === normalizeExpect(opts.expect), "player.engine_sha256", "engine matches --expect", "engine differs from --expect", "verifying");
+    r.hashes.engine_sha256 = result.engine.sha256;
+    r.sizes.engine_bytes = result.engine.length;
+    r.pass("player.engine", `embedded engine: ${result.engine.sha256} (${result.engine.length} bytes)`, "verifying");
+    if (opts.expect) r.check(result.engine.sha256 === normalizeExpect(opts.expect), "player.engine_sha256", "engine matches --expect", "engine differs from --expect", "verifying");
     r.info("player.consumer_content", result.scope, "verifying");
   } catch (e) { r.fail("player.libraries", e.message, "verifying"); }
   let blocks;

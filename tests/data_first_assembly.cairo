@@ -49,7 +49,6 @@ pub fn token_uri(
     align_to_word(ref uri);
     uri.append(@synth.gunzip_segment());
     align_to_word(ref uri);
-    uri.append(@synth.engine_segment());
     if fixture.len() != 0 {
         align_to_word(ref uri);
         uri.append(@fixture);

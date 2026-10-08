@@ -35,3 +35,27 @@ test("short loops advance index over skipped passes",async()=>{const h=harness({
 test("long loops are left until schedulable without overflowing setTimeout",async()=>{const midi=smf({ppq:1,tracks:[[[0,0xff,0x51,3,255,255,255],[0,0x90,60,100],[200000,0x80,60,0],[0,0xff,0x2f,0]]]}),h=harness({midi}),events=[];h.api.onPassStart(e=>events.push(e));await h.api.play();h.fire(1.12);h.status.startTime=1.1+h.api.getPlayStatus().passSeconds;h.poll();assert.equal(h.timers.size,0);h.ctx.currentTime=h.status.startTime-.1;h.poll();assert.equal(h.timers.size,1);h.api.stop();});
 test("tempo-only null start emits one immediate initial event and no fictitious repeats",async()=>{const midi=smf({ppq:96,tracks:[[[0,0xff,0x51,3,7,0xa1,0x20],[192,0xff,0x2f,0]]]}),h=harness({midi,nullStart:true}),events=[];h.api.onPassStart(e=>events.push(e));await h.api.play();assert.equal(events.length,1);assert.equal(events[0].startTime,null);assert.equal(events[0].audibleTime,null);assert.equal(h.intervals.size,0);h.api.stop();});
 for(const latency of [undefined,-1,NaN,Infinity])test(`output latency fallback ${latency}`,async()=>{const h=harness({latency});h.ctx.outputLatency=latency;await h.api.play();assert.equal(h.api.getPlayStatus().outputLatency,0);h.api.stop();});
+test("reentrant stop queues captured state transitions in observer order",async()=>{
+ const h=harness(),seen=[],late=[];let remove=()=>{},removedCalls=0;
+ h.api.onStateChange(s=>{if(s.state==="starting"){h.api.stop();remove();h.api.onStateChange(s=>late.push(s.state));}});
+ h.api.onStateChange(s=>{seen.push(s);s.state="failed";});
+ remove=h.api.onStateChange(()=>removedCalls++);
+ await assert.rejects(h.api.play(),{name:"AbortError"});
+ assert.deepEqual(seen.map(s=>s.runId),[1,2]);
+ assert.deepEqual(late,[]);assert.equal(removedCalls,0);assert.equal(h.api.getPlayStatus().state,"stopped");assert.deepEqual(h.calls,[]);
+});
+test("reentrant state stop delivers starting then stopped once per observer",async()=>{
+ const h=harness(),seen=[];
+ h.api.onStateChange(s=>{if(s.state==="starting")h.api.stop();});
+ h.api.onStateChange(s=>seen.push(s.state));
+ await assert.rejects(h.api.play(),{name:"AbortError"});assert.deepEqual(seen,["starting","stopped"]);
+});
+test("pass stop suppresses remaining callbacks from the stopped run",async()=>{
+ const h=harness(),seen=[];h.api.onPassStart(()=>h.api.stop());h.api.onPassStart(e=>seen.push(e));
+ await h.api.play();h.fire(1.12);assert.deepEqual(seen,[]);assert.equal(h.api.getPlayStatus().state,"stopped");
+});
+test("pass subscriptions removed during delivery are skipped and snapshots are isolated",async()=>{
+ const h=harness(),seen=[];let remove=()=>{},removedCalls=0;
+ h.api.onPassStart(e=>{e.passIndex=99;remove();});remove=h.api.onPassStart(()=>removedCalls++);
+ h.api.onPassStart(e=>seen.push(e.passIndex));await h.api.play();h.fire(1.12);assert.deepEqual(seen,[0]);assert.equal(removedCalls,0);h.api.stop();
+});

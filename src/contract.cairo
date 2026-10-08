@@ -12,9 +12,6 @@ pub mod TinySynth {
         fn gunzip_segment(self: @ContractState) -> ByteArray {
             segment_data::gunzip_segment()
         }
-        fn engine_segment(self: @ContractState) -> ByteArray {
-            segment_data::engine_segment()
-        }
         fn player_segment(self: @ContractState) -> ByteArray {
             segment_data::player_segment()
         }

@@ -269,14 +269,14 @@ async function main() {
     const c = JSON.parse(readFileSync(new URL(`../../../deployments/${f}`, import.meta.url), 'utf8')).class;
     versionOf.set(BigInt(c.class_hash), c.version);
   }
-  const engineFragmentSha = sha256(fixedFragment("engine"));
+  const playerFragmentSha = sha256(fixedFragment("player"));
   const recorded = JSON.parse(readFileSync(new URL('../../../scripts/library_versions.json', import.meta.url), 'utf8'));
   for (const name of names) {
     const pinned = scalar(await call(providers[name], redact, 30, opt.address, 'tinysynth_class_hash', []));
     if (pinned === undefined) continue;
     const version = versionOf.get(pinned);
-    if (version === undefined || recorded[version]?.artifacts.engine.raw_sha256 !== engineFragmentSha) {
-      console.log(`warning: the contract pins class 0x${pinned.toString(16)}, ${version === undefined ? 'which is not a class in deployments/' : `version ${version}, whose engine fragment is not this checkout's`}: the reference is the composition of this checkout, so DIFF may be a consumer/build mismatch, not a provider fault`);
+    if (version === undefined || recorded[version]?.artifacts.player.raw_sha256 !== playerFragmentSha) {
+      console.log(`warning: the contract pins class 0x${pinned.toString(16)}, ${version === undefined ? 'which is not a class in deployments/' : `version ${version}, whose combined player fragment is not this checkout's`}: the reference is the composition of this checkout, so DIFF may be a consumer/build mismatch, not a provider fault`);
     }
     break;
   }

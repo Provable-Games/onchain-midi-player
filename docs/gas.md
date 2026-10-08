@@ -1,110 +1,93 @@
 # Gas, payload and class measurements
 
-These 0.5.0 measurements use Scarb 2.20.1, snforge 0.64.0 and **Sierra gas** on 2026-10-06. [Machine-readable results](measurements/issue59.json) record the named probes, payload identities and class sizes. The comparison baseline is the verified **pending, unmerged** #57 head `32f776185370ed519e1f14f94a0975a843069702`; rebase and repeat against its final merged state before release. No class was declared or deployed for these checks.
+The current unreleased 0.5.0 build combines the unchanged TinySynth engine and headless API in one gzip fragment. The comparison is the recoverable split-fragment head `4a76614193d87f045230693fe972bbd5ac457386`. [Results and bindings](measurements/issue59.json) record the tool binaries, source/input/artifact hashes, complete case inventory and repeated captures from 2026-10-07. Prerequisite #57 remains open at `32f776185370ed519e1f14f94a0975a843069702`; rebase and revalidate against its final merged state before release. No declaration, deployment or release occurred.
 
-## Full-size reference and encoding choices
+## Production-shaped comparison
 
-The common input is the shiny Warlock SVG (22,733 bytes), a 3,716-byte synthetic MIDI and the three Beast sounds (334 serialized settings bytes). Both versions preserve the same visible/music/background behavior. The replacement safely frames supplied art as an encoded complete `<img>`, with bootstrap and closing HTML after it.
+Both revisions use Scarb 2.20.1, Cairo/CASM compiler 2.20.0, Sierra 1.9.3 and snforge 0.64.0, default features, release profile and Sierra gas. `--no-optimization` builds separate contract targets, avoiding test-specialized contract artifacts. Each capture ran twice with identical results.
 
-| Full reference | L2 gas | Token URI characters |
-| --- | ---: | ---: |
-| Pending 0.4.0 whole-page baseline, same NFT setup and token 4 | 303,820,178 | 150,101 |
-| 0.5.0 Beast NFT, direct splicing | 429,355,528 | 167,905 |
-| 0.5.0 runtime reconstruction and nested encoding, byte-identical output | 831,613,928 | 167,905 |
+The actual Beast NFT uses the same setup, local caller/block context and token 4: the 22,733-byte shiny Warlock SVG, 3,716-byte MIDI and three Beast sounds (334 serialized settings bytes).
 
-The complete safe framing costs **41.3% more** than the previous art-as-document-tail representation. Direct splicing saves **48.4%** relative to reconstructing/encoding the complete replacement page at runtime. This includes each test's input/setup work, not the SHA-256 golden comparison. Both NFT versions have the same separately measured setup cost, 872,340 gas; subtracting it gives 302,947,838 for the pending baseline and 428,483,188 for the replacement. The runtime reconstruction is a compiled reference function and has no NFT deployment setup, so its comparison is conservative for direct splicing. The reference reuses the encoded metadata image attribute while constructing the complete isolated image fragment, applying the remaining outer layer rather than separately encoding the large image twice. Original SVG bytes remain unchanged; alignment spaces belong to its HTML representation and JSON framing.
+| Actual full NFT measurement | Split | Combined | Change |
+| --- | ---: | ---: | ---: |
+| `BeastLikeNft.token_uri` selector L2 gas | 413,985,168 | 413,511,218 | −473,950 (0.1145%) |
+| Test-wide L2 gas, including fixture/setup | 429,355,528 | 428,752,938 | −602,590 (0.1403%) |
+| Complete token URI characters | 167,905 | 166,417 | −1,488 |
 
-## Fixed padding, dynamic padding and order
+Selector gas includes nested library calls; adding those costs again would double count them. Test-wide and selector measurements describe different work. These are execution measurements, not transaction/declaration fees or RPC support guarantees.
 
-The root composition probes use the same complete document/UI and input constants, with a library dispatcher for each provider. They omit NFT deployment/storage/setup, so their totals differ from the Beast NFT totals above. The independent library is the tiny named-export fixture, not a real p5.js payload.
+A temporary separately compiled `CompositionProbe.token_uri` returns the complete ByteArray and calls the actual MIDI and independent fixture providers. Its runtime class-hash arguments and small/full selector exercise both compositions without folding the result to a length. Each test validates the whole URI length and SHA-256 against the independent JS nesting/splicing reference. A same-length incorrect URI prefix compiles successfully and fails the content assertion, qualifying the oracle. Complete layers decode correctly, and split/combined metadata, original SVG, settings, MIDI and exact engine bytes agree; HTML payload identity intentionally changes.
 
-| Root consumer, same inputs within each pair | Raw fixed padding | L2 gas |
-| --- | ---: | ---: |
-| Full-size MIDI-only | 279 | 405,289,968 |
-| Full-size MIDI-only | 9 | 405,435,158 |
-| Small MIDI-only | 279 | 27,828,578 |
-| Small MIDI-only | 9 | 28,387,168 |
-| Small MIDI + independently called fixture provider | 279 | 28,051,688 |
-| Small MIDI + independently called fixture provider | 9 | 28,697,718 |
-| Full-size MIDI + fixture, art before data | 279 | 405,512,778 |
-| Full-size MIDI + fixture, data before art | 279 | 405,513,178 |
-| Small MIDI + fixture, data before art | 279 | 27,910,258 |
+| Composition selector L2 gas | Split | Combined | Change |
+| --- | ---: | ---: | ---: |
+| Small MIDI-only, fixed279 | 31,153,288 | 30,679,338 | −473,950 |
+| Small independent fixture, fixed279 | 31,387,298 | 30,913,348 | −473,950 |
+| Full MIDI-only, fixed279 | 413,782,418 | 413,308,468 | −473,950 |
+| Full independent fixture, fixed279 | 414,016,428 | 413,542,478 | −473,950 |
+| Small MIDI-only, minimum9 | 31,686,758 | 31,226,728 | −460,030 |
+| Small independent fixture, minimum9 | 32,008,208 | 31,548,178 | −460,030 |
+| Full MIDI-only, minimum9 | 413,902,488 | 412,770,838 | −1,131,650 |
+| Full independent fixture, minimum9 | 414,223,938 | 413,092,288 | −1,131,650 |
 
-Use **279-byte padding for fixed library fragments**: it saves 145,190 gas in the full-size base and 558,590 in the small base. The consumer inserts pre-encoded nine-space fragments until the returned-stream position is on a 31-byte word boundary before large constants. The fixed streams themselves are also word-aligned. Art-before-data wins the full input by only 400 gas; data-before-art wins the small input by 141,430. The reference uses art first, while both orders are valid and tested.
+The independent library is the 78-byte named-export fixture, with its own provider and manifest. Browser tests also include a dependent gzip block and verify once-only shared loading and actual use of the export. These measurements contain no real p5.js payload or integration.
 
-Dynamic data stays at **minimum nine-byte padding**. With the same 3,716-byte MIDI/default settings, encoding the dynamic fragment at 9 costs 53,969,010 gas; expanding it to 279 costs 55,997,370. Encoding extra whitespace costs more than the possible append saving. Settings validation and MIDI encoding retain their earlier algorithms; MIDI is encoded verbatim onchain and validated by the browser.
+## Alignment trade-off
 
-## Components
+Neither fixed alignment dominates. In the combined build, 279-byte raw padding saves 547,390 gas (about 1.75%) on small MIDI-only composition; minimum9 saves 537,630 (about 0.13%) on full composition. Keep **279 as the default** for straightforward word-aligned fixed returns and its small-input advantage. The nine-byte fragment contract remains the interoperability requirement. The fixture follows the same trade-off: 279 saves 634,830 on small, while nine saves 450,190 on full.
 
-| Probe | L2 gas |
-| --- | ---: |
-| Loader constant materialization | 62,450 |
-| Engine constant materialization | 232,050 |
-| Headless player constant materialization | 72,050 |
-| Loader through `library_call` | 1,336,020 |
-| Engine through `library_call` | 5,109,250 |
-| Player through `library_call` | 1,549,620 |
-| Append engine + player, aligned (including materialization) | 2,565,090 |
-| Same append, unaligned | 10,361,090 |
-| Default settings/empty MIDI through `library_call` | 1,877,280 |
-| Three Beast sounds/3,716-byte MIDI through `library_call` | 61,021,398 |
+Dynamic data remains at **minimum nine-byte padding**. The unchanged encoding probes with a 3,716-byte MIDI/default settings cost 53,969,010 test-wide gas at nine versus 55,997,370 at 279. These helper measurements describe dynamic encoding separately, rather than substituting for production selector gas. Both art/data orders and byte-identical runtime reconstruction of each revision remain covered by the Cairo/JS suites.
 
-Library-call probes include serialization and the declaration test setup (17,420 gas). A direct per-token fragment with default settings and 3,716-byte MIDI costs 53,634,110 gas after subtracting its input-build probe; the three-sound input costs 58,211,508. Large settings/custom-wave validation is still priced by execution, without an arbitrary byte cap. Read exact per-size/validation/encoding probes in the JSON record rather than applying these small-input figures to large settings.
+## Payload and class sizes
 
-## Payloads and release artifacts
-
-| Provider fragment | Source bytes | Gzip bytes | Raw HTML bytes | Returned bytes / serialized felts |
+| Current provider fragment | Source bytes | Gzip bytes | Raw HTML bytes | Returned bytes / serialized felts |
 | --- | ---: | ---: | ---: | ---: |
-| Shared loader | 4,465 | inline | 4,743 | 8,432 / 275 |
-| TinySynth engine | 47,212 | 14,339 | 19,530 | 34,720 / 1,123 |
-| Headless player | 8,245 | 3,926 | 5,580 | 9,920 / 323 |
+| Shared loader | 4,465 | inline | 4,743 | 8,432 /275 |
+| Combined engine/headless API | 55,687 | 17,970 | 24,273 | 43,152 /1,395 |
 
-Together the fixed returned streams are 53,072 bytes, versus the pending baseline's 59,220-byte fixed page return. Separate source/gzip/raw/double-encoded hashes are in the [current segment manifest](../scripts/library_versions.json); the independent fixture's [record](../tests/fixtures/libraries/manifest.json) is separate. Fixed 279 padding adds 1,024 returned bytes over minimum 9 for this build.
+Fixed returns total **51,584 bytes**, down from 53,072 (−1,488; 2.8037%). Minimum9 totals 51,152 bytes. The loader bytes are unchanged. The combined source contains the exact 47,212 engine bytes at offset 0, a three-byte statement delimiter and the separately minified 8,472-byte API. The [manifest](../scripts/library_versions.json) records the combined source/gzip hashes and distinct embedded-engine/API byte ranges and hashes. `script_sha256()` still identifies the original engine: `bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74`.
 
-| Release class | Pending 0.4.0 | 0.5.0 |
-| --- | ---: | ---: |
-| Sierra JSON bytes | 1,028,322 | 983,489 |
-| Sierra program felts | 20,192 | 18,764 |
-| CASM JSON bytes | 809,039 | 787,215 |
-| CASM bytecode felts | 30,565 | 29,962 |
+| Separately built release artifact | Split | Combined | Change |
+| --- | ---: | ---: | ---: |
+| TinySynth Sierra JSON bytes | 983,489 | 973,255 | −10,234 |
+| TinySynth Sierra program felts | 18,764 | 18,581 | −183 |
+| TinySynth CASM JSON bytes | 787,215 | 780,098 | −7,117 |
+| TinySynth CASM bytecode felts | 29,962 | 29,730 | −232 |
+| Composition consumer Sierra JSON bytes | 710,451 | 705,788 | −4,663 |
+| Composition consumer Sierra program felts | 13,447 | 13,374 | −73 |
+| Composition consumer CASM JSON bytes | 575,265 | 573,400 | −1,865 |
+| Composition consumer CASM bytecode felts | 23,163 | 23,069 | −94 |
 
-These are compact JSON build-artifact sizes, not declaration fee estimates. CASM generation is enabled locally in the release target; the ABI contains exactly eight MIDI class selectors. Browser startup/gesture-to-playing measurements are recorded separately in the JSON record after real offline Chromium/Firefox/WebKit checks. Audio output is a null sink and timers are best effort; hardware/device and mobile lock-screen validation remains outstanding.
+These are emitted compact artifact sizes. The public MIDI ABI now has exactly seven entries. The prior pending 0.4.0 default test-wide measurement of 303,820,178 gas/150,101 URI characters is historical architecture evidence; it was not remeasured for this packaging update and is not the matched comparator above.
 
-## Browser startup and first play
+## Browser evidence
 
-Three fresh offline full-size MIDI-only contexts per build use the same timestamps: init script to NFT control enable, then captured user click to engine `playMIDI`. Medians in milliseconds:
+Chromium 153.0.8010.12, Firefox 155 and WebKit 26.6 pass composed pages, independent/dependent providers, custom NFT controls, loader lifecycle/errors, parser agreement on normal/self-closing SVG/plaintext, six strict-CSP sandbox/media cases and the retained audio-render suite. A focused one-minute combined Chromium drift probe passes schedule/rest/cancellation/restart checks; the drift trend remains informational. The prior split three-engine drift checks remain historical evidence.
 
-| Browser | Pending baseline startup | 0.5.0 startup | Pending baseline first play | 0.5.0 first play |
+Three fresh full-size MIDI-only contexts per build measure init-script to NFT control enable and captured click to engine `playMIDI`. Median milliseconds:
+
+| Browser | Split startup | Combined startup | Split first play | Combined first play |
 | --- | ---: | ---: | ---: | ---: |
-| Chromium 153.0.8010.12 | 10.1 | 15.0 | 53.1 | 53.4 |
-| Firefox 155.0 | 12 | 19 | 1,748 | 1,733 |
-| WebKit 26.6 | 12 | 9 | 91 | 82 |
+| Chromium | 9.8 | 17.3 | 59.9 | 67.9 |
+| Firefox |15 |19 |1,735 |1,748 |
+| WebKit |8 |10 |90 |88 |
 
-These small descriptive samples do not establish a performance guarantee. Firefox's null-sink backend accounts for substantial first-play variability (recorded samples span roughly 0.7–1.8 seconds); no device latency is inferred. `scripts/startup_check.mjs` reproduces three current samples and accepts a baseline HTML/token URI file for the same measurement. All three browser engines also pass offline page, strict-CSP sandbox/blocked-media, audio-render and one-minute schedule/drift checks. The drift trend is informational in that one-minute run; device/mobile lock-screen checks remain outstanding.
+These descriptive samples are not performance guarantees. The initial Firefox run timed out because the prior local PulseAudio socket had expired; restoring the null sink made the complete suites pass. Hardware/mobile lock-screen, silent-switch, calls/headset and media controls remain device validation.
 
 ## Reproduce
+
+Use separate checkouts of the frozen split head and this revision, with their pinned locks/tools. Run each actual NFT capture twice:
 
 ```sh
 npm ci
 npm run check:segments
 npm run check:data
 npm run check:measurements
+npm run check:abi
 scarb --release build
-node scripts/measure_payloads.mjs /path/to/verified-pr57-baseline
-snforge test gas_ --tracked-resource sierra-gas
-(cd examples/beast_consumer && snforge test gas_t4_ --tracked-resource sierra-gas)
+node scripts/measure_payloads.mjs /path/to/split-checkout
+(cd examples/beast_consumer && snforge test --release --no-optimization --tracked-resource sierra-gas --gas-report gas_t4_direct_splicing)
 ```
 
-For the baseline, check out the exact recorded #57 head separately, enable `casm = true` in its build target for size measurement, and run this small probe in its Beast `tests/test_gas.cairo`, importing the existing NFT dispatcher trait:
+The eight-case composition lab is **temporary snapshot evidence**, not a checked-in clone-and-run benchmark. The review workspace retains its preparation scripts, copied fixture sources, full-return wrapper, complete golden cases and two captures per revision under `/tmp/issue61-*`; the JSON record binds these files and separately compiled artifacts by hash. Its command was `snforge test --release --no-optimization --tracked-resource sierra-gas --gas-report test_measure`. Those paths support auditing this captured experiment in the shared review workspace. The checked-in Beast commands above are the permanent reproduction route for the actual full NFT selector comparison. No diagnostic contract is part of the production MIDI package or ABI.
 
-```cairo
-#[test]
-fn gas_issue59_baseline_token4() {
-    let (nft, _) = crate::test_token_uri::setup();
-    assert!(nft.token_uri(4).len() > 0);
-}
-```
-
-Run `snforge test gas_issue59_baseline_token4 --tracked-resource sierra-gas` there. The ordinary baseline token-4 SHA-256 assertion adds substantial hash gas and is not a valid token-URI execution comparison. Run browser checks with the pinned Playwright builds and a PulseAudio null sink for Firefox; see [development](development.md).
-
-RPC call gas/response limits remain provider-specific. The stress example retains its 20 calibrated large tokens and opt-in gas/RPC probes; do not infer public RPC support or a production transaction budget from unit-test execution alone.
+Standard root helper gas probes remain available with `snforge test gas_ --tracked-resource sierra-gas`, but their default test-wide numbers are not interchangeable with production selector captures. Run browser checks with the established pinned Playwright/null-sink setup; [development](development.md) documents the commands. The stress consumer retains its opt-in large-token gas/RPC probes; unit execution does not establish public RPC call budgets.

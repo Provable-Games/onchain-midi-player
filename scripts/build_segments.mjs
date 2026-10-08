@@ -28,19 +28,20 @@ export function gzipFragment(id, gzip) { return `<script type="text/javascript+g
 export async function build(alignment = FIXED_ALIGNMENT) {
   const engine = engineSource();
   const loader = await compile(["../player/gunzip.js"], "gunzipScripts");
-  const player = await compile(["../player/settings.js", "../player/player.js"], "startPlayer");
+  const wrapper = await compile(["../player/settings.js", "../player/player.js"], "startPlayer");
+  const player = engine + "\n;\n" + wrapper;
+  const embedded_engine = { offset: 0, length: bytes(engine).length, sha256: sha256(engine) };
   const definitions = {
     gunzip: { source: loader, fragment: `<!-- gunzip: fflate 0.8.3, Copyright (c) 2026 Arjun Barrett, MIT; full license: license() --><script id="onchain-gunzip">${loader}</script>` },
-    engine: { source: engine, gzip: gzipSource(engine) },
     player: { source: player, gzip: gzipSource(player) },
   };
-  definitions.engine.fragment = `<!-- TinySynth: Tatsuya Shinyagaito (g200kg), Apache-2.0; Provable Games fork; full notices: license() -->` + gzipFragment("onchain-midi-engine", definitions.engine.gzip);
-  definitions.player.fragment = gzipFragment("onchain-midi-player", definitions.player.gzip);
+  definitions.player.fragment = `<!-- TinySynth: Tatsuya Shinyagaito (g200kg), Apache-2.0; Provable Games fork; full notices: license() -->` + gzipFragment("onchain-midi-player", definitions.player.gzip);
   const artifacts = Object.fromEntries(Object.entries(definitions).map(([name, d]) => {
     const raw = alignedFragment(d.fragment, alignment), returned = segmentFor(raw);
     return [name, { ...d, raw, returned, record: { source_sha256: sha256(d.source), source_len: bytes(d.source).length,
       raw_sha256: sha256(raw), raw_len: bytes(raw).length, returned_sha256: sha256(returned), returned_len: returned.length,
       returned_felts: Math.floor(returned.length / 31) + 3,
+      ...(name === "player" ? { embedded_engine, wrapper: { offset: bytes(engine).length + 3, length: bytes(wrapper).length, sha256: sha256(wrapper) } } : {}),
       ...(d.gzip ? { gzip_sha256: sha256(d.gzip), gzip_len: d.gzip.length, gzip_base64_len: b64(d.gzip).length } : {}) } }];
   }));
   const license = licenseText();

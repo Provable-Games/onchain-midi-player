@@ -34,7 +34,7 @@ export function consumerPieces(mem, svg, { midi, settings, d, fixture = false, d
   };
   const word = () => { if (align) while (uri.length % 31) { uri += HTML_SPACE_SEGMENT; html += "         "; } };
   append("head", ownedFragment("head")); word();
-  for (const [name,raw] of (libraries || [["gunzip",fixedFragment("gunzip")],["engine",fixedFragment("engine")],
+  for (const [name,raw] of (libraries || [["gunzip",fixedFragment("gunzip")],
     ...(fixture?[["fixture",fixtureFragment()]]:[]),["player",fixedFragment("player")],...(dependent?[["dependent",fixtureFragment("dependent")]]:[])])) {
     word(); append(name,raw);
   }

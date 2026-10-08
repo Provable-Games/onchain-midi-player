@@ -30,6 +30,7 @@
   "devDependencies": {
     "@xmldom/xmldom": "0.9.12",
     "fflate": "0.8.3",
+    "parse5": "8.0.0",
     "terser": "5.51.2"
   }
 }

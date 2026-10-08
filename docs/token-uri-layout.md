@@ -28,9 +28,8 @@ JSON data URI prefix
 ++ B64(NFT JSON opening, image, aligned animation_url prefix)
 ++ segment(NFT head)
 ++ gunzip_segment()
-++ engine_segment()
 ++ independent_provider.library_segment()    optional
-++ player_segment()
+++ player_segment()                          engine and headless API together
 ++ segment(NFT body/control markup)
 ++ segment(NFT image element)                may precede or follow data
 ++ midi_segment(midi, settings)
@@ -54,7 +53,7 @@ The delivered Cairo fixture calls TinySynth and a separate small fixture provide
 
 The [six-member headless API](../player/api.d.ts) supplies `ready`, `play()`, synchronous `stop()`, fresh `getPlayStatus()`, `onPassStart()` and `onStateChange()`. A start before readiness rejects; concurrent starting calls share one promise and playing calls are idempotent. Stop invalidates pending starts with `AbortError`, cancels current/scheduled voices and event timers, and the next play reloads tick zero. Initialization/audio failure is terminal; subscription exceptions cannot restart or interrupt the player.
 
-Status state is `loading`, `stopped`, `starting`, `playing` or `failed`. Tick, maxTick, startTime, audioTime and passSeconds are null until available. Output latency is finite/nonnegative, falling back to zero. Each run has a monotonically increasing ID. State callbacks emit on transitions without replaying history. Both subscription methods return idempotent unsubscribe functions.
+Status state is `loading`, `stopped`, `starting`, `playing` or `failed`. Tick, maxTick, startTime, audioTime and passSeconds are null until available. Output latency is finite/nonnegative, falling back to zero. Each run has a monotonically increasing ID. State callbacks capture each transition and its subscribers, then deliver nested transitions in order without replaying history. Stopping a run suppresses its remaining pass callbacks. Both subscription methods return idempotent unsubscribe functions.
 
 Times are AudioContext seconds. Engine `startTime` may describe a pass scheduled ahead of audibility; the event waits for `startTime + outputLatency`. Initial notifications always follow a successful start; subsequent missed boundaries or notifications more than 50 ms late are skipped, preserving pass indices across short loops. Long delays wait until within setTimeout's range. Tempo-only scores with null engine startTime emit one immediate initial event and no fictitious recurring passes. Browser timers are best effort rather than sample-accurate.
 

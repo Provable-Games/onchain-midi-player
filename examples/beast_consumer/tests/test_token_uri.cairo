@@ -119,9 +119,9 @@ fn library_call_without_deployment() {
     assert(nft.tinysynth_class_hash() == class_hash, 'class hash not stored');
 
     let synth = ITinySynthLibraryDispatcher { class_hash };
-    let segment = synth.engine_segment();
-    assert(segment.len() == segment_data::ENGINE_SEGMENT_LEN, 'segment length');
-    assert(segment == segment_data::engine_segment(), 'segment content');
+    let segment = synth.player_segment();
+    assert(segment.len() == segment_data::PLAYER_SEGMENT_LEN, 'segment length');
+    assert(segment == segment_data::player_segment(), 'segment content');
     // The pre-encoded piece splices mid-stream: no '=' padding (which could only end it).
     assert(segment[segment.len() - 1] != '=', 'segment is padded');
     assert(synth.script_sha256() == segment_data::ENGINE_SHA256, 'script_sha256');

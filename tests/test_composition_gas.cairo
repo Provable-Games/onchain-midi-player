@@ -53,8 +53,6 @@ fn full_page() -> ByteArray {
     raw_align(ref html, ref length);
     raw_append(ref html, ref length, @raw_assets::gunzip());
     raw_align(ref html, ref length);
-    raw_append(ref html, ref length, @raw_assets::engine());
-    raw_align(ref html, ref length);
     raw_append(ref html, ref length, @raw_assets::fixture());
     raw_align(ref html, ref length);
     raw_append(ref html, ref length, @raw_assets::player());

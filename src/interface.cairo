@@ -5,9 +5,7 @@ use crate::types::{TinySynthSettings, TinySynthSound};
 pub trait ITinySynth<T> {
     /// Standalone generic loader; window.OnchainLibraries.ready covers synchronous classic scripts.
     fn gunzip_segment(self: @T) -> ByteArray;
-    /// Standalone deterministic gzip engine block, #onchain-midi-engine.
-    fn engine_segment(self: @T) -> ByteArray;
-    /// Standalone deterministic gzip headless API block, #onchain-midi-player.
+    /// Standalone deterministic gzip engine and headless API block, #onchain-midi-player.
     fn player_segment(self: @T) -> ByteArray;
     /// Validates settings and encodes verbatim MIDI into complete namespaced data blocks.
     /// MIDI contents are validated in the browser before synth creation, not onchain.
