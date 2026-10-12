@@ -1,6 +1,6 @@
 # Gas, payload and class measurements
 
-The unreleased 0.5.0 build combines the unchanged TinySynth engine and headless API in one gzip fragment. The original packaging capture compares combined head `f1ee9c5df6cb73a84fcb42f627b9503e26678dab` with the recoverable split-fragment head `4a76614193d87f045230693fe972bbd5ac457386`. [Results and bindings](measurements/issue59.json) record the tool binaries, source/input/artifact hashes, complete case inventory and repeated captures from 2026-10-07. Prerequisite #57 remains open at `32f776185370ed519e1f14f94a0975a843069702`; rebase and revalidate against its final merged state before release. No declaration, deployment or release occurred.
+The unreleased 0.5.0 build combines the unchanged TinySynth engine and headless API in one gzip fragment. The original packaging capture compares combined head `f1ee9c5df6cb73a84fcb42f627b9503e26678dab` with the recoverable split-fragment head `4a76614193d87f045230693fe972bbd5ac457386`. [Results and bindings](measurements/issue59.json) record the tool binaries, source/input/artifact hashes, complete case inventory and repeated captures from 2026-10-07. Those captures used #57’s then-pending head `32f776185370ed519e1f14f94a0975a843069702`. It is now merged on main as `d92159283dc71e76000d6338f53f0f79f9ea1522`; the original and merged baseline file trees are identical. Merged-baseline revalidation is recorded separately, preserving the historical capture identities. No declaration, deployment or release occurred.
 
 ## Production-shaped comparison
 

@@ -1,6 +1,6 @@
 # Development and release
 
-Use the pinned `.tool-versions`, `Scarb.lock`, `package-lock.json` and `.github/ci-tools/package-lock.json`. The current implementation depends on [PR #57](https://github.com/Provable-Games/onchain-midi-player/pull/57)'s final merged 0.4.0 baseline; while that prerequisite remains open, implementation/measurement results describe its verified pending head, not a landed release.
+Use the pinned `.tool-versions`, `Scarb.lock`, `package-lock.json` and `.github/ci-tools/package-lock.json`. The implementation builds on [PR #57](https://github.com/Provable-Games/onchain-midi-player/pull/57)'s merged 0.4.0 baseline, main commit `d92159283dc71e76000d6338f53f0f79f9ea1522`. Earlier measurements retain their original revision and artifact bindings; merged-baseline revalidation is recorded separately.
 
 ```sh
 npm ci
@@ -47,8 +47,8 @@ Headless browsers do not establish Android/iOS lock-screen, silent-switch, calls
 
 ## Measurements
 
-[Gas documentation](gas.md) reports like-for-like MIDI-only pending-0.4.0/new pages and the independent-fixture composition, runtime encoder, fixed/dynamic alignment, payload/token URI sizes, materialization/appending/data encoding and release Sierra/CASM size. Fixture figures are not p5.js benchmarks. For reproducible L2 values use `snforge test gas_` in root and Beast packages; pass/fail checks are separate from measurement overhead.
+[Gas documentation](gas.md) distinguishes the matched split/combined packaging experiment, its review refresh and historical 0.4.0 whole-page evidence. It also records independent-fixture composition, runtime encoding, fixed/dynamic alignment, payload/token URI sizes and release Sierra/CASM size. Fixture figures are not p5.js benchmarks. For reproducible L2 values use the documented production-shaped selector commands; root helper `gas_` test-wide figures include different work.
 
 ## Release process
 
-After #57 lands, rebase onto its final merged artifacts and revalidate. After this breaking implementation is reviewed/merged, prepare the 0.5.0 declaration/release artifacts with the release profile, class hash and final manifests/ABI. A declared class or deployment remains a separate maintainer-authorized transaction. Do not merge/deploy/declare or publish a release as part of implementation. Keep `deployments/` truthful: historical network records remain historical, and current build readiness is independent of them.
+After this breaking implementation is reviewed/merged, prepare the 0.5.0 declaration/release artifacts with the release profile, class hash and final manifests/ABI. A declared class or deployment remains a separate maintainer-authorized transaction. Do not merge/deploy/declare or publish a release as part of implementation. Keep `deployments/` truthful: historical network records remain historical, and current build readiness is independent of them.

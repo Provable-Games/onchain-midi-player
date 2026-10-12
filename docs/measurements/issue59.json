@@ -4,7 +4,8 @@
   "prerequisite": {
     "pr": 57,
     "state": "open/unmerged",
-    "head": "32f776185370ed519e1f14f94a0975a843069702"
+    "head": "32f776185370ed519e1f14f94a0975a843069702",
+    "scope": "State at the original 2026-10-07 captures; see merged_base_revalidation for the later merge."
   },
   "comparison_baseline": {
     "head": "4a76614193d87f045230693fe972bbd5ac457386",
@@ -1040,7 +1041,7 @@
     "drift": "One-minute combined Chromium scheduling/rest/cancellation/restart check passed; drift trend informational."
   },
   "limitations": [
-    "Prerequisite #57 is open; rebase/revalidate after its final merge before release.",
+    "At the original captures #57 was open; its final merged baseline and revalidation are recorded in merged_base_revalidation.",
     "No class declaration/deployment/release occurred.",
     "Headless/null-sink browser audio does not establish device/mobile lock-screen/silent-switch/headset/call support.",
     "Fixed279 and minimum9 have a small/full trade-off;279 remains the default with word-aligned returns.",
@@ -1377,5 +1378,96 @@
         }
       }
     }
+  },
+  "merged_base_revalidation": {
+    "date": "2026-10-12",
+    "prior_feature_head": "6be1c4c129573fb4788300c66e627172c52b3eec",
+    "merged_main": "d92159283dc71e76000d6338f53f0f79f9ea1522",
+    "prerequisite_merged_at": "2026-10-12T13:07:27Z",
+    "original_prerequisite_head": "32f776185370ed519e1f14f94a0975a843069702",
+    "baseline_tree_sha": "de4e2aa034ea8add8c9899b7bcd0d4eb838951e8",
+    "rebase_method": "git rebase --onto origin/main 32f776185370ed519e1f14f94a0975a843069702",
+    "rebase_tree_equivalence": "Original 6be1c4c and rebased 3fe2efb both have tree 8fc4ade5c87352a0f4a7bcbd29dd99f84083f701. Final follow-up changes only offchain validator/tests and workflow/documentation; runtime sources, engine bytes, manifest and generated assets remain unchanged.",
+    "gas_capture_reuse": "No fresh gas capture is claimed. Reuse review_refresh captures only after same pinned binaries and rebuilt production artifact hashes reproduce identically. Exact artifact and payload equivalence checks are recorded below after validation.",
+    "reproduced_production_artifacts": {
+      "target/release/onchain_midi_player_TinySynth.contract_class.json": {
+        "bytes": 973661,
+        "sha256": "f06a2337d9084f8ddbdd2a0142f2eb0876bac7e5475bf17fd4c9c732de0d0fca"
+      },
+      "target/release/onchain_midi_player_TinySynth.compiled_contract_class.json": {
+        "bytes": 780098,
+        "sha256": "1a1de65482959434b59911316bea2be2f0d9aa1eb73f65dc5ef7c104fea077db"
+      },
+      "examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json": {
+        "bytes": 746224,
+        "sha256": "bba5147943d628d232f72c4fab5237c50c76789cf6ae96d9a05ab167087c9f7d"
+      }
+    },
+    "payload_equivalence": "Complete fixed279/minimum9 payload hashes/lengths, full Beast URI length, and current/baseline library Sierra/CASM dimensions exactly match review_refresh.payload.",
+    "toolchain_equivalence": {
+      "scarb": {
+        "path": "/home/ubuntu/.asdf/installs/scarb/2.20.1/bin/scarb",
+        "bytes": 57410376,
+        "sha256": "ab9e550b0e0ee10f524958c95c9f0b27aac476cb5141cad4dba755b233c6ff55"
+      },
+      "snforge": {
+        "path": "/home/ubuntu/.asdf/installs/starknet-foundry/0.64.0/bin/snforge",
+        "bytes": 81856536,
+        "sha256": "e9406081ba0d48f311544c3e0ca306b7054794d0bf8a4621e3a4bf2b26665344"
+      },
+      "node": {
+        "path": "/home/ubuntu/.asdf/installs/nodejs/24.19.0/bin/node",
+        "bytes": 125989464,
+        "sha256": "bc17c508ffeed0ec622934f9b7fa72f8e78da65350e63c3eceb56fa688aa5e12"
+      }
+    },
+    "validation": {
+      "js": {
+        "root": 333,
+        "beast": 29,
+        "stress": 13
+      },
+      "cairo": {
+        "root_passed": 267,
+        "beast_passed": 27,
+        "beast_ignored": 1,
+        "stress_passed": 10,
+        "stress_ignored": 20
+      },
+      "generation": "segments/data/settings/measurement fixtures, seven-entry release ABI, pinned types and Cairo formatting passed",
+      "validator": "Malformed animation UTF-8 reproduced the exception before the fix; raw JSON and token URI now retain animation.utf8 JSON reports and CLI exit1.",
+      "source_bindings": {
+        "scripts/validate_token_uri.mjs": {
+          "bytes": 43413,
+          "sha256": "430ad1db5b9d2d64b78520865a04dd8a1816a4b0ce20767765be6e0c6c3b3597"
+        },
+        "scripts/validate_token_uri.test.mjs": {
+          "bytes": 26850,
+          "sha256": "a35ef8a067a10f643a462f87c47861cddfde01591e3c82e24d51913b13d98b1d"
+        }
+      },
+      "composed_browsers": {
+        "chromium": {
+          "status": "passed",
+          "capture": "/tmp/issue61-main-page-chromium.txt",
+          "bytes": 3471,
+          "sha256": "c2c60c79b5ca523e73e670f343cec7aa9b0c5057b86151f08b8f38bedbc0b1b2"
+        },
+        "firefox": {
+          "status": "passed",
+          "capture": "/tmp/issue61-main-page-firefox-retry.txt",
+          "bytes": 3200,
+          "sha256": "5c2539f317aa8f8986f081d220a54f616c35f216225bd39e8c8f2480d807448e"
+        },
+        "webkit": {
+          "status": "passed",
+          "capture": "/tmp/issue61-main-page-webkit.txt",
+          "bytes": 3047,
+          "sha256": "5caeb7694f2adcde7a1cc3c2cefac3449245b2cf4036a962de31692110d01b2c"
+        }
+      },
+      "environment_retry": "Initial Firefox audio timed out; pactl confirmed connection refused from a stale isolated null-sink socket. Restoring that server made the complete rerun pass. Initial failure remains /tmp/issue61-main-page-firefox.txt."
+    },
+    "limits": "Artifact-identical gas evidence reused, not relabeled as fresh captures. Unrelated hosting/audio-render/drift probes not repeated for an offchain validator fix and tree-equivalent rebase; device validation remains separate."
   }
 }

@@ -74,6 +74,27 @@ test("invalid UTF-8 fails the same through raw JSON and the data URI", () => {
   assert.ok(ids(viaUri, "fail").includes("token_uri.utf8"));
 });
 
+test("invalid animation UTF-8 keeps a structured failure report and CLI exit 1", () => {
+  const json = { ...goldenJson(), animation_url: HTML_PREFIX + Buffer.from([0xff]).toString("base64") };
+  const dir = mkdtempSync(join(tmpdir(), "validate-animation-utf8-"));
+  try {
+    for (const [name, text] of [["token.json", JSON.stringify(json)], ["token_uri.txt", toUri(json)]]) {
+      const r = check(parseInput(Buffer.from(text)));
+      assert.deepEqual(ids(r, "fail"), ["animation.utf8"]);
+      assert.ok(ids(r, "pass").includes("size.rpc"));
+      assert.ok(!r.checks.some(c => c.id.startsWith("player.")));
+      const file = join(dir, name);
+      writeFileSync(file, text);
+      const cli = spawnSync(process.execPath, [SCRIPT, file, "--json"], { encoding: "utf8" });
+      assert.equal(cli.status, 1, cli.stdout + cli.stderr);
+      assert.equal(cli.stderr, "");
+      const report = JSON.parse(cli.stdout);
+      assert.equal(report.ok, false);
+      assert.ok(report.checks.some(c => c.id === "animation.utf8" && c.level === "fail"));
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("malformed token JSON is a json.parse failure (exit 1), not an unreadable input", async () => {
   for (const text of ['{"name":"x",}', '{"name":"x"', '{"name":"a\u0001b"}']) {
     const input = parseInput(Buffer.from(text));

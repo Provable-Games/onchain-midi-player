@@ -2,7 +2,7 @@
 
 `TinySynth` is a storage-free Starknet class, declared and called with `library_call`. Version 0.5.0 supplies independently composable, offline browser libraries. NFTs own their JSON, complete HTML document, art and UI.
 
-The implementation is stacked on [PR #57](https://github.com/Provable-Games/onchain-midi-player/pull/57)'s pending 0.4.0 baseline, commit `32f776185370ed519e1f14f94a0975a843069702`. It must be rebased and revalidated against that PR's final merged state. No 0.5.0 declaration or release has occurred; [deployment records](deployments/sepolia.json) describe historical test classes.
+No 0.5.0 declaration or release has occurred; [deployment records](deployments/sepolia.json) describe historical test classes.
 
 | `ITinySynth` entry point | Result |
 | --- | --- |

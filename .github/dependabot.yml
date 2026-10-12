@@ -27,8 +27,8 @@ updates:
       codex-cli:
         patterns: ["*"]
 
-  # The root package.json has two devDependencies, Terser and fflate, pinned
-  # exactly: their versions determine the bytes of the page the class embeds,
-  # so they change only deliberately (npm run gen:segments, then a new
-  # SEGMENT_FORMAT; for fflate also a re-derived, re-pinned gunzip shim), not
-  # through Dependabot.
+  # Root devDependencies are deliberately pinned. Terser/fflate changes affect
+  # embedded segment bytes and require a new VERSION, recorded with
+  # npm run gen:segments -- --record; fflate also needs a re-derived, re-pinned
+  # shared gunzip loader. Update these dependencies deliberately, not through
+  # Dependabot. SEGMENT_FORMAT changes only when the shared fragment format does.

@@ -643,7 +643,7 @@ export function validateTokenUri(input, opts = {}) {
         r.pass("animation.base64", `"animation_url" is an HTML data URI (${html.length} bytes decoded; OpenSea shows an HTML page in a sandboxed iframe)`, "OpenSea media-and-traits");
         const text = utf8(html);
         if ("error" in text) r.fail("animation.utf8", `the page is not UTF-8: ${text.error}`, "token-uri-layout");
-        checkPlayerPage(r, html, imageSvg, opts);
+        else checkPlayerPage(r, html, imageSvg, opts);
       }
     }
   }
