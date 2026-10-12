@@ -8,7 +8,7 @@ From the repository root, regenerate the scores, then the files built from them:
 
 ```sh
 node scripts/gen_midi_fixtures.mjs                          # tests/fixtures/midi/scores.json
-npm run gen:page                                            # tests/class_fixtures.cairo
+npm run gen:data                                            # tests/class_fixtures.cairo
 (cd examples/beast_consumer && node scripts/gen_fixtures.mjs)  # src/beast_data.cairo, tests/golden.cairo
 ```
 

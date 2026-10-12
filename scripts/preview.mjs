@@ -2,7 +2,7 @@
 // @ts-check
 // Writes the animation_url page a token would get, offline, so a composer or sound designer can hear
 // a score with its settings and art before anything goes onchain (docs/midi-contract.md: "Previewing a score"). Node
-// built-ins only, but it imports the player and the page build: run it from a checkout of this
+// built-ins only, but it imports the player and the consumer composition utilities: run it from a checkout of this
 // repository. It needs no `npm install`.
 //
 // Usage: node scripts/preview.mjs <midi> [--settings <file.json | SETTINGS file>] [--svg <file.svg>]
@@ -18,18 +18,18 @@
 //   --out       where to write the page. Default: preview.html
 //   --serve     also serve the page on http://127.0.0.1:<port>/ (default 8000; 0 picks a free port)
 //
-// Before writing anything it runs the checks the class and the page run on the same inputs:
+// Before writing anything it runs the checks the class and headless player run on the same inputs:
 //   - the MIDI with the page's own checkMidi, reported exactly as check_midi.mjs reports it;
 //   - the settings with player/validate.js and player/encode.js, the JS reference of the class's
 //     settings::validate and encode (same checks, order, messages and indices; the parity fixtures
 //     are tests/fixtures/settings.json), so an error here is the revert midi_segment would give;
-//   - the art rule: the SVG must never contain `</script`, in any letter case.
-// It then writes PAGE ++ D ++ SVG, the decoded animation_url of a token with these inputs, byte for
-// byte as the class and a consumer produce it (scripts/page.mjs: pageHtml, dFragment).
-// The page is this checkout's PAGE: check out the tag v<version> of a released class, or for a test
+// Supplied SVG is isolated in an encoded image, so script-like text remains harmless to the parent.
+// It then writes the complete NFT-owned document, the decoded animation_url of a token with these inputs, byte for
+// byte as the class and a consumer produce it (scripts/composition.mjs and scripts/segments.mjs).
+// The page is this checkout's library segments: check out the tag v<version> of a released class, or for a test
 // class a commit whose VERSION equals its version().
 //
-// Exit status: 0 when the page is written, 1 when the MIDI, the settings or the SVG fails its check,
+// Exit status: 0 when the page is written, 1 when MIDI or settings validation fails,
 // 2 on a usage error or an input that cannot be read.
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -40,7 +40,8 @@ import { encodeSettings } from "../player/encode.js";
 import { decodeMidi } from "../player/player.js";
 import { OPERATOR_FIELDS, SettingsError, decodeSettings } from "../player/settings.js";
 import { InputError, checkScore, formatResult, scoresFromArg } from "./check_midi.mjs";
-import { VERSION, dFragment, pageHtml } from "./page.mjs";
+import { compositionHtml } from "./composition.mjs";
+import { VERSION, dFragment } from "./segments.mjs";
 import { DEFAULT_SETTINGS } from "./settings_fixtures.mjs";
 
 /** @typedef {import("../player/settings.js").TinySynthSettings} TinySynthSettings */
@@ -175,7 +176,7 @@ export function settingsFromText(label, text) {
 export const panicData = (e) => `('${e.code}'${e.indices.map((i) => `, ${i}`).join("")})`;
 
 /**
- * Builds the page for one score, settings and SVG, after the checks the class and the page run on
+ * Builds the page for one score, settings and SVG, after the checks the class and headless player run on
  * them. Returns the page and the report; throws a PreviewError with the report of the first failure.
  * @param {{midiArg: string, settings?: TinySynthSettings, settingsLabel?: string, svg?: Uint8Array, svgLabel?: string}} input
  * @returns {{html: Buffer, lines: string[]}}
@@ -197,32 +198,18 @@ export function buildPreview({ midiArg, settings = DEFAULT_SETTINGS, settingsLab
   const midi = score.bytes ?? decodeMidi(/** @type {string} */ (score.b64));
 
   // 2. The settings, as midi_segment validates and encodes them (D carries SETTINGS).
-  let d;
+  let d, settings_len;
   try {
-    ({ d } = dFragment(midi, settings));
+    ({ d, settings_len } = dFragment(midi, settings));
   } catch (e) {
     if (!(e instanceof SettingsError)) throw e;
     throw new PreviewError([...lines, `FAIL ${settingsLabel}`, `  ${e.message}`, `  midi_segment would revert with ${panicData(e)}`], 1);
   }
-  const settingsText = d.slice(0, d.indexOf("<"));
-  lines.push(`PASS ${settingsLabel}`, `  SETTINGS: ${settingsText.length} bytes`);
+  lines.push(`PASS ${settingsLabel}`, `  SETTINGS: ${settings_len} bytes`);
 
-  // 3. The art rule: the page's art block ends at the first `</script`.
   const art = svg ?? Buffer.from(PLACEHOLDER_SVG, "utf8");
-  const text = Buffer.from(art).toString("latin1");
-  const at = text.search(/<\/script/i);
-  if (at >= 0) {
-    throw new PreviewError([
-      ...lines,
-      `FAIL ${svgLabel}`,
-      `  art: the SVG contains ${JSON.stringify(text.slice(at, at + 8))} at byte ${at}; the page's art block would end there`,
-      "  (docs/token-uri-layout.md: \"Art (SVG) requirements\")",
-    ], 1);
-  }
-  lines.push(`PASS ${svgLabel}`, `  ${art.length} bytes, no </script`);
-
-  // PAGE ++ D ++ SVG: PAGE and D are ASCII; the SVG goes in as its exact bytes.
-  const html = Buffer.concat([Buffer.from(pageHtml(), "latin1"), Buffer.from(d, "latin1"), art]);
+  lines.push(`PASS ${svgLabel}`, `  ${art.length} bytes, isolated encoded image`);
+  const html = Buffer.from(compositionHtml({ mem: '\"name\":\"Preview\"', svg: art, d }), "utf8");
   return { html, lines };
 }
 
@@ -288,7 +275,7 @@ export async function run(args, out = console.log, err = console.error) {
     const { html, lines } = buildPreview({ midiArg: opts.midiArg ?? "", settings, settingsLabel: opts.settings, svg, svgLabel: opts.svg });
     for (const line of lines) out(line);
     writeFileSync(opts.out, html);
-    out(`wrote ${opts.out}: ${html.length} bytes, PAGE ++ D ++ SVG`);
+    out(`wrote ${opts.out}: ${html.length} bytes, the complete NFT-owned document`);
     out(`  page of version ${VERSION}: it must equal the class's version()`);
     const port = opts.serve;
     if (port === null) return 0;

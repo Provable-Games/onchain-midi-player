@@ -26,6 +26,6 @@ test = "snforge test"
 allow-prebuilt-plugins = ["snforge_std"]
 
 # Above snforge's default step limit of 10M: the large tokens run tens of millions of Cairo steps
-# through `token_uri`, and the digest test of token 12 also hashes its 354 KB in Cairo.
+# through `token_uri`, and the digest test of token 12 also hashes its complete URI in Cairo.
 [tool.snforge]
 max_n_steps = 100000000

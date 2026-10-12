@@ -1,6 +1,6 @@
 # MIDI contract
 
-What a composer can rely on, and what the page rejects. The `midi` argument of `midi_segment` is a Standard MIDI File passed as a `ByteArray`. The class embeds it as base64 and never parses it, so a file that breaks a rule here does not revert: the page shows the error, ▶ stays disabled, and the art still shows. Check files before they go onchain with [`check-midi`](#checking-midi-files), which runs the page's own check.
+What a composer can rely on, and what the headless player rejects. The `midi` argument of `midi_segment` is a Standard MIDI File passed as a `ByteArray`. The class embeds it as base64 and never parses it, so a file that breaks a rule here does not revert: headless readiness rejects and the NFT chooses how to present the error. The reference keeps art visible and disables its play control. Check files before they go onchain with [`check-midi`](#checking-midi-files), which runs the headless player's own check.
 
 Every rule below is fixed per class hash: the checks are `checkMidi` and `decodeMidi` in [`player/player.js`](../player/player.js), and playback is the pinned engine driven by that player. A new engine pin can change the playback rules. [`scripts/engine_contract.test.mjs`](../scripts/engine_contract.test.mjs) pins the less obvious ones, so a re-pin that changes one of them fails `npm test`.
 
@@ -29,20 +29,20 @@ Every rule below is fixed per class hash: the checks are `checkMidi` and `decode
 | No other system status bytes as events (`F1`–`F6`, `F8`–`FE`). | `unexpected status byte` |
 | One pass lasts at least 50 ms: `maxTick` (see [Playback](#playback)) under the tempo map, which starts at 120 BPM. | `loop shorter than 50 ms` |
 
-Everything else is accepted: any channel message, other meta events and SysEx of any length, and tempo events in any track. The page also rejects a MIDI block that is not strict base64 (`midi: not base64`). The class always writes valid base64, so only `check_midi.mjs` and the `token_uri` validator (which passes the page's MIDI block to the same check) report it, for a bad base64 input.
+Everything else is accepted: any channel message, other meta events and SysEx of any length, and tempo events in any track. The headless player also rejects a MIDI block that is not strict base64 (`midi: not base64`). The class always writes valid base64, so only `check_midi.mjs` and the `token_uri` validator (which passes the page's MIDI block to the same check) report it, for a bad base64 input.
 
 The rules follow from how the TinySynth engine reads a file: it stops reading a track at End-of-Track rather than at the chunk length, keeps running status across tracks and after meta and SysEx events, reads tempo at a fixed offset, and turns F7 events into SysEx. On a loop under 50 ms its scheduler would never catch up, and a longer text event can exceed a browser's argument limit.
 
 ## Playback
 
-- **Start.** Nothing plays until ▶ is pressed (a click or tap). Each ▶ reloads the MIDI and plays it from tick 0, after resetting every channel: program 0, volume (CC7) 100, pan (CC10) 64, expression (CC11) 127, modulation 0, sustain off, pitch bend centred, bend range MSB 2 (see RPN 0 below), fine, coarse, master and GS scale tuning 0, and channel 10 as the only drum channel. The tempo is 120 BPM until the first tempo event. Tick 0 sounds 0.1 s after playback starts (once the browser has resumed audio), and a rest before the first event is kept: every event sounds at its own tick's time.
+- **Start.** NFT code calls `play()` from a user gesture; the reference uses ▶ (a click or tap). Each successful start reloads the MIDI and plays it from tick 0, after resetting every channel: program 0, volume (CC7) 100, pan (CC10) 64, expression (CC11) 127, modulation 0, sustain off, pitch bend centred, bend range MSB 2 (see RPN 0 below), fine, coarse, master and GS scale tuning 0, and channel 10 as the only drum channel. The tempo is 120 BPM until the first tempo event. Tick 0 sounds 0.1 s after playback starts (once the browser has resumed audio), and a rest before the first event is kept: every event sounds at its own tick's time.
 - **Tracks.** The TinySynth engine merges all tracks into one list by tick; events at the same tick keep file order, track by track. A track does not loop on its own: if it ends before the others, it sends no more events until the next pass, but notes it left sounding (with no note-off yet) keep sounding.
 - **Tempo.** A tempo change takes effect at its tick, from any track. The BPM is 60,000,000 divided by the tempo value, kept fractional.
 - **Loop.** The song always loops. A pass ends at `maxTick`, the latest End-of-Track tick of any track (the player calls `setLoop(1)` and `setLoopEnd(maxTick)`), and the next pass starts at tick 0, keeping the rest before the first event.
 - **State between passes.** At each loop point the tempo returns to 120 BPM, and a tempo event at tick 0 applies at once. Nothing else is reset: programs, controllers, pitch bend, RPN settings and tuning carry over from the end of the previous pass, and notes still sounding at End-of-Track keep sounding. Events at tick 0 run again on every pass, so a song that sets its state at tick 0 starts every pass the same way. Otherwise the first pass starts from the defaults above, and later passes from wherever the previous one ended.
-- **The art.** The player restarts the art when tick 0 is heard, on ▶ and again at every pass (see [The player page](token-uri-layout.md#the-player-page)). A pass that is a whole multiple of every period of the art's animation keeps them in step with no visible jump. Otherwise the art jumps back to its start at every loop point, and an animation longer than the pass never finishes.
-- **Background.** ▶ also plays a silent looping `<audio>` element, which gives the page media controls and keeps it playing when the screen locks or the tab is hidden; on iOS the sound ignores the silent switch. Pausing from the notification, a headset or a call stops playback like ■. Where the element cannot play (a host CSP without `media-src blob:`), the music plays but stops when the page is hidden. See [The player page](token-uri-layout.md#the-player-page).
-- **■** stops playback: the TinySynth engine's `stopMIDI` cuts every voice (drum hits and notes already scheduled ahead included), and cancels the volume, expression, pan and modulation changes it had already scheduled. The art keeps running.
+- **Art policy.** The headless player emits `onPassStart` at tick zero’s estimated audible boundary. The reference NFT subscribes and restarts its own art on every pass; other consumers choose their own visual behavior (see [Player events and NFT policy](token-uri-layout.md#player-events-and-nft-policy)). With that restart policy, a pass that is a whole multiple of every animation period keeps them in step; otherwise art jumps back at each boundary.
+- **Background policy.** The reference NFT starts a silent looping `<audio>` element from its control, installs media-session handlers and stops when hidden if that element is unavailable, such as under a CSP without `media-src blob:`. The core creates none of these and imposes no visibility policy. Lock-screen, iOS silent-switch, notification/headset and interruption behavior require actual device validation; see [Player events and NFT policy](token-uri-layout.md#player-events-and-nft-policy).
+- **Stop.** `stop()` calls the engine's `stopMIDI`, cutting every voice (drum hits and notes already scheduled ahead included), and cancels scheduled controller changes and player pass timers. The reference's ■ control invokes it; reference art keeps running.
 - **Scheduling.** The TinySynth engine schedules events about 0.2 s ahead. Each message takes effect at its own time, except CC120, CC121 and CC123–127 (see below) and the voice limit (see [Limits](#limits)), which act when the event is scheduled.
 - **Notes the engine cannot compute.** A note whose computed frequencies or levels overflow the 32-bit float range, at a high note or tuning on a long FM chain or with a large `key_scale`, is skipped: it makes no sound and takes no voice, and the song plays on (see [Engine limits on operator values](sound-settings.md#engine-limits-on-operator-values)). Tuning adds to the note's pitch, so upward tuning can push such a timbre over.
 
@@ -87,7 +87,7 @@ Ignored, with no effect: every other controller, including bank select (CC0, CC3
 
 ## What's fixed and what's driven
 
-- **Fixed per class hash:** the engine, the player and the page, and so every rule in this section. A new engine or page means a new class hash and `version()`.
+- **Fixed per class hash:** the engine, the headless player and the loader, and so every rule in this section. Changed engine/player/loader artifacts mean a new class hash and `version()`.
 - **Driven on each call:** the MIDI (by the composer), and the `TinySynthSettings` and the art (by the consumer).
 
 The full list is in [Verifying the engine](verifying.md).
@@ -102,7 +102,7 @@ Nothing checks these; a file that ignores them still plays.
 - **Release every note by End-of-Track:** a note still held there sounds into the next pass.
 - **Put the note-off first:** at one tick, put a note's note-off before the next note-on of the same pitch on that channel. The other way round, the note-off releases the new note too.
 - **Prefer note-offs to CC120–127, and avoid CC121** (see the table).
-- **Keep the file small:** `midi_segment` base64-encodes the MIDI at call time, once on its own and twice inside `D`, so gas grows with its length. That is about 14M L2 gas per 1,000 bytes (1.4M with no MIDI and 53.5M with 3,716 bytes, in [the `midi_segment` table](gas.md#midi_segment-by-midi-and-settings-size)).
+- **Keep the file small:** `midi_segment` base64-encodes the MIDI at call time, once on its own and twice inside `D`, so gas grows with its length. Measure the actual score/settings and consumer path with the [current gas probes](gas.md#midi_segment-by-midi-and-settings-size); old per-byte rates do not describe the new document architecture.
 
 ## Checking MIDI files
 
@@ -117,7 +117,7 @@ node scripts/check_midi.mjs - < song.b64              # standard input: MIDI byt
 npm run check-midi -- song.mid                        # the same, through npm
 ```
 
-- **Inputs.** `.mid` and `.midi` files, and files starting with `MThd`, are MIDI. In a JSON file of any shape, every `midi_b64` string is checked and named by the `name` string next to it, as in [`tests/fixtures/page.json`](../tests/fixtures/page.json) and the synthetic scores in [`tests/fixtures/midi/scores.json`](../tests/fixtures/midi/scores.json). Any other text file is read as base64, ignoring line breaks and spaces (so `base64 song.mid > song.b64` works as it is).
+- **Inputs.** `.mid` and `.midi` files, and files starting with `MThd`, are MIDI. In a JSON file of any shape, every `midi_b64` string is checked and named by the `name` string next to it, as in [`tests/fixtures/data.json`](../tests/fixtures/data.json) and the synthetic scores in [`tests/fixtures/midi/scores.json`](../tests/fixtures/midi/scores.json). Any other text file is read as base64, ignoring line breaks and spaces (so `base64 song.mid > song.b64` works as it is).
 - **Output.** For each score, PASS or FAIL and the size. A failure gives the page's exact error. A pass gives the loop length, `maxTick`, each track's End-of-Track tick and channels, and each channel's notes and programs, with the drum notes on channel 10 (or that it is not used):
 
   ```text
@@ -135,7 +135,7 @@ npm run check-midi -- song.mid                        # the same, through npm
     32 bytes
   ```
 - **Exit status.** 0 if every score passes, 1 if any fails, and 2 for a usage error or an input it cannot read (a missing file, invalid JSON, or JSON with no `midi_b64` string), so it can gate another repository's CI.
-- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player, and a declared class keeps the player it was declared with. So use a checkout whose `VERSION` (in `src/page_data.cairo`) is the `version()` of the class your consumer stores: its release tag `v<version>`, or `main` while its `VERSION` matches. In another repository's CI, for example:
+- **Where to run it.** It imports `player/player.js`, so run it from a checkout of this repository rather than copying the file alone. It checks against that checkout's player, and a declared class keeps the player it was declared with. So use a checkout whose `VERSION` (in `src/segment_data.cairo`) is the `version()` of the class your consumer stores: its release tag `v<version>`, or `main` while its `VERSION` matches. In another repository's CI, for example:
 
   ```sh
   REF=main   # or v<version>, the release tag of the class you target
@@ -145,7 +145,7 @@ npm run check-midi -- song.mid                        # the same, through npm
 
 ## Previewing a score
 
-[`scripts/preview.mjs`](../scripts/preview.mjs) writes the page a token would get, offline: `PAGE ++ D ++ SVG`, byte for byte as the class and a consumer produce it (built with [`scripts/page.mjs`](../scripts/page.mjs)). It needs Node 22 or later and no `npm install`. Run it from a checkout whose `VERSION` (in `src/page_data.cairo`) is your class's `version()` (see [Agent skills](../README.md#agent-skills)).
+[`scripts/preview.mjs`](../scripts/preview.mjs) writes the composed consumer page a token would get, offline: a complete NFT-owned document with independent library/data/art/bootstrap fragments (built with [`scripts/segments.mjs`](../scripts/segments.mjs)). It needs Node 22 or later and no `npm install`. Run it from a checkout whose `VERSION` (in `src/segment_data.cairo`) is your class's `version()` (see [Agent skills](../README.md#agent-skills)).
 
 ```sh
 npm run preview -- song.mid                                        # default settings, placeholder art
@@ -153,7 +153,7 @@ npm run preview -- song.mid --settings sound.json --svg art.svg   # the token's 
 npm run preview -- song.mid --serve                                # also serve it on http://127.0.0.1:8000/
 ```
 
-- **Checks first.** It runs the MIDI through `checkMidi` and reports it as `check_midi.mjs` does; the settings through `player/validate.js` and `player/encode.js`, the JS reference of `settings::validate` and the encoder, printing the panic data `midi_segment` would revert with; and the SVG through the [art rule](token-uri-layout.md#art-svg-requirements). Any failure exits 1 and writes nothing.
+- **Checks first.** It runs the MIDI through `checkMidi` and reports it as `check_midi.mjs` does; the settings through `player/validate.js` and `player/encode.js`, the JS reference of `settings::validate` and the encoder, printing the panic data `midi_segment` would revert with; and the SVG bytes into [isolated-art framing](token-uri-layout.md#isolated-community-art). Any failure exits 1 and writes nothing.
 - **Inputs.** The MIDI in any form `check_midi.mjs` reads (one score). `--settings` takes a `TinySynthSettings` value as JSON, in the shape of the `settings` objects in [`tests/fixtures/settings.json`](../tests/fixtures/settings.json) (a whole fixture entry also works; every field is required and unknown fields are rejected), or a page's `SETTINGS` text, so a deployed token's page can be rebuilt from its blocks. `--out` defaults to `preview.html`; `--serve` takes an optional port (0 picks a free one).
 - **Identity.** `npm test` checks that, for the example's token 1, the output equals [`examples/beast_consumer/fixtures/animation.html`](../examples/beast_consumer/fixtures/animation.html), decoded from the golden `token_uri` the contract matches byte for byte, and that the `token_uri` around token 4's page has the digest the contract's is tested against.
 - **Playback** is the same engine and player code as in every token. Audio can still differ slightly across browsers and sample rates. Noise and reverb are generated from a fixed seed, so they are the same on every load at a given sample rate.

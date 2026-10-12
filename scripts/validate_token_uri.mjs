@@ -10,7 +10,7 @@
 //
 // Usage: node scripts/validate_token_uri.mjs <file | -> [options]
 //   --expect <sha256>  the engine's SHA-256 (script_sha256()), instead of the record of the checked version
-//   --version <semver> the record of scripts/page_versions.json to check against (default: VERSION)
+//   --version <semver> the record of scripts/library_versions.json to check against (default: VERSION)
 //   --json             print the report as JSON
 //
 // The input file is a token_uri (data:application/json;base64,...), the decoded token JSON, or the
@@ -30,12 +30,13 @@ import { DOMParser } from "@xmldom/xmldom";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { decodeSettings } from "../player/settings.js";
+import { documentElements } from "./html_blocks.mjs";
 import { validateSettings } from "../player/validate.js";
 import { byteArrayFromFelts, shortStrings, tokenUriFromCall } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/bytearray.mjs";
-import { checkArt, splitPage } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/split_page.mjs";
+import { splitPage } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/split_page.mjs";
 import { checkScore } from "./check_midi.mjs";
-import { ART_OPEN, MIDI_OPEN, PAGE_VERSIONS_PATH, SETTINGS_OPEN, VERSION, isSemVer } from "./page.mjs";
-import { normalizeSha256, verifyEngine } from "./verify_engine.mjs";
+import { MANIFEST_PATH, VERSION, isSemVer } from "./segments.mjs";
+import { normalizeSha256, verifyLibraries } from "./verify_engine.mjs";
 
 /** Where each check comes from. */
 export const SOURCES = {
@@ -63,6 +64,7 @@ const JSON_PREFIX = "data:application/json;base64,";
 const SVG_PREFIX = "data:image/svg+xml;base64,";
 const HTML_PREFIX = "data:text/html;base64,";
 const SVG_NS = "http://www.w3.org/2000/svg";
+const HTML_NS = "http://www.w3.org/1999/xhtml";
 /** Fields OpenSea (media-and-traits) and ERC-721 define. */
 const FIELDS = ["name", "description", "image", "animation_url", "external_url", "attributes", "background_color"];
 /** Fields older OpenSea documentation listed; the current documentation does not. */
@@ -179,6 +181,29 @@ export function parseXml(s) {
   return { root: { local: root.localName, ns: root.namespaceURI ?? undefined }, attrs, styles, elements, entities: /<!ENTITY/.test(markup) };
 }
 
+/** CSS URL checks shared by active HTML styles and the SVG validator; not a CSS parser.
+ * @param {string} raw
+ * @param {number} line
+ * @param {string} where
+ * @returns {[string, number][]}
+ */
+function cssReferenceProblems(raw, line, where) {
+  /** @type {[string, number][]} */
+  const out = [];
+  const external = (/** @type {string} */ target) => !/^(#|data:)/i.test(target.trim());
+  /** CSS escapes (\72 = r, \i = i) are decoded before the tokens are read. */
+  const unescape = (/** @type {string} */ css) =>
+    css.replace(/\\(?:([0-9a-fA-F]{1,6})[ \t\r\n\f]?|([^\n\r\f0-9a-fA-F]))/g, (_, hex, ch) => (hex ? String.fromCodePoint(Math.min(parseInt(hex, 16) || 0xfffd, 0x10ffff)) : ch));
+  const css = unescape(raw.replace(/\/\*[\s\S]*?\*\//g, " ")); // a CSS comment is inert, and splits a token
+  for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, line]);
+  // A quoted target runs to its closing quote (a data: URI may hold spaces and semicolons); an unquoted one to whitespace, ";" or ")".
+  for (const m of css.matchAll(/@import\s*(?:url\(\s*)?(?:'([^']*)'|"([^"]*)"|([^'"\s;)]+))/gi)) {
+    const target = m[1] ?? m[2] ?? m[3];
+    if (external(target)) out.push([`${where} has @import ${target.slice(0, 60)}, outside the document and data: URIs`, line]);
+  }
+  return out;
+}
+
 /**
  * Problems with external references and scripts in an SVG, as `[message, line]`.
  * @param {ReturnType<typeof parseXml>} xml
@@ -187,18 +212,6 @@ function svgReferenceProblems(xml) {
   /** @type {[string, number][]} */
   const out = [];
   const external = (/** @type {string} */ target) => !/^(#|data:)/i.test(target.trim());
-  /** CSS escapes (\72 = r, \i = i) are decoded before the tokens are read. */
-  const unescape = (/** @type {string} */ css) =>
-    css.replace(/\\(?:([0-9a-fA-F]{1,6})[ \t\r\n\f]?|([^\n\r\f0-9a-fA-F]))/g, (_, hex, ch) => (hex ? String.fromCodePoint(Math.min(parseInt(hex, 16) || 0xfffd, 0x10ffff)) : ch));
-  const urls = (/** @type {string} */ raw, /** @type {number} */ line, /** @type {string} */ where) => {
-    const css = unescape(raw.replace(/\/\*[\s\S]*?\*\//g, " ")); // a CSS comment is inert, and splits a token
-    for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, line]);
-    // A quoted target runs to its closing quote (a data: URI may hold spaces and semicolons); an unquoted one to whitespace, ";" or ")".
-    for (const m of css.matchAll(/@import\s*(?:url\(\s*)?(?:'([^']*)'|"([^"]*)"|([^'"\s;)]+))/gi)) {
-      const target = m[1] ?? m[2] ?? m[3];
-      if (external(target)) out.push([`${where} has @import ${target.slice(0, 60)}, outside the document and data: URIs`, line]);
-    }
-  };
   for (const el of xml.elements) {
     const local = el.name.slice(el.name.indexOf(":") + 1).toLowerCase();
     if (local === "script") out.push(["<script> element", el.line]);
@@ -210,9 +223,9 @@ function svgReferenceProblems(xml) {
     // Foreign HTML (<foreignObject>) can carry any of HTML's resource attributes; srcset holds several URLs.
     const urlsIn = local === "srcset" ? a.value.split(/\s+/).filter((t) => t && !/^[\d.]+[wx],?$/.test(t)).map((t) => t.replace(/,+$/, "")) : URL_ATTRIBUTES.has(local) ? [a.value] : [];
     if (urlsIn.some(external)) out.push([`${a.name}="${a.value.slice(0, 60)}" on <${a.el}> points outside the document and data: URIs`, a.line]);
-    urls(a.value, a.line, `attribute ${a.name} on <${a.el}>`);
+    out.push(...cssReferenceProblems(a.value, a.line, `attribute ${a.name} on <${a.el}>`));
   }
-  for (const st of xml.styles) urls(st.text, st.line, "a <style> element");
+  for (const st of xml.styles) out.push(...cssReferenceProblems(st.text, st.line, "a <style> element"));
   return out;
 }
 
@@ -455,128 +468,86 @@ function checkSvg(r, layer, svg, bytes) {
   const problems = svgReferenceProblems(xml);
   const scriptLike = problems.filter(([m]) => /^(<script>|event handler)/.test(m));
   const refs = problems.filter((p) => !scriptLike.includes(p));
-  if (scriptLike.length) r.fail(`${layer}.no_script`, `${scriptLike[0][0]} at line ${scriptLike[0][1]}: an SVG for NFT metadata carries no scripts, and a <script> ends the page's art block`, src);
+  if (scriptLike.length) r.warn(`${layer}.no_script`, `${scriptLike[0][0]} at line ${scriptLike[0][1]}: an SVG for NFT metadata carries no scripts, scripts stay inert in the encoded <img>`, src);
   else r.pass(`${layer}.no_script`, "no <script> or event handler", src);
   if (refs.length) r.fail(`${layer}.self_contained`, `${refs[0][0]} at line ${refs[0][1]}${refs.length > 1 ? ` (and ${refs.length - 1} more)` : ""}`, "OpenSea media-and-traits");
   else r.pass(`${layer}.self_contained`, "no external references (only #fragments and data: URIs)", "OpenSea media-and-traits");
-  const art = checkArt(Buffer.from(bytes));
-  r.check(art.ok, `${layer}.no_script_end_tag`, 'no "</script" in any letter case', art.lines.find((l) => l.startsWith("FAIL"))?.replace(/^FAIL /, "") ?? 'contains "</script"', src);
+
 }
 
 /**
- * The network references in the page outside its art block: element attributes and CSS that point
- * outside the document, and URL literals outside HTML comments.
+ * Check actual document elements and CSS; literal network URLs remain advisory.
  * @param {Report} r
- * @param {string} html the page up to the art block, as latin1
+ * @param {string} html complete UTF-8 page
  */
 function checkPageSelfContained(r, html) {
   const src = "token-uri-layout";
-  // Inert data (base64 payloads) and HTML comments are not markup that loads anything.
-  const text = html.replace(/<!--[\s\S]*?-->/g, "").replace(/base64,[A-Za-z0-9+/=]+/g, "base64,");
+  const external = (/** @type {string} */ target) => !/^(#|data:)/i.test(target.trim());
+  const attributes = new Set(["src", "href", "action", "formaction", "poster", "data", "srcset"]);
+  const svgStyles = new Set(["fill", "stroke", "filter", "clip-path", "mask", "cursor", "marker-start", "marker-mid", "marker-end"]);
   /** @type {string[]} */
   const loads = [];
-  for (const m of text.matchAll(/<[a-zA-Z][^>]*>/g)) {
-    for (const a of m[0].matchAll(/\s(src|href|action|formaction|poster|data|srcset)\s*=\s*(["'])(.*?)\2/gis)) {
-      if (!/^(#|data:)/i.test(a[3].trim())) loads.push(`${a[1]}="${a[3].slice(0, 60)}"`);
+  for (const node of documentElements(html)) {
+    for (const a of node.attrs) {
+      if (attributes.has(a.name)) {
+        const targets = a.name === "srcset" ? a.value.split(/\s+/).filter(t => t && !/^[\d.]+[wx],?$/.test(t)).map(t => t.replace(/,+$/, "")) : [a.value];
+        if (targets.some(external)) loads.push(`${a.name}="${a.value.slice(0, 60)}"`);
+      }
+      if (a.name === "style" || node.namespaceURI === SVG_NS && svgStyles.has(a.name))
+        loads.push(...cssReferenceProblems(a.value, 1, `attribute ${a.name}`).map(([message]) => message));
+    }
+    if (node.tagName === "style" && (node.namespaceURI === HTML_NS || node.namespaceURI === SVG_NS)) {
+      const css = (node.childNodes || []).map(n => n.value || "").join("");
+      loads.push(...cssReferenceProblems(css, 1, "a <style> element").map(([message]) => message));
     }
   }
-  // CSS references: not in script bodies, where `URL.createObjectURL(` and `toDataURL(` are code.
-  const css = text.replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, "$1</script>");
-  for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (!/^(#|data:)/i.test(m[2].trim())) loads.push(`url(${m[2].slice(0, 60)})`);
-  if (/@import/i.test(css)) loads.push("@import");
   if (loads.length) r.fail("animation.self_contained", `the page loads from outside: ${loads.slice(0, 3).join(", ")}`, src);
   else r.pass("animation.self_contained", "no element or CSS reference outside the page and data: URIs", src);
+  // This separate text warning is intentionally advisory, including URLs in consumer code.
+  const text = html.replace(/<!--[\s\S]*?-->/g, "").replace(/base64,[A-Za-z0-9+/=]+/g, "base64,");
   const literals = [...text.matchAll(/\b(?:https?|wss?|ftp):\/\/[^\s"'<>)\\]+/gi)].map((m) => m[0]).filter((u) => !/^https?:\/\/www\.w3\.org\//i.test(u));
   if (literals.length) r.warn("animation.network_urls", `the page text has network URLs: ${literals.slice(0, 3).join(", ")}`, src);
   else r.pass("animation.network_urls", "no network URL in the page text", src);
 }
 
 /**
- * The player page checks: the engine and PAGE against the version's record, SETTINGS, MIDI and art.
+ * Library provenance checks for each required segment, plus the NFT's metadata/settings/MIDI/art checks.
  * @param {Report} r
  * @param {Buffer} htmlBytes
  * @param {Buffer | null} imageSvg the image, if it is an SVG data URI
  * @param {{expect?: string, version?: string}} opts
  */
 function checkPlayerPage(r, htmlBytes, imageSvg, opts) {
-  const html = htmlBytes.toString("latin1");
+  const html = new TextDecoder("utf-8", { fatal: true }).decode(htmlBytes);
   const version = opts.version ?? VERSION;
-  /** @type {Record<string, any>} */
-  const versions = JSON.parse(readFileSync(PAGE_VERSIONS_PATH, "utf8"));
-  // The value is printed in the report: only a SemVer string is accepted, and an error never repeats it.
-  if (!isSemVer(version)) throw new Error("--version is not a SemVer version such as 0.3.0");
-  const record = Object.hasOwn(versions, version) ? versions[version] : undefined;
-  const expect = opts.expect ? normalizeExpect(opts.expect) : null;
+  if (!isSemVer(version)) throw new Error("--version is not SemVer");
   try {
-    const { gzip, engine, page } = verifyEngine(html);
-    r.hashes.page_sha256 = page.sha256;
-    r.hashes.engine_sha256 = engine.sha256;
-    r.hashes.gzip_sha256 = gzip.sha256;
-    r.sizes.page_bytes = page.length;
-    r.sizes.gzip_bytes = gzip.length;
-    r.sizes.engine_bytes = engine.length;
-    r.pass("player.engine_inflates", "the gzip payload is canonical base64 and inflates (gzip CRC and length checked)", "verifying");
-    r.info("player.page_sha256", `PAGE sha256 ${page.sha256} (${page.length} bytes)`, "verifying");
-    // --expect replaces the engine comparison only; the gzip payload and PAGE are always compared
-    // with the record, because a matching PAGE is what proves the shim and the player are the class's.
-    if (expect) {
-      r.check(engine.sha256 === expect, "player.engine_sha256", `the engine's SHA-256 equals --expect (${engine.sha256})`, `the engine's SHA-256 is ${engine.sha256}, not --expect ${expect}`, "verifying");
-    } else if (!record) {
-      r.fail("player.engine_sha256", `scripts/page_versions.json has no record for version ${version}: pass --version or --expect`, "verifying");
-    } else {
-      r.check(engine.sha256 === record.script_sha256, "player.engine_sha256", `the engine's SHA-256 equals the record of ${version} (script_sha256)`, `the engine's SHA-256 is ${engine.sha256}, but the record of ${version} has ${record.script_sha256}`, "verifying");
+    const result = verifyLibraries(html, version);
+    for (const [name, library] of Object.entries(result.libraries)) {
+      r.hashes[`${name}_sha256`] = library.sha256;
+      r.sizes[`${name}_bytes`] = library.length;
+      r.pass(`player.${name}`, `${library.id}: ${library.sha256} (${library.length} bytes)`, "verifying");
     }
-    if (record) {
-      r.check(gzip.sha256 === record.gzip_sha256 && gzip.length === record.gzip_len, "player.gzip", `the gzip payload equals the record of ${version} (${gzip.length} bytes)`, `the gzip payload (${gzip.length} bytes, ${gzip.sha256}) differs from the record of ${version} (${record.gzip_len} bytes, ${record.gzip_sha256})`, "verifying");
-      const other = Object.entries(versions).find(([, v]) => v.page_sha256 === page.sha256);
-      r.check(page.sha256 === record.page_sha256, "player.page_sha256_record", `PAGE equals the record of ${version} (page_sha256)`, `PAGE sha256 ${page.sha256} differs from the record of ${version} (${record.page_sha256})${other ? `; it is the page of version ${other[0]}: pass --version ${other[0]}` : ""}`, "verifying");
-    } else if (expect) {
-      r.warn("player.page_sha256_record", `scripts/page_versions.json has no record for version ${version}: the gzip payload and PAGE were not compared with any record (pass --version)`, "verifying");
-    }
-  } catch (e) {
-    r.fail("player.page", `not this player's page: ${/** @type {Error} */ (e).message}`, "verifying");
-  }
-  /** @type {ReturnType<typeof splitPage>} */
+    r.hashes.engine_sha256 = result.engine.sha256;
+    r.sizes.engine_bytes = result.engine.length;
+    r.pass("player.engine", `embedded engine: ${result.engine.sha256} (${result.engine.length} bytes)`, "verifying");
+    if (opts.expect) r.check(result.engine.sha256 === normalizeExpect(opts.expect), "player.engine_sha256", "engine matches --expect", "engine differs from --expect", "verifying");
+    r.info("player.consumer_content", result.scope, "verifying");
+  } catch (e) { r.fail("player.libraries", e.message, "verifying"); }
   let blocks;
+  try { blocks = splitPage(htmlBytes); }
+  catch (e) { r.fail("player.blocks", e.message, "token-uri-layout"); return; }
+  r.pass("player.blocks", "unique complete namespaced settings/MIDI blocks", "token-uri-layout");
+  checkPageSelfContained(r, html);
   try {
-    blocks = splitPage(htmlBytes);
-  } catch (e) {
-    r.fail("player.blocks", /** @type {Error} */ (e).message, "token-uri-layout");
-    return;
-  }
-  r.pass("player.blocks", "the settings, MIDI and art blocks follow the fixed page in that order", "token-uri-layout");
-  checkPageSelfContained(r, html.slice(0, html.indexOf(ART_OPEN)));
-  // The page hands each block's raw text to its decoders, which strip only U+0020 padding: so do not
-  // use the trimmed blocks of splitPage, which would hide a tab or a newline the page rejects.
-  const rawBetween = (/** @type {string} */ open, /** @type {string} */ close, /** @type {number} */ from) => {
-    const a = html.indexOf(open, from) + open.length;
-    return html.slice(a, html.indexOf(close, a));
-  };
-  const rawSettings = rawBetween(SETTINGS_OPEN, MIDI_OPEN, 0);
-  const rawMidi = rawBetween(MIDI_OPEN, ART_OPEN, html.indexOf(SETTINGS_OPEN));
-  r.sizes.settings_bytes = rawSettings.trim().length;
-  r.sizes.midi_base64_chars = rawMidi.trim().length;
-  r.sizes.art_bytes = blocks.art.length;
-  try {
-    const s = decodeSettings(rawSettings);
-    validateSettings(s);
-    r.pass("player.settings", `SETTINGS decodes and passes the class's checks (${rawSettings.trim().length} bytes, ${s.timbres.length} timbres, ${s.waves.length} waves)`, "sound-settings");
-  } catch (e) {
-    const err = /** @type {any} */ (e);
-    r.fail("player.settings", `SETTINGS: ${err.message}${err.indices?.length ? ` [${err.indices.join(", ")}]` : ""}`, "sound-settings");
-  }
-  const midi = checkScore({ label: "midi", b64: rawMidi });
-  if (midi.ok) {
-    r.sizes.midi_bytes = midi.size ?? 0;
-    r.pass("player.midi", `the MIDI passes the page's own check (${midi.size} bytes, loop ${midi.seconds.toFixed(3)} s)`, "midi-contract");
-  } else r.fail("player.midi", `the MIDI fails the page's check: ${midi.error}`, "midi-contract");
-  const art = checkArt(blocks.art, imageSvg ?? undefined);
-  r.check(art.ok, "player.art_block", imageSvg ? "the art block equals the image, with no </script" : "the art block has no </script", art.lines.filter((l) => l.startsWith("FAIL")).map((l) => l.slice(5)).join("; "), "token-uri-layout");
-  if (!imageSvg) {
-    const text = utf8(blocks.art);
-    if ("error" in text) r.fail("art.utf8", `the art is not UTF-8 text: ${text.error}`, "token-uri-layout");
-    else checkSvg(r, "art", text.text, blocks.art);
-  }
+    const s = decodeSettings(blocks.settings); validateSettings(s);
+    r.sizes.settings_bytes = Buffer.byteLength(blocks.settings);
+    r.pass("player.settings", `validated SETTINGS (${s.timbres.length} timbres)`, "sound-settings");
+  } catch (e) { r.fail("player.settings", e.message, "sound-settings"); }
+  const midi = checkScore({ label: "midi", b64: blocks.midi });
+  if (midi.ok) { r.sizes.midi_bytes = midi.size; r.pass("player.midi", `strict MIDI check passes (${midi.size} bytes)`, "midi-contract"); }
+  else r.fail("player.midi", midi.error, "midi-contract");
+
 }
 
 /**
@@ -670,7 +641,7 @@ export function validateTokenUri(input, opts = {}) {
         }
       }
     } else if (/^data:image\//i.test(image)) {
-      r.warn("image.type", `the image is a ${JSON.stringify(image.slice(0, image.indexOf(",") >= 0 ? image.indexOf(",") : 40))} data URI, not "${SVG_PREFIX}": the image checks are skipped (the art block is still checked)`, "OpenSea media-and-traits");
+      r.warn("image.type", `the image is a ${JSON.stringify(image.slice(0, image.indexOf(",") >= 0 ? image.indexOf(",") : 40))} data URI, not "${SVG_PREFIX}": the image checks are skipped (NFT-owned art is independent)`, "OpenSea media-and-traits");
     } else if (/^(https?|ipfs|ar):\/\//i.test(image)) {
       r.warn("image.type", "the image is an external URL, not an onchain SVG: the SVG checks are skipped and the token is not self-contained", "OpenSea media-and-traits");
     } else r.fail("image.type", `the image ${JSON.stringify(image.slice(0, 40))} is neither an image data URI nor a URL`, "OpenSea media-and-traits");
@@ -692,7 +663,7 @@ export function validateTokenUri(input, opts = {}) {
         r.pass("animation.base64", `"animation_url" is an HTML data URI (${html.length} bytes decoded; OpenSea shows an HTML page in a sandboxed iframe)`, "OpenSea media-and-traits");
         const text = utf8(html);
         if ("error" in text) r.fail("animation.utf8", `the page is not UTF-8: ${text.error}`, "token-uri-layout");
-        checkPlayerPage(r, html, imageSvg, opts);
+        else checkPlayerPage(r, html, imageSvg, opts);
       }
     }
   }
@@ -776,6 +747,10 @@ export async function run(argv, out = console.log, err = console.error) {
     return 2;
   }
   /** @type {{uri?: string, json?: string, felts?: number}} */
+  try {
+    if (opt.expect) normalizeExpect(String(opt.expect));
+    if (opt.version && !isSemVer(String(opt.version))) throw new Error("--version is not SemVer");
+  } catch (cause) { err(cause.message); return 2; }
   let input;
   try {
     // Node's read error names the path, which may be a URL typed by mistake: print its code only.

@@ -11,7 +11,7 @@
 //   - a MIDI file (.mid or .midi, or any file that starts with "MThd"): its bytes go to checkMidi;
 //   - a JSON file (.json, or any file that starts with "{" or "["): every "midi_b64" string in it, at
 //     any depth, goes to decodeMidi, as the page decodes its MIDI block, named by the "name" string
-//     next to it (the fixture shape of tests/fixtures/page.json and tests/fixtures/midi/scores.json);
+//     next to it (the fixture shape of tests/fixtures/data.json and tests/fixtures/midi/scores.json);
 //   - any other text file: its text, without line breaks and spaces, as base64 (decodeMidi);
 //   - "-": standard input, read like a file;
 //   - an argument that is not a file and starts with "TVRoZA" (base64 of "MThd", how every MIDI

@@ -40,7 +40,7 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   edits to generated files, fixtures regenerated to fit a bug, and tests that
   compare an output with itself. `deployments/<network>.json` records the
   class and example declared on each network: check that a change to it is
-  consistent with `scripts/page_versions.json` and the stated deployment.
+  consistent with `scripts/library_versions.json` and the stated deployment.
 - **Scarb dependencies:** a git dependency is pinned in `Scarb.toml` by a
   `tag` or `rev`, and each `Scarb.lock` (the root package's and
   `examples/beast_consumer`'s) records the commit it resolves to after the
@@ -59,7 +59,7 @@ and `src/types.cairo` for the contracts the change must keep. Focus on:
   (`TinySynthSettings`, the SETTINGS format, settings validation and its `'TS: …'`
   reverts, custom timbres and operator fields) and `token-uri-inspector`
   (decoding and rebuilding a `token_uri`, engine verification,
-  `scripts/page_versions.json`, RPC call caps). Each has a `SKILL.md` and may
+  `scripts/library_versions.json`, RPC call caps). Each has a `SKILL.md` and may
   have `references/` and `scripts/`. They summarize and link to `README.md`,
   `docs/` and the code, which stay the source of truth. When a change alters
   behaviour, an API, a limit, the `token_uri` layout, the MIDI contract,

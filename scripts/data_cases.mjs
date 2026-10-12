@@ -1,8 +1,8 @@
 // @ts-check
-// Inputs of the page golden fixtures: (MIDI, SETTINGS, SVG, JSON members) per case, plus invalid
-// settings that midi_segment must reject. `gen_page_fixtures.mjs` computes the expected outputs
-// with the JS reference (scripts/page.mjs) and writes tests/fixtures/page.json and
-// tests/page_fixtures.cairo. The browser and Node checks of the page use the same inputs.
+// Inputs of independent data/composition golden fixtures: (MIDI, SETTINGS, SVG, JSON members) per case, plus invalid
+// settings that midi_segment must reject. `gen_data_fixtures.mjs` computes the expected outputs
+// with the JS reference (scripts/segments.mjs) and writes tests/fixtures/data.json and
+// tests/data_fixtures.cairo. The browser and Node checks of the page use the same inputs.
 //
 // The valid cases cover every D padding length (0..8) and every consumer padding length (0..2 for
 // the head and for S): each case's MIDI carries a text meta event whose length the generator tunes

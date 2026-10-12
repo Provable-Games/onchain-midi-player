@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { checkScore, formatResult, scoresFromArg } from "./check_midi.mjs";
-import { smf } from "./page_fixtures.mjs";
+import { smf } from "./data_cases.mjs";
 
 const SCRIPT = fileURLToPath(new URL("./check_midi.mjs", import.meta.url));
 const path = (/** @type {string} */ p) => fileURLToPath(new URL(`../${p}`, import.meta.url));
@@ -95,9 +95,9 @@ describe("valid files", () => {
     ]);
   });
 
-  test("every score of tests/fixtures/page.json passes, with the fixtures' maxTick and loop length", () => {
-    const fixtures = JSON.parse(read("tests/fixtures/page.json").toString("utf8"));
-    const scores = scoresFromArg(path("tests/fixtures/page.json"));
+  test("every score of tests/fixtures/data.json passes, with the fixtures' maxTick and loop length", () => {
+    const fixtures = JSON.parse(read("tests/fixtures/data.json").toString("utf8"));
+    const scores = scoresFromArg(path("tests/fixtures/data.json"));
     assert.equal(scores.length, fixtures.valid.length + fixtures.invalid.length);
     fixtures.valid.forEach((/** @type {any} */ c, /** @type {number} */ i) => {
       const r = checkScore(scores[i]);
@@ -215,9 +215,9 @@ describe("exit status", () => {
     const one = cli([song]);
     assert.equal(one.status, 0);
     assert.equal(one.stdout.split("\n")[0], `PASS ${song}`);
-    const fixtures = JSON.parse(read("tests/fixtures/page.json").toString("utf8"));
+    const fixtures = JSON.parse(read("tests/fixtures/data.json").toString("utf8"));
     const n = 1 + fixtures.valid.length + fixtures.invalid.length;
-    const many = cli([song, path("tests/fixtures/page.json")]);
+    const many = cli([song, path("tests/fixtures/data.json")]);
     assert.equal(many.status, 0);
     assert.ok(many.stdout.endsWith(`\n${n} scores: ${n} passed, 0 failed\n`), many.stdout.slice(-40));
     assert.equal(cli(["--help"]).status, 0);

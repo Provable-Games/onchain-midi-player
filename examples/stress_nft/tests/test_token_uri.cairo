@@ -83,6 +83,35 @@ mod OtherEngineClass {
     }
 }
 
+/// An older TinySynth class can identify its engine but lacks this consumer's fragment ABI.
+#[starknet::contract]
+mod OlderTinySynthClass {
+    #[storage]
+    struct Storage {}
+
+    #[external(v0)]
+    fn engine(self: @ContractState) -> felt252 {
+        'tinysynth'
+    }
+
+    #[external(v0)]
+    fn version(self: @ContractState) -> felt252 {
+        '0.4.0'
+    }
+}
+
+#[test]
+fn constructor_rejects_an_older_tinysynth_version() {
+    let old = declare("OlderTinySynthClass").unwrap().contract_class().class_hash;
+    let args = array![old.into(), owner().into()];
+    match declare("StressNft").unwrap().contract_class().deploy(@args) {
+        Result::Ok(_) => panic_with_felt252('should have reverted'),
+        Result::Err(panic_data) => assert(
+            *panic_data.at(0) == 'unsupported TinySynth version', 'wrong error',
+        ),
+    }
+}
+
 #[test]
 fn constructor_rejects_another_engines_class() {
     let other = declare("OtherEngineClass").unwrap().contract_class().class_hash;
