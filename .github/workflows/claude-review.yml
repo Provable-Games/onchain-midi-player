@@ -190,7 +190,7 @@ jobs:
         if: steps.deps.outcome == 'success'
         continue-on-error: true
         timeout-minutes: 3
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # Must not match the claude-review-* pattern that publish and gate read results from.
           name: claude-dependency-sources
@@ -268,7 +268,7 @@ jobs:
       - name: Download the dependency sources
         id: deps
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: claude-dependency-sources
           path: ${{ runner.temp }}/deps
@@ -334,7 +334,7 @@ jobs:
       # model, effort, configuration, proxy or runtime to trusted values.
       - name: Run the Claude review
         id: claude
-        uses: anthropics/claude-code-action/base-action@ed670b4cf9de2a5a570d130d2f6197b9e543cd64 # v1.0.240
+        uses: anthropics/claude-code-action/base-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         env:
           CLAUDE_WORKING_DIR: ${{ steps.workdir.outputs.dir }}
           ANTHROPIC_MODEL: ${{ steps.settings.outputs.model }}
@@ -407,7 +407,7 @@ jobs:
 
       - name: Upload the review result
         if: ${{ !cancelled() && steps.result.outcome == 'success' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: claude-review-${{ matrix.agent_id }}
           path: |
@@ -451,7 +451,7 @@ jobs:
 
       - name: Download the review results
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: claude-review-*
           path: ${{ runner.temp }}/results
@@ -500,7 +500,7 @@ jobs:
       - name: Download the review results
         if: needs.prepare.outputs.policy == 'review'
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: claude-review-*
           path: ${{ runner.temp }}/results
