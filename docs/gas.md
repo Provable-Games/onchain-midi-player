@@ -6,7 +6,7 @@ The unreleased 0.5.0 build combines the unchanged TinySynth engine and headless 
 
 The #62 draft builds on #61's reviewed 0.5.0 artifacts and uses the explicitly provisional engine build described in [vendor provenance](../tests/vendor/README.md). Its current manifest records a 47,424-byte exact engine and 10,810-byte public API wrapper, combined 58,237 bytes and 18,737 gzipped bytes. The player HTML fragment is 25,389 bytes and its returned segment 45,136 bytes /1,459 serialized felts; the shared loader remains 8,432 returned bytes /275 felts. Total fixed returns are 53,568 bytes. These candidate sizes do not represent a published or declared class.
 
-The matched production-shaped gas captures above remain historical 0.5.0 evidence; they were not rerun as a #62 architecture benchmark. Routine current Cairo tests cover library calls, full metadata composition, direct/runtime byte equality and gas probe paths. A final upstream post-merge engine pin requires regenerating and checking these candidate artifacts again.
+The matched production-shaped gas captures above remain historical 0.5.0 evidence; they were not rerun as a #62 architecture benchmark. The constructor-review captures below likewise remain bound to their recorded 0.5.0 NFT artifacts. This 0.6.0 candidate inherits the compiled-version constructor policy, which changes its NFT artifacts; no new 0.6.0 constructor or token URI gas capture is claimed. Routine current Cairo tests cover library calls, full metadata composition, direct/runtime byte equality and gas probe paths. A final upstream post-merge engine pin requires regenerating and checking these candidate artifacts again.
 
 ## Production-shaped comparison
 

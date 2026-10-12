@@ -56,6 +56,16 @@ The [#62 browser capture](measurements/issue62.json) binds the loaded 0.6.0 play
 
 These are SVG versus estimated audible-clock observations, including the provisional display lead and transport/latency exercises. The separate one-minute capture overlapped builds/browser work and reached 105.273 ms in Chromium and 117.196 ms in Firefox; the monitor reports those excursions without correction. Initial alignment measures the timeline after seeking, not physical sound/display output. The unchanged historical Warlock fixture's embedded GIF has its own image clock; controlled animation acceptance uses outer/nested SVG/SMIL timelines.
 
+
+The initial 2026-10-12 restack built on #61 head `6e93957ed7112cca3bd21ae8757f1f1cfb17c670` and the merged #57 main baseline. The [separate restack record](measurements/issue62.json) preserves the historical captures and verifies identical runtime/source/payload hashes plus the unchanged 0.5.0 and 0.6.0 records. Current checks pass 332 root JavaScript, 43 consumer and 304 Cairo cases, generation/ABI/types/format, and all three browsers' one-minute transport, composition and sandbox/media acceptance. The original ten-minute evidence is reused because those runtime bytes are unchanged, rather than presented as a new capture.
+
+Engine #99 has merged; #98 remains open and aligned on that integration head. The existing provisional source build stays pinned to its recorded original source commit until #98 merges and distribution CI supplies the final pin; no dependency merge or engine-byte rewrite is part of this restack.
+
+
+The final review restack builds on #61 head `5ce9bd9aed9fd895d1d5ffcc81413fe7e7197e0d`. It inherits compiled `VERSION` checks in both reference constructors (0.6.0 for this candidate), two older-version rejection tests, parsed active-resource validation and explicit MIDI-only recovery guidance. Current validation passes 334 root JavaScript, 43 consumer and 306 Cairo cases, generation/ABI/player-UI types/format, and 30 composed-page checks in each browser. The [final review restack record](measurements/issue62.json) verifies unchanged runtime, manifests and prepared assets while preserving all earlier capture identities.
+
+The constructor checks change current NFT compiled artifacts. Historical token URI/NFT/gas captures are not relabeled as current-artifact captures; the separate constructor-review gas evidence remains bound to its recorded 0.5.0 builds. Browser runtime/source-bound evidence stays applicable because its engine, loader, player and NFT bootstrap bytes are unchanged. No long drift or native capture was repeated for this restack.
+
 ## Measurements
 
 [Gas documentation](gas.md) distinguishes the matched split/combined packaging experiment, its review refresh and historical 0.4.0 whole-page evidence. It also records independent-fixture composition, runtime encoding, fixed/dynamic alignment, payload/token URI sizes and release Sierra/CASM size. Fixture figures are not p5.js benchmarks. For reproducible L2 values use the documented production-shaped selector commands; root helper `gas_` test-wide figures include different work.
