@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { openBrowser, composed, dataUrl, waitReady } from './browser_harness.mjs';
 import { fixtureCase } from './fixture_pages.mjs';
+import { checkSchedule } from './schedule_observations.mjs';
 import { verifyLibraries } from './verify_engine.mjs';
 const seconds = Number(process.env.SYNC_SECONDS || 60);
 const sampleSeconds = Number(process.env.SYNC_SAMPLE_SECONDS || 10);
@@ -24,7 +25,7 @@ try {
  await waitReady(o.page);
  const info = () => o.page.evaluate(() => {
    const root = document.getElementById('beast-art'), svgs = [root,...root.querySelectorAll('svg')];
-   return {status:OnchainMidiPlayer.getPlayStatus(),timelines:svgs.map(s=>({time:s.getCurrentTime(),paused:s.animationsPaused()})),monitor:window.OnchainArtMonitor,seeks:window.__seeks.length,calls:window.__check.calls,passes:window.__check.passes,media:window.__check.media?.paused};
+   return {status:OnchainMidiPlayer.getPlayStatus(),timelines:svgs.map(s=>({time:s.getCurrentTime(),paused:s.animationsPaused()})),monitor:window.OnchainArtMonitor,seeks:window.__seeks.length,calls:window.__check.calls,passes:window.__check.passes,sends:window.__check.sends,media:window.__check.media?.paused};
  });
  const cold = await info(); assert.equal(cold.calls.length,0); assert.ok(cold.timelines.every(s=>s.paused&&s.time===0));
  await o.page.click('#play');
@@ -34,14 +35,14 @@ try {
  for(let i=0;i<3;i++) {
    await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==='suspended');
    const paused = await info();await o.page.waitForTimeout(350);const held=await info();
-   assert.equal(held.status.state,'paused');assert.equal(held.status.audioTime,paused.status.audioTime);assert.deepEqual(held.timelines,paused.timelines);assert.ok(held.timelines.every(s=>s.paused));assert.equal(held.media,true);
+   assert.equal(held.status.state,'paused');assert.equal(held.status.audioTime,paused.status.audioTime);assert.deepEqual(held.timelines,paused.timelines);assert.ok(held.timelines.every(s=>s.paused));assert.equal(held.media,true);assert.equal(held.sends.length,paused.sends.length,'scheduler stays held during pause');
    await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
    const resumed = await info();assert.equal(resumed.status.originTime,initial.status.originTime);assert.equal(resumed.status.runId,initial.status.runId);assert.ok(resumed.timelines.every(s=>!s.paused));
  }
  // External context suspension remains held despite an eligible explicit MIDI send and scheduler ticks.
  await o.page.evaluate(async()=>{await window.__check.synth.getAudioContext().suspend();window.__check.synth.send([0x90,60,1]);});
  await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='paused');const external=await info();await o.page.waitForTimeout(350);
- const externalHeld=await info();assert.equal(externalHeld.status.audioState,'suspended');assert.equal(externalHeld.status.audioTime,external.status.audioTime);assert.deepEqual(externalHeld.timelines,external.timelines);
+ const externalHeld=await info();assert.equal(externalHeld.status.audioState,'suspended');assert.equal(externalHeld.status.audioTime,external.status.audioTime);assert.deepEqual(externalHeld.timelines,external.timelines);assert.equal(externalHeld.sends.length,external.sends.length);
  await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
  // All consumers see one latency estimate. 1ms noise is ignored, 30ms route change resynchronizes.
  await o.page.evaluate(()=>{const ctx=window.__check.synth.getAudioContext();window.__oldLatency=OnchainMidiPlayer.getPlayStatus().latencySeconds;Object.defineProperty(ctx,'outputLatency',{configurable:true,value:.2,writable:true});Object.defineProperty(ctx,'baseLatency',{configurable:true,value:.01,writable:true});});
@@ -63,11 +64,13 @@ try {
  const passCount=end.passes.length-start.passes.length;
  assert.ok(passCount>=Math.floor(seconds/c.midi_loop_seconds)-1);
  assert.equal(end.seeks-start.seeks,passCount*2,'only two SVG seeks per announced pass during steady latency');
- for(const event of end.passes) if(event.audibleTime!==null)assert.ok(Math.abs(event.audibleTime-event.startTime-event.latencySeconds)<1e-9);
- const result={engine:run.engine,version:verified.version,player_source_sha256:verified.libraries.player.sha256,engine_sha256:verified.engine.sha256,seconds,checkpoints,initial_alignment_ms:initial.monitor.initialAlignment*1000,max_drift_ms:end.monitor.maxDrift*1000,current_drift_ms:end.monitor.currentDrift*1000,latency_events:end.monitor.latencyEvents,steady_passes:passCount,steady_svg_seeks:end.seeks-start.seeks,physical_audio_verified:false};
+ // The one-bar fixture has a unique channel-1 note 72 at tick zero. Match actual engine
+ // sends, never a live getPlayStatus().startTime that lookahead may have advanced.
+ const schedule=checkSchedule({sends:end.sends,passes:end.passes,origin:initial.status.originTime,period:c.midi_loop_seconds});
+ const result={engine:run.engine,version:verified.version,player_source_sha256:verified.libraries.player.sha256,engine_sha256:verified.engine.sha256,seconds,schedule,checkpoints,initial_alignment_ms:initial.monitor.initialAlignment*1000,max_drift_ms:end.monitor.maxDrift*1000,current_drift_ms:end.monitor.currentDrift*1000,latency_events:end.monitor.latencyEvents,steady_passes:passCount,steady_svg_seeks:end.seeks-start.seeks,physical_audio_verified:false};
  assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
  await o.page.evaluate(()=>OnchainMidiPlayer.stop());const stopped=await info();assert.equal(stopped.status.state,'stopped');assert.ok(stopped.timelines.every(s=>s.paused&&s.time===0));
  if(process.env.SYNC_RESULTS){mkdirSync(process.env.SYNC_RESULTS,{recursive:true});writeFileSync(`${process.env.SYNC_RESULTS}/sync-${run.engine}.json`,JSON.stringify(result,null,2)+'\n');}
  console.log(JSON.stringify(result,null,2));
- console.log(`${run.engine}: audio clock / SVG estimated max drift ${(result.max_drift_ms).toFixed(3)} ms; ${passCount} passes, ${end.seeks-start.seeks} boundary SVG seeks; ${result.latency_events.length} latency records; checks passed`);
+ console.log(`${run.engine}: audio clock / SVG estimated max drift ${(result.max_drift_ms).toFixed(3)} ms; ${passCount} passes, ${end.seeks-start.seeks} boundary SVG seeks; ${result.latency_events.length} latency records; engine grid error ${schedule.max_grid_error_seconds} s, late ${schedule.late}; checks passed`);
 } catch(error) {console.error(JSON.stringify(await o.page.evaluate(()=>({state:OnchainMidiPlayer.getPlayStatus(),states:window.__check.states,calls:window.__check.calls,media:window.__check.media?.paused})),null,2));throw error;} finally { await o.context.close(); await run.browser.close(); }

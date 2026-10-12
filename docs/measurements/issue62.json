@@ -1194,5 +1194,402 @@
       "Applicable device/audio-route/provider/mainnet qualification; physical 17 ms display lead remains pending issue #52.",
       "Separate maintainer authorization for declaration/deployment/release."
     ]
+  },
+  "current_review_validation": {
+    "capture_date_utc": "2026-10-12",
+    "reviewed_parent_commit": "b5e4bfc786f54f099714adf687ef139e415bf0b9",
+    "scope": "Current NFT-owned UI fixes and independent engine scheduling observations; final CI engine/player and both library manifest entries are unchanged.",
+    "bindings": {
+      "updated_nft_assets": {
+        "examples/beast_consumer/ui.js": {
+          "before": {
+            "sha256": "c7ecd3d499f1745edf07855940145d0ae3aab9f8c642df8375e10d6aaf261e02",
+            "bytes": 17063
+          },
+          "after": {
+            "sha256": "55dbe4b397a57bfa6a36cfea0bc90f18dd3d0aad53dfb9e7a2c44d88216669e1",
+            "bytes": 17488
+          }
+        },
+        "examples/beast_consumer/fixtures/footer.html": {
+          "before": {
+            "sha256": "d615b5856ccb73c83cf7a92443c72506dcaba9265ab342961b9274d49c71502d",
+            "bytes": 6597
+          },
+          "after": {
+            "sha256": "77b73ca718eff5b2c88c1b5872588829214683b3ab2b49c87382272ccce6263b",
+            "bytes": 6777
+          }
+        },
+        "examples/beast_consumer/fixtures/animation.html": {
+          "before": {
+            "sha256": "6a9d736a1936afe5cafa9986f41e58c024af1a36064883a4ce44d174d94b0787",
+            "bytes": 39915
+          },
+          "after": {
+            "sha256": "8a3c8e811688dd5808df94d6460c202878ee43a61913f9cd0405cbd0e4c9bee9",
+            "bytes": 40095
+          }
+        },
+        "examples/beast_consumer/fixtures/token_uri.txt": {
+          "before": {
+            "sha256": "e7111833b4087d77311a94442a97b203d266630fbfa48a7fcd9f3fbb3d6b84b9",
+            "bytes": 73330
+          },
+          "after": {
+            "sha256": "5ee0ae67e221f816e5fff33a358d849b70a143233572707c3c0b4660710563b6",
+            "bytes": 73650
+          }
+        },
+        "examples/beast_consumer/src/owned_assets.cairo": {
+          "before": {
+            "sha256": "bb7a224fd62cf8290b18cd94d4d36da938a782a5c764892e03b5d7fc5f81d31d",
+            "bytes": 14193
+          },
+          "after": {
+            "sha256": "be03b43fbcbf3bede368fd4eadaf29595e16b5f31db12bbe1a27ecf521bdab13",
+            "bytes": 14513
+          }
+        },
+        "examples/stress_nft/src/owned_assets.cairo": {
+          "before": {
+            "sha256": "bb7a224fd62cf8290b18cd94d4d36da938a782a5c764892e03b5d7fc5f81d31d",
+            "bytes": 14193
+          },
+          "after": {
+            "sha256": "be03b43fbcbf3bede368fd4eadaf29595e16b5f31db12bbe1a27ecf521bdab13",
+            "bytes": 14513
+          }
+        }
+      },
+      "unchanged_libraries_and_records": {
+        "scripts/library_versions.json": {
+          "sha256": "ac5ae4fe131d8bbd1981ae5775d9eaa9dec5f55782e8dc15d0611eae25073241",
+          "bytes": 5926
+        },
+        "scripts/engine.mjs": {
+          "sha256": "790273888257c6f7538b6c8fefa783f2a74deb9c03c2bc677d7bbc4928a977d9",
+          "bytes": 3499
+        },
+        "player/player.js": {
+          "sha256": "e912cf963edeb9d4fe89cb803da8693678b42725dce86d378225911401869804",
+          "bytes": 21606
+        },
+        "src/segment_data.cairo": {
+          "sha256": "f8b0a883465e0e780e1b282c89f57c47329bfbf631d0592eb533955d36f861dc",
+          "bytes": 79231
+        },
+        "tests/fixtures/segments/player.html": {
+          "sha256": "9e781a38a911fcc80cf9f414f7f54f379eb936e19a67d82eeec030c0ee1b3923",
+          "bytes": 25389
+        },
+        "tests/fixtures/segments/gunzip.html": {
+          "sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+          "bytes": 4743
+        }
+      },
+      "browser_probe_source": {
+        "scripts/browser_harness.mjs": {
+          "sha256": "fbbe3dcab05bb3dde7b268b586564bd25e9622134382dc19827d9e6ba3636b9c",
+          "bytes": 3415
+        },
+        "scripts/sync_check.mjs": {
+          "sha256": "4974a88947e9ce387b8dca0bbe28fb909d40f4eaf3a31bbc5c6403360b480142",
+          "bytes": 9128
+        },
+        "scripts/schedule_observations.mjs": {
+          "sha256": "fbc0f971196ad326fa5fbfaed18b1ed99fb0f14ccc5bf27a96136dc94e67fff8",
+          "bytes": 1463
+        },
+        "scripts/page_check.mjs": {
+          "sha256": "795e3460b8d7ac1aad95a42fbbecba97b80aee185e3774102b077b8ed162219d",
+          "bytes": 17284
+        }
+      },
+      "current_release_nft_artifacts": {
+        "examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json": {
+          "sha256": "029b7004a20d6803ed941ce0b8c1d757d3f9489f6dbdf0e0cc1959c6eced8d3f",
+          "bytes": 778356
+        },
+        "examples/stress_nft/target/release/stress_nft_StressNft.contract_class.json": {
+          "sha256": "ba79ab5ada52c1181388e01ca473b6f0cd68c68d629e7a47d99d678bb1b12369",
+          "bytes": 629381
+        }
+      }
+    },
+    "schedule_observation": "Test-only public synth.send records [status, data1, data2, scheduledTime, independently sampled context.currentTime]. The one-bar beast_140bpm fixture has exactly one channel-1 note72 at tick zero per pass. Its MIDI-derived period and initial API origin define the expected grid; captured API pass announcements match their actual opening sends, without reading live engine startTime at each callback.",
+    "negative_controls": [
+      "uniformly shifted actual engine grid",
+      "missing or duplicate opening",
+      "API pass/engine opening mismatch",
+      "late non-opening two-byte MIDI message"
+    ],
+    "browser_versions": {
+      "chromium": "153.0.8010.12",
+      "firefox": "155.0",
+      "webkit": "26.6"
+    },
+    "browser_environment": "Linux PulseAudio null sink with offline data URLs, request blocking and existing pinned browser tooling.",
+    "sync_results": {
+      "chromium": {
+        "engine": "chromium",
+        "version": "0.6.0",
+        "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+        "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+        "seconds": 60,
+        "schedule": {
+          "observed_passes": 36,
+          "scheduled_messages": 683,
+          "max_grid_error_seconds": 3.979039320256561e-13,
+          "minimum_lead_seconds": 0.1,
+          "late": 0
+        },
+        "checkpoints": [
+          {
+            "elapsed_seconds": 10,
+            "audioTime": 11.23845804988662,
+            "current_drift_ms": 19.60090928232283,
+            "max_drift_ms": 30.68063876643823
+          },
+          {
+            "elapsed_seconds": 20,
+            "audioTime": 21.24625850340136,
+            "current_drift_ms": 20.03046381777196,
+            "max_drift_ms": 30.68063876643823
+          },
+          {
+            "elapsed_seconds": 30,
+            "audioTime": 31.265668934240363,
+            "current_drift_ms": 15.170022523415483,
+            "max_drift_ms": 30.68063876643823
+          },
+          {
+            "elapsed_seconds": 40,
+            "audioTime": 41.2734693877551,
+            "current_drift_ms": 13.922573356700774,
+            "max_drift_ms": 30.68063876643823
+          },
+          {
+            "elapsed_seconds": 50,
+            "audioTime": 51.2928798185941,
+            "current_drift_ms": 14.252111298216796,
+            "max_drift_ms": 30.68063876643823
+          },
+          {
+            "elapsed_seconds": 60,
+            "audioTime": 61.32390022675737,
+            "current_drift_ms": 9.591732994048918,
+            "max_drift_ms": 30.68063876643823
+          }
+        ],
+        "initial_alignment_ms": -0.0007273489926046262,
+        "max_drift_ms": 30.68063876643823,
+        "current_drift_ms": 3.0717481140483116,
+        "latency_events": [
+          {
+            "audioTime": 0.011609977324263039,
+            "latencySeconds": 0.011609977324263039,
+            "revision": 1
+          },
+          {
+            "audioTime": 0.046439909297052155,
+            "latencySeconds": 0.04360997732426304,
+            "revision": 2
+          },
+          {
+            "audioTime": 0.301859410430839,
+            "latencySeconds": 0.05160997732426304,
+            "revision": 3
+          },
+          {
+            "audioTime": 0.4295691609977324,
+            "latencySeconds": 0.04360997732426304,
+            "revision": 4
+          },
+          {
+            "audioTime": 0.626938775510204,
+            "latencySeconds": 0.21000000000000002,
+            "revision": 5
+          },
+          {
+            "audioTime": 1.1261678004535147,
+            "latencySeconds": 0.24100000000000002,
+            "revision": 6
+          }
+        ],
+        "steady_passes": 35,
+        "steady_svg_seeks": 70,
+        "physical_audio_verified": false
+      },
+      "firefox": {
+        "engine": "firefox",
+        "version": "0.6.0",
+        "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+        "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+        "seconds": 60,
+        "schedule": {
+          "observed_passes": 36,
+          "scheduled_messages": 679,
+          "max_grid_error_seconds": 3.907985046680551e-13,
+          "minimum_lead_seconds": 0.1,
+          "late": 0
+        },
+        "checkpoints": [
+          {
+            "elapsed_seconds": 10,
+            "audioTime": 10.86984126984127,
+            "current_drift_ms": 13.277708304473279,
+            "max_drift_ms": 28.51700012700087
+          },
+          {
+            "elapsed_seconds": 20,
+            "audioTime": 20.874739229024943,
+            "current_drift_ms": 11.287287240633326,
+            "max_drift_ms": 28.51700012700087
+          },
+          {
+            "elapsed_seconds": 30,
+            "audioTime": 30.89124716553288,
+            "current_drift_ms": 10.093263207108016,
+            "max_drift_ms": 28.51700012700087
+          },
+          {
+            "elapsed_seconds": 40,
+            "audioTime": 40.91646258503401,
+            "current_drift_ms": 18.191882065393905,
+            "max_drift_ms": 28.51700012700087
+          },
+          {
+            "elapsed_seconds": 50,
+            "audioTime": 50.935873015873014,
+            "current_drift_ms": 19.387938881739508,
+            "max_drift_ms": 28.51700012700087
+          },
+          {
+            "elapsed_seconds": 60,
+            "audioTime": 60.95238095238095,
+            "current_drift_ms": 12.461553394213176,
+            "max_drift_ms": 28.51700012700087
+          }
+        ],
+        "initial_alignment_ms": -0.2018149970825986,
+        "max_drift_ms": 28.51700012700087,
+        "current_drift_ms": 12.046547353494752,
+        "latency_events": [
+          {
+            "audioTime": 0.0029024943310657597,
+            "latencySeconds": 0.041020408,
+            "revision": 1
+          },
+          {
+            "audioTime": 0.313469387755102,
+            "latencySeconds": 0.21000000000000002,
+            "revision": 2
+          },
+          {
+            "audioTime": 0.8126984126984127,
+            "latencySeconds": 0.24100000000000002,
+            "revision": 3
+          }
+        ],
+        "steady_passes": 35,
+        "steady_svg_seeks": 70,
+        "physical_audio_verified": false
+      },
+      "webkit": {
+        "engine": "webkit",
+        "version": "0.6.0",
+        "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+        "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+        "seconds": 60,
+        "schedule": {
+          "observed_passes": 36,
+          "scheduled_messages": 680,
+          "max_grid_error_seconds": 3.979039320256561e-13,
+          "minimum_lead_seconds": 0.09419501133786848,
+          "late": 0
+        },
+        "checkpoints": [
+          {
+            "elapsed_seconds": 10,
+            "audioTime": 11.104943310657596,
+            "current_drift_ms": 1.987348777667819,
+            "max_drift_ms": 2.7103178721836763
+          },
+          {
+            "elapsed_seconds": 20,
+            "audioTime": 21.112743764172336,
+            "current_drift_ms": 0.8923477097226851,
+            "max_drift_ms": 2.7103178721836763
+          },
+          {
+            "elapsed_seconds": 30,
+            "audioTime": 31.120544217687076,
+            "current_drift_ms": 0.10914237104220348,
+            "max_drift_ms": 2.7103178721836763
+          },
+          {
+            "elapsed_seconds": 40,
+            "audioTime": 41.131247165532876,
+            "current_drift_ms": 0.06563409279802812,
+            "max_drift_ms": 2.9586871035185425
+          },
+          {
+            "elapsed_seconds": 50,
+            "audioTime": 51.14485260770975,
+            "current_drift_ms": -2.2159613421690594,
+            "max_drift_ms": 2.9586871035185425
+          },
+          {
+            "elapsed_seconds": 60,
+            "audioTime": 61.164263038548754,
+            "current_drift_ms": -0.9684464654897695,
+            "max_drift_ms": 2.9586871035185425
+          }
+        ],
+        "initial_alignment_ms": 0.05499956498340383,
+        "max_drift_ms": 2.9586871035185425,
+        "current_drift_ms": -1.2154270125863675,
+        "latency_events": [
+          {
+            "audioTime": 0.020317460317460317,
+            "latencySeconds": 0.0029024943310657597,
+            "revision": 1
+          },
+          {
+            "audioTime": 0.5369614512471655,
+            "latencySeconds": 0.21000000000000002,
+            "revision": 2
+          },
+          {
+            "audioTime": 1.0419954648526077,
+            "latencySeconds": 0.24100000000000002,
+            "revision": 3
+          }
+        ],
+        "steady_passes": 35,
+        "steady_svg_seeks": 70,
+        "physical_audio_verified": false
+      }
+    },
+    "composed_page_cases_per_engine": 31,
+    "functional_checks": {
+      "root_javascript": 338,
+      "beast_javascript": 31,
+      "stress_javascript": 13,
+      "cairo_root": 267,
+      "cairo_beast": 28,
+      "cairo_stress": 11,
+      "existing_cairo_ignored": 21,
+      "generation_abi_player_ui_types_and_format": "passed"
+    },
+    "historical_evidence_scope": "Earlier ten-minute/PCM/gas/NFT captures retain their original artifact and source bindings. The changed NFT UI was validated in these fresh one-minute runs; the old ten-minute probe did not collect independent engine sends and is not claimed as current scheduling evidence. No new gas measurement or physical-device qualification is claimed.",
+    "physical_audio_verified": false,
+    "release_prerequisites": [
+      "tagged fork release",
+      "issue52 hardware/display/audio-route qualification of provisional17ms reference display lead",
+      "applicable provider/mainnet qualification",
+      "separately authorized declaration/deployment/release actions"
+    ]
   }
 }

@@ -72,6 +72,16 @@ try {
  {const c=fixtureCase("beast_140bpm"),svg=c.svg.replace('</svg>','<script>window.artInjection=true</script><desc><![CDATA[</SCRIPT>]]></desc></svg>');
  const o=await run.page();try{await o.page.goto(dataUrl(composed({...c,svg})));await waitReady(o.page);assert.equal(await o.page.evaluate(()=>window.artInjection),undefined);assert.equal(await o.page.locator('#beast-art').count(),1);assert.deepEqual(await o.errors(),[]);}finally{await o.context.close();}}
  for(const name of ["player"]){const o=await run.page();try{await o.page.goto(dataUrl(withoutBlock(composed(),name)));await o.page.waitForFunction(()=>!document.getElementById("error").hidden);assert.equal(await o.page.locator('#beast-art').count(),1);assert.ok(await o.page.locator('#play').isDisabled());assert.equal(await o.page.evaluate(()=>window.__check.created),0);}finally{await o.context.close();}console.log(`PASS missing ${name}: art stays visible`);}
+ // Trusted inline art recovers its own animation clocks when MIDI readiness fails.
+ {const o=await run.page();try{
+   const c=fixtureCase('beast_140bpm'),svg='<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect><svg><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect></svg></svg>';
+   await o.page.goto(dataUrl(withoutBlock(composed({...c,svg},{fixture:true,dependent:true,trustedArt:true}),'player')));
+   await o.page.waitForFunction(()=>!document.getElementById('error').hidden);
+   assert.ok(await o.page.locator('#play').isDisabled());
+   const paused=await o.page.evaluate(()=>{const root=document.getElementById('beast-art');return[root,...root.querySelectorAll('svg')].map(s=>s.animationsPaused());});
+   assert.deepEqual(paused,[false,false]);assert.equal(await o.page.evaluate(()=>window.__check.created),0);
+   assert.deepEqual(await o.errors(),[]);console.log('PASS missing player: trusted outer/nested SVG animations recover');
+ }finally{await o.context.close();}}
  // Synchronous library failure does not prevent an independent later provider from executing.
  {const o=await run.page();try{const bad=alignedFragment(gzipFragment('broken-library',gzipSource('throw Error("fixture evaluation failure")'))),html=composed().replace(fixedFragment('player'),fixedFragment('player')+bad);
  await o.page.goto(dataUrl(html));const result=await o.page.evaluate(async()=>{try{await window.OnchainLibraries.ready;return "resolved";}catch(e){return e.message;}});assert.match(result,/broken-library/);assert.equal(await o.page.evaluate(()=>window.DependentFixture),'fixture:dependent');

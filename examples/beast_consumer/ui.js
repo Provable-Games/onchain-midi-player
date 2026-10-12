@@ -64,18 +64,17 @@ export const REFERENCE_DISPLAY_LEAD_SECONDS = 0.017;
  */
 export function mountArtSync(root, player, { host = window, notes = null, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS } = {}) {
   const timelines = [root, ...root.querySelectorAll('svg')];
-  let frame = 0, active = false, revision = -1, started = false;
+  let frame = 0, active = false, revision = -1, started = false, runId = -1;
   let currentDrift = 0, maxDrift = 0;
   /** @type {number | null} */ let initialAlignment = null;
   /** @type {{audioTime: number | null, latencySeconds: number, revision: number}[]} */ const latencyEvents = [];
   const monitor = () => Object.freeze({ currentDrift, maxDrift, initialAlignment,
     latencyEvents: Object.freeze(latencyEvents.map(event => Object.freeze({ ...event }))) });
-  const clock = () => {
-    const s = player.getPlayStatus();
+  const clock = (s = player.getPlayStatus()) => {
     return s.positionSeconds === null ? null : Math.max(0, s.positionSeconds + displayLead);
   };
-  const phase = () => {
-    const s = player.getPlayStatus(), position = clock();
+  const phase = (s = player.getPlayStatus()) => {
+    const position = clock(s);
     return position === null ? 0 : s.passSeconds ? position % s.passSeconds : position;
   };
   const pause = () => {
@@ -83,7 +82,7 @@ export function mountArtSync(root, player, { host = window, notes = null, displa
     for (const svg of timelines) svg.pauseAnimations();
     notes?.pause();
   };
-  const seek = () => { const position = phase(); for (const svg of timelines) svg.setCurrentTime(position); };
+  const seek = (s = player.getPlayStatus()) => { const position = phase(s); for (const svg of timelines) svg.setCurrentTime(position); };
   const sample = () => {
     const s = player.getPlayStatus(), expected = phase();
     for (const svg of timelines) {
@@ -107,12 +106,17 @@ export function mountArtSync(root, player, { host = window, notes = null, displa
     } else sample(); // Read-only drift observation; never seeks or changes compensation here.
     frame = host.requestAnimationFrame(tick);
   };
-  const synchronize = () => {
-    const s = player.getPlayStatus();
+  const synchronize = (s = player.getPlayStatus()) => {
+    // State notifications are captured snapshots: an earlier listener may already have replayed.
+    if (runId !== s.runId) {
+      runId = s.runId; started = false; pause();
+      for (const svg of timelines) svg.setCurrentTime(0);
+      notes?.stop();
+    }
     if (revision !== s.latencyRevision) {
       if (revision >= 0) latencyEvents.push({ audioTime: s.audioTime, latencySeconds: s.latencySeconds, revision: s.latencyRevision });
       revision = s.latencyRevision;
-      if (started && s.state === 'playing' && s.audioState === 'running') seek();
+      if (started && s.state === 'playing' && s.audioState === 'running') seek(s);
     }
     if (s.state !== 'playing' || s.audioState !== 'running') {
       pause();
@@ -121,7 +125,7 @@ export function mountArtSync(root, player, { host = window, notes = null, displa
     }
     if (!active) {
       active = true;
-      if (started) { seek(); for (const svg of timelines) svg.unpauseAnimations(); notes?.play(); }
+      if (started) { seek(s); for (const svg of timelines) svg.unpauseAnimations(); notes?.play(); }
       frame = host.requestAnimationFrame(tick);
     }
   };
@@ -195,7 +199,11 @@ export async function startUi() {
 
     let playing = false, resuming = false;
     try { await window.OnchainLibraries.ready; if (!window.OnchainMidiPlayer) throw new Error("player: library did not load"); await window.OnchainMidiPlayer.ready; }
-    catch (e) { fail(e); return; }
+    catch (e) {
+      fail(e);
+      if (art instanceof SVGSVGElement) for (const timeline of [art, ...art.querySelectorAll("svg")]) timeline.unpauseAnimations();
+      return;
+    }
     const player = window.OnchainMidiPlayer;
     /** @type {HTMLAudioElement | null} the silent element of the media session */
     let silent = null;

@@ -295,10 +295,10 @@ jobs:
         if: steps.detect.outputs.has_hosting_check == 'true'
         run: npm run hosting-check -- "$RUNNER_TEMP/screenshots"
 
-      # One minute of the long-session check: every pass on the tempo map's grid, no late notes,
-      # the art running. The art's drift from the sound is printed, not checked (--drift-info): in
-      # a minute one stall of a headless audio clock can exceed the limit while the page does
-      # nothing wrong. Longer runs check it: see "Browser validation" in docs/development.md and
+      # One minute of the composed check: actual engine sends on the MIDI pass grid, no late sends,
+      # pause/resume holds and boundary-only SVG seeks. Estimated SVG/audio drift is informational
+      # in both short and long runs; physical device acceptance remains issue #52. See
+      # "Browser validation" in docs/development.md and
       # .github/workflows/drift.yml, which runs 10 minutes weekly and on demand.
       - name: Drift check, 1 minute (loop schedule; art against sound printed)
         if: steps.detect.outputs.has_drift_check == 'true'

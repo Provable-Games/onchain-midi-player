@@ -80,16 +80,20 @@ test("NFT media session owns a six-second silent PCM carrier",()=>{
  const b=Buffer.from(silentWav());assert.equal(b.toString('ascii',0,4),'RIFF');assert.equal(b.readUInt32LE(4),b.length-8);assert.equal(b.readUInt32LE(24),8000);assert.equal(b.readUInt32LE(40),48000);assert.ok(b.subarray(44).every(x=>x===128));
 });
 // @ts-nocheck
-function artHarness(){
- let status={state:'stopped',audioState:null,positionSeconds:null,originTime:null,startTime:null,audioTime:null,passSeconds:2,latencySeconds:.03,latencyRevision:0};
+function artHarness(before = () => {}){
+ let status={runId:0,state:'stopped',audioState:null,positionSeconds:null,originTime:null,startTime:null,audioTime:null,passSeconds:2,latencySeconds:.03,latencyRevision:0};
  const states=new Set(),passes=new Set(),frames=new Map(),seeks=[],calls=[],notes=[];let seq=0;
  const host={requestAnimationFrame(fn){frames.set(++seq,fn);return seq;},cancelAnimationFrame(id){frames.delete(id);}};
  function svg(name){let time=0;return{pauseAnimations(){calls.push(name+':pause');},unpauseAnimations(){calls.push(name+':run');},setCurrentTime(t){seeks.push([name,t]);time=t;},getCurrentTime(){return time;},advance(t){time+=t;}};}
  const nested=svg('nested'),root=svg('outer');root.querySelectorAll=()=>[nested];
  const player={getPlayStatus:()=>({...status}),onStateChange(fn){states.add(fn);return()=>states.delete(fn);},onPassStart(fn){passes.add(fn);return()=>passes.delete(fn);}};
  const note={play(){notes.push('play');},pause(){notes.push('pause');},stop(){notes.push('stop');}};
+ // Match the API: capture both snapshots and listeners, then drain nested notifications in order.
+ const queue=[];let notifying=false;
+ const set=next=>{Object.assign(status,next);queue.push({snapshot:{...status},listeners:[...states]});if(notifying)return;notifying=true;try{while(queue.length){const event=queue.shift();for(const fn of event.listeners)if(states.has(fn))fn({...event.snapshot});}}finally{notifying=false;}};
+ before(player,set);
  const sync=mountArtSync(root,player,{host,notes:note});
- return{sync,status,seeks,calls,notes,root,nested,set(next){Object.assign(status,next);for(const fn of states)fn();},frame(){const fs=[...frames.values()];frames.clear();for(const fn of fs)fn();},pass(){for(const fn of passes)fn();}};
+ return{sync,status,seeks,calls,notes,root,nested,set,frame(){const fs=[...frames.values()];frames.clear();for(const fn of fs)fn();},pass(){for(const fn of passes)fn();}};
 }
 test('trusted outer AND nested SVG hold zero until estimated audible start, then resume at shared position',()=>{
  const h=artHarness();assert.ok(h.calls.includes('nested:pause'));
@@ -105,4 +109,20 @@ test('drift is read-only between start/resume/pass/latency synchronization point
  h.pass();assert.equal(h.seeks.length,count+2);
  h.set({latencyRevision:2,latencySeconds:.06,positionSeconds:.4});assert.equal(h.seeks.length,count+4);assert.equal(h.sync.getMonitor().latencyEvents.at(-1).latencySeconds,.06);
  h.set({state:'paused',audioState:'interrupted'});const last=h.seeks.length;h.frame();assert.equal(h.seeks.length,last);h.sync.dispose();
+});
+
+test('an earlier stopped subscriber replaying resets every new run until audible start',()=>{
+ let replay=false;
+ const h=artHarness((player,set)=>player.onStateChange(s=>{
+   if(replay&&s.state==='stopped')set({runId:3,state:'starting',originTime:null});
+ }));
+ h.set({runId:1,state:'playing',audioState:'running',originTime:1,audioTime:1.1,positionSeconds:.07});h.frame();
+ assert.equal(h.calls.at(-1),'nested:run');
+ replay=true;h.set({runId:2,state:'stopped',originTime:null,positionSeconds:null});
+ assert.equal(h.calls.at(-1),'nested:pause');assert.equal(h.seeks.at(-1)[1],0);
+ h.set({state:'playing',originTime:1.2,audioTime:1.1,positionSeconds:0});h.frame();
+ assert.equal(h.calls.at(-1),'nested:pause');assert.equal(h.seeks.at(-1)[1],0);
+ h.set({audioTime:1.24,positionSeconds:.01});h.frame();assert.equal(h.calls.at(-1),'nested:run');
+ h.set({state:'paused',audioState:'suspended'});h.set({state:'playing',audioState:'running',positionSeconds:.4});
+ assert.equal(h.seeks.at(-1)[1],.41700000000000004,'same-run resume retains phase');h.sync.dispose();
 });
