@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
-import { ART_OPEN, HTML_PREFIX, MIDI_OPEN, JSON_PREFIX, SVG_PREFIX, b64, byteArrayFelts, withGzipPayload } from "./page.mjs";
+import { ART_OPEN, HTML_PREFIX, MIDI_OPEN, JSON_PREFIX, SVG_PREFIX, VERSION, b64, byteArrayFelts, withGzipPayload } from "./page.mjs";
 import { RPC_CAP, base64Problem, formatReport, parseInput, parseXml, run, validateTokenUri } from "./validate_token_uri.mjs";
 
 const SCRIPT = fileURLToPath(new URL("./validate_token_uri.mjs", import.meta.url));
@@ -34,7 +34,7 @@ test("the example's golden token_uri passes: every layer and the engine record",
   for (const id of ["token_uri.base64", "json.name", "image.self_contained", "player.engine_sha256", "player.gzip", "player.page_sha256_record", "player.settings", "player.midi", "player.art_block", "animation.self_contained", "size.rpc"]) {
     assert.ok(ids(r, "pass").includes(id), id);
   }
-  const record = JSON.parse(readFileSync(new URL("./page_versions.json", import.meta.url), "utf8"))["0.3.0"];
+  const record = JSON.parse(readFileSync(new URL("./page_versions.json", import.meta.url), "utf8"))[VERSION];
   assert.equal(r.hashes.page_sha256, record.page_sha256);
   assert.equal(r.sizes.token_uri_bytes, golden.length);
   assert.ok(r.sizes.rpc_response_estimated < RPC_CAP);

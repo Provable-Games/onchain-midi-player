@@ -1,14 +1,15 @@
 # Vendored engine and licenses
 
 The pinned TinySynth engine, from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>,
-at commit `4bf982994dc3d1187661385726fed2e6595fafbe` on the fork's `improve/integration` branch (the fork CI's rebuild of
-`webaudio-tinysynth.min.js` for `68782fa`):
+at commit `31fb18d8e04125519776773042da0d5b2db591a9` on the fork's `improve/integration` branch (the NOTICE entry for the
+lazy n1 noise build and `prewarm()`, fork PRs #63 and #64; the minified build is the one the fork's CI made for `16d7cad`,
+and the library source has not changed since):
 
-- `webaudio-tinysynth-4bf9829.min.js`: the commit's own `webaudio-tinysynth.min.js` (46,504 bytes), byte-identical to
+- `webaudio-tinysynth-31fb18d.min.js`: the commit's own `webaudio-tinysynth.min.js` (47,212 bytes), byte-identical to
   rebuilding that commit's `webaudio-tinysynth.js` with its pinned build (`npm ci && npm run verify`, Terser 5.51.2).
-  SHA-256 `8ad79ab8214e45a601e7d929e676b34b78e3f2b4200fd751d6548cf2b7df7749`.
-- `webaudio-tinysynth-4bf9829.NOTICE`: the commit's `NOTICE` (the fork's list of modifications), which goes into the
-  class's `license()` text. SHA-256 `29b1e003f554d943972c538fd2fc173b2515a5320033016a7fdf938a0181b698`.
+  SHA-256 `bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74`.
+- `webaudio-tinysynth-31fb18d.NOTICE`: the commit's `NOTICE` (the fork's list of modifications), which goes into the
+  class's `license()` text. SHA-256 `c9c18d9103a8759d3d8048dd5847044c6d779fdb5b06e8d359af6a79b29dd914`.
 - License: Apache License 2.0. Copyright Tatsuya Shinyagaito (g200kg), modified by Provable Games (see the fork's NOTICE
   and this repository's [NOTICE](../../NOTICE)).
 
@@ -21,7 +22,7 @@ bytes. The engine tests and the render and page checks run the same file. The pi
 the one line `ENGINE_PIN` in [`scripts/engine.mjs`](../../scripts/engine.mjs), which checks both hashes on every load,
 so a mismatch fails before anything is generated. Nothing needs network access.
 
-To verify: `git -C <fork> show 4bf9829:webaudio-tinysynth.min.js | sha256sum`.
+To verify: `git -C <fork> show 31fb18d:webaudio-tinysynth.min.js | sha256sum`.
 
 ## Re-pinning
 

@@ -480,8 +480,10 @@ function checkPageSelfContained(r, html) {
       if (!/^(#|data:)/i.test(a[3].trim())) loads.push(`${a[1]}="${a[3].slice(0, 60)}"`);
     }
   }
-  for (const m of text.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (!/^(#|data:)/i.test(m[2].trim())) loads.push(`url(${m[2].slice(0, 60)})`);
-  if (/@import/i.test(text)) loads.push("@import");
+  // CSS references: not in script bodies, where `URL.createObjectURL(` and `toDataURL(` are code.
+  const css = text.replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, "$1</script>");
+  for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (!/^(#|data:)/i.test(m[2].trim())) loads.push(`url(${m[2].slice(0, 60)})`);
+  if (/@import/i.test(css)) loads.push("@import");
   if (loads.length) r.fail("animation.self_contained", `the page loads from outside: ${loads.slice(0, 3).join(", ")}`, src);
   else r.pass("animation.self_contained", "no element or CSS reference outside the page and data: URIs", src);
   const literals = [...text.matchAll(/\b(?:https?|wss?|ftp):\/\/[^\s"'<>)\\]+/gi)].map((m) => m[0]).filter((u) => !/^https?:\/\/www\.w3\.org\//i.test(u));

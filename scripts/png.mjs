@@ -2,7 +2,17 @@
 // Minimal PNG decoder (8-bit RGB/RGBA, non-interlaced), enough for Playwright screenshots in the
 // browser checks. Node built-ins only.
 
-import { inflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
+
+/** CRC-32 (zlib.crc32 needs Node 22.2). @param {Buffer} buf */
+function crc32(buf) {
+  let c = ~0;
+  for (const b of buf) {
+    c ^= b;
+    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  }
+  return ~c >>> 0;
+}
 
 /** @param {number} a @param {number} b @param {number} c */
 function paeth(a, b, c) {
@@ -39,4 +49,28 @@ export function decodePng(buf) {
     }
   }
   return { width, height, pixel: (x, y) => [...px.subarray(y * stride + x * channels, y * stride + x * channels + 3)] };
+}
+
+/**
+ * Encodes 8-bit RGBA, non-interlaced, unfiltered rows (for test fixtures).
+ * @param {number} width
+ * @param {number} height
+ * @param {(x: number, y: number) => number[]} rgba
+ */
+export function encodePng(width, height, rgba) {
+  const raw = Buffer.alloc((width * 4 + 1) * height);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) Buffer.from(rgba(x, y)).copy(raw, y * (width * 4 + 1) + 1 + x * 4);
+  const chunk = (/** @type {string} */ type, /** @type {Buffer} */ data) => {
+    const head = Buffer.alloc(4);
+    head.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, "latin1"), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([head, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr.set([8, 6, 0, 0, 0], 8);
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
