@@ -3,7 +3,7 @@
 // Template contents are not document elements; only HTML scripts supply libraries or player data.
 import { parse } from "parse5";
 const HTML_NS = "http://www.w3.org/1999/xhtml";
-function documentElements(html) {
+export function documentElements(html) {
   const elements = [];
   const visit = node => {
     if (node.tagName) elements.push(node);

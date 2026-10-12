@@ -74,7 +74,25 @@ try {
  for(const name of ["player"]){const o=await run.page();try{await o.page.goto(dataUrl(withoutBlock(composed(),name)));await o.page.waitForFunction(()=>!document.getElementById("error").hidden);assert.equal(await o.page.locator('#beast-art').count(),1);assert.ok(await o.page.locator('#play').isDisabled());assert.equal(await o.page.evaluate(()=>window.__check.created),0);}finally{await o.context.close();}console.log(`PASS missing ${name}: art stays visible`);}
  // Synchronous library failure does not prevent an independent later provider from executing.
  {const o=await run.page();try{const bad=alignedFragment(gzipFragment('broken-library',gzipSource('throw Error("fixture evaluation failure")'))),html=composed().replace(fixedFragment('player'),fixedFragment('player')+bad);
- await o.page.goto(dataUrl(html));const result=await o.page.evaluate(async()=>{try{await window.OnchainLibraries.ready;return "resolved";}catch(e){return e.message;}});assert.match(result,/broken-library/);assert.equal(await o.page.evaluate(()=>window.DependentFixture),'fixture:dependent');}finally{await o.context.close();}}
+ await o.page.goto(dataUrl(html));const result=await o.page.evaluate(async()=>{try{await window.OnchainLibraries.ready;return "resolved";}catch(e){return e.message;}});assert.match(result,/broken-library/);assert.equal(await o.page.evaluate(()=>window.DependentFixture),'fixture:dependent');
+ await o.page.waitForFunction(()=>!document.getElementById("error").hidden);
+ assert.ok(await o.page.locator('#play').isDisabled());
+ assert.equal(await o.page.evaluate(async()=>{await OnchainMidiPlayer.ready;return OnchainMidiPlayer.getPlayStatus().state;}),'stopped');
+ assert.equal(await o.page.evaluate(()=>window.__check.created),0);
+ console.log('PASS reference NFT requires whole-composition readiness after independent failure');
+ }finally{await o.context.close();}}
+ // An NFT can deliberately recover MIDI-only controls after an unrelated library failure.
+ {const o=await run.page();try{const bad=alignedFragment(gzipFragment('broken-library',gzipSource('throw Error("fixture evaluation failure")')));
+ const html='<!doctype html><html><head>'+fixedFragment('gunzip')+fixedFragment('player')+bad+'</head><body><button id="midi-only-play" disabled>Play MIDI</button>'+fixtureCase('beast_140bpm').d+'<script>(async()=>{try{await OnchainLibraries.ready;}catch(error){window.libraryFailure=error.message;}const player=window.OnchainMidiPlayer;if(!player)throw Error("MIDI library did not load");await player.ready;const button=document.getElementById("midi-only-play");button.onclick=()=>player.play().catch(console.error);button.disabled=false;})().catch(error=>{window.bootstrapFailure=error.message;});</script></body></html>';
+ await o.page.goto(dataUrl(html));await o.page.waitForFunction(()=>!document.getElementById('midi-only-play').disabled);
+ assert.match(await o.page.evaluate(()=>window.libraryFailure),/broken-library/);
+ assert.equal(await o.page.evaluate(()=>window.bootstrapFailure),undefined);
+ assert.equal(await o.page.evaluate(()=>window.__check.created),0);
+ await o.page.click('#midi-only-play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
+ await o.page.evaluate(()=>OnchainMidiPlayer.stop());assert.equal(await o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus().state),'stopped');
+ assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
+ console.log('PASS explicit NFT MIDI-only recovery after independent failure');
+ }finally{await o.context.close();}}
  // Real browser parsing/evaluation checks for the generic loader, including late installation.
  for(const mode of ["late","repeat","duplicate","corrupt"]){const o=await run.page();try{let html=composed();
    if(mode==="late"){

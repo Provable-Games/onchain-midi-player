@@ -1035,8 +1035,8 @@
     },
     "types": "player, loader and NFT UI passed",
     "generation": "segments, settings/data, measurement fixtures, release ABI and all Cairo formatting passed",
-    "production_lab": "8 cases per revision \u00d7 2 captures, all complete-output checks passed",
-    "actual_nft": "one full-size token_uri per revision \u00d7 2 captures, matching selectors/test-wide gas",
+    "production_lab": "8 cases per revision × 2 captures, all complete-output checks passed",
+    "actual_nft": "one full-size token_uri per revision × 2 captures, matching selectors/test-wide gas",
     "semantic_comparison": "Independent JS nesting/splicing plus decoded small/full MIDI-only and independent+dependent compositions: metadata, original SVG, settings, MIDI and exact engine bytes match; URI bytes intentionally change.",
     "drift": "One-minute combined Chromium scheduling/rest/cancellation/restart check passed; drift trend informational."
   },
@@ -1468,6 +1468,278 @@
       },
       "environment_retry": "Initial Firefox audio timed out; pactl confirmed connection refused from a stale isolated null-sink socket. Restoring that server made the complete rerun pass. Initial failure remains /tmp/issue61-main-page-firefox.txt."
     },
-    "limits": "Artifact-identical gas evidence reused, not relabeled as fresh captures. Unrelated hosting/audio-render/drift probes not repeated for an offchain validator fix and tree-equivalent rebase; device validation remains separate."
+    "limits": "Artifact-identical gas evidence reused, not relabeled as fresh captures. Unrelated hosting/audio-render/drift probes not repeated for an offchain validator fix and tree-equivalent rebase; device validation remains separate.",
+    "validated_feature_head": "6e93957ed7112cca3bd21ae8757f1f1cfb17c670"
+  },
+  "constructor_and_validator_review": {
+    "date": "2026-10-12",
+    "prior_feature_head": "6e93957ed7112cca3bd21ae8757f1f1cfb17c670",
+    "merged_main": "d92159283dc71e76000d6338f53f0f79f9ea1522",
+    "scope": "The two reference NFT constructors require the compiled VERSION once at configuration. Generic loader/player/engine/data/API/UI/assembly and generated payloads remain unchanged. Offchain resource validation uses the existing HTML5 document parser; literal URL warnings remain advisory.",
+    "policy": "Exact version equality is reference consumer configuration policy, not a universal composer restriction or compatibility framework. Reference whole-page readiness remains strict; documentation and browser cases prove an explicit NFT-owned MIDI-only recovery choice.",
+    "constructor_measurement": {
+      "command": "snforge test gas_t4_setup --release --no-optimization --gas-report --tracked-resource sierra-gas",
+      "cwd": "examples/beast_consumer",
+      "profile": "release",
+      "tracked_resource": "sierra-gas",
+      "no_optimization": "Uses the separate production contract target, not the test-specialized class.",
+      "inputs": "The existing setup declares the unchanged TinySynth class, deploys BeastLikeNft with that class hash, and checks tinysynth_class_hash(). The test and default local caller/block setup are the same; only the NFT constructor and its emitted artifact change.",
+      "toolchain": {
+        "scarb": {
+          "path": "/home/ubuntu/.asdf/installs/scarb/2.20.1/bin/scarb",
+          "bytes": 57410376,
+          "sha256": "ab9e550b0e0ee10f524958c95c9f0b27aac476cb5141cad4dba755b233c6ff55"
+        },
+        "snforge": {
+          "path": "/home/ubuntu/.asdf/installs/starknet-foundry/0.64.0/bin/snforge",
+          "bytes": 81856536,
+          "sha256": "e9406081ba0d48f311544c3e0ca306b7054794d0bf8a4621e3a4bf2b26665344"
+        },
+        "node": {
+          "path": "/home/ubuntu/.asdf/installs/nodejs/24.19.0/bin/node",
+          "bytes": 125989464,
+          "sha256": "bc17c508ffeed0ec622934f9b7fa72f8e78da65350e63c3eceb56fa688aa5e12"
+        }
+      },
+      "captures": {
+        "prior": [
+          {
+            "path": "/tmp/issue61-round3-constructor-old-1.txt",
+            "bytes": 1887,
+            "sha256": "7357a76b4ab846504fc40d24de543729e2441e26085a0d764903032db8e6dc28",
+            "constructor_selector_l2_gas": 155980,
+            "test_wide_l2_gas": 872340,
+            "l1_gas": 0,
+            "l1_data_gas": 192
+          },
+          {
+            "path": "/tmp/issue61-round3-constructor-old-2.txt",
+            "bytes": 1888,
+            "sha256": "332ae84552ca36f639701ef1327bd8c7e6ffc19495684a199a002f00bfe6142f",
+            "constructor_selector_l2_gas": 155980,
+            "test_wide_l2_gas": 872340,
+            "l1_gas": 0,
+            "l1_data_gas": 192
+          }
+        ],
+        "candidate": [
+          {
+            "path": "/tmp/issue61-round3-constructor-new-1.txt",
+            "bytes": 2007,
+            "sha256": "3e82de5fa10b2a2b5313f4c425f872f88966c0f8a8edfb1fc74ae3736bc1f8e7",
+            "constructor_selector_l2_gas": 249330,
+            "test_wide_l2_gas": 965690,
+            "l1_gas": 0,
+            "l1_data_gas": 192
+          },
+          {
+            "path": "/tmp/issue61-round3-constructor-new-2.txt",
+            "bytes": 2007,
+            "sha256": "a573778f043303a8f76cdbfd51c8490333b3a9587bdabf64642a9a81594f16a2",
+            "constructor_selector_l2_gas": 249330,
+            "test_wide_l2_gas": 965690,
+            "l1_gas": 0,
+            "l1_data_gas": 192
+          }
+        ]
+      },
+      "delta": {
+        "constructor_selector_l2_gas": 93350,
+        "test_wide_l2_gas": 93350
+      },
+      "nested_version_getter_l2_gas": 1570,
+      "interpretation": "One extra version library_call and local assertion at construction only. The nested version cost is already included in the constructor selector. No new token_uri capture or current NFT artifact equivalence with prior token_uri captures is claimed."
+    },
+    "production_artifacts": {
+      "prior_beast": {
+        "path": "examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json",
+        "bytes": 746224,
+        "sha256": "bba5147943d628d232f72c4fab5237c50c76789cf6ae96d9a05ab167087c9f7d",
+        "sierra_program_felts": 14155
+      },
+      "candidate_beast": {
+        "path": "examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json",
+        "bytes": 749132,
+        "sha256": "95de984712f9d411d826579f5393ae413c4beddbfb56305bf81f117ce4a90bd5",
+        "sierra_program_felts": 14206
+      },
+      "candidate_stress": {
+        "path": "examples/stress_nft/target/release/stress_nft_StressNft.contract_class.json",
+        "bytes": 606198,
+        "sha256": "8d62cc66ab7b09c4e8f91c23dede19e106a240aad0249b905c0c63b5f1bb464d",
+        "sierra_program_felts": 11946
+      },
+      "unchanged_tinysynth": {
+        "path": "target/release/onchain_midi_player_TinySynth.contract_class.json",
+        "bytes": 973661,
+        "sha256": "f06a2337d9084f8ddbdd2a0142f2eb0876bac7e5475bf17fd4c9c732de0d0fca",
+        "sierra_program_felts": 18589
+      },
+      "unchanged_tinysynth_casm": {
+        "path": "target/release/onchain_midi_player_TinySynth.compiled_contract_class.json",
+        "bytes": 780098,
+        "sha256": "1a1de65482959434b59911316bea2be2f0d9aa1eb73f65dc5ef7c104fea077db",
+        "casm_bytecode_felts": 29730
+      }
+    },
+    "source_bindings": {
+      "examples/beast_consumer/src/beast_like_nft.cairo": {
+        "bytes": 7658,
+        "sha256": "74f05db584b545f74cfdc66fcce54057c1f8d6e86e1dcd20835ae5b341dbf9ca"
+      },
+      "examples/beast_consumer/tests/test_gas.cairo": {
+        "bytes": 544,
+        "sha256": "ee42122f0fed5a91c899e4cc0d7b3db4506eea0ad0b9fda4449bb71cc9b476e5"
+      },
+      "examples/beast_consumer/tests/test_token_uri.cairo": {
+        "bytes": 5554,
+        "sha256": "1ad84a183fb07eeba20aa8522a29411a52075237220e631867205d41d6f74ea9"
+      },
+      "examples/beast_consumer/Scarb.toml": {
+        "bytes": 1078,
+        "sha256": "8d6b8db28f2366b280538edfff99b8211acda1f60c75812e82aac66e29b1ea9e"
+      },
+      "examples/beast_consumer/Scarb.lock": {
+        "bytes": 864,
+        "sha256": "f2407f419dbca2aa482c5c7ddd88f3ef87c8e782c46fb38448ef660e2181cf28"
+      },
+      "examples/stress_nft/src/stress_nft.cairo": {
+        "bytes": 8787,
+        "sha256": "d1c7451a86b3eec4b2707d0c5c69b41cd583d15c882b4477144b27abe44120fb"
+      },
+      "examples/stress_nft/Scarb.toml": {
+        "bytes": 1001,
+        "sha256": "8f7d0013953073c446c6694a0f154864c3f9b7bafa0491905611778e06288784"
+      },
+      "scripts/html_blocks.mjs": {
+        "bytes": 2293,
+        "sha256": "e531446570cf45e588727cac5f399d7ec7aae37e3db425fb0f98678780593de9"
+      },
+      "scripts/validate_token_uri.mjs": {
+        "bytes": 44290,
+        "sha256": "4947083a9b72d53016a98bb576eee685f2fb476a009144de49f58fd3f2c6cbda"
+      },
+      "scripts/validate_token_uri.test.mjs": {
+        "bytes": 28757,
+        "sha256": "afa0f29d8220197ee3060dfb6c9ff7dcf4dacfbf432c1e1042169b1550272bf9"
+      },
+      "scripts/page_check.mjs": {
+        "bytes": 16092,
+        "sha256": "d9132acbed9a3e885378f8f0db1100835ac052f1ba3be98db5cf4695331a2933"
+      }
+    },
+    "unchanged_runtime_bindings": {
+      "tests/vendor/webaudio-tinysynth-31fb18d.min.js": {
+        "bytes": 47212,
+        "sha256": "bcb498b915beb397f0333b22a59a4485d00025ff1e098cbf65823b9646759d74"
+      },
+      "player/gunzip.js": {
+        "bytes": 13156,
+        "sha256": "17945521b35cd5cf1e454518ac8d849e47ea8bcfd9d796eb7cfc685ab9bb43f1"
+      },
+      "player/player.js": {
+        "bytes": 15481,
+        "sha256": "67d9501e51b5c216f6a3e13b82e44303d89aa125ce2eeea092fe4f21dee53adb"
+      },
+      "examples/beast_consumer/ui.js": {
+        "bytes": 12878,
+        "sha256": "4f4718f46c25a6cadcfbadce3debfe2c6a812e045b0434d95943ab5d78a7d7ed"
+      },
+      "scripts/build_segments.mjs": {
+        "bytes": 9210,
+        "sha256": "cb8e78555afc0eb55540ba9cfeb8a2fe42b7714dbcc1bd8da9d32fad03a7c529"
+      },
+      "scripts/segments.mjs": {
+        "bytes": 13559,
+        "sha256": "bf2cea9dcf84885a9f84b5642f7cb4ef8e538443ee7651580dc79f7a2a076959"
+      },
+      "scripts/library_versions.json": {
+        "bytes": 2595,
+        "sha256": "d52c756d9a1d22ea1eab427bf67238ea6983a50d302f093e2cf30a2fe4d85d68"
+      },
+      "src/segment_data.cairo": {
+        "bytes": 76477,
+        "sha256": "45585189793e943ab8da93af0ff3df7b3494218226c22ee89db3dfb127ec56d2"
+      },
+      "src/contract.cairo": {
+        "bytes": 1190,
+        "sha256": "adc6fc090a73757a179467ea37b10a67b013b019f02bb62f3b4a142c29d3a07e"
+      },
+      "src/interface.cairo": {
+        "bytes": 6065,
+        "sha256": "c064d4a2772ba57d44b9a84c786a1d3ff8e5f1e86446f9d81be43aec41573b0c"
+      },
+      "examples/beast_consumer/src/owned_assets.cairo": {
+        "bytes": 10061,
+        "sha256": "3a63d6e49a5cf591185d2454cd849a50de3825f4ca6216f5759e845a90246d54"
+      },
+      "examples/beast_consumer/src/assembly.cairo": {
+        "bytes": 2810,
+        "sha256": "23ad05a7fe4329fd6133aae388a4c2316d86d32f4a043f070e265a31df26b322"
+      },
+      "examples/beast_consumer/tests/golden.cairo": {
+        "bytes": 545236,
+        "sha256": "0c7bd5da0da594e443db94889fb868ea42beb0ae41ea7c011956af915901241f"
+      },
+      "examples/stress_nft/tests/golden.cairo": {
+        "bytes": 448,
+        "sha256": "098705633af6c1ecc375a38c67cc614e4a47389cc0db1a55656e736a6911e63d"
+      }
+    },
+    "payload": "The 0.5.0 manifest, embedded engine bytes, fixed279/fixed9 segments, NFT assets/assembly and complete URI goldens are identical to prior feature head. Complete full Beast URI remains 166417 characters. Historical token_uri gas captures stay bound to their old NFT artifacts; constructor costs are separate.",
+    "validation": {
+      "js": {
+        "root": 335,
+        "beast": 29,
+        "stress": 13
+      },
+      "cairo": {
+        "root_passed": 267,
+        "beast_passed": 28,
+        "beast_ignored": 1,
+        "stress_passed": 11,
+        "stress_ignored": 20
+      },
+      "validator": {
+        "tests": 20,
+        "before_fix_regression_capture": {
+          "path": "/tmp/issue61-round3-scanner-before.txt",
+          "bytes": 1978,
+          "sha256": "f7672f189988a79662cffa73237e01cde03f71bbb3f9f197c13f1a42049aa552"
+        },
+        "after_fix_suite": {
+          "path": "/tmp/issue61-round3-validator.txt",
+          "bytes": 1828,
+          "sha256": "1ee677e086ddaccf37cb9c64cf3a199a59c3c067cd3cd50ecf3ee087ac415c3d"
+        },
+        "coverage": "Inert bootstrap HTML/CSS strings, template/textarea/noscript/comment contents, active unquoted/entity-decoded attributes, mixed srcset, HTML/SVG CSS references, and advisory source URL warnings."
+      },
+      "composed_browsers": {
+        "chromium": {
+          "status": "passed",
+          "path": "/tmp/issue61-round3-page-chromium.txt",
+          "bytes": 3632,
+          "sha256": "d9f8bf3320cb58a7c3c713d79e68b2efa7545e3c5a875246883e178d49a27a19",
+          "coverage": "Complete composed/custom-control checks, plus strict whole-page reference failure policy and explicit MIDI-only recovery after independent block failure."
+        },
+        "firefox": {
+          "status": "passed",
+          "path": "/tmp/issue61-round3-page-firefox.txt",
+          "bytes": 3346,
+          "sha256": "691149a796f798a711b1ced1d6775bee87c06109109156a3aeecdbf95750bbea",
+          "coverage": "Complete composed/custom-control checks, plus strict whole-page reference failure policy and explicit MIDI-only recovery after independent block failure."
+        },
+        "webkit": {
+          "status": "passed",
+          "path": "/tmp/issue61-round3-page-webkit.txt",
+          "bytes": 3199,
+          "sha256": "3770efc53d5e2ee6c41413c0d978aa2637f434c0e4db8ad06833fc3cc442b889",
+          "coverage": "Complete composed/custom-control checks, plus strict whole-page reference failure policy and explicit MIDI-only recovery after independent block failure."
+        }
+      },
+      "inspector": "Executed full reference ByteArray decoding, metadata/engine verification, layer decoding, complete data extraction, MIDI and settings validation. Sncast option/selector syntax checked against pinned installed CLI; no live RPC/current deployment claimed.",
+      "generation": "segments/data/settings/measurement fixtures, both consumer goldens, seven-entry release ABI, pinned player/UI types and Cairo formatting passed"
+    },
+    "limits": "No browser runtime or audio algorithm changed; unrelated render/hosting/drift/device probes were not repeated. CSS resource checks reuse lightweight heuristics, not a CSS parser or JavaScript resource analysis. No declaration, deployment, release or merge."
   }
 }

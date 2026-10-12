@@ -1,7 +1,7 @@
 //! End-to-end: the real class (`onchain_midi_player::contract::TinySynth`) is declared but
 //! never deployed, BeastLikeNft is deployed with its class hash, and token_uri (built with library
 //! calls) is checked byte for byte against (a) the independent JavaScript reference (golden.cairo)
-//! and (b) the in-Cairo naive reference. Token 4, a full-size Beast (about 132 KB), is checked
+//! and (b) the in-Cairo naive reference. Token 4, the full-size Beast, is checked
 //! against the reference's length and SHA-256.
 
 use beast_consumer::beast_like_nft::{
@@ -69,7 +69,7 @@ fn token_uri_3_matches_js_golden() {
 }
 
 /// Token 4: a real Beast SVG (22,733 bytes), the full-size synthetic score (3,716 bytes) and the
-/// reference sounds. Its 150,101-character token_uri is pinned by length and SHA-256.
+/// reference sounds. Its complete token_uri is pinned by generated length and SHA-256.
 #[test]
 fn token_uri_4_matches_js_digest() {
     let (nft, _) = setup();

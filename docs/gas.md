@@ -74,6 +74,21 @@ The exact 47,212-byte engine remains unchanged; the wrapper is now 8,524 bytes. 
 
 The current separately built TinySynth has 973,661 compact Sierra JSON bytes /18,589 program felts and 780,098 compact CASM JSON bytes /29,730 bytecode felts. Compared with the frozen combined class, Sierra grows 406 bytes /8 felts; CASM size is unchanged. Payload hashes and byte values change even where sizes/gas do not.
 
+## Constructor review
+
+The 2026-10-12 reference consumers now check both engine identity and the compiled `VERSION` once during construction. This rejects older TinySynth classes that identify the engine but lack the consumer's fragment ABI. It is reference configuration policy, not a universal composer restriction, and adds no call to `token_uri`.
+
+Matched, repeated `gas_t4_setup` captures compare prior head `6e93957ed7112cca3bd21ae8757f1f1cfb17c670` with the constructor fix using the same pinned tools, release profile, separate production artifact (`--no-optimization`), Sierra gas and setup:
+
+| One-time Beast setup measure | Prior | Version check | Change |
+| --- | ---: | ---: | ---: |
+| Constructor selector L2 gas | 155,980 | 249,330 | +93,350 |
+| Setup test-wide L2 gas | 872,340 | 965,690 | +93,350 |
+
+The nested `version()` getter costs 1,570 L2 gas and is already included in the constructor selector. Reproduce with `(cd examples/beast_consumer && snforge test gas_t4_setup --release --no-optimization --gas-report --tracked-resource sierra-gas)` at each revision. The [review record](measurements/issue59.json) binds both captures per revision, their sources and artifacts. Beast Sierra grows from 746,224 bytes /14,155 felts to 749,132 bytes /14,206 felts. The TinySynth Sierra/CASM artifacts, engine/player/loader bytes and complete URI goldens remain identical.
+
+The NFT artifact changes even though its token URI method and output remain unchanged. The earlier token URI gas captures remain evidence for their recorded NFT artifacts; no fresh token URI measurement or new NFT artifact equivalence is claimed here. The constructor measurement is separate from those historical per-call costs.
+
 ## A full-size token
 
 Budget the complete NFT selector, including its art and metadata, provider calls and encoding. The production-shaped full Beast example above costs about 413.5 million L2 gas; the smaller isolated `midi_segment` call does not establish its RPC budget. Measure the actual largest token and the service that will fetch it before deployment.

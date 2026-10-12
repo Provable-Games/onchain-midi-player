@@ -301,6 +301,36 @@ test("separate library verification accepts changed consumer heads and independe
   assert.ok(ids(check({json:JSON.stringify(withHtml(changed))}),"fail").includes("player.libraries"));
 });
 
+test("animation resources ignore inert bootstrap strings and parser contents", () => {
+  const inert = `<script>const markup = '<img src="unused.png">'; const css = 'url(unused.png)'; const example = 'https://example.com/unused.png';</script>
+    <template><img src="unused.png"><style>@import "unused.css";</style></template>
+    <textarea><img src="unused.png"></textarea><noscript><img src="unused.png"></noscript>
+    <!-- <img src="unused.png"> -->`;
+  const report = check({ json: JSON.stringify(withHtml(goldenHtml().replace("</body>", inert + "</body>"))) });
+  assert.ok(!ids(report, "fail").includes("animation.self_contained"));
+  assert.ok(ids(report, "warn").includes("animation.network_urls"), "literal URL remains advisory");
+});
+
+test("animation resources inspect active unquoted attributes and styles", () => {
+  const active = [
+    '<img src=https://example.com/x.png>',
+    '<img src="h&#116;tps://example.com/x.png">',
+    '<video poster=//example.com/x.png></video>',
+    '<img srcset="data:image/png;base64,AAAA 1x, https://example.com/x.png 2x">',
+    '<div style="background:url(https://example.com/x.png)"></div>',
+    '<style>@import "https://example.com/x.css";</style>',
+    '<svg><image href="https://example.com/x.png"/></svg>',
+    '<svg><rect fill="url(https://example.com/x.svg#paint)"/></svg>',
+  ];
+  for (const markup of active) {
+    const report = check({ json: JSON.stringify(withHtml(goldenHtml().replace("</body>", markup + "</body>"))) });
+    assert.ok(ids(report, "fail").includes("animation.self_contained"), markup);
+  }
+  const local = '<div style="background:url(data:image/png;base64,AAAA)"></div><style>/* url(unused.png) */ @import "data:text/css,body{}";</style>';
+  const report = check({ json: JSON.stringify(withHtml(goldenHtml().replace("</body>", local + "</body>"))) });
+  assert.ok(!ids(report, "fail").includes("animation.self_contained"));
+});
+
 test("sizes: the JSON-RPC response against the 10 MiB cap", () => {
   const big = check({ uri: JSON_PREFIX + "A".repeat(5_000_000) });
   assert.ok(ids(big, "fail").includes("size.rpc"));

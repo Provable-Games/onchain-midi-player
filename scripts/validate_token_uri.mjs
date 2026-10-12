@@ -30,6 +30,7 @@ import { DOMParser } from "@xmldom/xmldom";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { decodeSettings } from "../player/settings.js";
+import { documentElements } from "./html_blocks.mjs";
 import { validateSettings } from "../player/validate.js";
 import { byteArrayFromFelts, shortStrings, tokenUriFromCall } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/bytearray.mjs";
 import { splitPage } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/split_page.mjs";
@@ -63,6 +64,7 @@ const JSON_PREFIX = "data:application/json;base64,";
 const SVG_PREFIX = "data:image/svg+xml;base64,";
 const HTML_PREFIX = "data:text/html;base64,";
 const SVG_NS = "http://www.w3.org/2000/svg";
+const HTML_NS = "http://www.w3.org/1999/xhtml";
 /** Fields OpenSea (media-and-traits) and ERC-721 define. */
 const FIELDS = ["name", "description", "image", "animation_url", "external_url", "attributes", "background_color"];
 /** Fields older OpenSea documentation listed; the current documentation does not. */
@@ -179,6 +181,29 @@ export function parseXml(s) {
   return { root: { local: root.localName, ns: root.namespaceURI ?? undefined }, attrs, styles, elements, entities: /<!ENTITY/.test(markup) };
 }
 
+/** CSS URL checks shared by active HTML styles and the SVG validator; not a CSS parser.
+ * @param {string} raw
+ * @param {number} line
+ * @param {string} where
+ * @returns {[string, number][]}
+ */
+function cssReferenceProblems(raw, line, where) {
+  /** @type {[string, number][]} */
+  const out = [];
+  const external = (/** @type {string} */ target) => !/^(#|data:)/i.test(target.trim());
+  /** CSS escapes (\72 = r, \i = i) are decoded before the tokens are read. */
+  const unescape = (/** @type {string} */ css) =>
+    css.replace(/\\(?:([0-9a-fA-F]{1,6})[ \t\r\n\f]?|([^\n\r\f0-9a-fA-F]))/g, (_, hex, ch) => (hex ? String.fromCodePoint(Math.min(parseInt(hex, 16) || 0xfffd, 0x10ffff)) : ch));
+  const css = unescape(raw.replace(/\/\*[\s\S]*?\*\//g, " ")); // a CSS comment is inert, and splits a token
+  for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, line]);
+  // A quoted target runs to its closing quote (a data: URI may hold spaces and semicolons); an unquoted one to whitespace, ";" or ")".
+  for (const m of css.matchAll(/@import\s*(?:url\(\s*)?(?:'([^']*)'|"([^"]*)"|([^'"\s;)]+))/gi)) {
+    const target = m[1] ?? m[2] ?? m[3];
+    if (external(target)) out.push([`${where} has @import ${target.slice(0, 60)}, outside the document and data: URIs`, line]);
+  }
+  return out;
+}
+
 /**
  * Problems with external references and scripts in an SVG, as `[message, line]`.
  * @param {ReturnType<typeof parseXml>} xml
@@ -187,18 +212,6 @@ function svgReferenceProblems(xml) {
   /** @type {[string, number][]} */
   const out = [];
   const external = (/** @type {string} */ target) => !/^(#|data:)/i.test(target.trim());
-  /** CSS escapes (\72 = r, \i = i) are decoded before the tokens are read. */
-  const unescape = (/** @type {string} */ css) =>
-    css.replace(/\\(?:([0-9a-fA-F]{1,6})[ \t\r\n\f]?|([^\n\r\f0-9a-fA-F]))/g, (_, hex, ch) => (hex ? String.fromCodePoint(Math.min(parseInt(hex, 16) || 0xfffd, 0x10ffff)) : ch));
-  const urls = (/** @type {string} */ raw, /** @type {number} */ line, /** @type {string} */ where) => {
-    const css = unescape(raw.replace(/\/\*[\s\S]*?\*\//g, " ")); // a CSS comment is inert, and splits a token
-    for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (external(m[2])) out.push([`${where} has url(${m[2].slice(0, 60)}), outside the document and data: URIs`, line]);
-    // A quoted target runs to its closing quote (a data: URI may hold spaces and semicolons); an unquoted one to whitespace, ";" or ")".
-    for (const m of css.matchAll(/@import\s*(?:url\(\s*)?(?:'([^']*)'|"([^"]*)"|([^'"\s;)]+))/gi)) {
-      const target = m[1] ?? m[2] ?? m[3];
-      if (external(target)) out.push([`${where} has @import ${target.slice(0, 60)}, outside the document and data: URIs`, line]);
-    }
-  };
   for (const el of xml.elements) {
     const local = el.name.slice(el.name.indexOf(":") + 1).toLowerCase();
     if (local === "script") out.push(["<script> element", el.line]);
@@ -210,9 +223,9 @@ function svgReferenceProblems(xml) {
     // Foreign HTML (<foreignObject>) can carry any of HTML's resource attributes; srcset holds several URLs.
     const urlsIn = local === "srcset" ? a.value.split(/\s+/).filter((t) => t && !/^[\d.]+[wx],?$/.test(t)).map((t) => t.replace(/,+$/, "")) : URL_ATTRIBUTES.has(local) ? [a.value] : [];
     if (urlsIn.some(external)) out.push([`${a.name}="${a.value.slice(0, 60)}" on <${a.el}> points outside the document and data: URIs`, a.line]);
-    urls(a.value, a.line, `attribute ${a.name} on <${a.el}>`);
+    out.push(...cssReferenceProblems(a.value, a.line, `attribute ${a.name} on <${a.el}>`));
   }
-  for (const st of xml.styles) urls(st.text, st.line, "a <style> element");
+  for (const st of xml.styles) out.push(...cssReferenceProblems(st.text, st.line, "a <style> element"));
   return out;
 }
 
@@ -463,28 +476,35 @@ function checkSvg(r, layer, svg, bytes) {
 }
 
 /**
- * The network references in the page outside its art block: element attributes and CSS that point
- * outside the document, and URL literals outside HTML comments.
+ * Check actual document elements and CSS; literal network URLs remain advisory.
  * @param {Report} r
- * @param {string} html the page up to the art block, as latin1
+ * @param {string} html complete UTF-8 page
  */
 function checkPageSelfContained(r, html) {
   const src = "token-uri-layout";
-  // Inert data (base64 payloads) and HTML comments are not markup that loads anything.
-  const text = html.replace(/<!--[\s\S]*?-->/g, "").replace(/base64,[A-Za-z0-9+/=]+/g, "base64,");
+  const external = (/** @type {string} */ target) => !/^(#|data:)/i.test(target.trim());
+  const attributes = new Set(["src", "href", "action", "formaction", "poster", "data", "srcset"]);
+  const svgStyles = new Set(["fill", "stroke", "filter", "clip-path", "mask", "cursor", "marker-start", "marker-mid", "marker-end"]);
   /** @type {string[]} */
   const loads = [];
-  for (const m of text.matchAll(/<[a-zA-Z][^>]*>/g)) {
-    for (const a of m[0].matchAll(/\s(src|href|action|formaction|poster|data|srcset)\s*=\s*(["'])(.*?)\2/gis)) {
-      if (!/^(#|data:)/i.test(a[3].trim())) loads.push(`${a[1]}="${a[3].slice(0, 60)}"`);
+  for (const node of documentElements(html)) {
+    for (const a of node.attrs) {
+      if (attributes.has(a.name)) {
+        const targets = a.name === "srcset" ? a.value.split(/\s+/).filter(t => t && !/^[\d.]+[wx],?$/.test(t)).map(t => t.replace(/,+$/, "")) : [a.value];
+        if (targets.some(external)) loads.push(`${a.name}="${a.value.slice(0, 60)}"`);
+      }
+      if (a.name === "style" || node.namespaceURI === SVG_NS && svgStyles.has(a.name))
+        loads.push(...cssReferenceProblems(a.value, 1, `attribute ${a.name}`).map(([message]) => message));
+    }
+    if (node.tagName === "style" && (node.namespaceURI === HTML_NS || node.namespaceURI === SVG_NS)) {
+      const css = (node.childNodes || []).map(n => n.value || "").join("");
+      loads.push(...cssReferenceProblems(css, 1, "a <style> element").map(([message]) => message));
     }
   }
-  // CSS references: not in script bodies, where `URL.createObjectURL(` and `toDataURL(` are code.
-  const css = text.replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, "$1</script>");
-  for (const m of css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gis)) if (!/^(#|data:)/i.test(m[2].trim())) loads.push(`url(${m[2].slice(0, 60)})`);
-  if (/@import/i.test(css)) loads.push("@import");
   if (loads.length) r.fail("animation.self_contained", `the page loads from outside: ${loads.slice(0, 3).join(", ")}`, src);
   else r.pass("animation.self_contained", "no element or CSS reference outside the page and data: URIs", src);
+  // This separate text warning is intentionally advisory, including URLs in consumer code.
+  const text = html.replace(/<!--[\s\S]*?-->/g, "").replace(/base64,[A-Za-z0-9+/=]+/g, "base64,");
   const literals = [...text.matchAll(/\b(?:https?|wss?|ftp):\/\/[^\s"'<>)\\]+/gi)].map((m) => m[0]).filter((u) => !/^https?:\/\/www\.w3\.org\//i.test(u));
   if (literals.length) r.warn("animation.network_urls", `the page text has network URLs: ${literals.slice(0, 3).join(", ")}`, src);
   else r.pass("animation.network_urls", "no network URL in the page text", src);

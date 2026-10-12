@@ -128,6 +128,7 @@ pub fn stress_midi(bars: u32) -> ByteArray {
 pub mod StressNft {
     use core::num::traits::Zero;
     use onchain_midi_player::interface::{ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher};
+    use onchain_midi_player::segment_data::VERSION;
     use onchain_midi_player::settings::default_settings;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
@@ -153,10 +154,11 @@ pub mod StressNft {
     ) {
         assert(tinysynth_class_hash.is_non_zero(), 'zero tinysynth class hash');
         assert(owner.is_non_zero(), 'zero owner');
-        // Engine classes share the midi_segment selector: reject another engine's class here,
-        // rather than render the wrong page later.
+        // These reference consumers pin the compiled engine/API version at configuration time.
+        // An older TinySynth class can share engine() while lacking the fragment ABI.
         let synth = ITinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
         assert(synth.engine() == 'tinysynth', 'not a TinySynth class');
+        assert(synth.version() == VERSION, 'unsupported TinySynth version');
         self.tinysynth_class_hash.write(tinysynth_class_hash);
         self.owner.write(owner);
         let mut token = 1;

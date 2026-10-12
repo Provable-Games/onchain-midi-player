@@ -37,7 +37,7 @@ JSON data URI prefix
 ++ B64('"}')
 ```
 
-The reference reuses the already encoded metadata image attribute at the inner HTML base64 layer when building a complete isolated `<img>`, then applies its outer layer. Its 93-byte opening tag prefix and separately padded closing pieces preserve both complete framing and concatenation alignment.
+The reference reuses the already encoded metadata image attribute at the inner HTML base64 layer when building a complete isolated `<img>`, then applies its outer layer. This encodes the image attribute again for the HTML layer; the class-owned payload is not the only runtime encoding cost. The matched gas figures measure the complete assembly, without attributing its increase over the earlier whole-page layout to this pass alone. Its 93-byte opening tag prefix and separately padded closing pieces preserve both complete framing and concatenation alignment.
 
 Direct splicing is the recommended efficient pattern. Consumers may decode fragments, reconstruct HTML and encode the result again if the resulting metadata/HTML is valid. The runtime full-page comparison supports this integration and measures its extra work. Generated metadata, art, settings and MIDI may be encoded at runtime; prepared token-specific constants may be pre-encoded.
 
@@ -45,7 +45,25 @@ Direct splicing is the recommended efficient pattern. Consumers may decode fragm
 
 HTML-namespace library data blocks use `type="text/javascript+gzip"`, unique IDs and `src="data:application/gzip;base64,PAYLOAD"`. The loader is an inline classic script with `id="onchain-gunzip"`. It exposes `window.OnchainLibraries.ready` synchronously, including before payload parsing, and inflates/executes actual selected script elements in document order after parsing. A repeated loader reuses readiness. Duplicate IDs among selected HTML gzip scripts reject before execution. SVG/MathML script decoys and template contents are excluded; HTML scripts inside SVG `foreignObject` remain candidates. Corruption, noncanonical base64, invalid UTF-8 and synchronous evaluation failures identify the affected library; independent remaining blocks still execute.
 
-Readiness covers synchronous classic-script initialization. Each library remains responsible for any asynchronous work it starts. A consumer bootstrap awaits `OnchainLibraries.ready`, then `OnchainMidiPlayer.ready`. Parser-time ordinary scripts cannot assume gzip globals are already available.
+Readiness covers synchronous classic-script initialization. Each library remains responsible for any asynchronous work it starts. Parser-time ordinary scripts cannot assume gzip globals are already available.
+
+The reference NFT awaits `OnchainLibraries.ready`, then `OnchainMidiPlayer.ready`, and keeps playback disabled if any library fails. This is its whole-composition policy: a partly initialized artwork should show its error rather than enable its normal controls. A different NFT can explicitly recover MIDI-only controls after an unrelated library fails, while leaving controls that need that library disabled. For example, in an async NFT bootstrap:
+
+```js
+try {
+  await window.OnchainLibraries.ready;
+} catch (error) {
+  console.warn("Some artwork libraries failed", error);
+}
+const player = window.OnchainMidiPlayer;
+if (!player) throw new Error("MIDI library did not load");
+await player.ready; // MIDI/data failures still prevent playback.
+const button = document.getElementById("midi-only-play");
+button.onclick = () => player.play().catch(console.error);
+button.disabled = false;
+```
+
+Global readiness settles after all selected blocks have been attempted, so this needs no per-library readiness framework. A successful MIDI API/data check does not establish that unrelated artwork initialized.
 
 The delivered Cairo fixture calls TinySynth and a separate small fixture provider. Its `CompositionFixture.label()` export is used by NFT code; a dependent gzip block consumes that export. This proves generic independent-provider assembly and ordering. A future p5.js provider can use the same interface without MIDI-specific loader behavior; no real p5.js code or benchmark is included.
 

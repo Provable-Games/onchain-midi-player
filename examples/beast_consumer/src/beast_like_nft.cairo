@@ -129,6 +129,7 @@ pub fn members(token_id: u256, name: @ByteArray, tier: u8) -> ByteArray {
 #[starknet::contract]
 pub mod BeastLikeNft {
     use onchain_midi_player::interface::{ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher};
+    use onchain_midi_player::segment_data::VERSION;
     use starknet::ClassHash;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use crate::sound;
@@ -136,18 +137,18 @@ pub mod BeastLikeNft {
 
     #[storage]
     struct Storage {
-        /// Class hash of the declared (never deployed) TinySynth class. Pinning a new class hash
-        /// is how the collection opts into a new engine or page version.
+        /// Immutable class hash of a declared TinySynth class matching this build's VERSION.
         tinysynth_class_hash: ClassHash,
     }
 
     #[constructor]
     fn constructor(ref self: ContractState, tinysynth_class_hash: ClassHash) {
         assert(tinysynth_class_hash.is_non_zero(), 'zero tinysynth class hash');
-        // Engine classes share the midi_segment selector: reject another engine's class here,
-        // rather than render the wrong page later.
+        // These reference consumers pin the compiled engine/API version at configuration time.
+        // An older TinySynth class can share engine() while lacking the fragment ABI.
         let synth = ITinySynthLibraryDispatcher { class_hash: tinysynth_class_hash };
         assert(synth.engine() == 'tinysynth', 'not a TinySynth class');
+        assert(synth.version() == VERSION, 'unsupported TinySynth version');
         self.tinysynth_class_hash.write(tinysynth_class_hash);
     }
 
