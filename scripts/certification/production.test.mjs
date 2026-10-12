@@ -465,9 +465,14 @@ describe("production certification is versioned, bound and fail-closed", () => {
     assert.match(child.stderr, /release certification incomplete for 1\.0\.0:/);
     assert.match(child.stderr, /production-pairs-missing/);
 
-    const reversed = spawnSync(process.execPath, [script.pathname, "--check-release-version", "1.0.0", "--check"], {
-      cwd: process.cwd(), encoding: "utf8", timeout: 30000,
-    });
+    // The JavaScript CI job has Node but no Scarb. Missing evidence must fail before generation.
+    const nodeOnlyPath = mkdtempSync(join(tmpdir(), "certification-node-only-"));
+    let reversed;
+    try {
+      reversed = spawnSync(process.execPath, [script.pathname, "--check-release-version", "1.0.0", "--check"], {
+        cwd: process.cwd(), env: { ...process.env, PATH: nodeOnlyPath }, encoding: "utf8", timeout: 30000,
+      });
+    } finally { rmSync(nodeOnlyPath, { recursive: true, force: true }); }
     assert.equal(reversed.error, undefined);
     assert.equal(reversed.status, 2);
     assert.match(reversed.stderr, /release certification incomplete for 1\.0\.0:/);

@@ -97,16 +97,16 @@ if (process.argv[1]?.endsWith("build_segments.mjs")) {
     if (releaseIndex >= 0 && (!check || !requested || requested.startsWith("--"))) throw Error("--check-release-version VERSION requires --check and a SemVer version");
     releaseVersions = releaseVersionsForCheck(VERSION, requested);
   } catch (error) { console.error(error.message); process.exit(2); }
-  const result = await generatedFiles();
-  const versions = existsSync(MANIFEST_PATH) ? JSON.parse(readFileSync(MANIFEST_PATH,"utf8")) : {};
-  const recorded = checkLibraryVersion(versions, VERSION, result.record, { record });
-  result.files.set("scripts/library_versions.json",JSON.stringify(recorded,null,2)+"\n");
   if (check) for (const version of releaseVersions) {
     const certification = await checkReleaseEvidenceForBuild({ version });
     if (certification.required && certification.status !== "pass") {
       console.error(`release certification ${certification.status} for ${version}: ${JSON.stringify(certification)}`); process.exit(2);
     }
   }
+  const result = await generatedFiles();
+  const versions = existsSync(MANIFEST_PATH) ? JSON.parse(readFileSync(MANIFEST_PATH,"utf8")) : {};
+  const recorded = checkLibraryVersion(versions, VERSION, result.record, { record });
+  result.files.set("scripts/library_versions.json",JSON.stringify(recorded,null,2)+"\n");
   let stale = false;
   for (const [path, value] of result.files) {
     const target = new URL(`../${path}`,import.meta.url);
