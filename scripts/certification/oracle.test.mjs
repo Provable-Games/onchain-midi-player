@@ -7,7 +7,7 @@ import {
   BEND_RANGE_MIDI, CC121_MIDI, EXTREME_KEY_MIDI, EXTREME_SETTINGS, FORMAT1_OFF_BEFORE_ON_MIDI, FORMAT1_ON_BEFORE_OFF_MIDI,
   HELD_SAMPLE_BEND_MIDI,
   GOOD_MIDI, INITIALIZED_MASTER_COARSE_TUNING_MIDI, LATE_MASTER_COARSE_TUNING_MIDI, LONG_SUSTAIN_MIDI,
-  LONG_TAIL_SETTINGS, SAMPLE_BEND_SETTINGS, SECONDARY_TAIL_SETTINGS, SHORT_LOOP_LONG_TAIL_MIDI, SIMPLE_SETTINGS, ZERO_LENGTH_MIDI,
+  LONG_TAIL_SETTINGS, SAMPLE_BEND_SETTINGS, SECONDARY_TAIL_SETTINGS, SHORT_LOOP_LONG_TAIL_MIDI, SIMPLE_SETTINGS, ZERO_LENGTH_MIDI, smf,
 } from "./fixtures.mjs";
 
 const analyze = (midi, settings = SIMPLE_SETTINGS, extra = {}) => analyzeMidi(midi, settings, {
@@ -18,6 +18,28 @@ const codes = (report) => new Set(report.failures.map((item) => item.code));
 const incompleteCodes = (report) => new Set(report.incomplete.map((item) => item.code));
 
 describe("independent certification intent/state oracle", () => {
+  test("repeated drum hits remain one-shots across passes and ignore note-offs and sustain", () => {
+    const settings = { ...SIMPLE_SETTINGS, timbres: [{ drum: true, slot: 36, operators: [
+      { ...SIMPLE_SETTINGS.timbres[0].operators[0], decay: 100 },
+    ] }] };
+    const events = [[0, 0xff, 0x51, 3, 0x07, 0xa1, 0x20], [0, 0xb9, 64, 127],
+      [0, 0x99, 36, 100], [480, 0x99, 36, 100], [480, 0xff, 0x2f, 0]];
+    const withoutOffs = analyze(smf(events), settings);
+    const withOffs = analyze(smf([...events.slice(0, 3), [0, 0x89, 36, 0],
+      events[3], [0, 0x89, 36, 0], events[4]]), settings);
+    for (const report of [withoutOffs, withOffs]) {
+      assert.equal(report.status, "pass", JSON.stringify(report));
+      assert.equal(report.notes.filter(note => note.pass < 3).length, 6);
+      assert.ok(report.notes.every(note => note.drum && note.offTime === null && !note.pendingPedal));
+      for (const note of report.notes) {
+        assert.ok(Math.abs(note.expectedOperators[0].naturalTailEnd -
+          (0.1 + note.time + 0.035)) < 1e-9);
+      }
+    }
+    const lifetimes = report => report.demand.operatorIntervals.map(({ start, end, count }) => ({ start, end, count }));
+    assert.deepEqual(lifetimes(withOffs), lifetimes(withoutOffs), "ignored offs must not shorten drum sources");
+  });
+
   test("a hand-counted three-pass sine score yields C4 and C5 at equal temperament", () => {
     const report = analyze(GOOD_MIDI);
     assert.equal(report.notes.filter((note) => note.pass < 3).length, 9);

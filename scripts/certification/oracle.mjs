@@ -496,22 +496,27 @@ export function analyzeMidi(bytes, settings, options = {}) {
           if (op.intent === "unknown") feature("unknown-custom-wave-intent", "custom wave " + op.wave + " needs an explicit pitched or unpitched intent", event);
           if (!op.numericFiniteFloat32) feature("numeric-source-out-of-range", "operator " + op.index + " has a source, envelope, or gain value that cannot be represented as finite float32", event, "fail");
         }
-        const group = eventsByTick.get(event.tick) || [];
-        const orderedAfter = group.some((x) => x.channel === event.channel && x.kind === "noteOff" && x.data[0] === key &&
-          (x.track > event.track || (x.track === event.track && x.index > event.index)));
-        const older = currentActive(event.channel, key);
-        if (older.length && orderedAfter) {
-          failures.push({ code: "same-tick-retrigger-order", message: "same-key note-on precedes an existing note-off after merged track ordering", tick: event.tick, track: event.track, eventIndex: event.index, channel: event.channel, key, oldNoteId: older.at(-1).id });
-        } else if (older.length) {
-          incomplete.push({ code: "overlapping-same-key", message: "overlapping same-key notes outside an unambiguous same-tick off-before-on boundary are not mapped to note instances", tick: event.tick, track: event.track, eventIndex: event.index, channel: event.channel, key });
-        } else if (!older.length && orderedAfter) {
-          note.zeroLengthCandidate = true;
+        // Percussion is a one-shot with the natural source lifetime modeled below.
+        // It does not participate in melodic held-note, sustain or retrigger tracking.
+        if (!note.drum) {
+          const group = eventsByTick.get(event.tick) || [];
+          const orderedAfter = group.some((x) => x.channel === event.channel && x.kind === "noteOff" && x.data[0] === key &&
+            (x.track > event.track || (x.track === event.track && x.index > event.index)));
+          const older = currentActive(event.channel, key);
+          if (older.length && orderedAfter) {
+            failures.push({ code: "same-tick-retrigger-order", message: "same-key note-on precedes an existing note-off after merged track ordering", tick: event.tick, track: event.track, eventIndex: event.index, channel: event.channel, key, oldNoteId: older.at(-1).id });
+          } else if (older.length) {
+            incomplete.push({ code: "overlapping-same-key", message: "overlapping same-key notes outside an unambiguous same-tick off-before-on boundary are not mapped to note instances", tick: event.tick, track: event.track, eventIndex: event.index, channel: event.channel, key });
+          } else if (!older.length && orderedAfter) {
+            note.zeroLengthCandidate = true;
+          }
+          const list = currentActive(event.channel, key);
+          list.push(note);
+          setActive(event.channel, key, list);
         }
-        const list = currentActive(event.channel, key);
-        list.push(note);
-        setActive(event.channel, key, list);
         notes.push(note);
       } else if (event.kind === "noteOff") {
+        if (event.channel === 9) continue; // Drum note-offs are engine no-ops.
         const [key] = event.data;
         const list = currentActive(event.channel, key);
         const note = list.at(-1);
