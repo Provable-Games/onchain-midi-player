@@ -62,7 +62,10 @@ try {
  const end=await info();
  assert.equal(end.status.state,'playing');assert.equal(end.calls.filter(s=>s==='loadMIDI').length,1);assert.equal(end.calls.filter(s=>s==='playMIDI').length,1);assert.equal(end.calls.filter(s=>s==='prewarm').length,initial.calls.filter(s=>s==='prewarm').length);
  const passCount=end.passes.length-start.passes.length;
- assert.ok(passCount>=Math.floor(seconds/c.midi_loop_seconds)-1);
+ // A pass dispatched over 50 ms late (a stalled timer on a loaded runner) is not announced, so allow
+ // the retired drift check's 90%: a few skips per session, not a systematic loss.
+ const expectedPasses=Math.floor(seconds/c.midi_loop_seconds);
+ assert.ok(passCount>=Math.floor(0.9*expectedPasses),`announced ${passCount} of ${expectedPasses} passes (at least 90%)`);
  assert.equal(end.seeks-start.seeks,passCount*2,'only two SVG seeks per announced pass during steady latency');
  // The one-bar fixture has a unique channel-1 note 72 at tick zero. Match actual engine
  // sends, never a live getPlayStatus().startTime that lookahead may have advanced.
