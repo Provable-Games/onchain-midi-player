@@ -6,7 +6,7 @@ The headless player emits onPassStart at each audible boundary (engine startTime
 
 SVG timeline APIs do not pause or seek an embedded animated GIF. Use an SVG/SMIL sprite timeline for transport-controlled animation; the historical GIF fixture below remains useful for measuring periods.
 
-Choose a score pass that is a whole multiple of the art's visible periods to avoid visible resets. Use the composed preview/browser drift probes; matching engine hashes alone says nothing about consumer visuals. Future independent visual libraries can subscribe to the same API.
+Choose a score pass that is a whole multiple of the art's visible periods to avoid visible resets. The ordinary composed preview intentionally uses an isolated image and does not demonstrate controlled SVG pause/seek. For that acceptance use the trusted renderer-owned reference (`trusted_art: true`, `trusted_body_segment()` and `mountArtSync`) or the browser synchronization probes in the [development guide](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/development.md), selecting each browser engine; matching engine hashes alone says nothing about consumer visuals. Future independent visual libraries can subscribe to the same API.
 
 ## 1. Measure the art's periods
 

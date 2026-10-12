@@ -5,22 +5,26 @@
 // the one the engine tests and render checks run. Both files are SHA-256 checked on every load, so
 // any mismatch fails before anything is generated.
 //
-// Re-pinning is a one-line change to ENGINE_PIN, after vendoring the new files with
+// Re-pinning updates ENGINE_PIN and verified ENGINE_BUILD identities, after vendoring files with
 //   node scripts/vendor_engine.mjs <fork checkout> <commit or tag>
 // which prints the new line. `ref` names the vendored files and is recorded with the VERSION in
 // scripts/library_versions.json; it is the short commit SHA or, once the fork publishes tagged releases,
-// the tag. A re-pin needs a new VERSION (scripts/segments.mjs).
+// the tag. Changes to recorded provenance/artifacts normally require a new VERSION.
+// The unissued 0.6.0 development-record replacement is documented in docs/development.md.
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// PROVISIONAL: local build of source-only upstream draft dependency; repin to its post-merge CI build before marking #62 ready.
-export const ENGINE_PIN = { ref: "dev-748d777", commit: "748d777ae895e9e07cc84b13012c0fdb586b5c3f", sha256: "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65", noticeSha256: "9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708" };
+// Post-merge fork distribution build, reproducibly verified against its pinned source/recipe/lock.
+export const ENGINE_PIN = { ref: "2cb8b40", commit: "2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a", sha256: "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65", noticeSha256: "9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708" };
 export const ENGINE_BUILD = {
-  provisional: true,
-  sourceCommit: ENGINE_PIN.commit,
+  provisional: false,
+  sourceCommit: "8fd8b94c8bb1fd2df3d144404620520c4b7f3725",
+  distributionCommit: ENGINE_PIN.commit,
+  ciRun: "https://github.com/Provable-Games/webaudio-tinysynth/actions/runs/38269640215",
+  sourceMapSha256: "55d24636b60db7a6b7d16b557dc7eb89a387580ce2978d8d10e9054ef33ce60c",
   sourceSha256: "8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7",
   recipe: "node scripts/build.js <output-dir>",
   recipeSha256: "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",

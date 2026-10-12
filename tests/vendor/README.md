@@ -1,14 +1,23 @@
-# Provisional #62 engine dependency
+# Current engine provenance
 
-The current unissued 0.6.0 candidate embeds `webaudio-tinysynth-dev-748d777.min.js`, reproducibly built from source commit `748d777ae895e9e07cc84b13012c0fdb586b5c3f` on [engine draft PR #98](https://github.com/Provable-Games/webaudio-tinysynth/pull/98). This is a **provisional local development build**, not the stale min.js stored at that source-only commit. Its companion NOTICE is that source commit's exact NOTICE.
+The unissued 0.6.0 class embeds `webaudio-tinysynth-2cb8b40.min.js` from fork CI distribution commit `2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a`. Its bot commit names merged source `8fd8b94c8bb1fd2df3d144404620520c4b7f3725` and [the successful build workflow](https://github.com/Provable-Games/webaudio-tinysynth/actions/runs/38269640215). The established `scripts/vendor_engine.mjs` helper copies that commit's exact minified script and NOTICE; neither file is patched locally.
 
-`ENGINE_BUILD` in scripts/engine.mjs and the 0.6.0 manifest record the exact source SHA-256, build recipe SHA-256, package-lock SHA-256 and pinned Terser 5.51.2. To reproduce: check out the source commit in an isolated fork clone, run `npm ci`, then `node scripts/build.js <output-dir>`; compare output SHA-256 `df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65` and NOTICE SHA-256 `9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708`.
+`ENGINE_BUILD` and the manifest are non-provisional and record the source SHA-256, build recipe, lockfile, source map and CI workflow. To reproduce, check out the distribution commit in an isolated fork clone, run `npm ci`, then `node scripts/build.js <output-dir>` and compare both outputs against the committed files. The pinned compiler is Terser 5.51.2.
 
-Before marking #62 ready, replace this pin with the fork's post-merge CI-generated commit using the established vendor helper and revalidate all artifacts. Release readiness further requires a tagged fork release. No declaration or release is represented by this provisional build. The older 31fb18d files below are retained for the prerequisite 0.5.0 provenance.
+- Engine: 47,424 bytes, SHA-256 `df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65`.
+- Source: SHA-256 `8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7`.
+- Source map: SHA-256 `55d24636b60db7a6b7d16b557dc7eb89a387580ce2978d8d10e9054ef33ce60c`.
+- NOTICE: SHA-256 `9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708`.
+- `scripts/build.js`: SHA-256 `ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728`.
+- `package-lock.json`: SHA-256 `67402d41acd7d49ed3c1a1f689e7f91a81bff1b7dc1727b355d1d3b3dec4197d`.
 
-# Vendored engine and licenses
+The earlier local development build and current CI distribution have identical engine/NOTICE bytes. Historical development capture metadata remains in [the measurements](../../docs/measurements/issue62.json) and its original Git revisions; the redundant `dev-` files are removed from the current checkout. The retained 31fb18d files below support 0.5.0 provenance. Current `license()` attribution names the CI distribution commit, so its hash and compiled class identity change even though browser payloads do not.
 
-The pinned TinySynth engine, from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>,
+This is a verified CI commit, not a tagged fork release. Tagged-fork-release and applicable device/provider evidence remain release prerequisites; the unissued candidate is not a declared or mainnet-qualified release.
+
+## Historical engine and licenses
+
+The retained 0.5.0 TinySynth engine, from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>,
 at commit `31fb18d8e04125519776773042da0d5b2db591a9` on the fork's `improve/integration` branch (the NOTICE entry for the
 lazy n1 noise build and `prewarm()`, fork PRs #63 and #64; the minified build is the one the fork's CI made for `16d7cad`,
 and the library source has not changed since):
@@ -24,13 +33,13 @@ and the library source has not changed since):
 A class whose engine pin is not a tagged fork release is a test class, without a `v<version>` release tag. A release
 pins a tagged fork release with a published SHA-256.
 
-This is the engine the class embeds: `scripts/build_segments.mjs` gzips the minified file's exact bytes, a statement delimiter and a separately compiled headless API into one player fragment (the
+For the current ENGINE_PIN, the class embeds that selected engine: `scripts/build_segments.mjs` gzips the minified file's exact bytes, a statement delimiter and a separately compiled headless API into one player fragment (the
 shared loader inflates it in the browser), and `script_sha256()` returns the SHA-256 of the exact embedded engine
 bytes, independently of the combined source/gzip hashes. The engine tests and the render and page checks run the same file. The pin is
 the one line `ENGINE_PIN` in [`scripts/engine.mjs`](../../scripts/engine.mjs), which checks both hashes on every load,
 so a mismatch fails before anything is generated. Nothing needs network access.
 
-To verify: `git -C <fork> show 31fb18d:webaudio-tinysynth.min.js | sha256sum`.
+To verify the historical file: `git -C <fork> show 31fb18d:webaudio-tinysynth.min.js | sha256sum`.
 
 ## Re-pinning
 
@@ -44,9 +53,11 @@ To a later commit, or to a tagged fork release once the fork publishes them:
    build`, then compare).
 2. `node scripts/vendor_engine.mjs <fork checkout> <commit or tag>` copies the two files here (named after the short
    commit or the tag) and prints the new `ENGINE_PIN` line. It only reads the checkout.
-3. Replace the `ENGINE_PIN` line in `scripts/engine.mjs`, delete the old vendored engine/NOTICE files,
-   and choose a new `VERSION` in `scripts/segments.mjs` for a new engine release. Released records in
-   `scripts/library_versions.json` remain immutable.
+3. Replace `ENGINE_PIN` in `scripts/engine.mjs` and update the verified `ENGINE_BUILD` source/build/CI identities.
+   Remove old vendor files only when no historical verification requires them. Choose a new `VERSION` in
+   `scripts/segments.mjs`: changes to any recorded entry are rejected even with `--record`.
+   The one-time finalization of the unissued 0.6.0 development entry is recorded in the development guide;
+   it does not change this immutable-version guard.
 4. From the full checkout with `npm ci` installed, regenerate:
 
    ```sh
