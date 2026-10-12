@@ -83,8 +83,8 @@ export function mountArtSync(root, player, { host = window, notes = null, displa
     notes?.pause();
   };
   const seek = (s = player.getPlayStatus()) => { const position = phase(s); for (const svg of timelines) svg.setCurrentTime(position); };
-  const sample = () => {
-    const s = player.getPlayStatus(), expected = phase();
+  const sample = (s = player.getPlayStatus()) => {
+    const expected = phase(s);
     for (const svg of timelines) {
       let drift = svg.getCurrentTime() - expected;
       if (s.passSeconds) drift -= Math.round(drift / s.passSeconds) * s.passSeconds;
@@ -100,10 +100,10 @@ export function mountArtSync(root, player, { host = window, notes = null, displa
       // On play: freeze at zero until tick zero reaches its estimated audible start.
       const ready = s.originTime !== null && s.audioTime !== null && s.audioTime >= s.originTime + s.latencySeconds;
       if (ready) {
-        seek(); for (const svg of timelines) svg.unpauseAnimations(); notes?.play();
-        started = true; sample(); initialAlignment ??= currentDrift;
+        seek(s); for (const svg of timelines) svg.unpauseAnimations(); notes?.play();
+        started = true; sample(s); initialAlignment ??= currentDrift;
       }
-    } else sample(); // Read-only drift observation; never seeks or changes compensation here.
+    } else sample(s); // Read-only drift observation; never seeks or changes compensation here.
     frame = host.requestAnimationFrame(tick);
   };
   const synchronize = (s = player.getPlayStatus()) => {
@@ -164,8 +164,9 @@ export async function startUi() {
       if (root.localName === "svg" && root.namespaceURI === "http://www.w3.org/2000/svg") {
         const inline = /** @type {SVGSVGElement} */ (/** @type {unknown} */ (document.importNode(root, true)));
         inline.id = "beast-art";
-        for (const timeline of [inline, ...inline.querySelectorAll("svg")]) { timeline.pauseAnimations(); timeline.setCurrentTime(0); }
+        // Attached first: a detached <svg> may have no timeline to pause yet. No paint runs in between.
         art.replaceWith(inline); art = inline;
+        for (const timeline of [inline, ...inline.querySelectorAll("svg")]) { timeline.pauseAnimations(); timeline.setCurrentTime(0); }
       }
     }
 
