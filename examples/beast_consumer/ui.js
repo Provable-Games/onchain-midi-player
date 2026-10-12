@@ -121,6 +121,8 @@ export function mountArtSync(root, player, { host = window, notes = null, displa
     if (s.state !== 'playing' || s.audioState !== 'running') {
       pause();
       if (s.state === 'stopped') { started = false; for (const svg of timelines) svg.setCurrentTime(0); notes?.stop(); }
+      // A terminal audio failure releases trusted art to animate independently.
+      if (s.state === 'failed') for (const svg of timelines) svg.unpauseAnimations();
       return;
     }
     if (!active) {

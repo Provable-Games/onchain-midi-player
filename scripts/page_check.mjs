@@ -82,6 +82,21 @@ try {
    assert.deepEqual(paused,[false,false]);assert.equal(await o.page.evaluate(()=>window.__check.created),0);
    assert.deepEqual(await o.errors(),[]);console.log('PASS missing player: trusted outer/nested SVG animations recover');
  }finally{await o.context.close();}}
+ // Public engine resume rejection is a terminal player failure, with independently running art.
+ {const o=await run.page();try{
+   const c=fixtureCase('beast_140bpm'),svg='<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect><svg><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect></svg></svg>';
+   await o.page.goto(dataUrl(composed({...c,svg},{fixture:true,dependent:true,trustedArt:true})));await waitReady(o.page);
+   await o.page.click('#play');await o.page.waitForFunction(()=>!document.getElementById('beast-art').animationsPaused());
+   await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='paused');
+   await o.page.evaluate(()=>{window.__check.synth.resume=()=>Promise.reject(Error('fixture resume failure'));});
+   await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='failed'&&!document.getElementById('error').hidden);
+   assert.ok(await o.page.locator('#play').isDisabled());assert.match(await o.page.locator('#error').textContent(),/fixture resume failure/);
+   const timelines=()=>o.page.evaluate(()=>{const root=document.getElementById('beast-art');return[root,...root.querySelectorAll('svg')].map(s=>({paused:s.animationsPaused(),time:s.getCurrentTime()}));});
+   const before=await timelines();assert.ok(before.every(s=>!s.paused));await o.page.waitForTimeout(300);
+   const after=await timelines();assert.ok(after.every((s,i)=>!s.paused&&s.time>before[i].time+.05));
+   assert.equal(await o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus().state),'failed');
+   assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);console.log('PASS terminal resume failure: disabled controls/error and independently running outer/nested SVG');
+ }finally{await o.context.close();}}
  // Synchronous library failure does not prevent an independent later provider from executing.
  {const o=await run.page();try{const bad=alignedFragment(gzipFragment('broken-library',gzipSource('throw Error("fixture evaluation failure")'))),html=composed().replace(fixedFragment('player'),fixedFragment('player')+bad);
  await o.page.goto(dataUrl(html));const result=await o.page.evaluate(async()=>{try{await window.OnchainLibraries.ready;return "resolved";}catch(e){return e.message;}});assert.match(result,/broken-library/);assert.equal(await o.page.evaluate(()=>window.DependentFixture),'fixture:dependent');

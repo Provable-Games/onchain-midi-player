@@ -84,7 +84,7 @@ function artHarness(before = () => {}){
  let status={runId:0,state:'stopped',audioState:null,positionSeconds:null,originTime:null,startTime:null,audioTime:null,passSeconds:2,latencySeconds:.03,latencyRevision:0};
  const states=new Set(),passes=new Set(),frames=new Map(),seeks=[],calls=[],notes=[];let seq=0;
  const host={requestAnimationFrame(fn){frames.set(++seq,fn);return seq;},cancelAnimationFrame(id){frames.delete(id);}};
- function svg(name){let time=0;return{pauseAnimations(){calls.push(name+':pause');},unpauseAnimations(){calls.push(name+':run');},setCurrentTime(t){seeks.push([name,t]);time=t;},getCurrentTime(){return time;},advance(t){time+=t;}};}
+ function svg(name){let time=0,paused=false;return{pauseAnimations(){paused=true;calls.push(name+':pause');},unpauseAnimations(){paused=false;calls.push(name+':run');},animationsPaused(){return paused;},setCurrentTime(t){seeks.push([name,t]);time=t;},getCurrentTime(){return time;},advance(t){time+=t;}};}
  const nested=svg('nested'),root=svg('outer');root.querySelectorAll=()=>[nested];
  const player={getPlayStatus:()=>({...status}),onStateChange(fn){states.add(fn);return()=>states.delete(fn);},onPassStart(fn){passes.add(fn);return()=>passes.delete(fn);}};
  const note={play(){notes.push('play');},pause(){notes.push('pause');},stop(){notes.push('stop');}};
@@ -93,7 +93,7 @@ function artHarness(before = () => {}){
  const set=next=>{Object.assign(status,next);queue.push({snapshot:{...status},listeners:[...states]});if(notifying)return;notifying=true;try{while(queue.length){const event=queue.shift();for(const fn of event.listeners)if(states.has(fn))fn({...event.snapshot});}}finally{notifying=false;}};
  before(player,set);
  const sync=mountArtSync(root,player,{host,notes:note});
- return{sync,status,seeks,calls,notes,root,nested,set,frame(){const fs=[...frames.values()];frames.clear();for(const fn of fs)fn();},pass(){for(const fn of passes)fn();}};
+ return{sync,status,seeks,calls,notes,root,nested,get frameCount(){return frames.size;},set,frame(){const fs=[...frames.values()];frames.clear();for(const fn of fs)fn();},pass(){for(const fn of passes)fn();}};
 }
 test('trusted outer AND nested SVG hold zero until estimated audible start, then resume at shared position',()=>{
  const h=artHarness();assert.ok(h.calls.includes('nested:pause'));
@@ -125,4 +125,16 @@ test('an earlier stopped subscriber replaying resets every new run until audible
  h.set({audioTime:1.24,positionSeconds:.01});h.frame();assert.equal(h.calls.at(-1),'nested:run');
  h.set({state:'paused',audioState:'suspended'});h.set({state:'playing',audioState:'running',positionSeconds:.4});
  assert.equal(h.seeks.at(-1)[1],.41700000000000004,'same-run resume retains phase');h.sync.dispose();
+});
+
+for(const stage of ['starting','playing','paused'])test(`terminal audio failure during ${stage} releases trusted art and stops synchronization`,()=>{
+ const h=artHarness();
+ h.set({runId:1,state:stage==='starting'?'starting':'playing',audioState:stage==='starting'?'suspended':'running',originTime:stage==='starting'?null:1,audioTime:1.1,positionSeconds:stage==='starting'?null:.07});
+ if(stage!=='starting')h.frame();
+ if(stage==='paused')h.set({state:'paused',audioState:'suspended'});
+ h.set({state:'failed',audioState:'closed'});
+ assert.equal(h.root.animationsPaused(),false);assert.equal(h.nested.animationsPaused(),false);
+ assert.equal(h.frameCount,0);assert.equal(h.notes.at(-1),'pause');
+ const count=h.seeks.length;h.frame();h.pass();assert.equal(h.seeks.length,count,'failed audio no longer seeks art');
+ h.sync.dispose();
 });

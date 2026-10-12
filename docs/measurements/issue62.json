@@ -1591,5 +1591,308 @@
       "applicable provider/mainnet qualification",
       "separately authorized declaration/deployment/release actions"
     ]
+  },
+  "terminal_failure_followup": {
+    "capture_date_utc": "2026-10-12",
+    "reviewed_parent_commit": "e9d6a8bb10c481c080a8834ed3dd48cd874cfd13",
+    "scope": "NFT-owned terminal-failure art fallback and preview/reference identity documentation; library and transport implementation are unchanged.",
+    "bindings": {
+      "updated_nft_assets": {
+        "examples/beast_consumer/ui.js": {
+          "before": {
+            "sha256": "55dbe4b397a57bfa6a36cfea0bc90f18dd3d0aad53dfb9e7a2c44d88216669e1",
+            "bytes": 17488
+          },
+          "after": {
+            "sha256": "ffd845e30d588ffbb69c0538fac1680886cbb707733301115ffcfa1fd8da50f4",
+            "bytes": 17655
+          }
+        },
+        "examples/beast_consumer/fixtures/footer.html": {
+          "before": {
+            "sha256": "77b73ca718eff5b2c88c1b5872588829214683b3ab2b49c87382272ccce6263b",
+            "bytes": 6777
+          },
+          "after": {
+            "sha256": "802105afdffb5a66c0f1a698fa70524356ae345b43d234032a6a9f17eaadae34",
+            "bytes": 6840
+          }
+        },
+        "examples/beast_consumer/fixtures/animation.html": {
+          "before": {
+            "sha256": "8a3c8e811688dd5808df94d6460c202878ee43a61913f9cd0405cbd0e4c9bee9",
+            "bytes": 40095
+          },
+          "after": {
+            "sha256": "464d204cba47dd058218a7e8d85ce74a58943b700bd1895739f21805c87ccfc8",
+            "bytes": 40158
+          }
+        },
+        "examples/beast_consumer/fixtures/token_uri.txt": {
+          "before": {
+            "sha256": "5ee0ae67e221f816e5fff33a358d849b70a143233572707c3c0b4660710563b6",
+            "bytes": 73650
+          },
+          "after": {
+            "sha256": "39eb98e0b36d02ce5828a777fdb66d645965a3753cba50f29424ede15580ef19",
+            "bytes": 73762
+          }
+        },
+        "examples/beast_consumer/src/owned_assets.cairo": {
+          "before": {
+            "sha256": "be03b43fbcbf3bede368fd4eadaf29595e16b5f31db12bbe1a27ecf521bdab13",
+            "bytes": 14513
+          },
+          "after": {
+            "sha256": "0dc8feef916d3561320e47de549fe43d06b26e32e2ae0cb3cf75dcb1a9de3107",
+            "bytes": 14625
+          }
+        },
+        "examples/stress_nft/src/owned_assets.cairo": {
+          "before": {
+            "sha256": "be03b43fbcbf3bede368fd4eadaf29595e16b5f31db12bbe1a27ecf521bdab13",
+            "bytes": 14513
+          },
+          "after": {
+            "sha256": "0dc8feef916d3561320e47de549fe43d06b26e32e2ae0cb3cf75dcb1a9de3107",
+            "bytes": 14625
+          }
+        }
+      },
+      "unchanged_libraries_and_records": {
+        "scripts/library_versions.json": {
+          "sha256": "ac5ae4fe131d8bbd1981ae5775d9eaa9dec5f55782e8dc15d0611eae25073241",
+          "bytes": 5926
+        },
+        "scripts/engine.mjs": {
+          "sha256": "790273888257c6f7538b6c8fefa783f2a74deb9c03c2bc677d7bbc4928a977d9",
+          "bytes": 3499
+        },
+        "player/player.js": {
+          "sha256": "e912cf963edeb9d4fe89cb803da8693678b42725dce86d378225911401869804",
+          "bytes": 21606
+        },
+        "src/segment_data.cairo": {
+          "sha256": "f8b0a883465e0e780e1b282c89f57c47329bfbf631d0592eb533955d36f861dc",
+          "bytes": 79231
+        },
+        "tests/fixtures/segments/player.html": {
+          "sha256": "9e781a38a911fcc80cf9f414f7f54f379eb936e19a67d82eeec030c0ee1b3923",
+          "bytes": 25389
+        },
+        "tests/fixtures/segments/gunzip.html": {
+          "sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+          "bytes": 4743
+        }
+      },
+      "browser_probe_sources": {
+        "scripts/page_check.mjs": {
+          "sha256": "d37c01ab96cd04b3df7166836e8a0a2251e86e4fbbcdaffef26a37dc37af15cf",
+          "bytes": 19255
+        },
+        "scripts/sync_check.mjs": {
+          "sha256": "4974a88947e9ce387b8dca0bbe28fb909d40f4eaf3a31bbc5c6403360b480142",
+          "bytes": 9128
+        },
+        "scripts/browser_harness.mjs": {
+          "sha256": "fbbe3dcab05bb3dde7b268b586564bd25e9622134382dc19827d9e6ba3636b9c",
+          "bytes": 3415
+        },
+        "scripts/schedule_observations.mjs": {
+          "sha256": "fbc0f971196ad326fa5fbfaed18b1ed99fb0f14ccc5bf27a96136dc94e67fff8",
+          "bytes": 1463
+        }
+      },
+      "current_release_nft_artifacts": {
+        "examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json": {
+          "sha256": "d9aa3a4ea970875828db371af5b09c8e954c8841131d970d5fd5886cad016116",
+          "bytes": 779043
+        },
+        "examples/stress_nft/target/release/stress_nft_StressNft.contract_class.json": {
+          "sha256": "c728a5ebca74b62f93e7211041e5718db09de1c9d5fa91b97e356cbb470bd5e7",
+          "bytes": 630026
+        }
+      }
+    },
+    "regressions": [
+      "first-start, active and paused terminal failure unpauses both trusted SVG timelines, cancels synchronization frames and pauses optional synced notes",
+      "public engine resume rejection through actual player API leaves terminal failed state, disabled controls and visible error, while outer/nested SVG timelines advance independently"
+    ],
+    "composed_page_cases_per_engine": 32,
+    "fresh_sync_seconds": 5,
+    "sync_results": {
+      "chromium": {
+        "engine": "chromium",
+        "version": "0.6.0",
+        "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+        "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+        "seconds": 5,
+        "schedule": {
+          "observed_passes": 4,
+          "scheduled_messages": 71,
+          "max_grid_error_seconds": 8.881784197001252e-16,
+          "minimum_lead_seconds": 0.1,
+          "late": 0
+        },
+        "checkpoints": [
+          {
+            "elapsed_seconds": 5,
+            "audioTime": 6.1184580498866215,
+            "current_drift_ms": 12.980922984713317,
+            "max_drift_ms": 26.032112689340803
+          }
+        ],
+        "initial_alignment_ms": -0.000795970461806017,
+        "max_drift_ms": 26.032112689340803,
+        "current_drift_ms": 11.450973559684385,
+        "latency_events": [
+          {
+            "audioTime": 0.011609977324263039,
+            "latencySeconds": 0.011609977324263039,
+            "revision": 1
+          },
+          {
+            "audioTime": 0.16253968253968254,
+            "latencySeconds": 0.04360997732426304,
+            "revision": 2
+          },
+          {
+            "audioTime": 0.26702947845804986,
+            "latencySeconds": 0.05160997732426304,
+            "revision": 3
+          },
+          {
+            "audioTime": 0.33668934240362813,
+            "latencySeconds": 0.04360997732426304,
+            "revision": 4
+          },
+          {
+            "audioTime": 0.3599092970521542,
+            "latencySeconds": 0.05160997732426304,
+            "revision": 5
+          },
+          {
+            "audioTime": 0.5224489795918368,
+            "latencySeconds": 0.21000000000000002,
+            "revision": 6
+          },
+          {
+            "audioTime": 1.0216780045351475,
+            "latencySeconds": 0.24100000000000002,
+            "revision": 7
+          }
+        ],
+        "steady_passes": 3,
+        "steady_svg_seeks": 6,
+        "physical_audio_verified": false
+      },
+      "firefox": {
+        "engine": "firefox",
+        "version": "0.6.0",
+        "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+        "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+        "seconds": 5,
+        "schedule": {
+          "observed_passes": 4,
+          "scheduled_messages": 74,
+          "max_grid_error_seconds": 1.3322676295501878e-15,
+          "minimum_lead_seconds": 0.1,
+          "late": 0
+        },
+        "checkpoints": [
+          {
+            "elapsed_seconds": 5,
+            "audioTime": 6.49578231292517,
+            "current_drift_ms": 24.28961311312694,
+            "max_drift_ms": 32.29643872239851
+          }
+        ],
+        "initial_alignment_ms": -0.12018167573749072,
+        "max_drift_ms": 32.29643872239851,
+        "current_drift_ms": 24.28961311312694,
+        "latency_events": [
+          {
+            "audioTime": 0.0029024943310657597,
+            "latencySeconds": 0.040907029,
+            "revision": 1
+          },
+          {
+            "audioTime": 0.8736507936507937,
+            "latencySeconds": 0.21000000000000002,
+            "revision": 2
+          },
+          {
+            "audioTime": 1.3844897959183673,
+            "latencySeconds": 0.24100000000000002,
+            "revision": 3
+          }
+        ],
+        "steady_passes": 3,
+        "steady_svg_seeks": 6,
+        "physical_audio_verified": false
+      },
+      "webkit": {
+        "engine": "webkit",
+        "version": "0.6.0",
+        "player_source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+        "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+        "seconds": 5,
+        "schedule": {
+          "observed_passes": 4,
+          "scheduled_messages": 71,
+          "max_grid_error_seconds": 8.881784197001252e-16,
+          "minimum_lead_seconds": 0.1,
+          "late": 0
+        },
+        "checkpoints": [
+          {
+            "elapsed_seconds": 5,
+            "audioTime": 6.060408163265306,
+            "current_drift_ms": 2.34103841010036,
+            "max_drift_ms": 101.76436732866989
+          }
+        ],
+        "initial_alignment_ms": 0.05600125567307643,
+        "max_drift_ms": 101.76436732866989,
+        "current_drift_ms": 0.6271163484825593,
+        "latency_events": [
+          {
+            "audioTime": 0.020317460317460317,
+            "latencySeconds": 0.0029024943310657597,
+            "revision": 1
+          },
+          {
+            "audioTime": 0.45859410430839004,
+            "latencySeconds": 0.21000000000000002,
+            "revision": 2
+          },
+          {
+            "audioTime": 0.9636281179138322,
+            "latencySeconds": 0.24100000000000002,
+            "revision": 3
+          }
+        ],
+        "steady_passes": 3,
+        "steady_svg_seeks": 6,
+        "physical_audio_verified": false
+      }
+    },
+    "functional_checks": {
+      "root_javascript": 338,
+      "consumer_javascript": 47,
+      "cairo_root": 267,
+      "cairo_beast": 28,
+      "cairo_stress": 11,
+      "existing_cairo_ignored": 21,
+      "generation_abi_player_ui_types_and_format": "passed"
+    },
+    "historical_evidence_scope": "Previous one-minute independent scheduling results and older ten-minute/art/audio/gas captures retain their original UI/source/artifact bindings. This follow-up separately records fresh short smoke and terminal-failure browser behavior for the changed UI; no new long, native or gas capture is claimed. Estimated-clock drift is read-only/informational, including observed headless transients.",
+    "physical_audio_verified": false,
+    "release_prerequisites": [
+      "tagged fork release",
+      "issue #52 hardware/display/audio-route qualification of provisional 17 ms reference display lead",
+      "applicable provider/mainnet qualification",
+      "separately authorized declaration/deployment/release actions"
+    ]
   }
 }
