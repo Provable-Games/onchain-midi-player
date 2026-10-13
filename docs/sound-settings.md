@@ -153,7 +153,7 @@ The class bounds no operator value: every field takes any value of its integer t
 
 ## Designing a custom sound
 
-1. **Design the sound** in TinySynth's `soundedit.html` (in the [fork](https://github.com/Provable-Games/webaudio-tinysynth)) or by hand, as a TinySynth timbre: a list of operators `{g, w, t, f, v, a, h, d, s, r, p, q, k}`.
+1. **Design the sound** in TinySynth's `soundedit.html` (in the [pocket-synth fork](https://github.com/Provable-Games/pocket-synth)) or by hand, as a TinySynth timbre: a list of operators `{g, w, t, f, v, a, h, d, s, r, p, q, k}`.
 2. **Convert each operator:**
    - `g` becomes `route`;
    - `w` becomes `wave`: `sine`, `square`, `sawtooth`, `triangle`, `n0`, `n1` map to `Sine` … `MetallicNoise`. A wave registered with `setSampleWave` or `setHarmonicWave` becomes an entry of `waves` and `Custom(index)` (see [Custom waves](#custom-waves)), converted to what the format holds:
