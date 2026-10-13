@@ -305,7 +305,8 @@ export function startPlayer(host = window) {
     const ctx = audio();
     position(); // Observe clock transitions even when an in-flight transport suppresses state changes.
     if (ctx.state === "closed" && (state === "playing" || state === "paused" || state === "starting")) {
-      ++operationId; abortPending(); fail(new Error("player: AudioContext closed"));
+      // fail() invalidates and rejects pending transport with this cause, not a cancellation.
+      fail(new Error("player: AudioContext closed"));
     } else if (state === "playing" && ctx.state !== "running") {
       host.clearTimeout(timer); timer = 0; transition("paused");
     } else if (state === "paused" && ctx.state === "running" && !pausing && !resumeRequests) {

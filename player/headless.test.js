@@ -173,3 +173,12 @@ test('a later stale failure keeps the first error',async()=>{
  suspends[0].reject(Error('first'));await flush();suspends[1].reject(Error('second'));await flush();
  const s=h.api.getPlayStatus();assert.equal(s.state,'failed');assert.equal(s.error.message,'first');assert.deepEqual(states,['failed']);await assert.rejects(h.api.play(),/first/);
 });
+test('context closure rejects pending play and resume with the failure in status',async()=>{
+ for(const resuming of [false,true]){
+  const r=deferred(),h=harness(resuming?{}:{resume:r});if(resuming){await h.api.play();await h.api.pause();h.ctx.resume=()=>r.promise;}
+  let settled='unsettled';(resuming?h.api.resume():h.api.play()).then(()=>{settled='resolved';},e=>{settled=e;});
+  h.ctx.change('closed');await flush();r.resolve();await flush();
+  const s=h.api.getPlayStatus();assert.equal(s.state,'failed');assert.equal(s.error.message,'player: AudioContext closed');assert.equal(settled,s.error,resuming?'resume':'play');
+  assert.equal(h.intervals.size,0);assert.equal(h.timers.size,0);
+ }
+});
