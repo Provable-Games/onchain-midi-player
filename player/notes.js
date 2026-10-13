@@ -4,9 +4,9 @@
  * optional UI utility, separate from the player: a page that wants it injects this script beside the
  * player and calls `mount(canvas, options)`. No segment or build includes it yet; how a page gets it
  * (the prototype built it as `OnchainMidiNotes`) is onchain-midi-player #59's decision. It reads only
- * the MIDI, a canvas and a clock, never the engine. An NFT drives it like its art: `mountArtSync`'s
- * `notes` option takes the returned `play`, `pause` and `stop`, and its returned `clock()` is the
- * notes' `clock`.
+ * the MIDI, a canvas and a clock, never the engine. An NFT drives it like its art: `syncSvgToMusic`'s
+ * (examples/beast_consumer/art_sync.js) `notes` option takes the returned `play`, `pause` and `stop`,
+ * and its returned `clock()` is the notes' `clock`.
  *
  * Notes enter on the right and travel left; a note sounds as it reaches the playhead, near the left
  * edge (`playheadX`). One colour per channel; the drum channel (9, "channel 10") is ticks along a
@@ -26,7 +26,7 @@
  * Every option of `mount`, with its default.
  * - `midi`: the MIDI file, as bytes or base64 text (surrounding spaces allowed).
  * - `clock`: returns the estimated audible seconds since tick 0 of the first pass, or null when
- *   there is none (the notes then hold their last reading): the `clock()` that `mountArtSync`
+ *   there is none (the notes then hold their last reading): the `clock()` that `syncSvgToMusic`
  *   returns (the player's `positionSeconds` plus the art's display lead), or the player's
  *   `getPlayStatus().positionSeconds`. Read only while playing.
  * - `img`: the art's <img>, or a function returning the current one (a player that restarts the art
