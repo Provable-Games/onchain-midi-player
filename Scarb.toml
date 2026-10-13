@@ -18,6 +18,9 @@ game_components_encoding = { git = "https://github.com/Provable-Games/game-compo
 [dev-dependencies]
 snforge_std = "0.64.0"
 assert_macros = "2.20.0"
+# The Beast reference NFT's document/UI fragments, for the reference assemblies in tests/. A
+# dev-dependency: the class never contains them, and packages that depend on this one don't resolve it.
+owned_assets = { path = "examples/owned_assets" }
 
 [lib]
 

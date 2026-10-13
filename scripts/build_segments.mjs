@@ -84,8 +84,8 @@ export async function generatedFiles() {
   owned.trusted_body = alignedFragment(body.replace("<body>", '<body data-trusted-art="inline-svg">'));
   for (const [n,raw] of Object.entries(owned)) files.set(`examples/beast_consumer/fixtures/${n}.html`,raw);
   const ownedCairo = "//! NFT-owned pre-encoded document/UI assets. Generated; independent of the MIDI class.\n"+Object.entries(owned).map(([n,raw])=>cairoBase64Literal(`${n}_segment`,segmentFor(raw),["NFT-owned HTML fragment."])).join("\n\n")+"\n";
-  files.set("tests/owned_assets.cairo", ownedCairo);
-  for (const example of ["beast_consumer","stress_nft"]) files.set(`examples/${example}/src/owned_assets.cairo`,ownedCairo);
+  // One package, examples/owned_assets, that the examples and the root's tests depend on.
+  files.set("examples/owned_assets/src/lib.cairo", ownedCairo);
   for (const [path, value] of files) if (path.endsWith(".cairo")) files.set(path, formatCairo(value));
   return { ...built, files };
 }

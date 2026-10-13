@@ -8,7 +8,6 @@ mod data_fixtures;
 mod fixture_provider;
 mod helpers;
 mod minimum_alignment;
-mod owned_assets;
 
 mod raw_assets;
 mod settings_fixtures;

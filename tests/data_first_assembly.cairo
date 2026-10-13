@@ -2,7 +2,6 @@
 use onchain_midi_player::base64::bytes_base64_encode;
 use onchain_midi_player::interface::{ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher};
 use onchain_midi_player::types::TinySynthSettings;
-use crate::owned_assets;
 
 pub fn align_to_word(ref uri: ByteArray) {
     while uri.len() % 31 != 0 {
