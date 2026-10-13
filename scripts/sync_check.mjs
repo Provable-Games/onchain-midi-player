@@ -11,6 +11,11 @@ import { REFERENCE_DISPLAY_LEAD_SECONDS } from '../examples/beast_consumer/art_s
 // A suspended timeline is seeked to exactly this value. 5 ms covers each engine's SMIL time
 // representation (Firefox keeps whole milliseconds) and stays well under one 60 Hz frame (16.7 ms).
 const HELD_TOLERANCE_SECONDS = 0.005;
+// Coarse per-engine ceiling (ms) on the monitor's whole-session maximum drift, transport phases
+// included. With light reads while the art is measured, six ten-minute research runs
+// (research/drift-spikes) peaked at 26.0 ms (Chromium), 35.0-41.8 ms (Firefox) and 4.7-6.7 ms
+// (WebKit), with no frame over 40 ms.
+const MAX_DRIFT_LIMIT_MS = Object.freeze({ chromium: 40, firefox: 50, webkit: 15 });
 const seconds = Number(process.env.SYNC_SECONDS || 60);
 const sampleSeconds = Number(process.env.SYNC_SAMPLE_SECONDS || 10);
 assert.ok(sampleSeconds > 0 && Number.isFinite(sampleSeconds));
@@ -27,9 +32,12 @@ try {
  const html=composed({...c,svg:probe},{fixture:true,dependent:true,trustedArt:true}), verified=verifyLibraries(html);
  await o.page.goto(dataUrl(html));
  await waitReady(o.page);
+ // Small values only: copying the growing sends/passes/calls arrays out of the page blocks its main
+ // thread (about 220 ms by minute 10) and corrupts the monitor's next frame sample. Counts are taken
+ // in the page; the full arrays are fetched once, after the final monitor read.
  const info = () => o.page.evaluate(() => {
-   const root = document.getElementById('beast-art'), svgs = [root,...root.querySelectorAll('svg')];
-   return {status:OnchainMidiPlayer.getPlayStatus(),timelines:svgs.map(s=>({time:s.getCurrentTime(),paused:s.animationsPaused()})),monitor:window.OnchainArtMonitor,seeks:window.__seeks.length,calls:window.__check.calls,passes:window.__check.passes,sends:window.__check.sends,media:window.__check.media?.paused};
+   const root = document.getElementById('beast-art'), svgs = [root,...root.querySelectorAll('svg')], check = window.__check;
+   return {status:OnchainMidiPlayer.getPlayStatus(),timelines:svgs.map(s=>({time:s.getCurrentTime(),paused:s.animationsPaused()})),monitor:window.OnchainArtMonitor,seeks:window.__seeks.length,callCount:check.calls.length,prewarmCount:check.calls.filter(s=>s==='prewarm').length,passCount:check.passes.length,sendCount:check.sends.length,media:check.media?.paused};
  });
  // Paused art shows the audio's held position, where the suspend actually stopped it, plus the display lead.
  const heldAt = (sample, label) => {
@@ -46,7 +54,7 @@ try {
    return b;
  };
  const suspends = [];
- const cold = await runningFreely('before play'); assert.equal(cold.calls.length,0); assert.equal(cold.seeks,0);
+ const cold = await runningFreely('before play'); assert.equal(cold.callCount,0); assert.equal(cold.seeks,0);
  await o.page.click('#play');
  await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
  // The initial pass event, when the music becomes audible, seeks every timeline; the monitor measures right after it.
@@ -68,7 +76,7 @@ try {
      assert.equal(metadata.positionSeconds,paused.status.positionSeconds);assert.ok(Math.abs(metadata.latencySeconds-.06)<1e-9);
    }
    await o.page.waitForTimeout(350);const held=await info();heldAt(held,`held ${i}`);
-   assert.equal(held.status.state,'paused');assert.equal(held.status.audioTime,paused.status.audioTime);assert.equal(held.status.positionSeconds,paused.status.positionSeconds);assert.deepEqual(held.timelines,paused.timelines);assert.ok(held.timelines.every(s=>s.paused));assert.equal(held.media,true);assert.equal(held.sends.length,paused.sends.length,'scheduler stays held during pause');
+   assert.equal(held.status.state,'paused');assert.equal(held.status.audioTime,paused.status.audioTime);assert.equal(held.status.positionSeconds,paused.status.positionSeconds);assert.deepEqual(held.timelines,paused.timelines);assert.ok(held.timelines.every(s=>s.paused));assert.equal(held.media,true);assert.equal(held.sendCount,paused.sendCount,'scheduler stays held during pause');
    await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
    const resumed = await info();assert.equal(resumed.status.originTime,initial.status.originTime);assert.equal(resumed.status.runId,initial.status.runId);assert.ok(resumed.timelines.every(s=>!s.paused));assert.ok(Math.abs(resumed.status.positionSeconds-Math.max(0,resumed.status.audioTime-resumed.status.originTime-resumed.status.latencySeconds))<1e-9);
  }
@@ -79,7 +87,7 @@ try {
  await o.page.waitForFunction(revision=>OnchainMidiPlayer.getPlayStatus().latencyRevision>revision,external.status.latencyRevision);
  assert.equal(await o.page.evaluate(()=>window.__check.states.at(-1).positionSeconds),external.status.positionSeconds);
  await o.page.waitForTimeout(350);
- const externalHeld=await info();assert.equal(externalHeld.status.audioState,'suspended');assert.equal(externalHeld.status.audioTime,external.status.audioTime);assert.equal(externalHeld.status.positionSeconds,external.status.positionSeconds);assert.deepEqual(externalHeld.timelines,external.timelines);assert.equal(externalHeld.sends.length,external.sends.length);
+ const externalHeld=await info();assert.equal(externalHeld.status.audioState,'suspended');assert.equal(externalHeld.status.audioTime,external.status.audioTime);assert.equal(externalHeld.status.positionSeconds,external.status.positionSeconds);assert.deepEqual(externalHeld.timelines,external.timelines);assert.equal(externalHeld.sendCount,external.sendCount);
  await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
  // All consumers see one latency estimate. 1ms noise is ignored, 30ms route change resynchronizes.
  await o.page.evaluate(()=>{const ctx=window.__check.synth.getAudioContext();window.__oldLatency=OnchainMidiPlayer.getPlayStatus().latencySeconds;Object.defineProperty(ctx,'outputLatency',{configurable:true,value:.2,writable:true});Object.defineProperty(ctx,'baseLatency',{configurable:true,value:.01,writable:true});});
@@ -97,8 +105,10 @@ try {
  const start=await info(), checkpoints=[];
  for(let elapsed=0;elapsed<seconds;){const step=Math.min(sampleSeconds,seconds-elapsed);await o.page.waitForTimeout(step*1000);elapsed+=step;const sample=await info();checkpoints.push({elapsed_seconds:elapsed,audioTime:sample.status.audioTime,current_drift_ms:sample.monitor.currentDrift*1000,max_drift_ms:sample.monitor.maxDrift*1000});}
  const end=await info();
- assert.equal(end.status.state,'playing');assert.equal(end.calls.filter(s=>s==='loadMIDI').length,1);assert.equal(end.calls.filter(s=>s==='playMIDI').length,1);assert.equal(end.calls.filter(s=>s==='prewarm').length,initial.calls.filter(s=>s==='prewarm').length);
- const passCount=end.passes.length-start.passes.length;
+ // The final monitor read is done; one heavy read of the full observation arrays (an atomic snapshot).
+ const log=await o.page.evaluate(()=>({calls:window.__check.calls,passes:window.__check.passes,sends:window.__check.sends}));
+ assert.equal(end.status.state,'playing');assert.equal(log.calls.filter(s=>s==='loadMIDI').length,1);assert.equal(log.calls.filter(s=>s==='playMIDI').length,1);assert.equal(log.calls.filter(s=>s==='prewarm').length,initial.prewarmCount);
+ const passCount=end.passCount-start.passCount;
  // A pass dispatched over 50 ms late (a stalled timer on a loaded runner) is not announced, so allow
  // the retired drift check's 90%: a few skips per session, not a systematic loss.
  const expectedPasses=Math.floor(seconds/c.midi_loop_seconds);
@@ -106,12 +116,15 @@ try {
  assert.equal(end.seeks-start.seeks,passCount*2,'only two SVG seeks per announced pass during steady latency');
  // The one-bar fixture has a unique channel-1 note 72 at tick zero. Match actual engine
  // sends, never a live getPlayStatus().startTime that lookahead may have advanced.
- const schedule=checkSchedule({sends:end.sends,passes:end.passes,origin:initial.status.originTime,period:c.midi_loop_seconds});
- const result={engine:run.engine,version:verified.version,player_source_sha256:verified.libraries.player.sha256,engine_sha256:verified.engine.sha256,seconds,schedule,checkpoints,initial_alignment_ms:initial.monitor.initialAlignment*1000,max_drift_ms:end.monitor.maxDrift*1000,current_drift_ms:end.monitor.currentDrift*1000,latency_events:end.monitor.latencyEvents,steady_passes:passCount,steady_svg_seeks:end.seeks-start.seeks,pause_to_suspend_audio:suspends,physical_audio_verified:false};
+ const schedule=checkSchedule({sends:log.sends,passes:log.passes,origin:initial.status.originTime,period:c.midi_loop_seconds});
+ const maxDriftMs=end.monitor.maxDrift*1000, driftLimitMs=MAX_DRIFT_LIMIT_MS[run.engine], withinDriftLimit=maxDriftMs<driftLimitMs;
+ const result={engine:run.engine,version:verified.version,player_source_sha256:verified.libraries.player.sha256,engine_sha256:verified.engine.sha256,seconds,schedule,checkpoints,initial_alignment_ms:initial.monitor.initialAlignment*1000,max_drift_ms:maxDriftMs,max_drift_limit_ms:driftLimitMs,max_drift_within_limit:withinDriftLimit,current_drift_ms:end.monitor.currentDrift*1000,latency_events:end.monitor.latencyEvents,steady_passes:passCount,steady_svg_seeks:end.seeks-start.seeks,pause_to_suspend_audio:suspends,physical_audio_verified:false};
  assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
  // Stop releases the art: it keeps animating from where it was, without a rewind.
  await o.page.evaluate(()=>OnchainMidiPlayer.stop());const stopped=await runningFreely('after stop');assert.equal(stopped.status.state,'stopped');
  if(process.env.SYNC_RESULTS){mkdirSync(process.env.SYNC_RESULTS,{recursive:true});writeFileSync(`${process.env.SYNC_RESULTS}/sync-${run.engine}.json`,JSON.stringify(result,null,2)+'\n');}
  console.log(JSON.stringify(result,null,2));
- console.log(`${run.engine}: audio clock / SVG estimated max drift ${(result.max_drift_ms).toFixed(3)} ms; ${passCount} passes, ${end.seeks-start.seeks} boundary SVG seeks; ${result.latency_events.length} latency records; engine grid error ${schedule.max_grid_error_seconds} s, late ${schedule.late}; pause request to completed suspend ${suspends.map(s=>s.audio_ms.toFixed(3)).join(', ')} ms on the audio clock; checks passed`);
+ console.log(`${run.engine}: audio clock / SVG estimated max drift ${(result.max_drift_ms).toFixed(3)} ms (limit ${driftLimitMs} ms, ${withinDriftLimit?'within':'EXCEEDED'}); ${passCount} passes, ${end.seeks-start.seeks} boundary SVG seeks; ${result.latency_events.length} latency records; engine grid error ${schedule.max_grid_error_seconds} s, late ${schedule.late}; pause request to completed suspend ${suspends.map(s=>s.audio_ms.toFixed(3)).join(', ')} ms on the audio clock; checks ${withinDriftLimit?'passed':'failed'}`);
+ // Asserted last, after the result is written, so a failing run keeps its measurements.
+ assert.ok(withinDriftLimit,`${run.engine}: audio clock / SVG max drift ${maxDriftMs.toFixed(3)} ms is not below the ${driftLimitMs} ms ${run.engine} limit`);
 } catch(error) {console.error(JSON.stringify(await o.page.evaluate(()=>({state:OnchainMidiPlayer.getPlayStatus(),states:window.__check.states,calls:window.__check.calls,media:window.__check.media?.paused})),null,2));throw error;} finally { await o.context.close(); await run.browser.close(); }
