@@ -2494,7 +2494,7 @@
     "capture_date_utc": "2026-10-12",
     "reviewed_parent_commit": "9b5084499d424a5fd85513da43d15b589626a0f4",
     "issue": "#67 item A1",
-    "scope": "New combined headless player payload: a terminal failure invalidates in-flight transport and rejects a pending play()/resume() with the failure cause, so a late engine resume cannot leave failed or leave its promise unsettled. The candidate remains unissued/undeployed; only its 0.6.0 entry was explicitly replaced, with the normal immutable-version guard intact and 0.5.0 bytes preserved.",
+    "scope": "New combined headless player payload: a terminal failure invalidates in-flight transport and rejects a pending play()/resume() with the failure cause, so a late engine resume cannot leave failed or leave its promise unsettled; a later stale failure keeps the first error. The candidate remains unissued/undeployed; only its 0.6.0 entry was explicitly replaced, with the normal immutable-version guard intact and 0.5.0 bytes preserved.",
     "superseded_candidate_record": {
       "format": 1,
       "fixed_alignment": 279,
@@ -2618,8 +2618,8 @@
           "bytes": 12898
         },
         "player/player.js": {
-          "sha256": "6c73cddfcaf549d4305957fea5e5498e12773a47abb6bf2698c61565f92b3cb2",
-          "bytes": 22440
+          "sha256": "496ea49ea3dfad8ca6f75af94b97c2100314fcacd014baa127abab1dad66a321",
+          "bytes": 22580
         }
       },
       "engine_build": {
@@ -2648,11 +2648,11 @@
           "returned_felts": 275
         },
         "player": {
-          "source_sha256": "1b9396d7040e8b99023038e76f8eacfb3bcefdefe8bb65b2ea204795f0b9443d",
-          "source_len": 58393,
-          "raw_sha256": "4405139afb1a925225cd7abe17494c655c694d94dcb3d69ebe5c2390df5c0bf0",
+          "source_sha256": "c2e4d7500b35a85ca939997749113d0921acdaf3cc25bdc5d1640ee9157230f3",
+          "source_len": 58418,
+          "raw_sha256": "605af490d05dfd8f17d59b464dcabdb89ef2eca73021fd6e39ce545f09c95bd8",
           "raw_len": 25389,
-          "returned_sha256": "a3ffef825d3b6e85364a900c550b969998f5c2e6b2707f448c83b732a9473850",
+          "returned_sha256": "82e65df38930293a5d5ad09d3a8d9e14bc6248ca1ccee0dc37b187ac3736ffa3",
           "returned_len": 45136,
           "returned_felts": 1459,
           "embedded_engine": {
@@ -2662,12 +2662,12 @@
           },
           "wrapper": {
             "offset": 47427,
-            "length": 10966,
-            "sha256": "a7d93494c9f59204e64adf833d75a12383840864e493ff5e8655231980f1ee76"
+            "length": 10991,
+            "sha256": "2f502a288685c09d21184b5c05f6f7fa7bf8741a37eaa190af3b5816fa385b1e"
           },
-          "gzip_sha256": "8677ca009db48cb36581facac0be9afa229e30124146f8f0242d539321ab8f1d",
-          "gzip_len": 18792,
-          "gzip_base64_len": 25056
+          "gzip_sha256": "12378e008fa45d31384cf696ea35f107ee151101e0df23b9175941c2b13f15c3",
+          "gzip_len": 18799,
+          "gzip_base64_len": 25068
         }
       },
       "license_sha256": "9c68224366c7fc70f05d5a614c497bd7c13dcc8ec7f72b65d4c20316e2996cb8",
@@ -2681,8 +2681,8 @@
             "bytes": 22238
           },
           "after": {
-            "sha256": "6c73cddfcaf549d4305957fea5e5498e12773a47abb6bf2698c61565f92b3cb2",
-            "bytes": 22440
+            "sha256": "496ea49ea3dfad8ca6f75af94b97c2100314fcacd014baa127abab1dad66a321",
+            "bytes": 22580
           }
         },
         "tests/fixtures/segments/player.html": {
@@ -2691,7 +2691,7 @@
             "bytes": 25389
           },
           "after": {
-            "sha256": "4405139afb1a925225cd7abe17494c655c694d94dcb3d69ebe5c2390df5c0bf0",
+            "sha256": "605af490d05dfd8f17d59b464dcabdb89ef2eca73021fd6e39ce545f09c95bd8",
             "bytes": 25389
           }
         },
@@ -2701,7 +2701,7 @@
             "bytes": 79231
           },
           "after": {
-            "sha256": "7f9e9b1d9b7490a04ef03ea109be7eb0970896544c851247cfe34bc3e28b9ab8",
+            "sha256": "50d0968893a192d98fc377ab21f74347aeb73a941b45f774ebe2dbe1699be11d",
             "bytes": 79231
           }
         },
@@ -2711,7 +2711,7 @@
             "bytes": 40158
           },
           "after": {
-            "sha256": "4bfe52a2a0e669382bddd210f2f1bfcf248e1102cdb29d6f66eb49a37a2ab56b",
+            "sha256": "2e033f5b1eca7554b588b1e28cf01fc709c2ef8bc1fdb6c82e185db2055b1a52",
             "bytes": 40158
           }
         },
@@ -2721,7 +2721,7 @@
             "bytes": 73762
           },
           "after": {
-            "sha256": "e3348582affcc12818c1f4b1b04045b0a4bba81a2726126f506a93fb80a85514",
+            "sha256": "c7947dfc7b61a6ceccecd0325d261f2af5c58ec1616a962606c4ca2fd1968bf8",
             "bytes": 73762
           }
         }
@@ -2754,7 +2754,7 @@
       },
       "current_release_class_artifacts": {
         "target/release/onchain_midi_player_TinySynth.contract_class.json": {
-          "sha256": "75f38af3c1cc5018d1339e5a584b97a3b85161ed01a2be8801c70e4af642338c",
+          "sha256": "455080958100821fdd77f69d5ec8777c2a4cec7aa69b8da12928af96dae680af",
           "bytes": 986703
         },
         "examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json": {
@@ -2769,10 +2769,11 @@
     },
     "failure_regressions": [
       "stale re-suspend rejection during a newer in-flight resume leaves the player failed, rejects that resume with the failure cause and preserves error; no intervals or timers remain",
-      "stale re-suspend rejection during a newer in-flight play settles that play with the failure cause, stays failed and never loads or plays the score"
+      "stale re-suspend rejection during a newer in-flight play settles that play with the failure cause, stays failed and never loads or plays the score",
+      "two late resumes both send stale suspends that reject: the player stays failed with the first error, notifies failed once and later play() rejects with that first cause"
     ],
     "functional_checks": {
-      "root_javascript": 347,
+      "root_javascript": 348,
       "consumer_javascript": 47,
       "cairo_root": 267,
       "cairo_beast": 28,
