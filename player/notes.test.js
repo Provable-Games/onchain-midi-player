@@ -175,13 +175,14 @@ describe("mount: defaults, layout and animation", () => {
   function browser({ reduced = false } = {}) {
     /** @type {Array<() => void>} */
     const frames = [];
-    const saved = Object.fromEntries(["requestAnimationFrame", "cancelAnimationFrame", "matchMedia", "devicePixelRatio", "addEventListener"].map((n) => [n, Object.getOwnPropertyDescriptor(globalThis, n)]));
+    const saved = Object.fromEntries(["requestAnimationFrame", "cancelAnimationFrame", "matchMedia", "devicePixelRatio", "addEventListener", "getComputedStyle"].map((n) => [n, Object.getOwnPropertyDescriptor(globalThis, n)]));
     Object.assign(globalThis, {
       requestAnimationFrame: (/** @type {() => void} */ f) => frames.push(f),
       cancelAnimationFrame: (/** @type {number} */ id) => { frames[id - 1] = () => {}; },
       matchMedia: () => ({ matches: reduced }),
       devicePixelRatio: 2,
       addEventListener: () => {},
+      getComputedStyle: (/** @type {any} */ e) => ({ position: e.isConnected === false ? "" : e.style.position || "static" }), // inline style only; none detached
     });
     const restore = () => {
       for (const [n, d] of Object.entries(saved)) {
@@ -196,7 +197,7 @@ describe("mount: defaults, layout and animation", () => {
     /** @type {any[]} */
     const placed = [];
     const c = { style: {}, width: 0, height: 0, hidden: false, isConnected: false, getContext: () => g };
-    const img = { getBoundingClientRect: () => ({ left: 100, top: 140, width: 300, height: 420 }), before: (/** @type {any} */ e) => { placed.push(e); e.isConnected = true; } };
+    const img = { style: {}, getBoundingClientRect: () => ({ left: 100, top: 140, width: 300, height: 420 }), before: (/** @type {any} */ e) => { placed.push(e); e.isConnected = true; } };
     return { c: /** @type {any} */ (c), img: /** @type {any} */ (img), ops, placed };
   }
   const b64 = Buffer.from(SONG).toString("base64");
@@ -229,6 +230,35 @@ describe("mount: defaults, layout and animation", () => {
       assert.deepEqual([c.width, c.height], [528, 360]);
       assert.deepEqual(ops.find((op) => op[0] === "transform"), ["transform", 528 / 220, 0, 0, 360 / 150, 0, 0]);
       assert.equal(frames.length, 0);
+    } finally {
+      restore();
+    }
+  });
+  test("stacking: a static <img> gets position: relative, so it paints over the canvas just before it", () => {
+    const { restore } = browser();
+    try {
+      const { c, img, placed } = canvas();
+      const swapped = canvas().img;
+      let current = img;
+      const m = mount(c, { midi: SONG, img: () => current });
+      assert.deepEqual(placed, [c], "the canvas goes just before the <img>");
+      assert.equal(img.style.position, "relative", "static: now positioned like the canvas, so tree order decides");
+      current = swapped; // a player swapped the art's element
+      m.draw();
+      assert.equal(swapped.style.position, "relative", "the <img> the function returns now");
+      const detached = canvas().img;
+      detached.isConnected = false;
+      current = detached;
+      m.draw();
+      assert.equal(detached.style.position, undefined, "detached: no computed style yet");
+      detached.isConnected = true;
+      m.draw();
+      assert.equal(detached.style.position, "relative", "checked again once attached");
+      const fixed = canvas();
+      fixed.img.style.position = "fixed";
+      mount(fixed.c, { midi: SONG, img: fixed.img });
+      assert.deepEqual(fixed.placed, [fixed.c]);
+      assert.equal(fixed.img.style.position, "fixed", "already positioned: left alone");
     } finally {
       restore();
     }
@@ -275,16 +305,44 @@ describe("mount: defaults, layout and animation", () => {
       const latest = () => fills(ops.slice(ops.map((op) => op[0]).lastIndexOf("clear")));
       m.play();
       const playing = latest();
-      t = 1.5;
       m.pause();
       frames[0]();
       assert.equal(frames.length, 1, "paused: the pending frame was cancelled, none requested");
-      assert.deepEqual(latest(), playing, "the same frame, at the clock's last reading");
+      assert.deepEqual(latest(), playing, "the same frame: the clock stands still");
       m.draw(); // a resize while paused redraws the held frame
       assert.deepEqual(latest(), playing);
+      t = 1.5;
       m.play();
       assert.equal(frames.length, 2, "resumed");
       assert.notDeepEqual(latest(), playing, "drawn at the clock's new reading");
+    } finally {
+      restore();
+    }
+  });
+  test("pause reads the clock once: frames stopped (a hidden page) while the audio played on", () => {
+    const { restore } = browser();
+    try {
+      const latestOf = (/** @type {any[]} */ ops) => fills(ops.slice(ops.map((op) => op[0]).lastIndexOf("clear")));
+      /** The frame drawn playing at `at`, on a canvas of its own. */
+      const playingAt = (/** @type {number} */ at) => {
+        const { c, ops } = canvas();
+        mount(c, { midi: SONG, clock: () => at }).play();
+        return latestOf(ops);
+      };
+      const { c, ops } = canvas();
+      /** @type {number | null} */
+      let t = 1;
+      const m = mount(c, { midi: SONG, clock: () => t });
+      const still = latestOf(ops);
+      m.pause();
+      assert.deepEqual(latestOf(ops), still, "not scrolling yet: the still opening bars, the clock unread");
+      m.play(); // drawn at 1; the next frame never runs
+      t = 2.5;
+      m.pause();
+      assert.deepEqual(latestOf(ops), playingAt(2.5), "frozen at the clock's reading at pause, not at 1");
+      t = null;
+      m.pause();
+      assert.deepEqual(latestOf(ops), playingAt(2.5), "no reading: the cached one");
     } finally {
       restore();
     }
@@ -310,9 +368,13 @@ describe("mount: defaults, layout and animation", () => {
   test("prefers-reduced-motion: play keeps it standing still", () => {
     const { frames, restore } = browser({ reduced: true });
     try {
-      const { c } = canvas();
-      mount(c, { midi: SONG, clock: () => 1 }).play();
+      const { c, ops } = canvas();
+      const m = mount(c, { midi: SONG, clock: () => 1 });
+      const still = fills(ops);
+      m.play();
+      m.pause();
       assert.equal(frames.length, 0);
+      assert.deepEqual(fills(ops.slice(ops.map((op) => op[0]).lastIndexOf("clear"))), still, "pause leaves it at the opening bars, the clock unread");
     } finally {
       restore();
     }
@@ -338,6 +400,26 @@ describe("cutout: the page's copy of the art", () => {
       assert.deepEqual(["x", "y", "width", "height", "rx", "fill", "id"].map((a) => hole.getAttribute(a)), ["15", "58", "220", "156", "8", "#000", null], "the frame's own shape, in black, without its id");
       assert.equal(cutout(card("<rect/>")), card("<rect/>"), "no data-notes-bg: unchanged");
       assert.equal(cutout(card("<g><rect data-notes-bg=''/></g>")), card("<g><rect data-notes-bg=''/></g>"), "only a child of the root counts");
+    } finally {
+      for (const k of ["DOMParser", "XMLSerializer"]) delete (/** @type {any} */ (globalThis))[k];
+    }
+  });
+  test("a background painted by CSS (its style attribute or a class rule) still makes a black hole, with its geometry", async () => {
+    const { DOMParser, XMLSerializer } = await import("@xmldom/xmldom");
+    Object.assign(globalThis, { DOMParser, XMLSerializer });
+    try {
+      const PAINT = "fill:#000!important;stroke:none!important;fill-opacity:1!important;opacity:1!important;filter:none!important";
+      /** The mask's hole for an art whose root children are `body`. */
+      const hole = (/** @type {string} */ body) => {
+        const root = /** @type {any} */ (new DOMParser().parseFromString(cutout(card(body)), "image/svg+xml").documentElement);
+        return Array.from(root.childNodes).find((/** @type {any} */ e) => e.localName === "mask").childNodes[1];
+      };
+      const inline = hole("<rect id='frame' data-notes-bg='' x='15' y='58' width='220' height='150' rx='8' style='fill: #fff; stroke: red'/><g id='beast'/>");
+      assert.equal(inline.getAttribute("style"), "fill: #fff; stroke: red;" + PAINT, "after its own declarations, so the !important ones win");
+      assert.deepEqual(["x", "y", "width", "height", "rx", "fill", "id"].map((a) => inline.getAttribute(a)), ["15", "58", "220", "150", "8", "#000", null]);
+      const classed = hole("<style>.frame{fill:#fff!important}</style><rect class='frame' data-notes-bg='' x='15' y='58' width='220' height='150' clip-path='url(#round)' style='transform:translate(1px,0);'/><g id='beast'/>");
+      assert.equal(classed.getAttribute("style"), "transform:translate(1px,0);" + PAINT, "inline !important beats the class rule, even its !important");
+      assert.deepEqual(["class", "x", "y", "width", "height", "clip-path"].map((a) => classed.getAttribute(a)), ["frame", "15", "58", "220", "150", "url(#round)"], "geometry stays");
     } finally {
       for (const k of ["DOMParser", "XMLSerializer"]) delete (/** @type {any} */ (globalThis))[k];
     }

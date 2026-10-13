@@ -34,7 +34,10 @@
  *   the <img> draws the art (`object-fit: contain`), and the canvas is inserted just before the
  *   <img> (behind it) unless already in the document. Without it they are CSS pixels of the
  *   viewport. Either way the canvas is `position: fixed` over `box`, at the device's pixel ratio,
- *   and follows resizes.
+ *   and follows resizes. Stacking: a positioned element paints over in-flow content whatever the
+ *   DOM order, so a statically positioned <img> (each one the function returns) gets
+ *   `position: relative`; both then paint in tree order at `z-index: auto`, the canvas first. A
+ *   positioned <img> is left as it is (a negative `z-index` would put it under the canvas).
  * - `view`: the art's own units [x, y, width, height] (its viewBox).
  * - `box`: where the notes go [x, y, width, height].
  * - `hide`: rectangles [x, y, width, height] where no note is drawn (a sprite's box, say).
@@ -235,8 +238,8 @@ export function drawNotes(g, roll, o, at, live) {
 /**
  * Mounts the notes UI on `canvas` (see DEFAULTS for the options) and draws it standing still.
  * Returns `play()` (scroll with the clock, from wherever it is: also resumes), `pause()` (hold the
- * current frame; no animation frames until `play()`), `stop()` (back to the still opening bars),
- * `draw()` (lay out and redraw), and the resolved `options`.
+ * frame at the clock's reading then, if scrolling; no animation frames until `play()`), `stop()`
+ * (back to the still opening bars), `draw()` (lay out and redraw), and the resolved `options`.
  * @param {HTMLCanvasElement} canvas
  * @param {Partial<NotesOptions>} options
  */
@@ -245,7 +248,19 @@ export function mount(canvas, options) {
   let midi = o.midi;
   if (typeof midi == "string") midi = Uint8Array.from(atob(midi.trim()), (c) => c.charCodeAt(0));
   const roll = midiNotes(midi);
-  const img = () => (typeof o.img == "function" ? o.img() : o.img);
+  /** @type {HTMLImageElement | null} */
+  let raised = null; // the last <img> checked for stacking
+  const img = () => {
+    const i = typeof o.img == "function" ? o.img() : o.img;
+    if (i && i != raised) {
+      // Static, it would paint under the positioned canvas before it; positioned, in tree order.
+      // A detached <img> has no computed style yet (""): it is checked again once attached.
+      const position = globalThis.getComputedStyle?.(i).position;
+      if (position) raised = i;
+      if (position == "static") i.style.position = "relative";
+    }
+    return i;
+  };
   let frame = 0;
   let live = false; // playing or paused: the scrolling view, at the clock's last reading
   let at = 0;
@@ -298,6 +313,8 @@ export function mount(canvas, options) {
     },
     pause() {
       halt();
+      // Animation frames stop on a hidden page while the audio plays on: read the clock once more.
+      if (live) at = o.clock() ?? at;
       paint(at);
     },
     stop,
@@ -309,8 +326,9 @@ export function mount(canvas, options) {
 /**
  * The art for a page that draws the notes behind it: the SVG text with its root's `data-notes-bg`
  * child (the opaque background of the notes box, such as a frame's rect), and every root child
- * painted before it (the card's own background), masked out by that element's own shape, so a
- * canvas behind the <img> shows through there, under whatever is painted after it (a sprite).
+ * painted before it (the card's own background), masked out by that element's own shape (its
+ * geometry, painted black whatever its style says), so a canvas behind the <img> shows through
+ * there, under whatever is painted after it (a sprite).
  * Titles and animations stay where they are (an animation applies to its parent). Unchanged without
  * a `data-notes-bg` child of the root. The `image` a marketplace shows is not touched: only the
  * page's copy. Uses the browser's DOMParser and XMLSerializer.
@@ -334,6 +352,10 @@ export function cutout(svg) {
   const hole = /** @type {Element} */ (el.cloneNode(false));
   hole.removeAttribute("id");
   hole.setAttribute("fill", "#000");
+  // Its geometry stays (clip-path and mask included), but its paint is black whatever its style
+  // attribute or class says: inline !important beats every author rule. A filter could recolour it.
+  const style = (hole.getAttribute("style") || "").trim();
+  hole.setAttribute("style", (style && !style.endsWith(";") ? style + ";" : style) + "fill:#000!important;stroke:none!important;fill-opacity:1!important;opacity:1!important;filter:none!important");
   mask.appendChild(make("rect", { ...all, fill: "#fff" }));
   mask.appendChild(hole);
   const g = make("g", { mask: "url(#onchain-midi-notes)" });
