@@ -1,7 +1,8 @@
 //! End-to-end like-for-like direct-splicing versus runtime full-page encoding.
-use beast_consumer::beast_like_nft::IBeastLikeNftDispatcherTrait;
+use beast_consumer::beast_like_nft::{IBeastLikeNftDispatcher, IBeastLikeNftDispatcherTrait};
+use openzeppelin_interfaces::erc721::IERC721MetadataDispatcherTrait;
 use crate::naive::naive_token_uri;
-use crate::test_token_uri::setup;
+use crate::test_token_uri::{deploy, setup};
 #[test]
 fn gas_t4_direct_splicing() {
     let (nft, _) = setup();
@@ -13,6 +14,7 @@ fn gas_t4_runtime_full_page() {
 }
 #[test]
 fn gas_t4_setup() {
-    let (nft, class_hash) = setup();
+    let (address, class_hash) = deploy();
+    let nft = IBeastLikeNftDispatcher { contract_address: address };
     assert(nft.tinysynth_class_hash() == class_hash, 'class hash');
 }

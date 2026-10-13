@@ -7502,6 +7502,10 @@ const SVG_3: [felt252; 36] = [
 pub fn token_uri_4_digest() -> (u32, u256) {
     (174785, 0x86671d48203d632094da9d6ba494909945c92378d835959ec795e6e3bdd23949)
 }
+/// Token 5, minted after deployment as Kraken, tier 4: its token_uri's length and SHA-256.
+pub fn minted_token_uri_digest() -> (u32, u256) {
+    (75329, 0xa13d9d9dc1387c281eb3952be296ce0fad0416d72baa13f6e307d7dfd6d43a7d)
+}
 pub fn gunzip() -> ByteArray {
     let mut felts = GUNZIP.span();
     Serde::deserialize(ref felts).unwrap()
