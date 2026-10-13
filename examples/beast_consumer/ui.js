@@ -57,14 +57,16 @@ export const REFERENCE_DISPLAY_LEAD_SECONDS = 0.017;
 /**
  * Control every trusted inline SVG timeline with the player's shared audible clock.
  * Optional NFT-owned notes implement play/pause/stop and use clock() below. No correction loop:
- * seeks happen only on start, resume, pass boundaries and accepted latency changes.
+ * seeks happen only on start, resume, pass boundaries, accepted latency changes and suspension.
+ * A pause stays audible until the AudioContext's suspend completes: running art runs on and
+ * freezes at the player's held position, where the audio actually stopped.
  * @param {SVGSVGElement} root
  * @param {import('../../player/api.d.ts').OnchainMidiApi} player
  * @param {{host?: any, notes?: any, displayLead?: number}} [options]
  */
 export function mountArtSync(root, player, { host = window, notes = null, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS } = {}) {
   const timelines = [root, ...root.querySelectorAll('svg')];
-  let frame = 0, active = false, revision = -1, started = false, runId = -1;
+  let frame = 0, active = false, suspending = false, revision = -1, started = false, runId = -1;
   let currentDrift = 0, maxDrift = 0;
   /** @type {number | null} */ let initialAlignment = null;
   /** @type {{audioTime: number | null, latencySeconds: number, revision: number}[]} */ const latencyEvents = [];
@@ -78,7 +80,7 @@ export function mountArtSync(root, player, { host = window, notes = null, displa
     return position === null ? 0 : s.passSeconds ? position % s.passSeconds : position;
   };
   const pause = () => {
-    host.cancelAnimationFrame(frame); frame = 0; active = false;
+    host.cancelAnimationFrame(frame); frame = 0; active = suspending = false;
     for (const svg of timelines) svg.pauseAnimations();
     notes?.pause();
   };
@@ -95,7 +97,11 @@ export function mountArtSync(root, player, { host = window, notes = null, displa
   const tick = () => {
     frame = 0;
     const s = player.getPlayStatus();
-    if (s.state !== 'playing' || s.audioState !== 'running') { pause(); return; }
+    if (s.audioState !== 'running' || (s.state !== 'playing' && !suspending)) {
+      // The audio stopped: freeze, then seek to the held position where it stopped.
+      pause(); if (started && s.state !== 'stopped' && s.state !== 'failed') seek(s);
+      return;
+    }
     if (!started) {
       // On play: freeze at zero until tick zero reaches its estimated audible start.
       const ready = s.originTime !== null && s.audioTime !== null && s.audioTime >= s.originTime + s.latencySeconds;
@@ -119,16 +125,22 @@ export function mountArtSync(root, player, { host = window, notes = null, displa
       if (started && s.state === 'playing' && s.audioState === 'running') seek(s);
     }
     if (s.state !== 'playing' || s.audioState !== 'running') {
+      // A pending suspend is still audible: active art runs on until tick() sees the audio stop.
+      if (s.state === 'paused' && s.audioState === 'running' && active) { suspending = true; return; }
       pause();
       if (s.state === 'stopped') { started = false; for (const svg of timelines) svg.setCurrentTime(0); notes?.stop(); }
       // A terminal audio failure releases trusted art to animate independently.
       if (s.state === 'failed') for (const svg of timelines) svg.unpauseAnimations();
+      else if (started && s.audioState !== 'running') seek(s); // Already suspended: freeze at the held position.
       return;
     }
     if (!active) {
       active = true;
       if (started) { seek(s); for (const svg of timelines) svg.unpauseAnimations(); notes?.play(); }
       frame = host.requestAnimationFrame(tick);
+    } else if (suspending) {
+      // Resumed before tick() saw the suspension: the art ran on while the audio was held.
+      suspending = false; if (started) seek(s);
     }
   };
   for (const svg of timelines) { svg.pauseAnimations(); svg.setCurrentTime(0); }
