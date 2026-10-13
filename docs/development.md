@@ -36,8 +36,8 @@ npm run page-check
 npm run render-check
 npm run hosting-check
 # Asserts pause/resume, boundaries, latency resynchronization and a coarse per-engine limit on
-# trusted SVG/audio drift (the CI browser job runs 1 minute; the Drift workflow runs 3 by default
-# and takes a longer session on demand):
+# trusted SVG/audio drift (the CI browser job runs 1 minute; the Drift workflow runs 10 weekly
+# and on demand, 3 on pull requests):
 npm run drift-check -- --minutes 1 --every 10
 node examples/beast_consumer/scripts/browser_check.mjs
 ```
