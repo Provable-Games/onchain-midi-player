@@ -48,6 +48,20 @@ npm run check:abi
 node scripts/validate_token_uri.mjs examples/beast_consumer/fixtures/token_uri.txt
 ```
 
+## Sync your art
+
+Art synced to the music is the experience, and it needs no scheduling. Let the art animate on the page clock, and seek it to the music's position at moments the player already announces: the first pass event (the music is audible), each later pass, and transport or latency changes. Each seek reads `getPlayStatus()` at that moment, so a late event can't misalign the art. [`art_sync.js`](examples/beast_consumer/art_sync.js) is a small reference to copy into your NFT-owned bootstrap; the Beast reference uses it.
+
+```js
+// After OnchainLibraries.ready and OnchainMidiPlayer.ready.
+// Inline SVG your renderer controls: seeks the root and every nested <svg> timeline.
+const sync = syncSvgToMusic(document.getElementById("art"), OnchainMidiPlayer);
+// Isolated art (community art) in an <img>: restarts it with a fresh decode at each pass.
+const dispose = restartImgOnPass(document.getElementById("art-img"), svgText, OnchainMidiPlayer);
+```
+
+Before the music is audible and after stop, the SVG animates freely; a pause freezes it where the audio stops. `sync.clock()` gives optional notes the same audible clock. An `<img>` restart lands up to one decode late, and the image keeps animating while paused. GIF frames inside any art can't be controlled: use SMIL sprite animation for motion synced to the music.
+
 ## Agent skills
 
 The repository plugin provides [integration](plugins/onchain-midi-player/skills/integrator-guide/SKILL.md), [MIDI authoring](plugins/onchain-midi-player/skills/midi-guide/SKILL.md), [sound design](plugins/onchain-midi-player/skills/sound-design/SKILL.md) and [token inspection](plugins/onchain-midi-player/skills/token-uri-inspector/SKILL.md) skills; the [marketplace manifest](.claude-plugin/marketplace.json) registers the plugin. Run checkout-based tooling against the targeted class version. `npm ci` installs pinned offchain dependencies for verification and HTML extraction; these are not browser/onchain dependencies.
