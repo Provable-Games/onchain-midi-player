@@ -1,6 +1,7 @@
 //! End-to-end: the real class (`onchain_midi_player::contract::TinySynth`) is declared but
-//! never deployed, BeastLikeNft is deployed with its class hash, and token_uri (built with library
-//! calls) is checked byte for byte against (a) the independent JavaScript reference (golden.cairo)
+//! never deployed, BeastLikeNft is deployed with its class hash, and the ERC721 metadata token_uri
+//! (built with library calls) is checked byte for byte against (a) the independent JavaScript
+//! reference (golden.cairo)
 //! and (b) the in-Cairo naive reference. Token 4, the full-size Beast, is checked
 //! against the reference's length and SHA-256.
 
@@ -10,17 +11,30 @@ use beast_consumer::beast_like_nft::{
 use core::sha256::compute_sha256_byte_array;
 use onchain_midi_player::interface::{ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher};
 use onchain_midi_player::segment_data;
+use openzeppelin_interfaces::erc721::{IERC721MetadataDispatcher, IERC721MetadataDispatcherTrait};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
-use starknet::ClassHash;
+use starknet::{ClassHash, ContractAddress};
 use crate::golden;
 use crate::naive::naive_token_uri;
 
-/// Declares the class (no deploy) and deploys the NFT with its class hash.
-pub fn setup() -> (IBeastLikeNftDispatcher, ClassHash) {
+/// The constructor's recipient of tokens 1-4.
+pub fn recipient() -> ContractAddress {
+    'recipient'.try_into().unwrap()
+}
+
+/// Declares the class (no deploy) and deploys the NFT with its class hash, minting tokens 1-4 to
+/// `recipient()`. Returns the NFT's address.
+pub fn deploy() -> (ContractAddress, ClassHash) {
     let class_hash = declare("TinySynth").unwrap().contract_class().class_hash;
     let nft_class = declare("BeastLikeNft").unwrap().contract_class();
-    let (address, _) = nft_class.deploy(@array![class_hash.into()]).unwrap();
-    (IBeastLikeNftDispatcher { contract_address: address }, class_hash)
+    let (address, _) = nft_class.deploy(@array![class_hash.into(), recipient().into()]).unwrap();
+    (address, class_hash)
+}
+
+/// `deploy()`, through the ERC721 metadata interface that wallets and indexers call.
+pub fn setup() -> (IERC721MetadataDispatcher, ClassHash) {
+    let (address, class_hash) = deploy();
+    (IERC721MetadataDispatcher { contract_address: address }, class_hash)
 }
 
 /// SHA-256 of `data` as a big-endian u256, like `sha256sum`.
@@ -115,7 +129,8 @@ fn render_svg_matches_js_golden() {
 /// library dispatcher reaches it without any deployed TinySynth contract.
 #[test]
 fn library_call_without_deployment() {
-    let (nft, class_hash) = setup();
+    let (address, class_hash) = deploy();
+    let nft = IBeastLikeNftDispatcher { contract_address: address };
     assert(nft.tinysynth_class_hash() == class_hash, 'class hash not stored');
 
     let synth = ITinySynthLibraryDispatcher { class_hash };

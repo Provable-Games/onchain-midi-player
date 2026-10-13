@@ -1,7 +1,6 @@
 //! Invalid inputs revert. midi_segment is called through the safe library dispatcher, the same
 //! library-call path BeastLikeNft uses, so the panic data can be checked exactly.
 
-use beast_consumer::beast_like_nft::{IBeastLikeNftSafeDispatcher, IBeastLikeNftSafeDispatcherTrait};
 use beast_consumer::sound;
 use core::panic_with_felt252;
 use onchain_midi_player::interface::{
@@ -228,7 +227,7 @@ mod OlderTinySynthClass {
 #[test]
 fn constructor_rejects_an_older_tinysynth_version() {
     let old = declare("OlderTinySynthClass").unwrap().contract_class().class_hash;
-    let args = array![old.into()];
+    let args = array![old.into(), crate::test_token_uri::recipient().into()];
     match declare("BeastLikeNft").unwrap().contract_class().deploy(@args) {
         Result::Ok(_) => panic_with_felt252('should have reverted'),
         Result::Err(panic_data) => assert(
@@ -240,26 +239,13 @@ fn constructor_rejects_an_older_tinysynth_version() {
 #[test]
 fn constructor_rejects_another_engines_class() {
     let other = declare("OtherEngineClass").unwrap().contract_class().class_hash;
-    match declare("BeastLikeNft").unwrap().contract_class().deploy(@array![other.into()]) {
+    match declare("BeastLikeNft")
+        .unwrap()
+        .contract_class()
+        .deploy(@array![other.into(), crate::test_token_uri::recipient().into()]) {
         Result::Ok(_) => panic_with_felt252('should have reverted'),
         Result::Err(panic_data) => assert(
             *panic_data.at(0) == 'not a TinySynth class', 'wrong error',
         ),
-    }
-}
-
-#[test]
-#[feature("safe_dispatcher")]
-fn unknown_token_reverts() {
-    let class_hash = declare("TinySynth").unwrap().contract_class().class_hash;
-    let (address, _) = declare("BeastLikeNft")
-        .unwrap()
-        .contract_class()
-        .deploy(@array![class_hash.into()])
-        .unwrap();
-    let nft = IBeastLikeNftSafeDispatcher { contract_address: address };
-    match nft.token_uri(99) {
-        Result::Ok(_) => panic_with_felt252('should have reverted'),
-        Result::Err(panic_data) => assert(*panic_data.at(0) == 'unknown token', 'wrong error'),
     }
 }

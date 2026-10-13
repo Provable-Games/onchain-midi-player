@@ -21,6 +21,9 @@ export const TOKENS = {
   4: { name: 'Shiny Warlock', tier: 1, real: true },
 };
 
+/** A Beast minted after deployment with the contract's open test `mint` (token id, name, tier). */
+export const MINTED = { tokenId: 5, name: 'Kraken', tier: 4 };
+
 export const DESCRIPTION =
   'A Beast-like example token. Its animation_url plays the onchain MIDI with the TinySynth class.';
 
@@ -136,7 +139,7 @@ export const TIMBRES = [
 ];
 
 /** Reverb is the only per-token setting, derived from the permanent tier trait. */
-export const REVERB_BY_TIER = { 1: 100, 2: 30, 3: 5 };
+export const REVERB_BY_TIER = { 1: 100, 2: 30, 3: 5, 4: 5, 5: 5 };
 
 export function settingsFor(tier) {
   return { quality: 1, reverb: REVERB_BY_TIER[tier], master_vol: 40, voices: 64, waves: [], timbres: TIMBRES };
@@ -167,8 +170,9 @@ export const scriptTextSvg = (name, tier) => renderSvg(name,tier).replace('</svg
 // token_uri: spliced (what the contract does) and naive (one pass, standard nesting)
 // ---------------------------------------------------------------------------------------------
 
-export function tokenParts(tokenId) {
-  const t = TOKENS[tokenId];
+/** A token's pieces: one of TOKENS, or the Beast `beast` ({ name, tier }) minted as `tokenId`. */
+export function tokenParts(tokenId, beast = TOKENS[tokenId]) {
+  const t = beast;
   if (!t) throw new Error(`unknown token ${tokenId}`);
   const real = t.real ? realBeast() : null;
   const svg = real ? real.svg : renderSvg(t.name, t.tier);
@@ -183,7 +187,7 @@ export function tokenParts(tokenId) {
 export const ALIGN = { align: true, trustedArt: true };
 
 /** What the contract assembles, piece by piece. */
-export const tokenUriSpliced = (tokenId) => spliceTokenUri(tokenParts(tokenId), ALIGN);
+export const tokenUriSpliced = (tokenId, beast) => spliceTokenUri(tokenParts(tokenId, beast), ALIGN);
 
 /** The decoded animation_url HTML: the complete NFT-owned document. */
 export const animationHtml = (tokenId) => {
