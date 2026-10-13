@@ -26,8 +26,11 @@ export function artTime(s, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS) {
 /**
  * Inline SVG the page controls (trusted art): seeks the root `<svg>` and every nested `<svg>`. The
  * art animates freely until the music is audible, follows the music until stop, a new run or a
- * failure, then animates freely again from where it is. Optional NFT-owned `notes` are played,
- * paused and stopped with the art and can read `clock()`: audible seconds since tick zero, or null.
+ * failure, then animates freely again from where it is. It starts following at the initial pass
+ * event, or, if that never reaches it (mounted mid-run, or an earlier pass listener paused during
+ * it), at mount or the next transport change, from the player's clock. Optional NFT-owned `notes`
+ * are played, paused and stopped with the art and can read `clock()`: audible seconds since tick
+ * zero, or null.
  * @param {SVGSVGElement} svgRoot
  * @param {OnchainMidiApi} player
  * @param {{displayLead?: number, notes?: {play(): void, pause(): void, stop(): void} | null,
@@ -58,6 +61,19 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
     for (const svg of timelines) svg.unpauseAnimations();
     if (failed) notes?.pause(); else notes?.stop();
   };
+  // The music is audible once the audio clock reaches tick zero's estimated audible start (the
+  // player fires the initial pass event then, up to 1 ms early).
+  const audible = (/** @type {PlayStatus} */ s) =>
+    s.originTime !== null && s.audioTime !== null && s.audioTime >= s.originTime + s.latencySeconds - 0.002;
+  // Start following a run that is already audible without its initial pass event reaching this
+  // helper: mounted mid-run, or an earlier pass listener paused during that event. The art ran
+  // freely until now: align it, or, paused, freeze it where the audio stops.
+  const follow = (/** @type {PlayStatus} */ s) => {
+    synced = true;
+    if (s.state === "playing" && s.audioState === "running") { seek(); run(); }
+    else if (s.audioState === "running") { seek(); frame = host.requestAnimationFrame(waitForSilence); }
+    else freeze();
+  };
   const offPass = player.onPassStart(() => {
     seek();
     if (!synced) { synced = true; run(); } // The music is audible: follow it from here.
@@ -70,7 +86,11 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
     const latencyChanged = s.latencyRevision !== revision;
     revision = s.latencyRevision;
     if (s.runId !== runId || s.state === "stopped" || s.state === "failed") { runId = s.runId; release(s.state === "failed"); return; }
-    if (!synced) return; // Before the music is audible, pause and resume leave the art alone.
+    if (!synced) {
+      // Before the music is audible, pause and resume leave the art alone.
+      if (audible(now)) follow(now);
+      return;
+    }
     if (s.state === "playing" && s.audioState === "running") {
       // Resume, a latency change, or a resume before a pending suspend completed.
       if (frozen || frame || latencyChanged) seek();
@@ -81,6 +101,7 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
       if (!frozen && !frame) frame = host.requestAnimationFrame(waitForSilence);
     } else if (!frozen) { stopWaiting(); freeze(); } // Suspended: freeze at the held position.
   });
+  if ((start.state === "playing" || start.state === "paused") && audible(start)) follow(start);
   return {
     clock: () => { const s = player.getPlayStatus(); return s.positionSeconds === null ? null : Math.max(0, s.positionSeconds + displayLead); },
     dispose() { offPass(); offState(); release(false); },

@@ -145,8 +145,8 @@ test('each later pass seeks every timeline once; between passes the art runs on 
  Object.assign(h.status,{positionSeconds:4.5});h.pass();near(h.root.getCurrentTime(),.5+LEAD);h.sync.dispose();
 });
 test('a latency change seeks while synced, playing and running, and only then',()=>{
- const h=artHarness();h.set({...playing});h.set({latencyRevision:2,latencySeconds:.05});assert.deepEqual(h.seeks,[],'not before the music is audible');
- h.pass();const count=h.seeks.length;
+ const h=artHarness();h.set({...playing,audioTime:1.01,positionSeconds:0});h.set({latencyRevision:2,latencySeconds:.05});assert.deepEqual(h.seeks,[],'not before the music is audible');
+ Object.assign(h.status,{audioTime:1.1,positionSeconds:.07});h.pass();const count=h.seeks.length;
  h.set({latencyRevision:3,latencySeconds:.06,positionSeconds:.4});assert.equal(h.seeks.length,count+2);near(h.root.getCurrentTime(),.4+LEAD);
  h.set({latencyRevision:3,positionSeconds:.45});assert.equal(h.seeks.length,count+2,'the same revision does not seek');
  h.set({state:'paused',audioState:'suspended',positionSeconds:.5});assert.equal(h.seeks.length,count+4,'the freeze');
@@ -460,4 +460,26 @@ test('<img> art: a stop or replay cancels restarts still decoding',()=>{
 test('<img> art: the play button placement follows each swapped image; dispose ends restarts',()=>{
  const h=imgHarness();h.pass();h.created[0].load();assert.equal(h.art,h.created[0]);h.pass();h.created[1].load();assert.equal(h.art,h.created[1]);assert.equal(h.art,h.page[0]);
  h.pass();h.dispose();h.created[2].load();assert.equal(h.page[0],h.created[1],'a decode finishing after dispose');h.pass();assert.equal(h.created.length,3);
+});
+// Pass events stop reaching later listeners once an earlier one pauses: the initial one can be lost.
+test('real player: an earlier pass listener pausing on the initial event still lets the art follow the music',async()=>{
+ let pausing=null;
+ const h=playerArt({before:api=>api.onPassStart(e=>{if(e.initial&&!pausing)pausing=api.pause();})});
+ const suspend=h.gate('suspend');await h.api.play();h.elapse(.2);
+ assert.equal(h.passes.length,1);assert.equal(h.api.getPlayStatus().state,'paused');assert.equal(h.ctx.state,'running');
+ atPlayer(h,'aligned at the pause, without the initial event');h.elapse(.05);h.frame();atPlayer(h,'runs on while still audible');assert.equal(h.root.animationsPaused(),false);
+ suspend.resolve();await pausing;h.elapse(.2);h.frame();
+ atPlayer(h,'frozen where the audio stopped');assert.equal(h.root.animationsPaused(),true);assert.equal(h.nested.animationsPaused(),true);
+ await h.api.resume();atPlayer(h,'resumed in step');assert.equal(h.root.animationsPaused(),false);
+ h.elapse(.3);h.frame();atPlayer(h,'runs with the audio');
+ const before=h.root.getCurrentTime();h.api.stop();assert.equal(h.root.getCurrentTime(),before,'no rewind');runsFree(h,'released');
+});
+test('real player: a helper mounted while the music is audible follows it at once; before audible it waits',async()=>{
+ const h=playerArt();await h.api.play();h.elapse(.02); // Started, not yet audible.
+ const timeline=()=>{const log=[];let t=5;return{log,pauseAnimations(){log.push('pause');},unpauseAnimations(){log.push('run');},setCurrentTime(v){log.push('seek');t=v;},getCurrentTime:()=>t,querySelectorAll:()=>[]};};
+ const host={requestAnimationFrame:()=>1,cancelAnimationFrame(){}};
+ const early=timeline(),first=syncSvgToMusic(early,h.api,{host});assert.deepEqual(early.log,[],'not audible yet: left free');first.dispose();
+ h.elapse(.6);const late=timeline(),second=syncSvgToMusic(late,h.api,{host});
+ const s=h.api.getPlayStatus();assert.deepEqual(late.log,['seek','run']);near(late.getCurrentTime(),(s.positionSeconds+LEAD)%s.passSeconds,'aligned at mount');
+ second.dispose();h.api.stop();
 });
