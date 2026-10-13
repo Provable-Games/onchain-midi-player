@@ -63,6 +63,10 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
     if (!synced) { synced = true; run(); } // The music is audible: follow it from here.
   });
   const offState = player.onStateChange((s) => {
+    // Snapshots arrive in order, but an earlier subscriber may already have moved the player on
+    // (stop, pause or play). Its newer snapshot is queued behind this one: leave the art to that.
+    const now = player.getPlayStatus();
+    if (now.runId !== s.runId || now.state !== s.state) return;
     const latencyChanged = s.latencyRevision !== revision;
     revision = s.latencyRevision;
     if (s.runId !== runId || s.state === "stopped" || s.state === "failed") { runId = s.runId; release(s.state === "failed"); return; }

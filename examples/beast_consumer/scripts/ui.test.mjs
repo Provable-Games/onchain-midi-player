@@ -234,6 +234,19 @@ test('a new run without a stop (an earlier subscriber replaying) also releases t
  h.set({state:'paused',audioState:'suspended',positionSeconds:.38});h.set({state:'playing',audioState:'running',positionSeconds:.4});
  near(h.seeks.at(-1)[1],.417,'same-run resume retains phase');h.sync.dispose();
 });
+test('a superseded snapshot is left to the newer one, without using up its latency change',()=>{
+ // Earlier subscribers pause on a latency update, then resume at once: the helper sees "playing",
+ // "paused" and "playing" again, but only the last still matches getPlayStatus().
+ let step=0;
+ const h=artHarness((player,set)=>player.onStateChange(s=>{
+   if(step===1&&s.state==='playing'){step=2;set({state:'paused',audioState:'suspended'});}
+   else if(step===2&&s.state==='paused'){step=3;set({state:'playing',audioState:'running'});}
+ }));
+ startArt(h);const count=h.seeks.length;h.calls.length=0;
+ step=1;h.set({latencyRevision:2,latencySeconds:.06,positionSeconds:.4});assert.equal(step,3);
+ assert.deepEqual(h.calls,['outer:seek','nested:seek'],'never frozen by the superseded pause: one latency seek');
+ assert.equal(h.seeks.length,count+2);near(h.root.getCurrentTime(),.4+LEAD);free(h);h.sync.dispose();
+});
 for(const stage of ['starting','playing','paused'])test(`terminal audio failure during ${stage} releases trusted art and stops synchronization`,()=>{
  const h=artHarness();
  h.set({runId:1,state:stage==='starting'?'starting':'playing',audioState:stage==='starting'?'suspended':'running',originTime:stage==='starting'?null:1,audioTime:1.1,positionSeconds:stage==='starting'?null:.07});
@@ -275,7 +288,7 @@ test('the monitor only reads: drift each frame while synced and playing, the ini
 // document clock; the audio clock advances only while the context runs. Timers fire on time, and
 // the engine announces each pass's start time 0.1 s ahead, so pass events come from the player.
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};}
-function playerArt({nullStart=false}={}){
+function playerArt({nullStart=false,before=()=>{}}={}){
  let wall=0,suspendGate=null,resumeGate=null,serial=0;const listeners=new Set(),frames=new Map(),timers=new Map(),intervals=new Map();
  const ctx={currentTime:1,state:'suspended',outputLatency:.02,baseLatency:0,addEventListener(_,fn){listeners.add(fn);},change(state){this.state=state;for(const fn of listeners)fn();},
   resume(){return (resumeGate?.promise??Promise.resolve()).then(()=>this.change('running'));},suspend(){return (suspendGate?.promise??Promise.resolve()).then(()=>this.change('suspended'));}};
@@ -288,14 +301,16 @@ function playerArt({nullStart=false}={}){
  const host={document:{readyState:'complete',querySelectorAll:selector=>[tags[/id="([^"]+)"/.exec(selector)[1]]]},WebAudioTinySynth:function(){return synth;},
   setTimeout(fn,ms){timers.set(++serial,{fn,at:wall+ms/1000});return serial;},clearTimeout(id){timers.delete(id);},setInterval(fn){intervals.set(++serial,fn);return serial;},clearInterval(id){intervals.delete(id);},
   requestAnimationFrame(fn){frames.set(++serial,fn);return serial;},cancelAnimationFrame(id){frames.delete(id);}};
- const api=startPlayer(host),passes=[];api.onPassStart(e=>passes.push(e));
+ const api=startPlayer(host),passes=[],log=[];api.onPassStart(e=>passes.push(e));
  let seeks=0;
- const svg=()=>{let paused=false,base=0,at=0;return{pauseAnimations(){if(!paused)base+=wall-at;paused=true;},unpauseAnimations(){if(paused)at=wall;paused=false;},animationsPaused:()=>paused,setCurrentTime(t){seeks++;base=t;at=wall;},getCurrentTime:()=>paused?base:base+wall-at,shift(dt){base+=dt;}};};
+ // Each timeline logs what the helper does to it: pause, run (unpause) and seek:<time>.
+ const svg=()=>{let paused=false,base=0,at=0;return{pauseAnimations(){log.push('pause');if(!paused)base+=wall-at;paused=true;},unpauseAnimations(){log.push('run');if(paused)at=wall;paused=false;},animationsPaused:()=>paused,setCurrentTime(t){log.push('seek:'+t);seeks++;base=t;at=wall;},getCurrentTime:()=>paused?base:base+wall-at,shift(dt){base+=dt;}};};
  const nested=svg(),root=Object.assign(svg(),{querySelectorAll:()=>[nested]});
+ before(api); // A subscriber registered before the helper: it is notified first.
  const sync=syncSvgToMusic(root,api,{host});
  const engine=()=>{const origin=api.getPlayStatus().originTime;if(origin!==null&&status.startTime!==null)status.startTime=origin+Math.max(0,Math.floor((ctx.currentTime+.1-origin)/2))*2;};
  const due=()=>[...timers].find(([,t])=>t.at<=wall+1e-9);
- return{api,ctx,root,nested,sync,passes,get seeks(){return seeks;},
+ return{api,ctx,root,nested,sync,passes,log,get seeks(){return seeks;},
   elapse(dt){for(let left=dt;left>1e-12;){const step=Math.min(.01,left);left-=step;wall+=step;if(ctx.state==='running')ctx.currentTime+=step;engine();for(const fn of [...intervals.values()])fn();for(let t=due();t;t=due()){timers.delete(t[0]);t[1].fn();}}},
   frame(){const fs=[...frames.values()];frames.clear();for(const fn of fs)fn();},
   gate(kind){const d=deferred();if(kind==='suspend')suspendGate=d;else resumeGate=d;return d;}};
@@ -348,6 +363,41 @@ test('real player: a tempo-only score (null start time) syncs the art at zero on
  assert.equal(h.seeks,2);assert.equal(h.root.getCurrentTime(),0);assert.equal(h.sync.clock(),null);runsFree(h,'synced at zero');
  await h.api.pause();h.frame();assert.equal(h.root.animationsPaused(),true);assert.ok(Number.isFinite(h.root.getCurrentTime()));
  await h.api.resume();runsFree(h,'resumed');h.api.stop();runsFree(h,'stopped');
+});
+
+// State notifications are captured snapshots, delivered in order. A subscriber notified before the
+// helper may move the player on (stop, pause, play) while the older snapshot is still on its way.
+test('real player: an earlier subscriber stopping on a latency notification does not rewind the art',async()=>{
+ let armed=false;
+ const h=playerArt({before:api=>api.onStateChange(s=>{if(armed&&s.state==='playing'){armed=false;api.stop();}})});
+ await h.api.play();h.elapse(.2);atPlayer(h,'synced');h.elapse(1.5);
+ const before=h.root.getCurrentTime(),seen=h.log.length;
+ armed=true;h.ctx.outputLatency=.05;h.elapse(.01); // The latency poll's "playing" notification.
+ assert.equal(h.api.getPlayStatus().state,'stopped');
+ assert.deepEqual(h.log.slice(seen),['run','run'],'released: no seek, so no rewind to 0');
+ near(h.root.getCurrentTime(),before+.01,'no rewind');runsFree(h,'released after stop');
+});
+test('real player: an earlier subscriber replaying (stop, then play) releases the art until the new run is audible',async()=>{
+ let armed=false,replay=null;
+ const h=playerArt({before:api=>api.onStateChange(s=>{if(armed&&s.state==='playing'){armed=false;api.stop();replay=api.play();}})});
+ await h.api.play();h.elapse(.2);h.elapse(1.5);
+ const before=h.root.getCurrentTime(),seen=h.log.length;
+ armed=true;h.ctx.outputLatency=.05;h.elapse(.01);
+ assert.equal(h.api.getPlayStatus().state,'starting');assert.deepEqual(h.log.slice(seen),['run','run'],'released by the new run, not rewound');
+ near(h.root.getCurrentTime(),before+.01,'no rewind');
+ await replay;assert.equal(h.api.getPlayStatus().state,'playing');h.elapse(.05);runsFree(h,'the new run is not yet audible');assert.deepEqual(h.log.slice(seen),['run','run']);
+ h.elapse(.1);assert.equal(h.passes.at(-1).initial,true);atPlayer(h,'synced at the new run\'s initial pass');h.api.stop();
+});
+test('real player: an earlier subscriber pausing again on resume keeps frozen art frozen',async()=>{
+ let armed=false,pausing=null;
+ const h=playerArt({before:api=>api.onStateChange(s=>{if(armed&&s.state==='playing'){armed=false;pausing=api.pause();}})});
+ await h.api.play();h.elapse(.2);h.elapse(.5);
+ await h.api.pause();h.frame();assert.equal(h.root.animationsPaused(),true);const held=h.root.getCurrentTime(),seen=h.log.length;
+ armed=true;await h.api.resume();await pausing;assert.equal(h.api.getPlayStatus().state,'paused');
+ h.elapse(.2);h.frame();
+ assert.deepEqual(h.log.slice(seen),[],'the superseded "playing" neither seeks nor unpauses');
+ for(const svg of [h.root,h.nested]){assert.equal(svg.animationsPaused(),true);assert.equal(svg.getCurrentTime(),held);}
+ await h.api.resume();atPlayer(h,'a later resume seeks to the music');assert.equal(h.root.animationsPaused(),false);h.api.stop();
 });
 
 // Isolated art: an <img> restarted at each pass. A fake document is enough: the helper only creates,
