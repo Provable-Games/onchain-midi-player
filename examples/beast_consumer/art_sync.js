@@ -29,11 +29,14 @@ export function artTime(s, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS) {
  * notification says, so missed or out-of-date events cannot leave it wrong:
  * - free (animating on its own, from where it is): before the run's music is audible, and after
  *   stop, a new run or a failure;
- * - running, aligned to the music: once the run is audible (its initial pass event, or the audio
- *   clock past tick zero's audible start) while the AudioContext runs, which includes a pending
+ * - running, aligned to the music: once the run is heard (its initial pass event, or the player's
+ *   position past zero) while the AudioContext runs, which includes a pending
  *   pause, whose sound plays on until the suspend completes;
  * - frozen where the audio stopped: once audible, while the AudioContext does not run.
- * It seeks on entering running or frozen, at each pass and on a latency change. Optional NFT-owned
+ * It seeks on entering running or frozen, at each pass and on a latency change. One transient: a
+ * latency increase larger than the music heard so far makes the player clamp its position to zero
+ * until the audio clock catches up; the art runs on from the display lead meanwhile, at most that
+ * increase ahead, and realigns at the next pass. Optional NFT-owned
  * `notes` are played, paused and stopped with the art and can read `clock()`: audible seconds since
  * tick zero, or null.
  * @param {SVGSVGElement} svgRoot
@@ -48,14 +51,19 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
   let heardRun = -1, revision = -1, frame = 0, live = true;
   const seek = (/** @type {PlayStatus} */ s) => { const t = artTime(s, displayLead); for (const svg of timelines) svg.setCurrentTime(t); };
   const animate = (/** @type {boolean} */ on) => { for (const svg of timelines) if (on) svg.unpauseAnimations(); else svg.pauseAnimations(); };
-  // The player fires the initial pass event when the audio clock reaches tick zero's estimated
-  // audible start (up to 1 ms early); a run stays audible until it ends.
-  const audible = (/** @type {PlayStatus} */ s) =>
-    s.originTime !== null && s.audioTime !== null && s.audioTime >= s.originTime + s.latencySeconds - 0.002;
+  // Heard, per the player: a pass event, or a position past zero (live, or held while suspended,
+  // which keeps what was heard when the audio stopped whatever the latency estimate does since).
+  // A run stays heard until it ends.
   /** @returns {"free" | "running" | "frozen"} */
   const want = (/** @type {PlayStatus} */ s) => {
     if (s.state !== "playing" && s.state !== "paused") return "free"; // Not started, stopped or failed.
-    if (s.runId !== heardRun) { if (!audible(s)) return "free"; heardRun = s.runId; }
+    if (s.runId !== heardRun) {
+      if (s.positionSeconds !== null && s.positionSeconds > 0) heardRun = s.runId;
+      // The player fires the initial pass event up to 1 ms before the audio clock reaches tick zero's
+      // audible start: within that window running audio is followed, but not yet counted as heard.
+      else if (!(s.audioState === "running" && s.originTime !== null && s.audioTime !== null
+        && s.audioTime >= s.originTime + s.latencySeconds - 0.002)) return "free";
+    }
     return s.audioState === "running" ? "running" : "frozen";
   };
   const update = (pass = false) => {
@@ -73,7 +81,12 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
       if (mode !== "running" || pass || s.latencyRevision !== revision || (waited && s.state === "playing")) seek(s);
       if (mode !== "running") { animate(true); notes?.play(); }
     } else if (next === "frozen") {
-      if (mode !== "frozen") { animate(false); seek(s); notes?.pause(); } // Where the audio stopped.
+      if (mode !== "frozen") {
+        animate(false); seek(s); // Where the audio stopped.
+        // Heard, now paused: notes that never played start, so they read the clock, then hold.
+        if (mode === "free") notes?.play();
+        notes?.pause();
+      }
     } else if (mode !== "free") {
       animate(true); // From where it is, without a rewind.
       if (s.state === "failed") notes?.pause(); else notes?.stop();
@@ -83,7 +96,8 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
   };
   const offPass = player.onPassStart(() => update(true));
   const offState = player.onStateChange(() => update()); // A trigger only: the snapshot may be out of date.
-  update(); // Mounted mid-run: follow it at once.
+  // Mounted mid-run: follow it at once, but after returning, so notes can read the returned clock().
+  queueMicrotask(() => update());
   return {
     clock: () => { const s = player.getPlayStatus(); return s.positionSeconds === null ? null : Math.max(0, s.positionSeconds + displayLead); },
     dispose() {

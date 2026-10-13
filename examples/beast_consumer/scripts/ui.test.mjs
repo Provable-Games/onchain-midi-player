@@ -4,6 +4,7 @@ import {describe,test} from "node:test";
 import {playAnchor,silentWav,monitorArtSync} from "../ui.js";
 import {REFERENCE_DISPLAY_LEAD_SECONDS,syncSvgToMusic,restartImgOnPass} from "../art_sync.js";
 import {startPlayer} from "../../../player/player.js";
+import {mount as mountNotes} from "../../../player/notes.js";
 import {riff,smf} from "../../../scripts/data_cases.mjs";
 describe("the play button's anchor on the art (playAnchor)", () => {
   const full = (/** @type {number} */ w, /** @type {number} */ h) => ({ left: 0, top: 0, width: w, height: h });
@@ -477,8 +478,8 @@ test('real player: a helper mounted while the music is audible follows it at onc
  const h=playerArt();await h.api.play();h.elapse(.02); // Started, not yet audible.
  const timeline=()=>{const log=[];let t=5;return{log,pauseAnimations(){log.push('pause');},unpauseAnimations(){log.push('run');},setCurrentTime(v){log.push('seek');t=v;},getCurrentTime:()=>t,querySelectorAll:()=>[]};};
  const host={requestAnimationFrame:()=>1,cancelAnimationFrame(){}};
- const early=timeline(),first=syncSvgToMusic(early,h.api,{host});assert.deepEqual(early.log,[],'not audible yet: left free');first.dispose();
- h.elapse(.6);const late=timeline(),second=syncSvgToMusic(late,h.api,{host});
+ const early=timeline(),first=syncSvgToMusic(early,h.api,{host});await Promise.resolve();assert.deepEqual(early.log,[],'not audible yet: left free');first.dispose();
+ h.elapse(.6);const late=timeline(),second=syncSvgToMusic(late,h.api,{host});assert.deepEqual(late.log,[],'first look after returning');await Promise.resolve();
  const s=h.api.getPlayStatus();assert.deepEqual(late.log,['seek','run']);near(late.getCurrentTime(),(s.positionSeconds+LEAD)%s.passSeconds,'aligned at mount');
  second.dispose();h.api.stop();
 });
@@ -515,7 +516,7 @@ test('real player, randomized: the art and notes always match what getPlayStatus
  const wrap=(d,p)=>d-Math.round(d/p)*p;
  let checks=0;
  for(let seed=1;seed<=150;seed++){
-  const r=rng(seed),notes=[],gates=[],trail=[],heard={};
+  const r=rng(seed),notes=[],gates=[],trail=[],heard={},positioned={};
   const pauseOnPass=r()<.3,meddle=r()<.3;
   const h=playerArt({notes:{play(){notes.push('play');},pause(){notes.push('pause');},stop(){notes.push('stop');}},before:api=>{
    if(pauseOnPass)api.onPassStart(()=>{if(r()<.4)api.pause().catch(()=>{});});
@@ -530,15 +531,25 @@ test('real player, randomized: the art and notes always match what getPlayStatus
    else if(x<.57){trail.push('hold suspend');gates.push(h.gate('suspend'));}
    else if(x<.61){trail.push('hold resume');gates.push(h.gate('resume'));}
    else if(x<.69){trail.push('release');for(const g of gates.splice(0))g.resolve();}
-   else if(x<.74&&now.state==='playing'&&(now.positionSeconds??0)>.2){trail.push('latency');h.ctx.outputLatency=.02+r()*.03;h.elapse(.26);}
+   else if(x<.76&&(now.state==='playing'||now.state==='paused')&&now.audioState==='running'){
+    // While the audio runs (a change while suspended has its own regression: the player re-anchors its
+    // held position with the new latency when a resume it cancels re-suspends, without notifying). Any
+    // change before the music is heard; after it, none that pushes the position below zero, which the
+    // player clamps (the documented transient where the art leads until the next pass).
+    const cap=heard[now.runId]&&now.originTime!==null&&now.audioTime!==null?now.audioTime-now.originTime-.003:.26;
+    trail.push('latency');h.ctx.outputLatency=Math.max(.01,Math.min(.01+r()*.25,cap));h.elapse(.26);}
    else{const dt=[.004,.03,.2,1.1][Math.floor(r()*4)];trail.push('elapse '+dt);h.elapse(dt);}
    await settle();h.frame();await settle();
    const s=h.api.getPlayStatus(),where=`seed ${seed}: ${trail.join(', ')} -> ${s.state}/${s.audioState}`;
    for(const p of h.passes)heard[p.runId]=true;
-   const at=s.originTime===null||s.audioTime===null?null:s.audioTime-(s.originTime+s.latencySeconds);
+   // Heard as the player reports it: a pass event or a position past zero (live, or held while suspended).
+   const running=s.audioState==='running',at=!running||s.originTime===null||s.audioTime===null?null:s.audioTime-(s.originTime+s.latencySeconds);
    const live=s.state==='playing'||s.state==='paused';
-   if(live&&at!==null&&at>=0)heard[s.runId]=true;
-   if(live&&at!==null&&at>-.0025&&at<0&&!heard[s.runId])continue; // Inside the player's early-dispatch tolerance.
+   if(live&&(s.positionSeconds??0)>0)heard[s.runId]=positioned[s.runId]=true;
+   // The initial pass fires up to 1 ms early: a pause inside it (an earlier listener) can leave the run
+   // suspended at position 0 with that event never delivered to the helper. Free or frozen at zero are both right.
+   if(live&&!running&&(s.positionSeconds??0)===0&&heard[s.runId]&&!positioned[s.runId])continue;
+   if(live&&at!==null&&at>-.0025&&at<=0&&!heard[s.runId])continue; // Inside the player's early-dispatch window.
    checks++;
    if(!(live&&heard[s.runId])){
     for(const svg of [h.root,h.nested])assert.equal(svg.animationsPaused(),false,'free: '+where);
@@ -547,7 +558,9 @@ test('real player, randomized: the art and notes always match what getPlayStatus
     const frozen=s.audioState!=='running',expected=((s.positionSeconds??0)+LEAD)%s.passSeconds;
     for(const svg of [h.root,h.nested]){
      assert.equal(svg.animationsPaused(),frozen,(frozen?'frozen: ':'running: ')+where);
-     assert.ok(Math.abs(wrap(svg.getCurrentTime()-expected,s.passSeconds))<1e-6,`aligned: ${where}: art ${svg.getCurrentTime()} expected ${expected}`);
+     // Within 2.1 ms: following can start up to 2 ms before the audible start (the initial pass's early
+     // dispatch), so the art may lead by that much until the next seek.
+     assert.ok(Math.abs(wrap(svg.getCurrentTime()-expected,s.passSeconds))<.0021,`aligned: ${where}: art ${svg.getCurrentTime()} expected ${expected}`);
     }
     assert.equal(notes.at(-1),frozen?'pause':'play','notes: '+where);
    }
@@ -555,4 +568,31 @@ test('real player, randomized: the art and notes always match what getPlayStatus
   for(const g of gates)g.resolve();h.api.stop();await settle();
  }
  assert.ok(checks>4000,`checked ${checks} states`);
+});
+test('real player: a latency drop during a pause before anything was heard leaves the art free',async()=>{
+ const h=playerArt();h.ctx.outputLatency=.2;await h.api.play();h.elapse(.2); // Audible start 1.3; the clock is at 1.2.
+ assert.equal(h.passes.length,0);await h.api.pause();h.elapse(.05);h.frame();
+ const s=h.api.getPlayStatus();assert.equal(s.audioState,'suspended');assert.equal(s.positionSeconds,0);const seen=h.log.length;
+ h.ctx.outputLatency=.03;h.elapse(.3);h.frame(); // By the new estimate tick zero "was" audible at 1.13: it was not heard.
+ assert.ok(Math.abs(h.api.getPlayStatus().latencySeconds-.03)<1e-9,'the new latency is published while paused');
+ assert.deepEqual(h.log.slice(seen),[],'no freeze, no seek');runsFree(h,'still free');
+ await h.api.resume();h.elapse(.01);assert.equal(h.passes.at(-1)?.initial,true);atPlayer(h,'synced once the music is heard');h.api.stop();
+});
+test('real player and notes.js: following that starts frozen (mounted while paused) shows the notes at the held position',async()=>{
+ const h=playerArt();await h.api.play();h.elapse(.6);await h.api.pause();h.elapse(.1);h.frame();
+ const s=h.api.getPlayStatus();assert.equal(s.audioState,'suspended');assert.ok(s.positionSeconds>0);
+ const recorder=()=>{const ops=[];return{ops,g:new Proxy({},{get:(_,k)=>(...args)=>{ops.push([k,...args]);},set:(_,k,v)=>{ops.push(['=',k,v]);return true;}})};};
+ const canvas=g=>({style:{},width:0,height:0,hidden:false,isConnected:true,getContext:()=>g});
+ const midi=riff({ppq:96,us:500000}),host={requestAnimationFrame:()=>1,cancelAnimationFrame(){}};
+ const saved=[globalThis.requestAnimationFrame,globalThis.cancelAnimationFrame];globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
+ try{
+  // Wired as documented: the notes are created first and read the helper's returned clock().
+  const a=recorder();let sync=null;const notes=mountNotes(canvas(a.g),{midi,clock:()=>sync.clock()});a.ops.length=0;
+  const art={pauseAnimations(){},unpauseAnimations(){},setCurrentTime(){},getCurrentTime:()=>0,querySelectorAll:()=>[]};
+  sync=syncSvgToMusic(art,h.api,{host,notes});await Promise.resolve();
+  const b=recorder(),reference=mountNotes(canvas(b.g),{midi,clock:()=>sync.clock()});b.ops.length=0;reference.play();reference.pause();
+  assert.ok(a.ops.length>0);assert.deepEqual(a.ops,b.ops,'drawn exactly as notes played, then paused, at the held position');
+  sync.dispose();
+ }finally{[globalThis.requestAnimationFrame,globalThis.cancelAnimationFrame]=saved;}
+ h.api.stop();
 });
