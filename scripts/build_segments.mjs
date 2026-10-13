@@ -74,12 +74,14 @@ export async function generatedFiles() {
   files.set("tests/fixtures/libraries/manifest.json",JSON.stringify({format:SEGMENT_FORMAT,toolchain:built.record.toolchain,libraries:fixtures},null,2)+"\n");
   const ui = await compile(["../examples/beast_consumer/ui.js"], "startUi");
   const style = "html,body{margin:0;height:100%;overflow:hidden;background:#000}#beast-art{position:fixed;inset:0;width:100%;height:100%;object-fit:contain}button{position:fixed;right:12px;bottom:12px;width:48px;height:48px;padding:12px;border:0;z-index:1;border-radius:50%;background:rgba(0,0,0,.55);box-shadow:0 0 0 1px rgba(255,255,255,.4);color:#fff;cursor:pointer}button:disabled{opacity:.4}button svg{width:100%;height:100%;fill:currentColor}p{position:fixed;left:12px;right:64px;bottom:12px;z-index:1;color:#f88;background:#000;font:12px monospace}";
+  const body = '</head><body><button id="play" aria-label="Play" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path id="icon" d="M8 5v14l11-7z"/></svg></button><p id="error" role="alert" hidden></p>';
   const owned = {
     head: alignedFragment('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><title>Onchain music</title><style>'+style+'</style>'),
-    body: alignedFragment('</head><body><button id="play" aria-label="Play" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path id="icon" d="M8 5v14l11-7z"/></svg></button><p id="error" role="alert" hidden></p>'),
+    body: alignedFragment(body),
     footer: alignedFragment(`<script id="beast-bootstrap">${ui}</script></body></html>`),
   };
-  owned.trusted_body = alignedFragment(owned.body.replace("<body>", '<body data-trusted-art="inline-svg">'));
+  // From the unpadded body: re-aligning the padded one would add a whole block of spaces.
+  owned.trusted_body = alignedFragment(body.replace("<body>", '<body data-trusted-art="inline-svg">'));
   for (const [n,raw] of Object.entries(owned)) files.set(`examples/beast_consumer/fixtures/${n}.html`,raw);
   const ownedCairo = "//! NFT-owned pre-encoded document/UI assets. Generated; independent of the MIDI class.\n"+Object.entries(owned).map(([n,raw])=>cairoBase64Literal(`${n}_segment`,segmentFor(raw),["NFT-owned HTML fragment."])).join("\n\n")+"\n";
   files.set("tests/owned_assets.cairo", ownedCairo);

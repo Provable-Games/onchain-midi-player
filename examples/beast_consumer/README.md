@@ -2,7 +2,7 @@
 
 The NFT owns its complete document, SVG image, styles, title/favicon, controls, anchoring, controlled inline SVG timelines and background/media-session policy. Its generated `owned_assets.cairo` is separate from every TinySynth class constant. `assembly.cairo` directly splices standalone library fragments and runtime metadata/art/data using an encoder compiled into the consumer.
 
-Metadata and initial document art use a complete encoded `<img>`. Only this contract's own renderer opts into `data-trusted-art="inline-svg"`: bootstrap imports trusted Genesis art and pauses the outer and every nested SVG. Generic composition defaults to isolated images for arbitrary/community SVG. A failed library still leaves ordinary art visible.
+Metadata and initial document art use a complete encoded `<img>`. Only this contract's own renderer opts into `data-trusted-art="inline-svg"`: bootstrap imports trusted Genesis art, attaches it, then pauses the outer and every nested SVG (a detached `<svg>` may have no timeline to pause yet). Generic composition defaults to isolated images for arbitrary/community SVG. A failed library still leaves ordinary art visible.
 
 The NFT-owned ▶/❚❚ button suspends/resumes the AudioContext through the public player API. Art waits at zero for estimated audibility on first play, then seeks on resume/pass/latency changes. Optional notes may share the helper clock and transport controls; no notes package or dimming is included. The read-only `OnchainArtMonitor` samples drift and latency events without continuous correction. Its 17 ms display lead is the provisional lab setting, pending [#52](https://github.com/Provable-Games/onchain-midi-player/issues/52) hardware evidence.
 
