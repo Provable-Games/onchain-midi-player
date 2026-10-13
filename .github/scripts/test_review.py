@@ -676,12 +676,27 @@ class ResultTests(Workspace):
                 self.assertFalse(passed)
                 self.assertIn("Codex authentication failed: the org secret CODEX_AUTH_DOT_JSON needs to be "
                               "refreshed (or switch to an API-key credential)", " ".join(messages))
-        for log in ("ERROR: unexpected status 429 Too Many Requests", "thread 'main' panicked", "4010 Unauthorizedx", ""):
+        for log in ("thread 'main' panicked", "4010 Unauthorizedx", "status 4290", "build 503 artifacts", ""):
             with self.subTest(log=log):
                 message = lib.classify_codex_failure("101", log)
                 self.assertNotEqual(message, lib.CODEX_AUTH_FAILURE)
                 self.assertIn("exited with status 101", message)
                 self.assertIn("CODEX_AUTH_DOT_JSON may need to be refreshed", message)
+        # Transient API failures are named from a fixed list; nothing from the log is quoted.
+        transient = {
+            "ERROR: unexpected status 429 Too Many Requests: secret-ish detail": "HTTP 429 Too Many Requests",
+            "stream error: exceeded retry limit, last status: 503 Service Unavailable": "HTTP 503 Service Unavailable",
+            "unexpected status 502 Bad Gateway\nunexpected status 500 Internal Server Error":
+                "HTTP 500 Internal Server Error, HTTP 502 Bad Gateway",
+        }
+        for log, named in transient.items():
+            with self.subTest(log=log[:40]):
+                message = lib.classify_codex_failure("1", log)
+                self.assertEqual(message, f"the Codex CLI exited with status 1 after the API answered {named}; "
+                                          "this is usually transient, so re-run the review")
+                self.assertNotIn("secret-ish", message)
+        self.assertEqual(lib.classify_codex_failure("1", auth_logs[0] + "\nunexpected status 503"),
+                         lib.CODEX_AUTH_FAILURE, "authentication wins over a transient status")
         result, _, completed = self.codex_result(exit_code="1", log_extra=auth_logs[0] + "\n")
         for secret in SECRETS_ENV.values():
             self.assertNotIn(secret, json.dumps(result) + completed.stdout)

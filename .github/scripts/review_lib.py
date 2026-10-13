@@ -176,10 +176,22 @@ def resolve_settings(provider, config, env):
     return {"model": model, "effort": effort, "model_variable": model_var, "effort_variable": effort_var}
 
 
+# Transient API failures the CLI can report ("unexpected status 503 Service Unavailable", "last
+# status: 429"). Only these fixed reason phrases are ever printed, never log text.
+CODEX_HTTP_FAILURES = {"429": "Too Many Requests", "500": "Internal Server Error", "502": "Bad Gateway",
+                       "503": "Service Unavailable", "504": "Gateway Timeout"}
+CODEX_HTTP_RE = re.compile(r"\bstatus:? (" + "|".join(CODEX_HTTP_FAILURES) + r")\b")
+
+
 def classify_codex_failure(exit_code, log):
     """Explain a nonzero Codex exit. The log is matched, never quoted."""
     if CODEX_AUTH_RE.search(log or ""):
         return CODEX_AUTH_FAILURE
+    statuses = sorted(set(CODEX_HTTP_RE.findall(log or "")))
+    if statuses:
+        answered = ", ".join(f"HTTP {code} {CODEX_HTTP_FAILURES[code]}" for code in statuses)
+        return (f"the Codex CLI exited with status {exit_code} after the API answered {answered}; this is "
+                "usually transient, so re-run the review")
     return (f"the Codex CLI exited with status {exit_code}; if its log shows an authentication error, "
             "the org secret CODEX_AUTH_DOT_JSON may need to be refreshed")
 
