@@ -25,7 +25,7 @@ export const SETTINGS_FORMAT_VERSION = 1;
 // are the limits of the format: every slot reachable from MIDI once, every wave `Waveform::Custom(u8)`
 // can index, and 8 operators. A wave's length has none: the engine's custom-wave API takes any
 // non-empty table (fork #26, decision D-028 in docs/improvements/decisions.md of
-// Provable-Games/webaudio-tinysynth), and every count is also checked against the tokens left, so
+// Provable-Games/pocket-synth), and every count is also checked against the tokens left, so
 // a corrupt one fails at once. Cairo's caps (`settings::validate`, and its JS reference
 // player/validate.js) equal these bounds today but are separate constants: a Cairo cap can change
 // within them without changing the page.

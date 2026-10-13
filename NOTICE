@@ -7,7 +7,7 @@ This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 This product embeds a modified version of webaudio-tinysynth by
 Tatsuya Shinyagaito (g200kg), https://github.com/g200kg/webaudio-tinysynth,
 licensed under the Apache License, Version 2.0. The modified version is
-maintained at https://github.com/Provable-Games/webaudio-tinysynth; see that
+maintained as pocket-synth at https://github.com/Provable-Games/pocket-synth; see that
 repository's NOTICE file for the list of modifications.
 
 The player page also embeds a gunzip routine derived from fflate by
