@@ -225,9 +225,13 @@ export function startPlayer(host = window) {
     host.clearTimeout(timer); host.clearInterval(poll); host.clearInterval(latencyPoll); timer = poll = latencyPoll = 0; syncBoundary = () => {};
   };
   const fail = (/** @type {unknown} */ cause) => {
+    // Terminal: a later stale rejection must not replace the first cause.
+    if (state === "failed") return /** @type {Error} */ (error);
     error = cause instanceof Error ? cause : new Error(String(cause));
-    cancelTimers();
+    ++operationId; cancelTimers();
     try { synth?.stopMIDI(); } catch (_) {}
+    // Invalidate in-flight transport and settle it with the real cause before reentrant listeners run.
+    if (pending) { const settle = pending; pending = null; settle.reject(error); }
     transition("failed");
     return error;
   };
@@ -301,7 +305,8 @@ export function startPlayer(host = window) {
     const ctx = audio();
     position(); // Observe clock transitions even when an in-flight transport suppresses state changes.
     if (ctx.state === "closed" && (state === "playing" || state === "paused" || state === "starting")) {
-      ++operationId; abortPending(); fail(new Error("player: AudioContext closed"));
+      // fail() invalidates and rejects pending transport with this cause, not a cancellation.
+      fail(new Error("player: AudioContext closed"));
     } else if (state === "playing" && ctx.state !== "running") {
       host.clearTimeout(timer); timer = 0; transition("paused");
     } else if (state === "paused" && ctx.state === "running" && !pausing && !resumeRequests) {

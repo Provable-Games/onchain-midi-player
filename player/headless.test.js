@@ -144,3 +144,41 @@ test('paused latency callback stop/replay preserves captured position and clears
  assert.equal(seen.find(s=>s.state==='stopped').positionSeconds,null);assert.equal(h.api.getPlayStatus().positionSeconds,0);
  assert.ok(h.api.getPlayStatus().runId>old.runId);assert.equal(h.calls.filter(c=>c==='load').length,2);h.api.stop();
 });
+test('stale re-suspend failure cancels an in-flight resume; failed stays terminal',async()=>{
+ const h=harness(),r1=deferred(),s2=deferred(),r3=deferred();await h.api.play();await h.api.pause();
+ h.ctx.resume=()=>{h.calls.push('resume');return r1.promise.then(()=>h.ctx.change('running'));};
+ h.api.resume().catch(()=>{});await h.api.pause();h.ctx.suspend=()=>{h.calls.push('suspend');return s2.promise;};r1.resolve();await flush();
+ h.ctx.resume=()=>{h.calls.push('resume');return r3.promise.then(()=>h.ctx.change('running'));};
+ let settled='unsettled';h.api.resume().then(()=>{settled='resolved';},e=>{settled=e;});
+ s2.reject(Error('suspend failed'));await flush();assert.equal(h.api.getPlayStatus().state,'failed');r3.resolve();await flush();await flush();
+ const s=h.api.getPlayStatus();assert.equal(s.state,'failed');assert.equal(s.error.message,'suspend failed');assert.equal(settled,s.error);
+ assert.equal(h.intervals.size,0);assert.equal(h.timers.size,0);assert.equal(h.calls.filter(c=>c==='load').length,1);await assert.rejects(h.api.resume(),/suspend failed/);
+});
+test('stale re-suspend failure settles an in-flight play; failed stays terminal',async()=>{
+ const h=harness(),r1=deferred(),s2=deferred(),r3=deferred();h.ctx.resume=()=>{h.calls.push('resume');return r1.promise.then(()=>h.ctx.change('running'));};
+ h.api.play().catch(()=>{});await h.api.pause();h.ctx.suspend=()=>{h.calls.push('suspend');return s2.promise;};r1.resolve();await flush();
+ h.ctx.resume=()=>{h.calls.push('resume');return r3.promise.then(()=>h.ctx.change('running'));};
+ let settled='unsettled';h.api.play().then(()=>{settled='resolved';},e=>{settled=e;});assert.equal(h.api.getPlayStatus().state,'starting');
+ s2.reject(Error('suspend failed'));await flush();r3.resolve();await flush();await flush();
+ const s=h.api.getPlayStatus();assert.equal(s.state,'failed');assert.equal(s.error.message,'suspend failed');assert.equal(settled,s.error);
+ assert.equal(h.intervals.size,0);assert.equal(h.timers.size,0);assert.ok(!h.calls.includes('load'));
+});
+test('a later stale failure keeps the first error',async()=>{
+ const h=harness(),resumes=[deferred(),deferred()],suspends=[deferred(),deferred()];await h.api.play();await h.api.pause();
+ const queue=[...resumes];h.ctx.resume=()=>{h.calls.push('resume');return queue.shift().promise.then(()=>h.ctx.change('running'));};
+ h.api.resume().catch(()=>{});await h.api.pause();h.api.resume().catch(()=>{});await h.api.pause();
+ const stale=[...suspends];h.ctx.suspend=()=>{h.calls.push('suspend');return stale.shift().promise;};
+ resumes[0].resolve();resumes[1].resolve();await flush();assert.equal(stale.length,0,'both late resumes sent a stale suspend');
+ const states=[];h.api.onStateChange(s=>states.push(s.state));
+ suspends[0].reject(Error('first'));await flush();suspends[1].reject(Error('second'));await flush();
+ const s=h.api.getPlayStatus();assert.equal(s.state,'failed');assert.equal(s.error.message,'first');assert.deepEqual(states,['failed']);await assert.rejects(h.api.play(),/first/);
+});
+test('context closure rejects pending play and resume with the failure in status',async()=>{
+ for(const resuming of [false,true]){
+  const r=deferred(),h=harness(resuming?{}:{resume:r});if(resuming){await h.api.play();await h.api.pause();h.ctx.resume=()=>r.promise;}
+  let settled='unsettled';(resuming?h.api.resume():h.api.play()).then(()=>{settled='resolved';},e=>{settled=e;});
+  h.ctx.change('closed');await flush();r.resolve();await flush();
+  const s=h.api.getPlayStatus();assert.equal(s.state,'failed');assert.equal(s.error.message,'player: AudioContext closed');assert.equal(settled,s.error,resuming?'resume':'play');
+  assert.equal(h.intervals.size,0);assert.equal(h.timers.size,0);
+ }
+});
