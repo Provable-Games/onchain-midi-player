@@ -2,9 +2,11 @@
 /**
  * The notes UI: the token's MIDI drawn as a piano roll on a <canvas>, scrolling with the music. An
  * optional UI utility, separate from the player: a page that wants it injects this script beside the
- * player and calls `OnchainMidiNotes.mount(canvas, options)` (onchain-midi-player #59 makes it a
- * segment of its own; until then it is built by `notesScript()` in scripts/build_page.mjs and is not
- * part of PAGE). It reads only the MIDI, a canvas and a clock, never the engine.
+ * player and calls `mount(canvas, options)`. No segment or build includes it yet; how a page gets it
+ * (the prototype built it as `OnchainMidiNotes`) is onchain-midi-player #59's decision. It reads only
+ * the MIDI, a canvas and a clock, never the engine. An NFT drives it like its art: `mountArtSync`'s
+ * `notes` option takes the returned `play`, `pause` and `stop`, and its returned `clock()` is the
+ * notes' `clock`.
  *
  * Notes enter on the right and travel left; a note sounds as it reaches the playhead, near the left
  * edge (`playheadX`). One colour per channel; the drum channel (9, "channel 10") is ticks along a
@@ -14,7 +16,7 @@
  * frames for a hidden page); paused, they hold where they are. The defaults suit the Beasts card (250x350, its art
  * frame at (15, 58), 220x150), so a Beasts page's call is short:
  *
- *   OnchainMidiNotes.mount(canvas, { midi, clock, img })
+ *   mount(canvas, { midi, clock, img })
  *
  * Plain browser JavaScript, no dependencies, no network, no storage. Failing silently is the caller's
  * choice: `mount` throws on a MIDI it cannot read; drawing errors stop the animation.
@@ -23,8 +25,10 @@
 /**
  * Every option of `mount`, with its default.
  * - `midi`: the MIDI file, as bytes or base64 text (surrounding spaces allowed).
- * - `clock`: returns the seconds heard since tick 0 of the first pass (the player's `startTime`
- *   at ▶, the AudioContext's `currentTime` minus its `outputLatency`). Read only while playing.
+ * - `clock`: returns the estimated audible seconds since tick 0 of the first pass, or null when
+ *   there is none (the notes then hold their last reading): the `clock()` that `mountArtSync`
+ *   returns (the player's `positionSeconds` plus the art's display lead), or the player's
+ *   `getPlayStatus().positionSeconds`. Read only while playing.
  * - `img`: the art's <img>, or a function returning the current one (a player that restarts the art
  *   swaps the element). With it, `box` and `hide` are in the art's units (`view`), mapped to where
  *   the <img> draws the art (`object-fit: contain`), and the canvas is inserted just before the
@@ -47,7 +51,7 @@
  */
 export const DEFAULTS = {
   midi: /** @type {Uint8Array | string} */ (""),
-  clock: /** @type {() => number} */ (() => 0),
+  clock: /** @type {() => number | null} */ (() => 0),
   img: /** @type {HTMLImageElement | (() => HTMLImageElement | null) | null} */ (null),
   view: [0, 0, 250, 350],
   box: [15, 58, 220, 150],
@@ -269,7 +273,7 @@ export function mount(canvas, options) {
   const tick = () => {
     frame = 0;
     try {
-      paint((at = o.clock()));
+      paint((at = o.clock() ?? at));
       frame = globalThis.requestAnimationFrame(tick);
     } catch (e) {} // the notes stop where they are
   };

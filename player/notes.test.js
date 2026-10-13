@@ -2,20 +2,18 @@
 // Node tests for the notes UI (player/notes.js): the MIDI-to-bars conversion (against the player's
 // own checkMidi on every fixture), the box mapping, the drawing (playhead, hide clipping, idle and
 // playing opacity, drums) on a recording 2D context, mount's defaults, layout and animation with
-// stubbed browser globals, the art cutout (with @xmldom/xmldom's DOMParser), and the built script.
+// stubbed browser globals, and the art cutout (with @xmldom/xmldom's DOMParser).
 //
 // Run: node --test "player/**/*.test.js" "scripts/**/*.test.mjs"   (or npm test)
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
-import vm from "node:vm";
 import { DEFAULTS, cutout, drawNotes, midiNotes, mount, screenBox } from "./notes.js";
 import { checkMidi } from "./player.js";
-import { smf } from "../scripts/page_fixtures.mjs";
-import { notesScript } from "../scripts/build_page.mjs";
+import { smf } from "../scripts/data_cases.mjs";
 
-const fixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/page.json", import.meta.url), "utf8"));
+const fixtures = JSON.parse(readFileSync(new URL("../tests/fixtures/data.json", import.meta.url), "utf8"));
 
 /** A song: 96 ticks per beat, 120 BPM then 60 BPM from tick 192; two melodic channels and drums. */
 const SONG = new Uint8Array(smf({
@@ -106,7 +104,7 @@ describe("drawNotes: one frame", () => {
   const o = { ...DEFAULTS, drumColor: DRUM };
   const [w, h] = [o.box[2], o.box[3]];
   const k = w / (o.beats * roll.beat); // units per second
-  const now = o.playheadX * w;
+  const now = /** @type {number} */ (o.playheadX) * w;
   test("standing still at 0: the opening notes from the playhead on, muted, and a faint playhead line", () => {
     const { g, ops } = recorder();
     drawNotes(g, roll, o, 0, false);
@@ -253,7 +251,7 @@ describe("mount: defaults, layout and animation", () => {
       const m = mount(c, { midi: SONG, clock: () => t });
       m.play();
       assert.equal(frames.length, 1);
-      const line = () => fills(ops).findLast((op) => op[1] === "#fff")[2]; // the playhead's alpha in the latest frame
+      const line = () => fills(ops).filter((op) => op[1] === "#fff").at(-1)[2]; // the playhead's alpha in the latest frame
       assert.equal(line(), 0.3, "drawn playing");
       t = 0.75;
       const before = ops.length;
@@ -274,7 +272,7 @@ describe("mount: defaults, layout and animation", () => {
       const { c, ops } = canvas();
       let t = 1;
       const m = mount(c, { midi: SONG, clock: () => t });
-      const latest = () => fills(ops.slice(ops.findLastIndex((op) => op[0] === "clear")));
+      const latest = () => fills(ops.slice(ops.map((op) => op[0]).lastIndexOf("clear")));
       m.play();
       const playing = latest();
       t = 1.5;
@@ -287,6 +285,24 @@ describe("mount: defaults, layout and animation", () => {
       m.play();
       assert.equal(frames.length, 2, "resumed");
       assert.notDeepEqual(latest(), playing, "drawn at the clock's new reading");
+    } finally {
+      restore();
+    }
+  });
+  test("a clock with no reading (null) holds the last frame", () => {
+    const { frames, restore } = browser();
+    try {
+      const { c, ops } = canvas();
+      /** @type {number | null} */
+      let t = 1;
+      const m = mount(c, { midi: SONG, clock: () => t });
+      const latest = () => fills(ops.slice(ops.map((op) => op[0]).lastIndexOf("clear")));
+      m.play();
+      const held = latest();
+      t = null;
+      frames[0]();
+      assert.equal(frames.length, 2, "still playing");
+      assert.deepEqual(latest(), held, "drawn at the last reading, not at 0");
     } finally {
       restore();
     }
@@ -311,7 +327,7 @@ describe("cutout: the page's copy of the art", () => {
     try {
       const body = "<title>t</title><animate attributeName='opacity' dur='2s' values='1;.99'/><rect id='card' width='250' height='350' fill='#123'/>" +
         "<text>name</text><rect id='frame' data-notes-bg='' x='15' y='58' width='220' height='156' rx='8' fill='#000'/><g id='beast'/><rect id='rim'/>";
-      const root = new DOMParser().parseFromString(cutout(card(body)), "image/svg+xml").documentElement;
+      const root = /** @type {any} */ (new DOMParser().parseFromString(cutout(card(body)), "image/svg+xml").documentElement);
       const kids = Array.from(/** @type {any} */ (root.childNodes)).map((/** @type {any} */ e) => e.localName + (e.getAttribute("id") ? "#" + e.getAttribute("id") : ""));
       assert.deepEqual(kids, ["title", "animate", "mask#onchain-midi-notes", "g", "g#beast", "rect#rim"]);
       const [mask, g] = /** @type {any[]} */ ([root.childNodes[2], root.childNodes[3]]);
@@ -326,15 +342,4 @@ describe("cutout: the page's copy of the art", () => {
       for (const k of ["DOMParser", "XMLSerializer"]) delete (/** @type {any} */ (globalThis))[k];
     }
   });
-});
-
-test("the built script (notesScript): printable ASCII, safe inside <script>, defines OnchainMidiNotes", async () => {
-  const code = await notesScript();
-  assert.ok(!/[^\x20-\x7e]/.test(code));
-  assert.ok(!/<\/script|<script|<!--/i.test(code));
-  /** @type {any} */
-  const window = {};
-  vm.runInNewContext(code, { window });
-  assert.deepEqual(Object.keys(window.OnchainMidiNotes), ["mount", "cutout", "DEFAULTS"]);
-  assert.equal(JSON.stringify(window.OnchainMidiNotes.DEFAULTS.box), "[15,58,220,150]");
 });
