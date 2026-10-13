@@ -225,6 +225,8 @@ export function startPlayer(host = window) {
     host.clearTimeout(timer); host.clearInterval(poll); host.clearInterval(latencyPoll); timer = poll = latencyPoll = 0; syncBoundary = () => {};
   };
   const fail = (/** @type {unknown} */ cause) => {
+    // Terminal: a later stale rejection must not replace the first cause.
+    if (state === "failed") return /** @type {Error} */ (error);
     error = cause instanceof Error ? cause : new Error(String(cause));
     ++operationId; cancelTimers();
     try { synth?.stopMIDI(); } catch (_) {}

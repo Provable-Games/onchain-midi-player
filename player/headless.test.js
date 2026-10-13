@@ -163,3 +163,13 @@ test('stale re-suspend failure settles an in-flight play; failed stays terminal'
  const s=h.api.getPlayStatus();assert.equal(s.state,'failed');assert.equal(s.error.message,'suspend failed');assert.equal(settled,s.error);
  assert.equal(h.intervals.size,0);assert.equal(h.timers.size,0);assert.ok(!h.calls.includes('load'));
 });
+test('a later stale failure keeps the first error',async()=>{
+ const h=harness(),resumes=[deferred(),deferred()],suspends=[deferred(),deferred()];await h.api.play();await h.api.pause();
+ const queue=[...resumes];h.ctx.resume=()=>{h.calls.push('resume');return queue.shift().promise.then(()=>h.ctx.change('running'));};
+ h.api.resume().catch(()=>{});await h.api.pause();h.api.resume().catch(()=>{});await h.api.pause();
+ const stale=[...suspends];h.ctx.suspend=()=>{h.calls.push('suspend');return stale.shift().promise;};
+ resumes[0].resolve();resumes[1].resolve();await flush();assert.equal(stale.length,0,'both late resumes sent a stale suspend');
+ const states=[];h.api.onStateChange(s=>states.push(s.state));
+ suspends[0].reject(Error('first'));await flush();suspends[1].reject(Error('second'));await flush();
+ const s=h.api.getPlayStatus();assert.equal(s.state,'failed');assert.equal(s.error.message,'first');assert.deepEqual(states,['failed']);await assert.rejects(h.api.play(),/first/);
+});
