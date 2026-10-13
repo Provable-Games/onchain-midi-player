@@ -383,6 +383,10 @@ describe("mount: defaults, layout and animation", () => {
 
 describe("cutout: the page's copy of the art", () => {
   const card = (/** @type {string} */ body) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 250 350'>${body}</svg>`;
+  /** The masked group's style: everything inherited from the root, then each non-inherited property that renders reset, and the mask. */
+  const WRAPPER = "all:inherit!important;direction:inherit!important;display:inline!important;opacity:1!important;filter:none!important;transform:none!important;" +
+    "translate:none!important;rotate:none!important;scale:none!important;clip-path:none!important;mask:url(#onchain-midi-notes)!important;" +
+    "mix-blend-mode:normal!important;isolation:auto!important;animation:none!important;transition:none!important;text-decoration:none!important";
   test("the root's children up to the data-notes-bg one are masked by its shape; titles, animations and later ones stay", async () => {
     const { DOMParser, XMLSerializer } = await import("@xmldom/xmldom");
     Object.assign(globalThis, { DOMParser, XMLSerializer });
@@ -442,10 +446,30 @@ describe("cutout: the page's copy of the art", () => {
       assert.deepEqual(["x", "y", "width", "height", "fill"].map((a) => styled.base.getAttribute(a)), ["-10000", "-10000", "20000", "20000", "#fff"], "its geometry and fill attribute stay");
       assert.equal(styled.mask.getAttribute("style"), "mask-type:luminance!important", "a luminance mask, whatever a mask rule says");
       assert.deepEqual(["id", "maskUnits", "x", "y", "width", "height"].map((a) => styled.mask.getAttribute(a)), ["onchain-midi-notes", "userSpaceOnUse", "-10000", "-10000", "20000", "20000"]);
-      assert.equal(styled.g.getAttribute("style"), "mask:url(#onchain-midi-notes)!important;opacity:1!important;filter:none!important;transform:none!important", "masked, and otherwise plain, whatever a g rule says");
+      assert.equal(styled.g.getAttribute("style"), WRAPPER, "masked, and otherwise transparent, whatever a g rule says");
       assert.equal(styled.g.getAttribute("mask"), "url(#onchain-midi-notes)");
       const plain = parts("<rect id='card' width='250' height='350'/>" + frame);
       assert.deepEqual([plain.base, plain.mask, plain.g].map((e) => e.getAttribute("style")), [styled.base, styled.mask, styled.g].map((e) => e.getAttribute("style")), "the same declarations without a stylesheet");
+    } finally {
+      for (const k of ["DOMParser", "XMLSerializer"]) delete (/** @type {any} */ (globalThis))[k];
+    }
+  });
+  test("the masked group is transparent: a g rule (display, fill, opacity) reaches none of the children moved into it", async () => {
+    const { DOMParser, XMLSerializer } = await import("@xmldom/xmldom");
+    Object.assign(globalThis, { DOMParser, XMLSerializer });
+    try {
+      const body = "<title>t</title><style>g{display:none;fill:red;opacity:.5}</style><rect id='card' width='250' height='350'/><text>name</text>" +
+        "<rect data-notes-bg='' x='15' y='58' width='220' height='150' fill='#000'/><g id='beast'/>";
+      const root = /** @type {any} */ (new DOMParser().parseFromString(cutout(card(body)), "image/svg+xml").documentElement);
+      const kids = Array.from(root.childNodes);
+      const g = kids.find((/** @type {any} */ e) => e.localName === "g" && e.getAttribute("mask"));
+      assert.equal(g.getAttribute("style"), WRAPPER, "inherits from the root, not from the g rule; renders nothing of its own but the mask");
+      assert.ok(g.getAttribute("style").startsWith("all:inherit!important;"), "all first: each later longhand overrides it");
+      assert.equal(g.getAttribute("mask"), "url(#onchain-midi-notes)", "the mask attribute stays");
+      assert.deepEqual(Array.from(g.childNodes).map((/** @type {any} */ e) => e.getAttribute("id") || e.localName), ["style", "card", "text", "rect"], "the moved children");
+      const mask = kids.find((/** @type {any} */ e) => e.localName === "mask");
+      assert.equal(mask.getAttribute("style"), "mask-type:luminance!important", "the mask: unchanged");
+      assert.equal(mask.childNodes[0].getAttribute("style"), "fill:#fff!important;stroke:none!important;fill-opacity:1!important;opacity:1!important;filter:none!important;display:inline!important;visibility:visible!important;transform:none!important", "its base: unchanged");
     } finally {
       for (const k of ["DOMParser", "XMLSerializer"]) delete (/** @type {any} */ (globalThis))[k];
     }

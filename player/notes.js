@@ -333,9 +333,11 @@ export function mount(canvas, options) {
  * a `data-notes-bg` child of the root. The `image` a marketplace shows is not touched: only the
  * page's copy. Uses the browser's DOMParser and XMLSerializer.
  * The generated mask, its white base and the masked group carry inline `!important` declarations,
- * so the art's own stylesheet (a `rect`, `mask` or `g` rule, say) cannot restyle them. Selectors
- * that depend on structure (`svg > rect`, `:nth-child`, sibling combinators) may still match
- * differently once those children are grouped.
+ * so the art's own stylesheet (a `rect`, `mask` or `g` rule, say) cannot restyle them. The group
+ * takes every inherited property from the root, as its children did, and adds only the mask.
+ * Custom properties a `g` rule sets still reach those children, and selectors that depend on
+ * structure (`svg > rect`, `:nth-child`, sibling combinators) may match differently once they are
+ * grouped.
  * @param {string} svg
  */
 export function cutout(svg) {
@@ -366,8 +368,14 @@ export function cutout(svg) {
   // remove it, and with it the art in the group).
   mask.appendChild(make("rect", { ...all, fill: "#fff", style: "fill:#fff!important;stroke:none!important;fill-opacity:1!important;opacity:1!important;filter:none!important;display:inline!important;visibility:visible!important;transform:none!important" }));
   mask.appendChild(hole);
-  // The group is not part of the art: a g rule's opacity, filter or transform must not apply to it.
-  const g = make("g", { mask: "url(#onchain-midi-notes)", style: "mask:url(#onchain-midi-notes)!important;opacity:1!important;filter:none!important;transform:none!important" });
+  // The group is not part of the art: its children render as they did as root children, whatever a
+  // g rule says. Every inherited property comes from the root (all, plus direction, which all
+  // leaves out). Then each non-inherited one that renders on a group is reset, or the root's own
+  // value (an opacity, a transform, an animation) would apply twice; later longhands beat all. It
+  // adds only the mask.
+  const transparent = ["all:inherit", "direction:inherit", "display:inline", "opacity:1", "filter:none", "transform:none", "translate:none", "rotate:none", "scale:none",
+    "clip-path:none", "mask:url(#onchain-midi-notes)", "mix-blend-mode:normal", "isolation:auto", "animation:none", "transition:none", "text-decoration:none"];
+  const g = make("g", { mask: "url(#onchain-midi-notes)", style: transparent.map((d) => d + "!important").join(";") });
   const next = el.nextSibling;
   for (let n = root.firstChild; n && n != next;) {
     const after = n.nextSibling;
