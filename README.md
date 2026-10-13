@@ -1,4 +1,4 @@
-# Onchain MIDI library
+# Onchain MIDI Player
 
 `TinySynth` is a storage-free Starknet class, declared and called with `library_call`. The 0.7.0 class supplies independently composable, offline browser libraries. NFTs own their JSON, complete HTML document, art and UI.
 
