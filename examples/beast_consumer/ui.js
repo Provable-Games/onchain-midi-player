@@ -1,5 +1,6 @@
 // @ts-check
 // NFT-owned visual and background-audio helpers.
+import { REFERENCE_DISPLAY_LEAD_SECONDS, artTime, restartImgOnPass, syncSvgToMusic } from "./art_sync.js";
 export const PLAY_ICON = "M8 5v14l11-7z";
 export const PAUSE_ICON = "M6 5h4v14H6zM14 5h4v14h-4z";
 /**
@@ -57,102 +58,45 @@ export function silentWav() {
 }
 
 
-// Provisional NFT reference policy: lab value, pending physical display/audio checks in #52.
-export const REFERENCE_DISPLAY_LEAD_SECONDS = 0.017;
 /**
- * Control every trusted inline SVG timeline with the player's shared audible clock.
- * Optional NFT-owned notes implement play/pause/stop and use clock() below. No correction loop:
- * seeks happen only on start, resume, pass boundaries, accepted latency changes and suspension.
- * A pause stays audible until the AudioContext's suspend completes: running art runs on and
- * freezes at the player's held position, where the audio actually stopped.
+ * NFT-owned, read-only lab instrumentation (`window.OnchainArtMonitor`, read by the browser checks),
+ * kept apart from the sync itself. After a run's first pass event (subscribe after
+ * syncSvgToMusic, which seeks there), it samples every frame, while the music plays, how far each
+ * SVG timeline is from artTime(): the drift now and the largest so far, and the drift right after
+ * that first seek. It also records each latency update. It never seeks: there is no drift correction.
  * @param {SVGSVGElement} root
  * @param {import('../../player/api.d.ts').OnchainMidiApi} player
- * @param {{host?: any, notes?: any, displayLead?: number}} [options]
+ * @param {{host?: {requestAnimationFrame(f: () => void): number, cancelAnimationFrame(id: number): void}, displayLead?: number}} [options]
  */
-export function mountArtSync(root, player, { host = window, notes = null, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS } = {}) {
-  const timelines = [root, ...root.querySelectorAll('svg')];
-  let frame = 0, active = false, suspending = false, revision = -1, started = false, runId = -1;
-  let currentDrift = 0, maxDrift = 0;
+export function monitorArtSync(root, player, { host = window, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS } = {}) {
+  const timelines = [root, ...root.querySelectorAll("svg")];
+  let currentDrift = 0, maxDrift = 0, frame = 0, syncedRun = -1, revision = player.getPlayStatus().latencyRevision;
   /** @type {number | null} */ let initialAlignment = null;
   /** @type {{audioTime: number | null, latencySeconds: number, revision: number}[]} */ const latencyEvents = [];
-  const monitor = () => Object.freeze({ currentDrift, maxDrift, initialAlignment,
-    latencyEvents: Object.freeze(latencyEvents.map(event => Object.freeze({ ...event }))) });
-  const clock = (s = player.getPlayStatus()) => {
-    return s.positionSeconds === null ? null : Math.max(0, s.positionSeconds + displayLead);
-  };
-  const phase = (s = player.getPlayStatus()) => {
-    const position = clock(s);
-    return position === null ? 0 : s.passSeconds ? position % s.passSeconds : position;
-  };
-  const pause = () => {
-    host.cancelAnimationFrame(frame); frame = 0; active = suspending = false;
-    for (const svg of timelines) svg.pauseAnimations();
-    notes?.pause();
-  };
-  const seek = (s = player.getPlayStatus()) => { const position = phase(s); for (const svg of timelines) svg.setCurrentTime(position); };
-  const sample = (s = player.getPlayStatus()) => {
-    const expected = phase(s);
+  const sample = () => {
+    frame = 0;
+    const s = player.getPlayStatus();
+    if (s.runId !== syncedRun || s.state !== "playing" || s.audioState !== "running") return;
+    const expected = artTime(s, displayLead);
     for (const svg of timelines) {
       let drift = svg.getCurrentTime() - expected;
       if (s.passSeconds) drift -= Math.round(drift / s.passSeconds) * s.passSeconds;
       if (svg === root) currentDrift = drift;
       maxDrift = Math.max(maxDrift, Math.abs(drift));
     }
+    frame = host.requestAnimationFrame(sample);
   };
-  const tick = () => {
-    frame = 0;
-    const s = player.getPlayStatus();
-    if (s.audioState !== 'running' || (s.state !== 'playing' && !suspending)) {
-      // The audio stopped: freeze, then seek to the held position where it stopped.
-      pause(); if (started && s.state !== 'stopped' && s.state !== 'failed') seek(s);
-      return;
-    }
-    if (!started) {
-      // On play: freeze at zero until tick zero reaches its estimated audible start.
-      const ready = s.originTime !== null && s.audioTime !== null && s.audioTime >= s.originTime + s.latencySeconds;
-      if (ready) {
-        seek(s); for (const svg of timelines) svg.unpauseAnimations(); notes?.play();
-        started = true; sample(s); initialAlignment ??= currentDrift;
-      }
-    } else sample(s); // Read-only drift observation; never seeks or changes compensation here.
-    frame = host.requestAnimationFrame(tick);
-  };
-  const synchronize = (s = player.getPlayStatus()) => {
-    // State notifications are captured snapshots: an earlier listener may already have replayed.
-    if (runId !== s.runId) {
-      runId = s.runId; started = false; pause();
-      for (const svg of timelines) svg.setCurrentTime(0);
-      notes?.stop();
-    }
-    if (revision !== s.latencyRevision) {
-      if (revision >= 0) latencyEvents.push({ audioTime: s.audioTime, latencySeconds: s.latencySeconds, revision: s.latencyRevision });
-      revision = s.latencyRevision;
-      if (started && s.state === 'playing' && s.audioState === 'running') seek(s);
-    }
-    if (s.state !== 'playing' || s.audioState !== 'running') {
-      // A pending suspend is still audible: active art runs on until tick() sees the audio stop.
-      if (s.state === 'paused' && s.audioState === 'running' && active) { suspending = true; return; }
-      pause();
-      if (s.state === 'stopped') { started = false; for (const svg of timelines) svg.setCurrentTime(0); notes?.stop(); }
-      // A terminal audio failure releases trusted art to animate independently.
-      if (s.state === 'failed') for (const svg of timelines) svg.unpauseAnimations();
-      else if (started && s.audioState !== 'running') seek(s); // Already suspended: freeze at the held position.
-      return;
-    }
-    if (!active) {
-      active = true;
-      if (started) { seek(s); for (const svg of timelines) svg.unpauseAnimations(); notes?.play(); }
-      frame = host.requestAnimationFrame(tick);
-    } else if (suspending) {
-      // Resumed before tick() saw the suspension: the art ran on while the audio was held.
-      suspending = false; if (started) seek(s);
-    }
-  };
-  for (const svg of timelines) { svg.pauseAnimations(); svg.setCurrentTime(0); }
-  const offState = player.onStateChange(synchronize);
-  const offPass = player.onPassStart(() => { if (started && active) seek(); });
-  synchronize();
-  return Object.freeze({ clock, getMonitor: monitor, dispose() { pause(); offState(); offPass(); } });
+  player.onPassStart((event) => {
+    if (event.runId === syncedRun) return;
+    syncedRun = event.runId; host.cancelAnimationFrame(frame); sample(); initialAlignment ??= currentDrift;
+  });
+  player.onStateChange((s) => {
+    if (s.latencyRevision !== revision) latencyEvents.push({ audioTime: s.audioTime, latencySeconds: s.latencySeconds, revision: s.latencyRevision });
+    revision = s.latencyRevision;
+    if (!frame) sample();
+  });
+  return () => Object.freeze({ currentDrift, maxDrift, initialAlignment,
+    latencyEvents: Object.freeze(latencyEvents.map((event) => Object.freeze({ ...event }))) });
 }
 
 /** NFT bootstrap. Only the player API owns sound/timing; all media and visual policy is here. */
@@ -181,9 +125,8 @@ export async function startUi() {
       if (root.localName === "svg" && root.namespaceURI === "http://www.w3.org/2000/svg") {
         const inline = /** @type {SVGSVGElement} */ (/** @type {unknown} */ (document.importNode(root, true)));
         inline.id = "beast-art";
-        // Attached first: a detached <svg> may have no timeline to pause yet. No paint runs in between.
+        // It animates from page load; syncSvgToMusic below seeks it once the music is audible.
         art.replaceWith(inline); art = inline;
-        for (const timeline of [inline, ...inline.querySelectorAll("svg")]) { timeline.pauseAnimations(); timeline.setCurrentTime(0); }
       }
     }
 
@@ -219,11 +162,7 @@ export async function startUi() {
 
     let playing = false, resuming = false;
     try { await window.OnchainLibraries.ready; if (!window.OnchainMidiPlayer) throw new Error("player: library did not load"); await window.OnchainMidiPlayer.ready; }
-    catch (e) {
-      fail(e);
-      if (art instanceof SVGSVGElement) for (const timeline of [art, ...art.querySelectorAll("svg")]) timeline.unpauseAnimations();
-      return;
-    }
+    catch (e) { fail(e); return; }
     const player = window.OnchainMidiPlayer;
     /** @type {HTMLAudioElement | null} the silent element of the media session */
     let silent = null;
@@ -312,10 +251,13 @@ export async function startUi() {
       }, e => { resuming = false; if (e.name !== "AbortError") { setPlaying(false); fail(e); } });
       return promise;
     };
+    // Art synced to the music (art_sync.js): trusted inline SVG is seeked, an isolated image restarted.
     if (art instanceof SVGSVGElement) {
-      const sync = mountArtSync(art, player);
-      // NFT-owned, read-only instrumentation for lab/browser acceptance.
-      Object.defineProperty(window, "OnchainArtMonitor", { configurable: true, get: sync.getMonitor });
+      syncSvgToMusic(art, player);
+      Object.defineProperty(window, "OnchainArtMonitor", { configurable: true, get: monitorArtSync(art, player) });
+    } else if (art) {
+      // Each restarted <img> replaces the art: the button follows the new one.
+      restartImgOnPass(art, player, { onSwap: (img) => { art = img; watch(img); } });
     }
     player.onStateChange(status => {
       if (status.state === "playing" || status.state === "stopped" || status.state === "failed") resuming = false;

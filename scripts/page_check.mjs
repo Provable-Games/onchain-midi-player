@@ -17,9 +17,11 @@ try {
  assert.equal(ready.created,0);assert.equal(ready.fixture,"fixture:ready");assert.equal(ready.dependent,"fixture:dependent");assert.equal(ready.state.state,"stopped");
  await o.page.click("#play");await o.page.waitForFunction(()=>window.OnchainMidiPlayer.getPlayStatus().state==="playing");
  await o.page.waitForFunction(()=>window.__check.passes.length>0,{timeout:10000});
- const played=await o.page.evaluate(()=>({passes:window.__check.passes,calls:window.__check.calls,art:document.getElementById("beast-art")?.src,media:window.__check.media?.paused,status:window.OnchainMidiPlayer.getPlayStatus(),firstPlay:window.__check.playingAt-window.__check.gestureAt,anchor:document.getElementById("play").getBoundingClientRect().toJSON(),artwork:navigator.mediaSession?.metadata?.artwork}));
+ // Isolated art restarts at each pass: a fresh copy with a distinct data URL replaces the image once decoded.
+ await o.page.waitForFunction(()=>/^data:image\/svg\+xml;r=\d+;base64,/.test(document.getElementById("beast-art")?.src),{timeout:10000});
+ const played=await o.page.evaluate(()=>({passes:window.__check.passes,calls:window.__check.calls,art:document.getElementById("beast-art")?.src,images:document.querySelectorAll("img#beast-art").length,media:window.__check.media?.paused,status:window.OnchainMidiPlayer.getPlayStatus(),firstPlay:window.__check.playingAt-window.__check.gestureAt,anchor:document.getElementById("play").getBoundingClientRect().toJSON(),artwork:navigator.mediaSession?.metadata?.artwork}));
  assert.ok(played.calls.indexOf("prewarm")<played.calls.indexOf("resume"));assert.equal(played.passes[0].initial,true);
- assert.ok(played.passes[0].audioTime >= played.passes[0].audibleTime-.02);assert.ok(/^data:image\/svg\+xml;(?:r=\d+;)?base64,/.test(played.art));assert.equal(played.media,false);
+ assert.ok(played.passes[0].audioTime >= played.passes[0].audibleTime-.02);assert.ok(/^data:image\/svg\+xml;r=\d+;base64,/.test(played.art));assert.equal(played.images,1);assert.equal(played.media,false);
  if(c.name==="full_warlock"){assert.ok(played.anchor.width>=44&&played.anchor.width<=128);await o.page.waitForFunction(()=>navigator.mediaSession.metadata?.artwork.length===2);}
  await o.page.click("#play");await o.page.waitForFunction(()=>window.OnchainMidiPlayer.getPlayStatus().state==="paused");
  const stopped=await o.page.evaluate(()=>({count:window.__check.passes.length,media:window.__check.media.paused,states:window.__check.states.map(s=>s.state).filter((state,i,list)=>i===0||state!==list[i-1]),violations:window.__check.violations}));
@@ -72,7 +74,7 @@ try {
  {const c=fixtureCase("beast_140bpm"),svg=c.svg.replace('</svg>','<script>window.artInjection=true</script><desc><![CDATA[</SCRIPT>]]></desc></svg>');
  const o=await run.page();try{await o.page.goto(dataUrl(composed({...c,svg})));await waitReady(o.page);assert.equal(await o.page.evaluate(()=>window.artInjection),undefined);assert.equal(await o.page.locator('#beast-art').count(),1);assert.deepEqual(await o.errors(),[]);}finally{await o.context.close();}}
  for(const name of ["player"]){const o=await run.page();try{await o.page.goto(dataUrl(withoutBlock(composed(),name)));await o.page.waitForFunction(()=>!document.getElementById("error").hidden);assert.equal(await o.page.locator('#beast-art').count(),1);assert.ok(await o.page.locator('#play').isDisabled());assert.equal(await o.page.evaluate(()=>window.__check.created),0);}finally{await o.context.close();}console.log(`PASS missing ${name}: art stays visible`);}
- // Trusted inline art recovers its own animation clocks when MIDI readiness fails.
+ // Trusted inline art keeps animating on its own clocks when MIDI readiness fails.
  {const o=await run.page();try{
    const c=fixtureCase('beast_140bpm'),svg='<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect><svg><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect></svg></svg>';
    await o.page.goto(dataUrl(withoutBlock(composed({...c,svg},{fixture:true,dependent:true,trustedArt:true}),'player')));
@@ -80,14 +82,15 @@ try {
    assert.ok(await o.page.locator('#play').isDisabled());
    const paused=await o.page.evaluate(()=>{const root=document.getElementById('beast-art');return[root,...root.querySelectorAll('svg')].map(s=>s.animationsPaused());});
    assert.deepEqual(paused,[false,false]);assert.equal(await o.page.evaluate(()=>window.__check.created),0);
-   assert.deepEqual(await o.errors(),[]);console.log('PASS missing player: trusted outer/nested SVG animations recover');
+   assert.deepEqual(await o.errors(),[]);console.log('PASS missing player: trusted outer/nested SVG animations keep running');
  }finally{await o.context.close();}}
  // Public engine resume rejection is a terminal player failure, with independently running art.
  {const o=await run.page();try{
    const c=fixtureCase('beast_140bpm'),svg='<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect><svg><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect></svg></svg>';
    await o.page.goto(dataUrl(composed({...c,svg},{fixture:true,dependent:true,trustedArt:true})));await waitReady(o.page);
-   await o.page.click('#play');await o.page.waitForFunction(()=>!document.getElementById('beast-art').animationsPaused());
-   await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='paused');
+   // Synced at the initial pass, then paused: frozen where the audio stopped.
+   await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing'&&window.__check.passes.length>0);
+   await o.page.click('#play');await o.page.waitForFunction(()=>{const root=document.getElementById('beast-art');return OnchainMidiPlayer.getPlayStatus().state==='paused'&&[root,...root.querySelectorAll('svg')].every(s=>s.animationsPaused());});
    await o.page.evaluate(()=>{window.__check.synth.resume=()=>Promise.reject(Error('fixture resume failure'));});
    await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='failed'&&!document.getElementById('error').hidden);
    assert.ok(await o.page.locator('#play').isDisabled());assert.match(await o.page.locator('#error').textContent(),/fixture resume failure/);
