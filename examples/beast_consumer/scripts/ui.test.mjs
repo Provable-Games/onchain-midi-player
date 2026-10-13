@@ -24,10 +24,10 @@ describe("the play button's anchor on the art (playAnchor)", () => {
     assert.deepEqual(playAnchor(card(BEAST), full(1250, 1750), 1250, 1750, S44), { left: 1017, top: 852, size: 128 }); // scale 5: 160 clamped to 128, inset 30
   });
   test("the shipped limits (16-128 px) keep the diameter proportional to the art: S times its scale", () => {
-    const SHIPPED = { min: 16, max: 128 }, PHONE = "viewBox='0 0 250 350' data-play-anchor='235 58 18 top-right'";
-    // the Beasts card's anchor: 18 units at scale 1 is 18 px, at scale 2 is 36 px; never below 16 px
-    assert.deepEqual(playAnchor(card(PHONE), full(250, 350), 250, 350, SHIPPED), { left: 235 - 6 - 18, top: 58 + 6, size: 18 });
-    assert.deepEqual(playAnchor(card(PHONE), full(500, 700), 500, 700, SHIPPED), { left: 470 - 12 - 36, top: 116 + 12, size: 36 });
+    const SHIPPED = { min: 16, max: 128 }, PHONE = "viewBox='0 0 250 350' data-play-anchor='235 58 24 top-right'";
+    // the Beasts card's anchor: 24 units at scale 1 is 24 px, at scale 2 is 48 px; never below 16 px
+    assert.deepEqual(playAnchor(card(PHONE), full(250, 350), 250, 350, SHIPPED), { left: 235 - 6 - 24, top: 58 + 6, size: 24 });
+    assert.deepEqual(playAnchor(card(PHONE), full(500, 700), 500, 700, SHIPPED), { left: 470 - 12 - 48, top: 116 + 12, size: 48 });
     assert.deepEqual(playAnchor(card(PHONE), full(125, 175), 125, 175, SHIPPED), { left: 118 - 3 - 16, top: 29 + 3, size: 16 });
     // without S, the 48 px default
     assert.deepEqual(playAnchor(card("viewBox='0 0 250 350' data-play-anchor='235 202'"), full(250, 350), 250, 350, SHIPPED), { left: 235 - 6 - 48, top: 202 - 6 - 48, size: 48 });
