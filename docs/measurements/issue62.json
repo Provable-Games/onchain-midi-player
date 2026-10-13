@@ -2489,5 +2489,299 @@
       "applicable provider/mainnet qualification",
       "separately authorized declaration/deployment/release actions"
     ]
+  },
+  "terminal_failure_transport_candidate_refresh": {
+    "capture_date_utc": "2026-10-12",
+    "reviewed_parent_commit": "9b5084499d424a5fd85513da43d15b589626a0f4",
+    "issue": "#67 item A1",
+    "scope": "New combined headless player payload: a terminal failure invalidates in-flight transport and rejects a pending play()/resume() with the failure cause, so a late engine resume cannot leave failed or leave its promise unsettled. The candidate remains unissued/undeployed; only its 0.6.0 entry was explicitly replaced, with the normal immutable-version guard intact and 0.5.0 bytes preserved.",
+    "superseded_candidate_record": {
+      "format": 1,
+      "fixed_alignment": 279,
+      "dynamic_alignment": 9,
+      "toolchain": {
+        "fflate": "0.8.3",
+        "terser": "5.51.2",
+        "minify": {
+          "ecma": 2020,
+          "compress": {
+            "passes": 2,
+            "ecma": 2020
+          },
+          "mangle": true,
+          "format": {
+            "ascii_only": true,
+            "ecma": 2020
+          }
+        },
+        "gzip": {
+          "level": 9,
+          "mtime": 0
+        }
+      },
+      "inputs": {
+        "player/gunzip.js": {
+          "sha256": "17945521b35cd5cf1e454518ac8d849e47ea8bcfd9d796eb7cfc685ab9bb43f1",
+          "bytes": 13156
+        },
+        "player/settings.js": {
+          "sha256": "b054bbac7bfacb5f3778ce5a08cc407bdf2ce657a974c81595d2ba8b4be6542e",
+          "bytes": 12898
+        },
+        "player/player.js": {
+          "sha256": "71128031a7e0072760c2bf95b3aed00c380d2c5c4f533a239bb1daff012f5643",
+          "bytes": 22238
+        }
+      },
+      "engine_build": {
+        "provisional": false,
+        "sourceCommit": "8fd8b94c8bb1fd2df3d144404620520c4b7f3725",
+        "distributionCommit": "2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a",
+        "ciRun": "https://github.com/Provable-Games/webaudio-tinysynth/actions/runs/38269640215",
+        "sourceMapSha256": "55d24636b60db7a6b7d16b557dc7eb89a387580ce2978d8d10e9054ef33ce60c",
+        "sourceSha256": "8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7",
+        "recipe": "node scripts/build.js <output-dir>",
+        "recipeSha256": "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
+        "packageLockSha256": "67402d41acd7d49ed3c1a1f689e7f91a81bff1b7dc1727b355d1d3b3dec4197d",
+        "terser": "5.51.2"
+      },
+      "engine_ref": "2cb8b40",
+      "engine_commit": "2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a",
+      "script_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+      "artifacts": {
+        "gunzip": {
+          "source_sha256": "9077d45fe8ad01be4379f4e4a7eaabcc0318aa429ef256160be2e194ae888052",
+          "source_len": 4524,
+          "raw_sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+          "raw_len": 4743,
+          "returned_sha256": "869be0afd09b9b8416b1f306a166a518e48ce4397d4d01b82ef004e934f6e7d7",
+          "returned_len": 8432,
+          "returned_felts": 275
+        },
+        "player": {
+          "source_sha256": "4506724d43938df795ebc4a846263afb6d9c0f388e0b7a198784d80e7ba078d9",
+          "source_len": 58354,
+          "raw_sha256": "7d7c922b614ba7c35cfb1873c5019aeae49878cacde55382456993d381a4ebd2",
+          "raw_len": 25389,
+          "returned_sha256": "86881e543daea6fd722a3645d14c82bea8873eaecd709015c3e83a6f6786c650",
+          "returned_len": 45136,
+          "returned_felts": 1459,
+          "embedded_engine": {
+            "offset": 0,
+            "length": 47424,
+            "sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65"
+          },
+          "wrapper": {
+            "offset": 47427,
+            "length": 10927,
+            "sha256": "59ee3f5d151d2dc4c447af20962a93bb3e6bb8f926b045076c8e5b85af81eec4"
+          },
+          "gzip_sha256": "d3a9b6a1f908571e3d5ef6169961079f7146872f32dfe5ac1f155ee58b0db4c7",
+          "gzip_len": 18780,
+          "gzip_base64_len": 25040
+        }
+      },
+      "license_sha256": "9c68224366c7fc70f05d5a614c497bd7c13dcc8ec7f72b65d4c20316e2996cb8",
+      "license_len": 11033
+    },
+    "current_candidate_record": {
+      "format": 1,
+      "fixed_alignment": 279,
+      "dynamic_alignment": 9,
+      "toolchain": {
+        "fflate": "0.8.3",
+        "terser": "5.51.2",
+        "minify": {
+          "ecma": 2020,
+          "compress": {
+            "passes": 2,
+            "ecma": 2020
+          },
+          "mangle": true,
+          "format": {
+            "ascii_only": true,
+            "ecma": 2020
+          }
+        },
+        "gzip": {
+          "level": 9,
+          "mtime": 0
+        }
+      },
+      "inputs": {
+        "player/gunzip.js": {
+          "sha256": "17945521b35cd5cf1e454518ac8d849e47ea8bcfd9d796eb7cfc685ab9bb43f1",
+          "bytes": 13156
+        },
+        "player/settings.js": {
+          "sha256": "b054bbac7bfacb5f3778ce5a08cc407bdf2ce657a974c81595d2ba8b4be6542e",
+          "bytes": 12898
+        },
+        "player/player.js": {
+          "sha256": "6c73cddfcaf549d4305957fea5e5498e12773a47abb6bf2698c61565f92b3cb2",
+          "bytes": 22440
+        }
+      },
+      "engine_build": {
+        "provisional": false,
+        "sourceCommit": "8fd8b94c8bb1fd2df3d144404620520c4b7f3725",
+        "distributionCommit": "2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a",
+        "ciRun": "https://github.com/Provable-Games/webaudio-tinysynth/actions/runs/38269640215",
+        "sourceMapSha256": "55d24636b60db7a6b7d16b557dc7eb89a387580ce2978d8d10e9054ef33ce60c",
+        "sourceSha256": "8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7",
+        "recipe": "node scripts/build.js <output-dir>",
+        "recipeSha256": "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
+        "packageLockSha256": "67402d41acd7d49ed3c1a1f689e7f91a81bff1b7dc1727b355d1d3b3dec4197d",
+        "terser": "5.51.2"
+      },
+      "engine_ref": "2cb8b40",
+      "engine_commit": "2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a",
+      "script_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+      "artifacts": {
+        "gunzip": {
+          "source_sha256": "9077d45fe8ad01be4379f4e4a7eaabcc0318aa429ef256160be2e194ae888052",
+          "source_len": 4524,
+          "raw_sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+          "raw_len": 4743,
+          "returned_sha256": "869be0afd09b9b8416b1f306a166a518e48ce4397d4d01b82ef004e934f6e7d7",
+          "returned_len": 8432,
+          "returned_felts": 275
+        },
+        "player": {
+          "source_sha256": "1b9396d7040e8b99023038e76f8eacfb3bcefdefe8bb65b2ea204795f0b9443d",
+          "source_len": 58393,
+          "raw_sha256": "4405139afb1a925225cd7abe17494c655c694d94dcb3d69ebe5c2390df5c0bf0",
+          "raw_len": 25389,
+          "returned_sha256": "a3ffef825d3b6e85364a900c550b969998f5c2e6b2707f448c83b732a9473850",
+          "returned_len": 45136,
+          "returned_felts": 1459,
+          "embedded_engine": {
+            "offset": 0,
+            "length": 47424,
+            "sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65"
+          },
+          "wrapper": {
+            "offset": 47427,
+            "length": 10966,
+            "sha256": "a7d93494c9f59204e64adf833d75a12383840864e493ff5e8655231980f1ee76"
+          },
+          "gzip_sha256": "8677ca009db48cb36581facac0be9afa229e30124146f8f0242d539321ab8f1d",
+          "gzip_len": 18792,
+          "gzip_base64_len": 25056
+        }
+      },
+      "license_sha256": "9c68224366c7fc70f05d5a614c497bd7c13dcc8ec7f72b65d4c20316e2996cb8",
+      "license_len": 11033
+    },
+    "bindings": {
+      "changed_player_and_prepared_artifacts": {
+        "player/player.js": {
+          "before": {
+            "sha256": "71128031a7e0072760c2bf95b3aed00c380d2c5c4f533a239bb1daff012f5643",
+            "bytes": 22238
+          },
+          "after": {
+            "sha256": "6c73cddfcaf549d4305957fea5e5498e12773a47abb6bf2698c61565f92b3cb2",
+            "bytes": 22440
+          }
+        },
+        "tests/fixtures/segments/player.html": {
+          "before": {
+            "sha256": "7d7c922b614ba7c35cfb1873c5019aeae49878cacde55382456993d381a4ebd2",
+            "bytes": 25389
+          },
+          "after": {
+            "sha256": "4405139afb1a925225cd7abe17494c655c694d94dcb3d69ebe5c2390df5c0bf0",
+            "bytes": 25389
+          }
+        },
+        "src/segment_data.cairo": {
+          "before": {
+            "sha256": "ee9c6d42b8731d72c1ff7525b9e323f9803e09159f525d9569a8b62d1c9df3f4",
+            "bytes": 79231
+          },
+          "after": {
+            "sha256": "7f9e9b1d9b7490a04ef03ea109be7eb0970896544c851247cfe34bc3e28b9ab8",
+            "bytes": 79231
+          }
+        },
+        "examples/beast_consumer/fixtures/animation.html": {
+          "before": {
+            "sha256": "8ae088768d10a3186d9e60793011d04f828720e3e394c5936640e6a521375548",
+            "bytes": 40158
+          },
+          "after": {
+            "sha256": "4bfe52a2a0e669382bddd210f2f1bfcf248e1102cdb29d6f66eb49a37a2ab56b",
+            "bytes": 40158
+          }
+        },
+        "examples/beast_consumer/fixtures/token_uri.txt": {
+          "before": {
+            "sha256": "a3ee9516f11ade86c029994d74e35c25273804f406e3bb831063d6b653a8b8c7",
+            "bytes": 73762
+          },
+          "after": {
+            "sha256": "e3348582affcc12818c1f4b1b04045b0a4bba81a2726126f506a93fb80a85514",
+            "bytes": 73762
+          }
+        }
+      },
+      "unchanged_engine_loader_and_nft_ui": {
+        "scripts/engine.mjs": {
+          "sha256": "790273888257c6f7538b6c8fefa783f2a74deb9c03c2bc677d7bbc4928a977d9",
+          "bytes": 3499
+        },
+        "tests/vendor/webaudio-tinysynth-2cb8b40.min.js": {
+          "sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+          "bytes": 47424
+        },
+        "tests/vendor/webaudio-tinysynth-2cb8b40.NOTICE": {
+          "sha256": "9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708",
+          "bytes": 6499
+        },
+        "tests/fixtures/segments/gunzip.html": {
+          "sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+          "bytes": 4743
+        },
+        "examples/beast_consumer/ui.js": {
+          "sha256": "85a3e19c09da126d36cf23637d39cf142ddf89e3af1dd286978d65cf84121f69",
+          "bytes": 17762
+        },
+        "examples/beast_consumer/fixtures/footer.html": {
+          "sha256": "dd644cc152e4406d27a8e9bd0695b5a1d24f1f203d25482405c81c862a028015",
+          "bytes": 6840
+        }
+      },
+      "current_release_class_artifacts": {
+        "target/release/onchain_midi_player_TinySynth.contract_class.json": {
+          "sha256": "75f38af3c1cc5018d1339e5a584b97a3b85161ed01a2be8801c70e4af642338c",
+          "bytes": 986703
+        },
+        "examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json": {
+          "sha256": "d5d736387f48b6ac869256d8d470a2f6bf0d149bae8cd1082d3d60b4b92aa8e5",
+          "bytes": 778923
+        },
+        "examples/stress_nft/target/release/stress_nft_StressNft.contract_class.json": {
+          "sha256": "06b7fa73e074b3c8cfb4b0540a127661ddf6314a6c303e1fd0cc6b7c5a189c25",
+          "bytes": 630026
+        }
+      }
+    },
+    "failure_regressions": [
+      "stale re-suspend rejection during a newer in-flight resume leaves the player failed, rejects that resume with the failure cause and preserves error; no intervals or timers remain",
+      "stale re-suspend rejection during a newer in-flight play settles that play with the failure cause, stays failed and never loads or plays the score"
+    ],
+    "functional_checks": {
+      "root_javascript": 347,
+      "consumer_javascript": 47,
+      "cairo_root": 267,
+      "cairo_beast": 28,
+      "cairo_stress": 11,
+      "existing_cairo_ignored": 21,
+      "generation_abi_player_types_and_format": "passed"
+    },
+    "browser_checks": "Not run: Chromium, Firefox and WebKit could not launch in the capture environment. No page, hosting, sync, drift or render result is claimed for this payload.",
+    "historical_evidence_scope": "All earlier player/grid/art/audio/gas/NFT records, including the suspended-position refresh's one-minute/page/hosting acceptance, retain their original payload, source and artifact bindings and are not claimed as validation of this changed payload. No browser, ten-minute, native-device or gas capture is claimed.",
+    "physical_audio_verified": false
   }
 }

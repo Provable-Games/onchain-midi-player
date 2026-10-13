@@ -56,8 +56,8 @@ To a later commit, or to a tagged fork release once the fork publishes them:
 3. Replace `ENGINE_PIN` in `scripts/engine.mjs` and update the verified `ENGINE_BUILD` source/build/CI identities.
    Remove old vendor files only when no historical verification requires them. Choose a new `VERSION` in
    `scripts/segments.mjs`: changes to any recorded entry are rejected even with `--record`.
-   The explicitly documented unissued 0.6.0 CI-pin finalization and paused-position candidate refresh
-   are recorded in the development guide; they do not change this immutable-version guard.
+   The explicitly documented unissued 0.6.0 CI-pin finalization and paused-position and terminal-failure
+   candidate refreshes are recorded in the development guide; they do not change this immutable-version guard.
 4. From the full checkout with `npm ci` installed, regenerate:
 
    ```sh
