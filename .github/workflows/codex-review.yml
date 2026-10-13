@@ -447,6 +447,9 @@ jobs:
             ${{ runner.temp }}/review/out/review.md
           if-no-files-found: error
           retention-days: 1
+          # A re-run must replace the earlier attempt's result: artifacts belong to the run, and the
+          # comment and gate jobs download by name pattern, so an older same-named result could win.
+          overwrite: true
 
       - name: Require a completed review
         if: ${{ !cancelled() }}
