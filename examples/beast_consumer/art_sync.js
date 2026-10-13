@@ -86,21 +86,24 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
 /**
  * Isolated art (community art, generic composed pages) is an `<img>`, which can't be paused or
  * seeked: restart it instead. At each pass event (the first fires when the music becomes audible),
- * a fresh copy with a distinct data URL decodes off screen and replaces the shown image once
- * loaded, unless a newer restart is already shown or the run changed (stop or replay). Limits: the
- * restart lands up to one decode late; the image keeps animating while paused; and no page can
- * control GIF frames inside any art (use SMIL sprite animation for motion synced to the music).
+ * a fresh copy decodes off screen and replaces the shown image once loaded, unless a newer restart
+ * is already shown or the run changed (stop or replay). Each copy is the image's own `data:` URL
+ * with a distinct `r=<n>` parameter added to its media type, so the browser decodes it afresh: the
+ * media type, its other parameters and the payload stay byte for byte, whatever the art's encoding.
+ * An image from any other URL is never restarted: changing that URL could fetch something else.
+ * Limits: the restart lands up to one decode late; the image keeps animating while paused; and no
+ * page can control GIF frames inside any art (use SMIL sprite animation for motion synced to the music).
  * @param {HTMLImageElement} img the shown art
- * @param {string} svgText its SVG source
  * @param {OnchainMidiApi} player
  * @param {{onSwap?: (img: HTMLImageElement) => void}} [options] onSwap: each new image once shown
  *   (re-attach observers of the art, such as the play button's placement)
  * @returns {() => void} dispose
  */
-export function restartImgOnPass(img, svgText, player, { onSwap = () => {} } = {}) {
-  let bin = "";
-  for (const b of new TextEncoder().encode(svgText)) bin += String.fromCharCode(b);
-  const base64 = btoa(bin);
+export function restartImgOnPass(img, player, { onSwap = () => {} } = {}) {
+  // data:<media type>[;base64],<payload>, split where the browser splits it (the first comma).
+  const url = /^data:([^,]*?)(;\x20*base64[\t\n\f\r ]*)?(,[\s\S]*)$/i.exec(img.src);
+  if (!url) return () => {};
+  const [, type, base64 = "", payload] = url;
   let restarts = 0, shown = 0, live = true;
   const off = player.onPassStart(() => {
     const n = ++restarts, runId = player.getPlayStatus().runId;
@@ -113,7 +116,7 @@ export function restartImgOnPass(img, svgText, player, { onSwap = () => {} } = {
       img = next;
       onSwap(next);
     };
-    next.src = "data:image/svg+xml;r=" + n + ";base64," + base64; // Distinct: a fresh decode.
+    next.src = "data:" + type + ";r=" + n + base64 + payload; // The same bytes at a distinct URL.
   });
   return () => { live = false; off(); };
 }

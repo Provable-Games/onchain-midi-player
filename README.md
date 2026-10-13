@@ -56,8 +56,8 @@ Art synced to the music is the experience, and it needs no scheduling. Let the a
 // After OnchainLibraries.ready and OnchainMidiPlayer.ready.
 // Inline SVG your renderer controls: seeks the root and every nested <svg> timeline.
 const sync = syncSvgToMusic(document.getElementById("art"), OnchainMidiPlayer);
-// Isolated art (community art) in an <img>: restarts it with a fresh decode at each pass.
-const dispose = restartImgOnPass(document.getElementById("art-img"), svgText, OnchainMidiPlayer);
+// Isolated art (community art) in an <img src="data:...">: restarts its own bytes at each pass.
+const dispose = restartImgOnPass(document.getElementById("art-img"), OnchainMidiPlayer);
 ```
 
 Before the music is audible and after stop, the SVG animates freely; a pause freezes it where the audio stops. When the music becomes audible, the art jumps once from wherever it was to the music's position; draw frame 0 as a natural rest pose, and make the art's loop a whole fraction of the pass, so the jump and every pass boundary look intended. `sync.clock()` gives optional notes the same audible clock. An `<img>` restart lands up to one decode late, and the image keeps animating while paused. GIF frames inside any art can't be controlled: use SMIL sprite animation for motion synced to the music.

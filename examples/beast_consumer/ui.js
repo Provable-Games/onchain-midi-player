@@ -255,9 +255,9 @@ export async function startUi() {
     if (art instanceof SVGSVGElement) {
       syncSvgToMusic(art, player);
       Object.defineProperty(window, "OnchainArtMonitor", { configurable: true, get: monitorArtSync(art, player) });
-    } else if (art && svg) {
+    } else if (art) {
       // Each restarted <img> replaces the art: the button follows the new one.
-      restartImgOnPass(art, svg, player, { onSwap: (img) => { art = img; watch(img); } });
+      restartImgOnPass(art, player, { onSwap: (img) => { art = img; watch(img); } });
     }
     player.onStateChange(status => {
       if (status.state === "playing" || status.state === "stopped" || status.state === "failed") resuming = false;

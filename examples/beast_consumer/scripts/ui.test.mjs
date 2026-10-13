@@ -352,26 +352,51 @@ test('real player: a tempo-only score (null start time) syncs the art at zero on
 
 // Isolated art: an <img> restarted at each pass. A fake document is enough: the helper only creates,
 // loads and replaces images.
-function imgHarness(svgText="<svg xmlns='http://www.w3.org/2000/svg'><title>é</title></svg>"){
+const svgUrl=(bytes,type='image/svg+xml')=>`data:${type};base64,`+Buffer.from(bytes).toString('base64');
+const UTF8_ART=svgUrl("<svg xmlns='http://www.w3.org/2000/svg'><title>é</title></svg>");
+function imgHarness(src=UTF8_ART){
  const status={runId:1,state:'playing'},passes=new Set(),page=[],created=[],swaps=[];
  const player={getPlayStatus:()=>({...status}),onPassStart(fn){passes.add(fn);return()=>passes.delete(fn);},onStateChange(){return()=>{};}};
  const doc={createElement(tag){assert.equal(tag,'img');const el=image();created.push(el);return el;}};
  function image(attributes=[]){return{attributes,ownerDocument:doc,onload:null,src:'',setAttribute(name,value){this.attributes=[...this.attributes.filter(a=>a.name!==name),{name,value}];},
   replaceWith(other){const i=page.indexOf(this);if(i>=0)page[i]=other;},load(){this.onload?.();}};}
- const first=image([{name:'id',value:'beast-art'},{name:'alt',value:''},{name:'src',value:'data:image/svg+xml;base64,AAAA'}]);page.push(first);
+ const first=Object.assign(image([{name:'id',value:'beast-art'},{name:'alt',value:''},{name:'src',value:src}]),{src});page.push(first);
  let art=first;
  // As startUi: the button's placement follows each new image.
- const dispose=restartImgOnPass(first,svgText,player,{onSwap:img=>{assert.equal(page[0],img,'shown before onSwap');art=img;swaps.push(img);}});
- return{status,page,created,swaps,first,dispose,get art(){return art;},pass(){for(const fn of [...passes])fn({runId:status.runId});}};
+ const dispose=restartImgOnPass(first,player,{onSwap:img=>{assert.equal(page[0],img,'shown before onSwap');art=img;swaps.push(img);}});
+ return{status,page,created,swaps,first,dispose,get art(){return art;},get subscribers(){return passes.size;},pass(){for(const fn of [...passes])fn({runId:status.runId});}};
 }
-const restartUrl=(n,svg)=>`data:image/svg+xml;r=${n};base64,`+Buffer.from(svg).toString('base64');
+const restartUrl=(n,src=UTF8_ART)=>src.replace(';base64,',`;r=${n};base64,`);
 test('<img> art: each pass decodes a fresh copy with a distinct data URL and swaps it in once loaded',()=>{
- const svg="<svg xmlns='http://www.w3.org/2000/svg'><title>é</title></svg>",h=imgHarness(svg);
+ const h=imgHarness();
  h.pass();assert.equal(h.created.length,1);const [a]=h.created;
- assert.equal(a.src,restartUrl(1,svg),'UTF-8 bytes, distinct URL');assert.deepEqual(a.attributes,[{name:'id',value:'beast-art'},{name:'alt',value:''}],'its id and alt, not its old src');
+ assert.equal(a.src,restartUrl(1),'its own URL, with r=1');assert.deepEqual(a.attributes,[{name:'id',value:'beast-art'},{name:'alt',value:''}],'its id and alt, not its old src');
  assert.equal(h.page[0],h.first,'shown only once decoded');
  a.load();assert.equal(h.page[0],a);assert.deepEqual(h.swaps,[a]);
- h.pass();const b=h.created[1];assert.equal(b.src,restartUrl(2,svg));b.load();assert.equal(h.page[0],b,'replaces the current image');assert.deepEqual(h.swaps,[a,b]);
+ h.pass();const b=h.created[1];assert.equal(b.src,restartUrl(2),'from the original URL, not the shown restart');b.load();assert.equal(h.page[0],b,'replaces the current image');assert.deepEqual(h.swaps,[a,b]);
+});
+test('<img> art: a restart keeps the original bytes of art that is not UTF-8',()=>{
+ // ISO-8859-1 "café": byte e9 is not valid UTF-8. Decoding it to text and re-encoding gives ef bf bd.
+ const latin1=Buffer.from('<?xml version="1.0" encoding="ISO-8859-1"?><svg xmlns="http://www.w3.org/2000/svg"><text>caf\xe9</text></svg>','latin1');
+ const utf16=Buffer.concat([Buffer.from([0xff,0xfe]),Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><text>é</text></svg>','utf16le')]);
+ for(const bytes of [latin1,utf16]){
+  const h=imgHarness(svgUrl(bytes));h.pass();const src=h.created[0].src;
+  assert.equal(src,restartUrl(1,svgUrl(bytes)));assert.deepEqual(Buffer.from(src.slice(src.indexOf(',')+1),'base64'),bytes,'byte for byte');
+ }
+});
+test('<img> art: a restart keeps the media type, its parameters and the payload, and only adds r=<n>',()=>{
+ const payload=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>').toString('base64');
+ for(const [src,restart] of [
+  [`data:image/svg+xml;charset=utf-8;base64,${payload}`,`data:image/svg+xml;charset=utf-8;r=1;base64,${payload}`],
+  [`data:image/svg+xml;BASE64,${payload}`,`data:image/svg+xml;r=1;BASE64,${payload}`],
+  ['data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%3E%3Ctext%3Ea,b%3C/text%3E%3C/svg%3E','data:image/svg+xml;r=1,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%3E%3Ctext%3Ea,b%3C/text%3E%3C/svg%3E'],
+  [`data:image/png;base64,${payload}`,`data:image/png;r=1;base64,${payload}`],
+ ]){const h=imgHarness(src);h.pass();assert.equal(h.created[0].src,restart,src);h.created[0].load();assert.equal(h.page[0],h.created[0]);}
+});
+test('<img> art from any other URL is never restarted',()=>{
+ for(const src of ['https://example.com/art.svg','blob:https://example.com/0b1c','']){
+  const h=imgHarness(src);assert.equal(h.subscribers,0,'not subscribed');h.pass();assert.equal(h.created.length,0);assert.equal(h.page[0],h.first);h.dispose();
+ }
 });
 test('<img> art: a restart that decodes after a newer one is already shown is dropped',()=>{
  const h=imgHarness();h.pass();h.pass();const [a,b]=h.created;
