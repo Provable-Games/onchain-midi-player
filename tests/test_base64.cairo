@@ -4,11 +4,8 @@
 //! come from RFC 4648 and from Node's encoder (the JS reference, `tests/class_fixtures.cairo`).
 
 use onchain_midi_player::base64::bytes_base64_encode;
-use onchain_midi_player::interface::ITinySynthDispatcherTrait;
-use onchain_midi_player::page_data;
-use crate::class_fixtures::{all_bytes_b64, page, seq_b64_long, seq_b64_short, seq_bytes};
-use crate::helpers::class;
-use crate::page_fixtures::sha256;
+use crate::class_fixtures::{all_bytes_b64, seq_b64_long, seq_b64_short, seq_bytes};
+use crate::helpers::sha256;
 
 /// RFC 4648, section 10.
 #[test]
@@ -100,29 +97,5 @@ fn large_input_16384() {
 fn large_inputs_cover_the_fixture() {
     assert_eq!(seq_b64_long().len(), 8);
 }
-
 /// The largest input in the crate's tests: PAGE (24,714 bytes), then the 32,991-byte JSON-layer
 /// string, encoded at call time must give the segment that was encoded offline, byte for byte.
-#[test]
-fn page_encodes_to_the_pre_encoded_segment() {
-    let page = page();
-    assert(sha256(@page) == crate::page_fixtures::PAGE_SHA256, 'page sha256');
-    let mut inner: ByteArray = "\"animation_url\":\"data:text/html;base64,";
-    inner.append(@bytes_base64_encode(page));
-    assert_eq!(inner.len(), 39 + 4 * page_data::PAGE_LEN / 3);
-    assert(bytes_base64_encode(inner) == page_data::animation_url_segment(), 'segment');
-}
-
-/// The `base64` entry point is the same encoder, through the library call.
-#[test]
-fn entry_point_is_the_same_encoder() {
-    let synth = class();
-    assert_eq!(synth.base64(""), "");
-    assert_eq!(synth.base64("}"), "fQ==");
-    assert_eq!(synth.base64(",  "), "LCAg");
-    assert_eq!(synth.base64("foobar"), "Zm9vYmFy");
-    let expected = seq_b64_short();
-    assert(synth.base64(seq_bytes(31)) == expected[31].clone(), '31');
-    assert(synth.base64(seq_bytes(62)) == expected[62].clone(), '62');
-    assert(synth.base64(seq_bytes(94)) == expected[94].clone(), '94');
-}

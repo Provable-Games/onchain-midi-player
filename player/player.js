@@ -1,97 +1,11 @@
 // @ts-check
-/**
- * The page's player: shows the token's art, then plays its MIDI with TinySynth behind a ▶/❚❚ toggle.
- *
- * The page (see scripts/build_page.mjs) is the engine, gzipped in a
- * `<script type="text/javascript+gzip" src="data:...">` that the gunzip shim (`player/gunzip.js`,
- * the next `<script>`) replaces with the inflated engine while the page is parsed, then this file
- * and `player/settings.js` flattened into one plain script (their `import`/`export` lines removed,
- * wrapped in a function, minified, and not compressed, so the art and errors never depend on
- * inflation), then three inert text blocks that follow the player in the document: `#settings` (SETTINGS, after PAGE's alignment spaces), `#midi` (base64 of the MIDI file,
- * then D's alignment spaces) and `#art` (the raw SVG, unclosed until the end of the document). They
- * exist only once the document is parsed, so the player starts on DOMContentLoaded:
- *
- * 1. Art first: the SVG is shown in an <img> as a base64 data URL, before and independently of
- *    everything else. Nothing that follows can hide it.
- * 2. The engine must have loaded (`WebAudioTinySynth` defined: the shim inflated it and it ran).
- *    SETTINGS is parsed strictly (`decodeSettings`: the grammar, Cairo types and count bounds; the
- *    class has already checked it with `settings::validate`), and the MIDI is
- *    decoded and checked (`decodeMidi`). On any failure (spec D9) ▶ stays disabled, the exact
- *    error is shown and put in its title and logged, and no synth is ever created. Otherwise ▶ is
- *    enabled.
- * 3. ▶ (a click or tap): the first one constructs TinySynth with the settings (`createSynth`) and
- *    builds its noise buffer (`prewarm`), which the engine would otherwise build inside `playMIDI()`,
- *    blocking the page after the clock it starts from was read and shifting the art against the
- *    sound. Every ▶ resumes the AudioContext inside the gesture; the first that gets it running loads
- *    the MIDI (tick 0 at the song's starting tempo), loops at End-of-Track (`setLoop(1)`,
- *    `setLoopEnd(maxTick)`) and starts playback. With `loopEnd` set, the engine keeps any rest
- *    before the first event on every pass. Later ones resume where ❚❚ paused (step 6).
- * 4. The art restarts when tick 0 is heard: at `getPlayStatus().startTime` (the AudioContext time
- *    at which tick 0 of the current pass sounds) plus the context's output latency, or at once if
- *    the engine is not playing (a song with no events but tempo, which it leaves stopped). Then it
- *    restarts again at every pass: `startTime` moves to the next pass as soon as the current
- *    pass's last event is scheduled (up to 0.2 s, plus any rest after that event, before the next
- *    pass starts), and the player, polling it every 50 ms, restarts the art at the new time. That bounds
- *    any drift between the image's clock and the audio clock to one pass; when the pass is a whole
- *    multiple of the art's period, the art is already at its start there, so the restart is not
- *    seen. At most one restart is pending; when it fires, the next is timed at once. On a short
- *    loop, where startTime can move on by more than one pass between polls, the player walks pass
- *    by pass (`checkMidi`'s pass length) from the last pass it timed. A pass start already past
- *    when reached, or a pass's restart timer that fires more than 50 ms late (the page was
- *    stalled), is skipped, so the art keeps its phase until the next pass rather than restarting
- *    late. The restart on ▶ is never skipped.
- * 5. Background audio, best effort (feature-detected, each step in its own try/catch, failing
- *    silently): ▶ also plays a silent looping <audio> element (a generated 6 s WAV in a blob: URL),
- *    which gives mobile browsers and desktop media hubs a media session (notification, lock screen,
- *    hardware keys) that keeps the page alive. `navigator.mediaSession` gets the art's title and its
- *    embedded bitmap (a static frame row, see `arm`) as artwork, and play, pause and stop
- *    handlers that run the same code as ▶ and ❚❚ (stop pauses too). A pause of the element from
- *    outside (the notification, a headset, a call) pauses the player. On iOS,
- *    `navigator.audioSession.type = "playback"` makes Web Audio ignore the silent switch. If the
- *    element cannot play (a host CSP without `media-src blob:`), the player pauses when the page
- *    becomes hidden, as it has no media session to keep it playing. The synth stays on the
- *    AudioContext's destination: the element carries no sound.
- * 6. ❚❚ pauses: the AudioContext is suspended (`suspend()`), which freezes its clock, so every voice,
- *    envelope and scheduled event holds, and TinySynth's sequencer, which schedules against that
- *    clock, schedules nothing more; ▶ resumes it (`resume()`) and all of it carries on from there.
- *    Nothing is stopped or reloaded: to start over, reload the page. ❚❚ also cancels the pending
- *    art restart (its pass is timed again on resume) and the polling. The art stands still with it:
- *    it is restarted at once with every SMIL animation begun as far into the pass as the music is
- *    and frozen there (`artUrl`'s offset and freeze), and on ▶ restarted from that same point,
- *    running. Both are plain images, so this works in any frame and engine (a GIF runs on).
- *
- * Plain browser JavaScript: no modules in the page, no eval, no network requests, no storage. Works
- * in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles
- * and data: images.
- */
-
+// Headless, one-score browser API. NFT code owns every control, visual and media policy.
 import { createSynth, decodeSettings } from "./settings.js";
-
-/** Icon path data (24x24 viewBox) of the toggle: ▶ while paused (or not started), ❚❚ while playing. */
-export const PLAY_ICON = "M8 5v14l11-7z";
-export const PAUSE_ICON = "M6 5h4v14H6zM14 5h4v14h-4z";
-
-/** The error shown when the engine did not load (it was not inflated, or failed when it ran). */
 export const ENGINE_MISSING = "engine: TinySynth did not load";
-
-/**
- * A pass's art restart whose timer fires later than this after its time (a stalled page) is
- * skipped: the art keeps its phase until the next pass rather than restarting late.
- */
 const LATE_SECONDS = 0.05;
-/**
- * The longest delay setTimeout takes, in ms (2^31 - 1, about 24.8 days); a longer one fires at once.
- * A pass start further ahead than this is left for a later poll.
- */
 const MAX_TIMER_MS = 2147483647;
-/** A loop shorter than this would make TinySynth's scheduler spin; such MIDI is rejected. */
 const MIN_LOOP_SECONDS = 0.05;
-/**
- * TinySynth decodes text meta events (text, copyright, track and instrument names, device) with
- * `String.fromCharCode.apply`, whose argument count browsers limit; longer ones are rejected.
- */
 const MAX_TEXT_BYTES = 4096;
-
 /**
  * Decodes the MIDI block: base64 (strict RFC 4648, `=` padding) after trimming the alignment spaces
  * (U+0020 only), then `checkMidi`. Throws `Error("midi: ...")`.
@@ -102,6 +16,7 @@ export function decodeMidi(text) {
   const b64 = text.replace(/^ +| +$/g, "");
   if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(b64)) throw new Error("midi: not base64");
   const bin = atob(b64);
+  if (btoa(bin) !== b64) throw new Error("midi: not base64");
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   checkMidi(bytes);
@@ -235,378 +150,309 @@ export function checkMidi(u) {
 }
 
 /**
- * The art as a data URL: the SVG text re-encoded as UTF-8 and base64. `restart` > 0 adds a media
- * type parameter, which gives an equivalent image with a distinct URL, so the browser builds a new
- * image (and animation timeline) rather than reusing the running one. `offset` > 0 starts that
- * timeline `offset` seconds in: every SMIL animation element (`animate`, `animateTransform`,
- * `animateMotion`, `animateColor`, `set`) without a `begin` gets `begin='-<offset>s'`, which SMIL
- * plays as begun that long ago. `freeze` also ends each of them there (`repeatDur` 1 ms past the
- * offset, as an interval must end after the timeline's start, and `fill='freeze'`, replacing their
- * own `repeatDur` and `fill`): the image is the frame at `offset`,
- * standing still. A GIF in the art always starts at its first frame, and runs on.
- * @param {string} svg
- * @param {number} [restart]
- * @param {number} [offset]
- * @param {boolean} [freeze]
+ * Install the headless API. Readiness validates data without constructing audio. startTime and
+ * pass timestamps are AudioContext seconds; the engine may announce a pass ahead of audibility.
+ * @param {any} [host]
+ * @returns {import("./api.d.ts").OnchainMidiApi}
  */
-export function artUrl(svg, restart = 0, offset = 0, freeze = false) {
-  if (offset > 0 || freeze) {
-    const t = offset.toFixed(3) + "s";
-    // A frozen interval must end after the image's timeline begins (at 0), or engines drop it.
-    const end = (offset + 0.001).toFixed(3) + "s";
-    svg = svg.replace(/<(animate(?:Transform|Motion|Color)?|set)(?![\w:.-])([^>]*)>/g, (tag, name, attrs) =>
-      /\sbegin\s*=/.test(attrs) ? tag
-        : freeze ? "<" + name + " begin='-" + t + "' repeatDur='" + end + "' fill='freeze'" + attrs.replace(/\s(?:fill|repeatDur)\s*=\s*(["']).*?\1/g, "") + ">"
-        : "<" + name + " begin='-" + t + "'" + attrs + ">");
-  }
-  let bin = "";
-  for (const b of new TextEncoder().encode(svg)) bin += String.fromCharCode(b);
-  return "data:image/svg+xml;" + (restart ? "r=" + restart + ";" : "") + "base64," + btoa(bin);
-}
-
-/**
- * Where the ▶/❚❚ button goes when the art's root `<svg>` carries `data-play-anchor="X Y"` or
- * `"X Y S"`: a point in the SVG's own units (its `viewBox`, else `width` and `height`), such as the
- * bottom-right corner of a sprite's box, and optionally the button's diameter S in the same units.
- * The button's bottom-right corner is placed at the point, inset by max(S/8, 6) art units (6 px without S: enough to clear a frame's rounded corner), where
- * the <img> draws it: `box` is the <img>'s own rectangle on screen (its `getBoundingClientRect()`),
- * and the art fills it as `object-fit: contain` does, scaled to fit and centred. The diameter is S
- * times the art's scale on screen, between 44 CSS px (a touch target) and 128; without S it is 48.
- * With a last word `top-right` (`"X Y S top-right"`), the point is the button's top-right corner
- * instead, inset the same way, and the button grows down and left from it (the top-right corner of
- * an art frame, say).
- * The button is kept inside the `vw` x `vh` viewport. Returns `null` (the button stays at the
- * viewport's bottom-right corner) when the attribute is absent, malformed or outside the art, or the
- * SVG or the image has no usable size.
- * @param {string} svg
- * @param {{left: number, top: number, width: number, height: number}} box
- * @param {number} vw
- * @param {number} vh
- * @returns {{left: number, top: number, size: number} | null}
- */
-export function playAnchor(svg, box, vw, vh) {
-  const tag = /<svg\b[^>]*>/i.exec(svg);
-  const attr = (/** @type {string} */ name) => {
-    const m = tag && new RegExp("\\s" + name + "\\s*=\\s*([\"'])(.*?)\\1", "i").exec(tag[0]);
-    return m ? m[2].trim() : "";
+export function startPlayer(host = window) {
+  const doc = host.document;
+  /** @type {import("./api.d.ts").PlayStatus["state"]} */ let state = "loading";
+  /** @type {Error | null} */ let error = null;
+  /** @type {any} */ let synth = null;
+  /** @type {import("./settings.js").TinySynthSettings} */ let settings;
+  /** @type {Uint8Array} */ let midi;
+  /** @type {{maxTick: number, seconds: number} | undefined} */ let score;
+  let runId = 0, operationId = 0, timer = 0, poll = 0, latencyPoll = 0;
+  let origin = /** @type {number | null} */ (null), latencySeconds = 0, latencyRevision = 0;
+  let nextPass = 0, resumeRequests = 0, holdSuspension = false;
+  /** @type {number | null} */ let heldPosition = null;
+  /** @type {() => void} */ let syncBoundary = () => {};
+  /** @type {Promise<void> | null} */ let pausing = null;
+  /** @type {{promise: Promise<void>, reject: (cause: Error) => void} | null} */ let pending = null;
+  /** @type {Set<(e: import("./api.d.ts").PassStart) => void>} */ const passes = new Set();
+  /** @type {Set<(s: import("./api.d.ts").PlayStatus) => void>} */ const states = new Set();
+  const number = (/** @type {any} */ x) => typeof x === "number" && Number.isFinite(x) ? x : null;
+  const audio = () => synth && synth.getAudioContext();
+  // Browser estimates only: discard malformed/implausible components independently.
+  const component = (/** @type {any} */ x) => number(x) !== null && x >= 0 && x <= 1 ? x : 0;
+  const estimateLatency = () => component(audio()?.outputLatency) + component(audio()?.baseLatency);
+  const position = () => {
+    if (origin === null) { heldPosition = null; return null; }
+    const ctx = audio();
+    const audible = Math.max(0, (number(ctx?.currentTime) ?? origin) - origin - latencySeconds);
+    if (ctx?.state === "running") { heldPosition = null; return audible; }
+    // Anchor at the actual frozen clock, including an asynchronous suspend's last advancing time.
+    return heldPosition ??= audible;
   };
-  const num = (/** @type {string} */ s) => (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s) ? +s : NaN);
-  const list = (/** @type {string} */ s) => (s ? s.split(/[\s,]+/).map(num) : []);
-  const view = list(attr("viewBox"));
-  const [x0, y0, w, h] = view.length == 4 ? view : [0, 0, num(attr("width").replace(/px$/i, "")), num(attr("height").replace(/px$/i, ""))];
-  const tokens = attr("data-play-anchor").split(/[\s,]+/).filter(Boolean);
-  const down = tokens[tokens.length - 1] == "top-right" && !!tokens.pop(); // the point is the button's top-right corner
-  const anchor = tokens.map(num);
-  const [ax, ay, diameter] = anchor;
-  if (!(w > 0 && h > 0 && box.width > 0 && box.height > 0) || !(anchor.length == 2 || (anchor.length == 3 && diameter > 0)) || !(ax >= x0 && ax <= x0 + w && ay >= y0 && ay <= y0 + h)) return null;
-  const k = Math.min(box.width / w, box.height / h);
-  const size = anchor.length == 3 ? Math.min(128, Math.max(44, diameter * k)) : 48;
-  const inset = anchor.length == 3 ? k * Math.max(diameter / 8, 6) : 6;
-  const place = (/** @type {number} */ a, /** @type {number} */ a0, /** @type {number} */ len, /** @type {number} */ at, /** @type {number} */ span, /** @type {number} */ view, /** @type {boolean} */ below) =>
-    Math.round(Math.max(0, Math.min(view - size, at + (span - len * k) / 2 + (a - a0) * k + (below ? inset : -size - inset))));
-  return { left: place(ax, x0, w, box.left, box.width, vw, false), top: place(ay, y0, h, box.top, box.height, vh, down), size: Math.round(size) };
-}
-
-/** Fallback title of the media session, for art without a <title>. */
-export const MEDIA_TITLE = "Onchain music";
-
-/** A silent 6 s WAV (8 kHz, 8-bit mono): long enough for Chrome Android to show media controls (5 s). */
-export function silentWav() {
-  const b = new Uint8Array(48044).fill(128);
-  // RIFF, size 48036, WAVE, "fmt ", 16, PCM, 1 channel, 8000 Hz, 8000 B/s, 1 B/frame, 8 bits, "data", 48000
-  b.set([82, 73, 70, 70, 164, 187, 0, 0, 87, 65, 86, 69, 102, 109, 116, 32, 16, 0, 0, 0, 1, 0, 1, 0, 64, 31, 0, 0, 64, 31, 0, 0, 1, 0, 8, 0, 100, 97, 116, 97, 128, 187, 0, 0]);
-  return b;
-}
-
-/** Wires up the page. Called once, by the page, when the player script runs. */
-export function startPlayer() {
-  document.addEventListener("DOMContentLoaded", () => {
-    const $ = (/** @type {string} */ id) => /** @type {HTMLElement} */ (document.getElementById(id));
-    const button = /** @type {HTMLButtonElement} */ ($("play"));
-    const icon = $("icon");
-    const message = $("error");
-    /** @param {unknown} e */
-    const fail = (e) => {
-      const text = String((e && /** @type {Error} */ (e).message) || e);
-      button.disabled = true;
-      button.title = message.textContent = text;
-      message.hidden = false;
-      console.error(e);
-    };
-
-    let run = 0; // every press of ▶/❚❚ invalidates a pending start or resume and art restart
-
-    // 1. Art first, on its own.
-    /** @type {HTMLImageElement | null} */
-    let art = null;
-    let svg = "";
-    let restarts = 0;
+  const refreshLatency = () => {
+    const value = estimateLatency();
+    if (Math.abs(value - latencySeconds) < 0.002 - 1e-9) return;
+    position(); // Preserve suspended audibility before publishing a new compensation estimate.
+    latencySeconds = value; ++latencyRevision;
+    host.clearTimeout(timer); timer = 0;
+    transition(state, true); syncBoundary();
+  };
+  const snapshot = () => {
+    const s = synth && synth.getPlayStatus();
+    return { state, tick: number(s?.curTick), maxTick: number(s?.maxTick) ?? number(score?.maxTick),
+      startTime: number(s?.startTime), originTime: origin, audioTime: number(audio()?.currentTime),
+      passSeconds: number(score?.seconds), outputLatency: component(audio()?.outputLatency),
+      baseLatency: component(audio()?.baseLatency), latencySeconds, latencyRevision,
+      audioState: audio()?.state ?? null,
+      positionSeconds: position(),
+      runId, error };
+  };
+  /** @type {{value: import("./api.d.ts").PlayStatus, listeners: ((s: import("./api.d.ts").PlayStatus) => void)[]}[]} */
+  const transitions = [];
+  let notifying = false;
+  const transition = (/** @type {import("./api.d.ts").PlayStatus["state"]} */ next, notify = false) => {
+    if (state === next && !notify) return;
+    state = next;
+    transitions.push({ value: snapshot(), listeners: [...states] });
+    if (notifying) return;
+    notifying = true;
     try {
-      svg = $("art").textContent || "";
-      art = document.createElement("img");
-      art.alt = "";
-      art.src = artUrl(svg);
-      document.body.prepend(art);
-    } catch (e) {
-      console.error(e);
-    }
-    let shown = 0; // the restart whose image is shown
-    /**
-     * Restarts the art: a new <img> with a distinct URL, swapped in once decoded (so the art never
-     * blinks out), unless ▶/❚❚ was pressed again in the meantime, or a later restart's image is
-     * already shown (restarts at every pass can decode out of order).
-     * @param {number} current the press that scheduled it
-     * @param {number} [offset] seconds into the art's timeline (resuming mid-pass)
-     * @param {boolean} [freeze] the art standing still at `offset` (paused)
-     */
-    const restartArt = (current, offset = 0, freeze = false) => {
-      if (!art) return;
-      const n = ++restarts;
-      const img = document.createElement("img");
-      img.alt = "";
-      img.onload = () => {
-        if (current !== run || n < shown || !art) return;
-        shown = n;
-        art.replaceWith(img);
-        art = img;
-        watch(art);
-      };
-      img.src = artUrl(svg, n, offset, freeze);
-    };
-
-    /** @param {() => unknown} f best effort: a failure is silent */
-    const attempt = (f) => {
-      try {
-        f();
-      } catch (e) {}
-    };
-    // The button sits at the art's `data-play-anchor` if it has one (see playAnchor), else at the
-    // viewport's bottom-right corner (the stylesheet's). It follows the <img>'s actual box.
-    const place = () => attempt(() => {
-      const r = art && art.getBoundingClientRect();
-      const a = r && playAnchor(svg, r, window.innerWidth, window.innerHeight);
-      const s = button.style;
-      s.right = s.bottom = a ? "auto" : "";
-      s.left = a ? a.left + "px" : "";
-      s.top = a ? a.top + "px" : "";
-      s.width = s.height = a ? a.size + "px" : "";
-      s.padding = a ? a.size / 4 + "px" : "";
-    });
-    /** @type {ResizeObserver | undefined} */
-    let observer;
-    /** @param {HTMLImageElement | null} img the current art image */
-    const watch = (img) => attempt(() => {
-      observer = observer || new ResizeObserver(place);
-      observer.disconnect();
-      if (img) observer.observe(img);
-    });
-    place();
-    watch(art);
-    attempt(() => window.addEventListener("resize", place));
-
-    // 2. The engine, settings and MIDI; on failure ▶ stays disabled and no synth is created.
-    /** @type {import("./settings.js").TinySynthSettings} */
-    let settings;
-    /** @type {Uint8Array} */
-    let midi;
-    let pass = 0; // one pass in seconds, under the MIDI's tempo map: the engine's pass with loopEnd = maxTick
-    try {
-      // Missing if its gzip payload did not inflate (the shim logged why) or the engine failed.
-      if (typeof (/** @type {any} */ (window).WebAudioTinySynth) != "function") throw new Error(ENGINE_MISSING);
-      settings = decodeSettings($("settings").textContent || "");
-      midi = decodeMidi($("midi").textContent || "");
-      pass = checkMidi(midi).seconds;
-    } catch (e) {
-      fail(e);
-      return;
-    }
-
-    // 3-6. The ▶/❚❚ toggle, and the art restarts.
-    /** @type {any} */
-    let synth = null;
-    let playing = false;
-    let started = false; // the MIDI is loaded and playing, or paused
-    let origin = 0; // startTime of the first pass
-    /** @type {number | null | undefined} the pass start the art was last timed to (or skipped) */
-    let synced;
-    let timer = 0; // the pending art restart, or 0
-    let poll = 0; // the interval that follows startTime to each pass
-    /** @type {HTMLAudioElement | null} the silent element of the media session */
-    let silent = null;
-    let background = false; // the silent element is playing: the page may keep playing when hidden
-    let armed = false; // the media session's metadata and handlers are set
-    /** @param {boolean} on */
-    const setPlaying = (on) => {
-      playing = on;
-      icon.setAttribute("d", on ? PAUSE_ICON : PLAY_ICON);
-      button.setAttribute("aria-label", on ? "Pause" : "Play");
-      if (!on) attempt(() => silent && silent.pause());
-      attempt(() => (navigator.mediaSession.playbackState = on ? "playing" : "paused"));
-    };
-    /**
-     * Times an art restart to tick 0 of a pass, as heard, unless one is pending. On ▶ (`first`):
-     * the current pass, at once without a pass start. Afterwards (and on resuming): the pass after
-     * the last one synced, once startTime has reached it. On a short loop startTime can move on by
-     * more than one pass between calls, so this walks pass by pass from the last one synced,
-     * skipping any whose start is already past, and takes the engine's own value when it reaches
-     * it. A pass start more than MAX_TIMER_MS ahead (a pass of weeks) is left unsynced, so a later
-     * poll times it once it is within reach.
-     * @param {number} current the press it serves
-     * @param {boolean} [first]
-     */
-    const sync = (current, first) => {
-      const ctx = synth.getAudioContext();
-      const latest = synth.getPlayStatus().startTime;
-      const lag = ctx.outputLatency || 0;
-      let start = latest;
-      if (timer || latest === synced) return;
-      if (!first && latest !== null && synced != null) {
-        start = synced + pass;
-        while (start < latest - 1e-6 && start + lag < ctx.currentTime) start += pass;
-        if (start > latest - 1e-6) start = latest;
+      while (transitions.length) {
+        const event = /** @type {NonNullable<ReturnType<typeof transitions.shift>>} */ (transitions.shift());
+        for (const callback of event.listeners) {
+          if (states.has(callback)) { try { callback({ ...event.value }); } catch (_) {} }
+        }
       }
-      const delay = start === null ? 0 : start - ctx.currentTime + lag;
+    } finally { notifying = false; }
+  };
+  const cancelTimers = () => {
+    host.clearTimeout(timer); host.clearInterval(poll); host.clearInterval(latencyPoll); timer = poll = latencyPoll = 0; syncBoundary = () => {};
+  };
+  const fail = (/** @type {unknown} */ cause) => {
+    // Terminal: a later stale rejection must not replace the first cause.
+    if (state === "failed") return /** @type {Error} */ (error);
+    error = cause instanceof Error ? cause : new Error(String(cause));
+    ++operationId; cancelTimers();
+    try { synth?.stopMIDI(); } catch (_) {}
+    // Invalidate in-flight transport and settle it with the real cause before reentrant listeners run.
+    if (pending) { const settle = pending; pending = null; settle.reject(error); }
+    transition("failed");
+    return error;
+  };
+  const subscribe = (/** @type {Set<any>} */ set, /** @type {any} */ callback) => {
+    if (typeof callback !== "function") throw new TypeError("subscriber must be a function");
+    const subscription = (/** @type {any} */ value) => callback(value);
+    set.add(subscription);
+    return () => { set.delete(subscription); };
+  };
+  const boundaries = (/** @type {number} */ current) => {
+    if (current !== runId || (state !== "playing" && state !== "paused")) return;
+    const ctx = audio();
+    syncBoundary = () => {
+      if (current !== runId || state !== "playing" || ctx.state !== "running" || timer) return;
+      const latest = number(synth.getPlayStatus().startTime);
+      if (origin === null) {
+        if (nextPass) return;
+        ++nextPass;
+        const event = { runId: current, passIndex: 0, initial: true, startTime: null, audibleTime: null,
+          audioTime: number(ctx.currentTime), outputLatency: component(ctx.outputLatency),
+          baseLatency: component(ctx.baseLatency), latencySeconds };
+        for (const callback of [...passes]) {
+          if (current !== runId || state !== "playing") break;
+          if (passes.has(callback)) { try { callback({ ...event }); } catch (_) {} }
+        }
+        return;
+      }
+      const seconds = /** @type {{seconds:number}} */ (score).seconds;
+      // Preserve the pending boundary across pause. Skip late subsequent passes in O(1).
+      if (nextPass > 0) {
+        const heard = ctx.currentTime - latencySeconds - origin;
+        nextPass = Math.max(nextPass, Math.ceil((heard - 1e-6) / seconds));
+      }
+      const index = nextPass, start = origin + index * seconds;
+      if (latest === null || start > latest + 1e-6) return;
+      const delay = start + latencySeconds - ctx.currentTime;
       if (delay * 1000 > MAX_TIMER_MS) return;
-      synced = start;
-      if (!first && (start === null || delay < 0)) return;
-      timer = window.setTimeout(() => {
+      const dispatch = () => {
         timer = 0;
-        if (first || ctx.currentTime - start - lag < LATE_SECONDS) restartArt(current);
-        sync(current);
-      }, Math.max(0, delay * 1000));
-    };
-    /**
-     * Seconds heard into the current pass, or null before tick 0 of the first is heard. startTime
-     * may already be the next pass's (see step 4).
-     */
-    const position = () => {
-      const ctx = synth.getAudioContext();
-      const at = synth.getPlayStatus().startTime;
-      let into = ctx.currentTime - (ctx.outputLatency || 0) - at;
-      if (into < 0 && at > origin) into += pass;
-      return started && at !== null && into >= 0 ? into % pass : null;
-    };
-    const pause = () => {
-      const at = position();
-      ++run;
-      // The art stands still at the music's position: its animations end there, frozen.
-      if (at !== null) restartArt(run, at, true);
-      window.clearTimeout(timer);
-      window.clearInterval(poll);
-      if (timer && synced != null) synced -= pass; // its pass is timed again on resume
-      timer = 0;
-      setPlaying(false);
-      attempt(() => synth.getAudioContext().suspend().catch(() => {}));
-    };
-    /** The media session, once: the title and art, and the handlers that run ▶ and ❚❚. */
-    const arm = () => {
-      armed = true;
-      /** @param {Array<{src: string, sizes: string, type: string}>} artwork */
-      const meta = (artwork) => attempt(() => (navigator.mediaSession.metadata = new MediaMetadata({ title, artwork })));
-      let title = MEDIA_TITLE;
-      attempt(() => (title = new DOMParser().parseFromString(svg, "image/svg+xml").getElementsByTagName("title")[0].textContent || title));
-      meta([]);
-      for (const action of /** @type {const} */ (["play", "pause", "stop"])) {
-        attempt(() => navigator.mediaSession.setActionHandler(action, action == "play" ? () => playing || button.disabled || start() : () => playing && pause()));
-      }
-      // Artwork: the art's own bitmap (the first embedded PNG, GIF or WebP: a Beast's 32x32 sprite),
-      // as a static frame row on a dark card colour, at the sizes Chrome Android asks for (512, and
-      // 256 on low-end devices): the frames of a sprite sheet (square, side by side; a GIF or a
-      // plain image gives its one frame) in one row, centred, nearest-neighbour at a whole scale
-      // (5x for one 32 px frame: 160 px of 512). Android 13+ shows the artwork centre-cropped to a
-      // wide panel, so the row stays in the middle band; iOS shows the square as it is. The card SVG
-      // itself is not drawn: its foreignObject can taint the canvas. Art without a bitmap gets no
-      // artwork. The image is static: updating the metadata to animate it would flicker and cost power.
-      const raster = /data:image\/(?:png|gif|webp);base64,[A-Za-z0-9+/=]+/.exec(svg);
-      if (raster) {
-        attempt(() => {
-          const img = document.createElement("img");
-          img.onload = () => attempt(() => {
-            const h = img.naturalHeight;
-            const count = img.naturalWidth % h ? 1 : img.naturalWidth / h;
-            const w = img.naturalWidth / count;
-            const canvas = document.createElement("canvas");
-            meta([512, 256].map((n) => {
-              canvas.width = canvas.height = n;
-              const g = /** @type {CanvasRenderingContext2D} */ (canvas.getContext("2d"));
-              g.fillStyle = "#1e1e22";
-              g.fillRect(0, 0, n, n);
-              g.imageSmoothingEnabled = false;
-              const fit = Math.min((n * 5 * 32) / 512 / h, n / (w * count));
-              const k = fit < 1 ? fit : Math.floor(fit);
-              for (let i = 0; i < count; i++) {
-                g.drawImage(img, i * w, 0, w, h, Math.floor((n - w * k * count) / 2) + i * w * k, Math.floor((n - h * k) / 2), w * k, h * k);
-              }
-              return { src: canvas.toDataURL("image/png"), sizes: n + "x" + n, type: "image/png" };
-            }));
-          });
-          img.src = raster[0];
-        });
-      }
-    };
-    /** The iOS audio session and the silent element, inside the gesture, before the AudioContext resumes. */
-    const session = () => {
-      attempt(() => (/** @type {any} */ (navigator).audioSession.type = "playback"));
-      background = false;
-      attempt(() => {
-        if (!silent) {
-          silent = new Audio(URL.createObjectURL(new Blob([silentWav()], { type: "audio/wav" })));
-          silent.loop = true;
-          // Paused from outside (the notification, a headset, a call): the same as ❚❚. It is paused
-          // here only if ▶ has not started it again since.
-          silent.onpause = () => playing && silent && silent.paused && pause();
+        if (current !== runId || state !== "playing" || ctx.state !== "running") return;
+        const audibleTime = start + latencySeconds, remaining = audibleTime - ctx.currentTime;
+        if (remaining > 0.001) {
+          timer = host.setTimeout(dispatch, Math.min(MAX_TIMER_MS, remaining * 1000)); return;
         }
-        silent.play().then(() => (background = true), () => {});
-      });
-      if (!armed) attempt(arm);
-    };
-    // Without a media session to keep it playing, a hidden page pauses.
-    document.addEventListener("visibilitychange", () => document.hidden && playing && !background && pause());
-    const start = () => {
-      const current = ++run;
-      session();
-      try {
-        if (!synth) {
-          synth = createSynth(/** @type {any} */ (window).WebAudioTinySynth, settings);
-          // The engine builds its noise buffer on first need, which blocks for tens of ms: here, in
-          // the gesture, rather than in playMIDI(), where it would delay what the clock is read for.
-          synth.prewarm();
-          // The engine resumes a suspended AudioContext whenever it sends a message (its _wake,
-          // for autoplay). While paused it must not: its sequencer can still send the events that
-          // fell within its look-ahead just before the clock stopped, which would undo ❚❚.
-          const wake = synth._wake;
-          if (typeof wake == "function") synth._wake = () => playing && wake();
-        }
-        const ctx = synth.getAudioContext();
-        setPlaying(true);
-        ctx.resume().then(() => {
-          if (current !== run) return;
-          if (started) {
-            // Resumed: the art carries on from where it stood still, the music's position in the
-            // pass (the clock stood still too). Before the first pass is heard, its restart is pending.
-            const at = position();
-            if (at !== null) restartArt(current, at);
-            sync(current);
-          } else {
-            synth.loadMIDI(midi);
-            synth.setLoop(1);
-            synth.setLoopEnd(synth.getPlayStatus().maxTick);
-            synth.playMIDI();
-            started = true;
-            origin = synth.getPlayStatus().startTime;
-            sync(current, true);
+        ++nextPass;
+        if (!index || remaining > -LATE_SECONDS) {
+          const event = { runId: current, passIndex: index, initial: !index, startTime: start, audibleTime,
+            audioTime: number(ctx.currentTime), outputLatency: component(ctx.outputLatency),
+            baseLatency: component(ctx.baseLatency), latencySeconds };
+          for (const callback of [...passes]) {
+            if (current !== runId || state !== "playing") break;
+            if (passes.has(callback)) { try { callback({ ...event }); } catch (_) {} }
           }
-          poll = window.setInterval(() => sync(current), 50);
-        }).catch((/** @type {unknown} */ e) => {
-          setPlaying(false);
-          fail(e);
-        });
-      } catch (e) {
-        setPlaying(false);
-        fail(e);
-      }
+        }
+        syncBoundary();
+      };
+      timer = host.setTimeout(dispatch, Math.max(0, delay * 1000));
     };
-    button.onclick = () => (playing ? pause() : start());
-    button.disabled = false;
-  });
+    syncBoundary();
+    if (origin !== null && current === runId && (/** @type {string} */ (state) === "playing" || /** @type {string} */ (state) === "paused"))
+      poll = host.setInterval(() => syncBoundary(), 50);
+    if (current === runId && (state === "playing" || state === "paused"))
+      latencyPoll = host.setInterval(refreshLatency, 250);
+  };
+  const abortPending = () => {
+    if (!pending) return;
+    const abort = new Error("player: transport cancelled"); abort.name = "AbortError";
+    pending.reject(abort); pending = null;
+  };
+  const contextChanged = () => {
+    const ctx = audio();
+    position(); // Observe clock transitions even when an in-flight transport suppresses state changes.
+    if (ctx.state === "closed" && (state === "playing" || state === "paused" || state === "starting")) {
+      // fail() invalidates and rejects pending transport with this cause, not a cancellation.
+      fail(new Error("player: AudioContext closed"));
+    } else if (state === "playing" && ctx.state !== "running") {
+      host.clearTimeout(timer); timer = 0; transition("paused");
+    } else if (state === "paused" && ctx.state === "running" && !pausing && !resumeRequests) {
+      // An external resume is an actual clock transition; never reload the score.
+      holdSuspension = false; transition("playing"); syncBoundary();
+    }
+  };
+  /** @type {() => void} */ let resolveReady = () => {};
+  /** @type {(cause: Error) => void} */ let rejectReady = () => {};
+  const ready = new Promise(/** @param {(value?: void) => void} resolve */ (resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+  ready.catch(() => {});
+  /** @type {import("./api.d.ts").OnchainMidiApi} */
+  const api = {
+    ready,
+    play() {
+      if (state === "paused") return api.resume();
+      if (state === "failed") return Promise.reject(error);
+      if (state === "loading") return Promise.reject(new Error("player: await OnchainMidiPlayer.ready before play()"));
+      if (pending) return pending.promise;
+      if (state === "playing") return Promise.resolve();
+      holdSuspension = false; heldPosition = null;
+      const current = ++runId, operation = ++operationId;
+      /** @type {() => void} */ let resolve = () => {};
+      /** @type {(cause: Error) => void} */ let reject = () => {};
+      const promise = new Promise(/** @param {(value?: void) => void} yes */ (yes, no) => { resolve = yes; reject = no; });
+      pending = { promise, reject };
+      transition("starting");
+      if (operation !== operationId || state !== "starting") return promise;
+      const begin = () => {
+        if (operation !== operationId) return;
+        try {
+          if (!synth) {
+            synth = createSynth(host.WebAudioTinySynth, settings); synth.prewarm();
+            audio().addEventListener("statechange", contextChanged);
+          }
+          // The public engine resume happens synchronously in the user's gesture.
+          ++resumeRequests;
+          const resumed = synth.resume();
+          Promise.resolve(resumed).then(() => {
+            --resumeRequests;
+            if (operation !== operationId || state !== "starting") {
+              if (holdSuspension && !pending) Promise.resolve(audio().suspend()).catch(fail);
+              return;
+            }
+            try {
+              synth.loadMIDI(midi); synth.setLoop(1);
+              synth.setLoopEnd(synth.getPlayStatus().maxTick); synth.playMIDI();
+              origin = number(synth.getPlayStatus().startTime); nextPass = 0;
+              latencySeconds = estimateLatency(); ++latencyRevision;
+              pending = null; transition(audio().state === "running" ? "playing" : "paused");
+              boundaries(current); resolve();
+            } catch (cause) { pending = null; reject(fail(cause)); }
+          }, (cause) => {
+            --resumeRequests;
+            if (operation !== operationId) return;
+            pending = null; reject(fail(cause));
+          });
+        } catch (cause) { pending = null; reject(fail(cause)); }
+      };
+      if (pausing) pausing.then(begin, cause => { if (operation === operationId) { pending = null; reject(fail(cause)); } });
+      else begin();
+      return promise;
+    },
+    pause() {
+      if (pausing) {
+        // A newer pause also cancels a resume/play queued behind the current suspension.
+        if (pending) { ++operationId; holdSuspension = true; abortPending(); transition(state === "starting" ? "stopped" : "paused"); }
+        return pausing;
+      }
+      if (state !== "playing" && state !== "starting" && !(state === "paused" && pending)) return Promise.resolve();
+      holdSuspension = true;
+      const wasStarting = state === "starting", operation = ++operationId;
+      abortPending(); host.clearTimeout(timer); timer = 0;
+      // Install the promise before notification, so reentrant resume waits for suspension.
+      /** @type {() => void} */ let resolve = () => {};
+      /** @type {(cause: Error) => void} */ let reject = () => {};
+      const promise = new Promise(/** @param {(value?: void) => void} yes */ (yes, no) => { resolve = yes; reject = no; });
+      pausing = promise;
+      try {
+        const suspended = synth ? audio().suspend() : Promise.resolve();
+        transition(wasStarting ? "stopped" : "paused");
+        Promise.resolve(suspended).then(() => { if (pausing === promise) pausing = null; resolve(); }, cause => {
+          if (pausing === promise) pausing = null;
+          reject(operation === operationId ? fail(cause) : cause);
+        });
+      } catch (cause) { pausing = null; reject(fail(cause)); }
+      return promise;
+    },
+    resume() {
+      if (state !== "paused") return api.play();
+      if (pending) return pending.promise;
+      holdSuspension = false;
+      const operation = ++operationId;
+      /** @type {() => void} */ let resolve = () => {};
+      /** @type {(cause: Error) => void} */ let reject = () => {};
+      const promise = new Promise(/** @param {(value?: void) => void} yes */ (yes, no) => { resolve = yes; reject = no; });
+      pending = { promise, reject };
+      const begin = () => {
+        if (operation !== operationId) return;
+        try {
+          // No loadMIDI, playMIDI, prewarm, seek or voice construction on resume.
+          ++resumeRequests;
+          Promise.resolve(synth.resume()).then(() => {
+            --resumeRequests;
+            if (operation !== operationId) {
+              if (holdSuspension && !pending) Promise.resolve(audio().suspend()).catch(fail);
+              return;
+            }
+            refreshLatency();
+            if (operation !== operationId) return;
+            pending = null;
+            transition(audio().state === "running" ? "playing" : "paused"); syncBoundary(); resolve();
+          }, cause => { --resumeRequests; if (operation === operationId) { pending = null; reject(fail(cause)); } });
+        } catch (cause) { pending = null; reject(fail(cause)); }
+      };
+      if (pausing) pausing.then(begin, cause => { if (operation === operationId) { pending = null; reject(fail(cause)); } });
+      else begin();
+      return promise;
+    },
+    stop() {
+      if (state !== "starting" && state !== "playing" && state !== "paused") return;
+      holdSuspension = false;
+      ++runId; ++operationId; cancelTimers(); abortPending(); origin = null; heldPosition = null;
+      try { synth?.stopMIDI(); } catch (cause) { fail(cause); return; }
+      transition("stopped");
+    },
+    getPlayStatus: snapshot,
+    onPassStart: (callback) => subscribe(passes, callback),
+    onStateChange: (callback) => subscribe(states, callback),
+  };
+  host.OnchainMidiPlayer = api;
+  const init = () => {
+    try {
+      if (typeof host.WebAudioTinySynth !== "function") throw new Error(ENGINE_MISSING);
+      const block = (/** @type {string} */ id) => {
+        const tags = doc.querySelectorAll(`[id="${id}"]`);
+        if (tags.length !== 1 || tags[0].tagName.toLowerCase() !== "script" || tags[0].namespaceURI !== "http://www.w3.org/1999/xhtml" || tags[0].getAttribute("type") !== "text/plain")
+          throw new Error(`player: expected one text/plain #${id} block, found ${tags.length}`);
+        return tags[0].textContent || "";
+      };
+      settings = decodeSettings(block("onchain-midi-settings"));
+      midi = decodeMidi(block("onchain-midi-data")); score = checkMidi(midi);
+      transition("stopped"); resolveReady();
+    } catch (cause) { rejectReady(fail(cause)); }
+  };
+  if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once: true });
+  else init();
+  return api;
 }

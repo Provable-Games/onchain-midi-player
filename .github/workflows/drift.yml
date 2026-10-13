@@ -1,10 +1,8 @@
 name: Drift
 
-# The 10-minute session of scripts/drift_check.mjs on Chromium, Firefox and WebKit: the art's
-# offset from the sound may not drift, over 61 checkpoints, by more than the limits in
-# scripts/drift.mjs (the CI browser job runs 1 minute and only prints it). Too slow for every
-# pull request, so it runs weekly, on demand, and on a pull request that changes the check or this
-# file.
+# Ten-minute transport/SVG acceptance and read-only drift observations in three browsers.
+# Sampling never corrects drift; physical route/display acceptance remains issue #52.
+# Runs weekly, on demand, and when the acceptance harness changes.
 
 on:
   schedule:
@@ -18,7 +16,8 @@ on:
     paths:
       - .github/workflows/drift.yml
       - scripts/drift_check.mjs
-      - scripts/drift.mjs
+      - scripts/sync_check.mjs
+      - scripts/browser_harness.mjs
 
 permissions:
   contents: read
@@ -54,11 +53,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: ${{ env.CI_TOOLS }}/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            ${{ env.CI_TOOLS }}/package-lock.json
+
+      - name: Install pinned project dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Install pinned Playwright
         working-directory: ${{ env.CI_TOOLS }}
@@ -106,7 +110,7 @@ jobs:
 
       - name: Upload the result
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: drift-${{ matrix.browser }}
           path: ${{ runner.temp }}/drift

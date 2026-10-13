@@ -1,14 +1,12 @@
 // @ts-check
 /**
- * The page's gunzip shim. PAGE carries the TinySynth engine gzipped, as
- * `<script type="text/javascript+gzip" src="data:text/javascript;base64,...">` (the Art Blocks and
- * scripty.sol convention). The browser neither runs nor fetches a script of an unknown type, so
- * this shim, the next `<script>` in PAGE, inflates each such tag and replaces it with an inline
- * `<script>` holding the decompressed source. A script element without `src` that a script inserts
- * runs synchronously on insertion, so the engine has run before the shim returns, and so before the
- * player's `<script>` (after it in the document) is parsed. On any failure (bad base64, bad gzip
- * data, a CRC-32 or length mismatch) it logs the error and leaves the tag in place; the player
- * then finds no engine, shows the error and keeps ▶ disabled (spec D9).
+ * A generic shared loader for complete HTML script elements of type text/javascript+gzip,
+ * carrying data:application/gzip;base64 sources. Foreign-namespace scripts are not libraries.
+ * OnchainLibraries.ready is installed immediately; after document parsing, libraries inflate and
+ * execute synchronously in document order, once. Duplicate library IDs reject before execution.
+ * Failed blocks remain in place and later independent blocks still execute; ready rejects with
+ * the affected IDs. Readiness covers synchronous initialization, not a library's asynchronous work.
+ * Libraries own their APIs; consumers own UI and failure presentation.
  *
  * Plain browser JavaScript: no eval or Function (the source is inserted as a script element's
  * text, which a CSP allowing inline scripts permits), no network requests, deterministic.
@@ -29,9 +27,9 @@
  *   anything is allocated;
  * - errors are `Error("gunzip: <fflate's message>")`, without fflate's error codes.
  *
- * scripts/build_page.mjs flattens this module (removing `export`), wraps it in a function that
+ * scripts/build_segments.mjs flattens this module (removing `export`), wraps it in a function that
  * calls `gunzipScripts()`, minifies it with the pinned Terser and checks the result against
- * `SHIM_SHA256` in scripts/page.mjs.
+ * the loader source hash in scripts/library_versions.json.
  */
 
 const u8 = Uint8Array;
@@ -269,12 +267,12 @@ const le32 = (d, i) => d[i] | (d[i + 1] << 8) | (d[i + 2] << 16) | (d[i + 3] << 
  */
 export function gunzip(d) {
   const n = d.length;
-  if (d[0] != 31 || d[1] != 139 || d[2] != 8) err(4);
+  if (n < 18 || d[0] != 31 || d[1] != 139 || d[2] != 8 || d[3] & 224) err(4);
   // Skip the optional header fields: FEXTRA, then FNAME and FCOMMENT (zero-terminated), FHCRC.
   const flg = d[3];
   let st = 10;
   if (flg & 4) st += (d[10] | (d[11] << 8)) + 2;
-  for (let zs = ((flg >> 3) & 1) + ((flg >> 4) & 1); zs > 0;) if (!d[st++]) --zs;
+  for (let zs = ((flg >> 3) & 1) + ((flg >> 4) & 1); zs > 0;) { if (st >= n - 8) err(4); if (!d[st++]) --zs; }
   st += flg & 2;
   const size = le32(d, n - 4) >>> 0;
   if (st + 8 > n || size > n * 1032) err(4);
@@ -286,23 +284,52 @@ export function gunzip(d) {
   return out;
 }
 
-/**
- * Replaces every `<script type="text/javascript+gzip" src="data:...;base64,...">` in the document
- * with an inline `<script>` holding the decompressed source, which runs on insertion. A tag that
- * fails is logged and left in place; the others are still replaced.
- */
-export function gunzipScripts() {
-  document.querySelectorAll('script[type="text/javascript+gzip"]').forEach((tag) => {
-    try {
-      const src = tag.getAttribute("src") || "";
-      const bin = atob(src.slice(src.indexOf(",") + 1));
-      const bytes = new u8(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const script = document.createElement("script");
-      script.textContent = new TextDecoder().decode(gunzip(bytes));
-      tag.replaceWith(script);
-    } catch (e) {
-      console.error(e);
+/** Install generic classic-script readiness. @param {any} [host] @returns {Promise<void>} */
+export function gunzipScripts(host = window) {
+  if (host.OnchainLibraries?.ready) return host.OnchainLibraries.ready;
+  /** @type {() => void} */ let resolve = () => {};
+  /** @type {(cause: Error) => void} */ let reject = () => {};
+  const ready = new Promise(/** @param {(value?: void) => void} yes */ (yes, no) => { resolve = yes; reject = no; });
+  ready.catch(() => {});
+  host.OnchainLibraries = { ready };
+  const execute = () => {
+    const tags = [...host.document.querySelectorAll('script[type="text/javascript+gzip"]')]
+      .filter(tag => tag.namespaceURI === "http://www.w3.org/1999/xhtml");
+    const ids = new Set();
+    for (const tag of tags) {
+      const id = tag.getAttribute("id");
+      if (!id || ids.has(id)) { reject(new Error(`library ${id || "<missing id>"}: duplicate or missing library ID`)); return; }
+      ids.add(id);
     }
-  });
+    const failures = [];
+    for (const tag of tags) {
+      const id = tag.getAttribute("id");
+      try {
+        const src = tag.getAttribute("src") || "";
+        const prefix = "data:application/gzip;base64,";
+        if (!src.startsWith(prefix)) throw new Error("expected data:application/gzip;base64 URI");
+        const payload = src.slice(prefix.length);
+        if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(payload)) throw new Error("noncanonical base64");
+        const bin = host.atob(payload);
+        if (host.btoa(bin) !== payload) throw new Error("noncanonical base64");
+        const bytes = new u8(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const script = host.document.createElement("script");
+        script.id = id;
+        script.textContent = new TextDecoder("utf-8", { fatal: true }).decode(gunzip(bytes));
+        let evaluationError = null;
+        const capture = (/** @type {ErrorEvent} */ event) => { evaluationError = event.error || new Error(event.message || "script evaluation failed"); event.preventDefault(); };
+        host.addEventListener("error", capture);
+        try { tag.replaceWith(script); } finally { host.removeEventListener("error", capture); }
+        if (evaluationError) throw evaluationError;
+      } catch (cause) {
+        failures.push(new Error(`library ${id}: ${cause instanceof Error ? cause.message : String(cause)}`));
+      }
+    }
+    if (failures.length) reject(new AggregateError(failures, failures.map((e) => e.message).join("; ")));
+    else resolve();
+  };
+  if (host.document.readyState === "loading") host.document.addEventListener("DOMContentLoaded", execute, { once: true });
+  else execute();
+  return ready;
 }

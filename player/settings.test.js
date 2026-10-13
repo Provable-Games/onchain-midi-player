@@ -200,12 +200,12 @@ describe("installer", () => {
   test("constructs with quality, useReverb and voices, then installs in order", () => {
     const synth = createSynth(FakeSynth, beast);
     assert.deepEqual(synth.calls.map((/** @type {any[]} */ c) => c.slice(0, 3)), [
-      ["new", { quality: 1, useReverb: 0, voices: 64 }],
+      ["new", { autoResume: false, quality: 1, useReverb: 0, voices: 64 }],
       ["setQuality", 1], ["setMasterVol", 0.4], ["setReverbLev", 0], ["setVoices", 64],
       ["setTimbre", 0, 0], ["setTimbre", 1, 36], ["setTimbre", 1, 38],
     ]);
     const reverb = createSynth(FakeSynth, { ...beast, reverb: 30 });
-    assert.deepEqual(reverb.calls[0], ["new", { quality: 1, useReverb: 1, voices: 64 }]);
+    assert.deepEqual(reverb.calls[0], ["new", { autoResume: false, quality: 1, useReverb: 1, voices: 64 }]);
     assert.deepEqual(reverb.calls[3], ["setReverbLev", 0.3]);
   });
 
@@ -242,7 +242,7 @@ describe("installer", () => {
     for (const o of [hi, lo]) for (const v of Object.values(o)) if (typeof v === "number") assert.ok(Number.isFinite(v));
     const synth = createSynth(FakeSynth, s);
     assert.deepEqual(synth.calls.slice(0, 5), [
-      ["new", { quality: 1, useReverb: 1, voices: 255 }],
+      ["new", { autoResume: false, quality: 1, useReverb: 1, voices: 255 }],
       ["setQuality", 1], ["setMasterVol", 2.55], ["setReverbLev", 2.55], ["setVoices", 255],
     ]);
     // One past each type's extreme is malformed, not accepted.

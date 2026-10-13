@@ -3,11 +3,12 @@
 // A deliberately independent JavaScript re-implementation of what StressNft.token_uri returns for
 // a given number of bars: the SVG, the JSON members, the generated score, the default
 // TinySynthSettings and the spliced token_uri (the same layout and word alignment as the
-// beast_consumer example), on top of the repository's JS reference of the class (scripts/page.mjs).
+// beast_consumer example), on top of the repository's JS reference of the class (scripts/segments.mjs).
 // gen_fixtures.mjs writes the Cairo golden from it, and rpc_check.mjs compares live responses with it.
 
 import { readFileSync } from 'node:fs';
-import { consumerPieces, dFragment, pageHtml, sha256, spliceTokenUri } from '../../../scripts/page.mjs';
+import { dFragment, sha256 } from '../../../scripts/segments.mjs';
+import { consumerPieces, spliceTokenUri } from '../../../scripts/composition.mjs';
 
 export const TOKEN_COUNT = 20;
 
@@ -64,11 +65,10 @@ export const ALIGN = { align: true };
 
 export function tokenParts(tokenId, bars) {
   const svg = renderSvg(tokenId, bars);
-  if (/<\/script/i.test(svg)) throw new Error('SVG contains </script');
   const mem = members(tokenId, bars);
   const midi = stressMidi(bars);
   const { d } = dFragment(midi, SETTINGS);
-  return { tokenId, bars, svg, mem, midi, d, pageHtml: pageHtml() };
+  return { tokenId, bars, svg, mem, midi, d };
 }
 
 /** What `StressNft.token_uri(tokenId)` returns when the token has `bars` bars. */

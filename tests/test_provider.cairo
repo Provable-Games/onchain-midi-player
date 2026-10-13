@@ -15,10 +15,10 @@ use onchain_midi_player::types::{
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ContractAddress;
 use starknet::syscalls::call_contract_syscall;
-use crate::helpers::class;
-use crate::page_fixtures::{
+use crate::data_fixtures::{
     case_beast_140bpm_midi, case_beast_140bpm_midi_segment, case_beast_140bpm_settings,
 };
+use crate::helpers::class;
 use crate::settings_fixtures::{valid_filter_extremes, valid_reference_waves};
 
 /// A composer's provider. It decodes only the low 16 bits of the token ID, ignoring the rest as a
@@ -30,7 +30,7 @@ use crate::settings_fixtures::{valid_filter_extremes, valid_reference_waves};
 mod MockSoundProvider {
     use onchain_midi_player::interface::ISoundProvider;
     use onchain_midi_player::types::TinySynthSound;
-    use crate::page_fixtures::{case_beast_140bpm_midi, case_beast_140bpm_settings};
+    use crate::data_fixtures::{case_beast_140bpm_midi, case_beast_140bpm_settings};
 
     #[storage]
     struct Storage {}

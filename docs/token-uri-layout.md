@@ -1,161 +1,88 @@
-# `token_uri` layout and the player page
+# Composing a token URI
 
-How a consumer builds a `token_uri` around the class's pieces, and what the page does in the browser. The interface and its byte formats are documented in [`src/interface.cairo`](../src/interface.cairo). [`examples/beast_consumer`](../examples/beast_consumer) builds exactly this layout against the class.
+The NFT owns the document and metadata. The class returns only complete independently encoded fragments. No fragment contains a JSON member name, data URI prefix, document wrapper or tag that another provider must close.
 
-## Output format
+Define `B64` as canonical RFC 4648 base64, counting UTF-8 **bytes**:
 
-The output uses standard nested base64 data URIs:
-
-- `token_uri` is `data:application/json;base64,` followed by the token JSON.
-- The JSON's `animation_url` is `data:text/html;base64,` followed by the HTML page.
-- The HTML page is the engine (gzipped, with a gunzip shim that inflates it in the browser), the player, the token's settings and MIDI (in inert text blocks), and the token's SVG art (in an inert text block, shown through an `<img>`).
-
-The class is called with `library_call` from the consumer's contract. It is never deployed, so RPC nodes and explorers cannot call it directly. It has no storage, so it reads and writes nothing in the caller's context. Invalid settings revert with a `'TS: ...'` short string followed by the offending indices; through a library call the panic data arrives whole, followed by `'ENTRYPOINT_FAILED'`.
-
-## Pre-encoding the fixed page
-
-The engine and the player are the same for every token. The class stores them already base64-encoded at both layers, computed offline, and the consumer splices them in. This relies on the base64 identity
-
-```
-b64(X ++ Y) == b64(X) ++ b64(Y)    when len(X) % 3 == 0
+```text
+segment(F) = B64(B64(F))
+len(F) % 9 = 0
 ```
 
-With aligned pieces, only per-token data (MIDI, settings, art, JSON members) is encoded at call time, and the result is still ordinary standard base64 that any decoder accepts. The engine is never encoded onchain.
+The splicing identity `B64(X ++ Y) = B64(X) ++ B64(Y)` holds when `len(X) % 3 = 0`. Two layers require nine-byte alignment. Ordinary whitespace goes outside completed elements, so both intermediate streams have no `=` padding. MIDI's own inner data base64 may contain `=`.
 
-## Consumer `token_uri` layout
+Fixed code is minified/compressed/encoded offline. Fixed MIDI-class fragments use raw 279-byte alignment (`9 * 31`), yielding returned lengths divisible by Cairo's 31-byte word size. Consumers align their returned-stream append positions with insignificant HTML whitespace; the [reference assembler](../examples/beast_consumer/src/assembly.cairo) tracks the actual ByteArray position and adds a pre-encoded nine-space fragment before large constants. [Measurements](gas.md) compare this with minimum nine-byte fixed padding. Dynamic data uses minimum nine-byte padding because encoding extra spaces has a measurable runtime cost.
 
-The consumer builds the JSON itself, and pads with spaces between JSON tokens so that each piece starts on a 3-byte boundary:
+The complete data fragment is exactly:
 
-```
-"data:application/json;base64,"
-  ++ b64('{' members ',' <pad> '"image":"data:image/svg+xml;base64,')
-  ++ b64(S)                       S = svg_b64 '"' <pad>   (encoded once, used twice)
-  ++ b64(',' <pad>)
-  ++ animation_url_segment()      pre-encoded engine + page, never encoded at call time
-  ++ midi_segment(midi, settings) per-token: settings and MIDI blocks, then opens art
-  ++ b64(S)                       art closes both data URIs
-  ++ b64('}')
+```html
+<script type="text/plain" id="onchain-midi-settings">SETTINGS</script><script type="text/plain" id="onchain-midi-data">B64(MIDI)</script>ALIGNMENT_WHITESPACE
 ```
 
-Where:
+Settings use the canonical [validated serialization](sound-settings.md). The class encodes MIDI bytes verbatim; strict [MIDI validation](midi-contract.md) runs in the browser before synth creation. Each data ID must occur exactly once across document elements and identify a complete HTML-namespace `script` with `type="text/plain"`; non-script/foreign-namespace collisions reject readiness. Inert template contents do not belong to the document.
 
-- `PAGE` is the fixed HTML page. It ends by opening the settings text block (`<script type="text/plain" id="settings">`).
-- `animation_url_segment()` = `b64('"animation_url":"data:text/html;base64,' ++ b64(PAGE))`.
-- `midi_segment(midi, settings)` = `b64(b64(D))`, with `D = SETTINGS '</script><script type="text/plain" id="midi">' b64(midi) <pad> '</script><script type="text/plain" id="art">'`. `SETTINGS` is the ASCII encoding of the `TinySynthSettings` value (see [Sound settings](sound-settings.md#the-settings-format)).
-- `S = svg_b64 '"' <pad>` is encoded once and used twice. The first time it is the `image` value. The second time, at the HTML layer, it is the tail of the `animation_url` base64 stream: `svg_b64` decodes to the raw SVG, which becomes the contents of the open art block, and the `"` closes the `animation_url` string. So the SVG must never contain `</script` (see [Art (SVG) requirements](#art-svg-requirements)).
+The NFT's JSON opening includes its own metadata/image and `"animation_url":"data:text/html;base64,`. Its JSON-layer byte length before splicing is a multiple of three. It then appends independently double-encoded HTML fragments and finally its own encoded closing quote/brace:
 
-Decoded, the `animation_url` value after its `data:text/html;base64,` prefix is `b64(PAGE) ++ b64(D) ++ svg_b64`, which is standard base64 of `PAGE ++ D ++ SVG`. Since `svg_b64` ends that stream, it may end with `=` padding. `b64(PAGE)` and `b64(D)` are mid-stream and unpadded.
+```text
+JSON data URI prefix
+++ B64(NFT JSON opening, image, aligned animation_url prefix)
+++ segment(NFT head)
+++ gunzip_segment()
+++ independent_provider.library_segment()    optional
+++ player_segment()                          engine and headless API together
+++ segment(NFT body/control markup)
+++ segment(NFT image element)                may precede or follow data
+++ midi_segment(midi, settings)
+++ segment(NFT bootstrap and closing HTML)
+++ B64('"}')
+```
 
-## Alignment
+The reference reuses the already encoded metadata image attribute at the inner HTML base64 layer when building a complete isolated `<img>`, then applies its outer layer. This encodes the image attribute again for the HTML layer; the class-owned payload is not the only runtime encoding cost. The matched gas figures measure the complete assembly, without attributing its increase over the earlier whole-page layout to this pass alone. Its 93-byte opening tag prefix and separately padded closing pieces preserve both complete framing and concatenation alignment.
 
-**Base64 alignment (required).** Every piece passed to `base64`, except the final `'}'`, must be a multiple of 3 bytes long. Otherwise the encoder emits `=` padding mid-stream and the concatenation is no longer valid base64. The consumer pads with spaces between JSON tokens. The class pads `PAGE` and `D` itself, to multiples of 9, because its pieces sit at both layers: 3-alignment at the HTML layer, and `len(b64(X)) = 4·len(X)/3` must also be a multiple of 3 at the JSON layer. The 39-byte `"animation_url":"data:text/html;base64,` prefix is already a multiple of 3.
+Direct splicing is the recommended efficient pattern. Consumers may decode fragments, reconstruct HTML and encode the result again if the resulting metadata/HTML is valid. The runtime full-page comparison supports this integration and measures its extra work. Generated metadata, art, settings and MIDI may be encoded at runtime; prepared token-specific constants may be pre-encoded.
 
-**Word alignment (optional, saves gas).** A Cairo `ByteArray` stores 31-byte words. `append` onto a `ByteArray` whose length is a multiple of 31 copies whole words. At any other length it splits every word of the appended piece in two, which costs about 4x as much. Measured in L2 gas:
+## Shared loader and dependencies
 
-| Append | Word-aligned | Unaligned |
-| --- | --- | --- |
-| The 59,220-byte `animation_url_segment()` | 3.0M | 12.9M |
-| Every append of the example's full-size token: two 40,420-character `b64(S)`, the segment, `midi_segment` and the small pieces | 16.7M | 33.8M |
+HTML-namespace library data blocks use `type="text/javascript+gzip"`, unique IDs and `src="data:application/gzip;base64,PAYLOAD"`. The loader is an inline classic script with `id="onchain-gunzip"`. It exposes `window.OnchainLibraries.ready` synchronously, including before payload parsing, and inflates/executes actual selected script elements in document order after parsing. A repeated loader reuses readiness. Duplicate IDs among selected HTML gzip scripts reject before execution. SVG/MathML script decoys and template contents are excluded; HTML scripts inside SVG `foreignObject` remain candidates. Corruption, noncanonical base64, invalid UTF-8 and synchronous evaluation failures identify the affected library; independent remaining blocks still execute.
 
-The consumer chooses where its large pieces land by adding spaces between JSON tokens, 3 at a time. Three spaces are one 3-byte group, so they keep every piece a multiple of 3, and they encode to the constant `'ICAg'`, so they are never encoded at call time. It does this in two places:
+Readiness covers synchronous classic-script initialization. Each library remains responsible for any asynchronous work it starts. Parser-time ordinary scripts cannot assume gzip globals are already available.
 
-- **Before `"image"`, so the first `b64(S)` is aligned.** The consumer encodes `'{' members ',' <pad>`, appends `'ICAg'` until the length plus 48 is a multiple of 31, then the 48-character constant `b64(' "image":"data:image/svg+xml;base64,')`. The image key, with one space in front, is a piece of its own: it is 36 bytes, a multiple of 3.
-- **After the comma before `"animation_url"`, so the segment is aligned.** The consumer appends `'LCAg'` (`b64(',  ')`), then `'ICAg'` until the length is a multiple of 31.
+The reference NFT awaits `OnchainLibraries.ready`, then `OnchainMidiPlayer.ready`, and keeps playback disabled if any library fails. This is its whole-composition policy: a partly initialized artwork should show its error rather than enable its normal controls. A different NFT can explicitly recover MIDI-only controls after an unrelated library fails, while leaving controls that need that library disabled. For example, in an async NFT bootstrap:
 
-At most 30 groups are needed in each place (120 characters), and the decoded JSON only gains insignificant whitespace. `midi_segment` and the second `b64(S)` cannot be aligned this way: they follow the segment directly at both layers.
-
-## Building `token_uri` in Cairo
-
-The layout above, with word alignment:
-
-```cairo
-use onchain_midi_player::interface::{
-    ITinySynthDispatcherTrait, ITinySynthLibraryDispatcher,
-};
-use onchain_midi_player::types::TinySynthSettings;
-
-/// Appends spaces (between JSON tokens) until `(s.len() + extra) % 3 == 0`.
-fn pad3(ref s: ByteArray, extra: u32) {
-    while (s.len() + extra) % 3 != 0 {
-        s.append_byte(' ');
-    }
+```js
+try {
+  await window.OnchainLibraries.ready;
+} catch (error) {
+  console.warn("Some artwork libraries failed", error);
 }
-
-/// Appends 'ICAg', which is b64('   '): 3 spaces between JSON tokens, until `uri.len() + extra` is
-/// a multiple of 31. At most 30 times, since 4 and 31 are coprime.
-fn align_to_word(ref uri: ByteArray, extra: u32) {
-    while (uri.len() + extra) % 31 != 0 {
-        uri.append(@"ICAg");
-    }
-}
-
-fn token_uri(
-    tinysynth: starknet::ClassHash,
-    members: ByteArray, // "name":...,"attributes":[...]   (no braces)
-    svg: ByteArray, // raw SVG; must never contain `</script`
-    midi: ByteArray,
-    settings: TinySynthSettings,
-) -> ByteArray {
-    let synth = ITinySynthLibraryDispatcher { class_hash: tinysynth };
-
-    // '{' members ',' <pad>, a multiple of 3 bytes.
-    let mut open: ByteArray = "{";
-    open.append(@members);
-    open.append_byte(',');
-    pad3(ref open, 0);
-
-    // S = svg_b64 '"' <pad>, encoded once and used twice.
-    let mut s = synth.base64(svg);
-    s.append_byte('"');
-    pad3(ref s, 0);
-    let s_b64 = synth.base64(s);
-
-    let mut uri: ByteArray = "data:application/json;base64,";
-    uri.append(@synth.base64(open));
-    // b64(' "image":"data:image/svg+xml;base64,'): the image key after one space (36 bytes), a
-    // constant. The spaces before it put b64(S) on a word boundary.
-    let image_key: ByteArray = "ICJpbWFnZSI6ImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQs";
-    align_to_word(ref uri, image_key.len());
-    uri.append(@image_key);
-    uri.append(@s_b64);
-    // b64(',  '), then spaces until the segment starts on a word boundary.
-    uri.append(@"LCAg");
-    align_to_word(ref uri, 0);
-    uri.append(@synth.animation_url_segment());
-    uri.append(@synth.midi_segment(midi, settings));
-    uri.append(@s_b64);
-    uri.append(@synth.base64("}"));
-    uri
-}
+const player = window.OnchainMidiPlayer;
+if (!player) throw new Error("MIDI library did not load");
+await player.ready; // MIDI/data failures still prevent playback.
+const button = document.getElementById("midi-only-play");
+button.onclick = () => player.play().catch(console.error);
+button.disabled = false;
 ```
 
-**MIDI and settings** come from wherever the collection keeps its sound: constants in the NFT or its renderer, as in the example, or a composer's contract that implements `ISoundProvider` (see [Sound provider interface](sound-provider.md)).
+Global readiness settles after all selected blocks have been attempted, so this needs no per-library readiness framework. A successful MIDI API/data check does not establish that unrelated artwork initialized.
 
-**Your own encoder.** You may use your own encoder instead of the class's `base64`, if it produces standard RFC 4648 output. A copy compiled into your contract also avoids passing the data through the library call: for a 22.7 KB SVG that saves about 7.4M L2 gas (75.2M instead of 82.6M). It adds the encoder's size to your class (see [Class size](development.md#class-size)).
+The delivered Cairo fixture calls TinySynth and a separate small fixture provider. Its `CompositionFixture.label()` export is used by NFT code; a dependent gzip block consumes that export. This proves generic independent-provider assembly and ordering. A future p5.js provider can use the same interface without MIDI-specific loader behavior; no real p5.js code or benchmark is included.
 
-## Art (SVG) requirements
+## Player events and NFT policy
 
-The consumer's SVG must never contain `</script`, in any letter case.
+The [headless API](../player/api.d.ts) supplies `ready`, `play()`, `pause()`, `resume()`, synchronous `stop()`, fresh `getPlayStatus()`, `onPassStart()` and `onStateChange()`. Readiness creates no audio or UI. Play starts tick zero or resumes a paused score. Pause suspends the AudioContext without reloading MIDI, rebuilding voices, restarting envelopes or changing the run ID; resume explicitly calls the engine's public `resume()`. The synth uses `autoResume: false`: scheduler sends cannot undo intentional or external suspension. Pending transport calls share a promise; stop/cancelled starts reject with `AbortError`. Stop cancels voices, timing and queued transport; the next play reloads tick zero. Initialization/audio failure is terminal; it rejects a pending `play()`/`resume()` with the failure cause and keeps the first error.
 
-- **Why.** In the `animation_url` page, the SVG is the raw contents of the final `<script type="text/plain" id="art">` block, which stays open until the end of the document. The HTML parser ends that block at the first `</script`. The art is cut short there, the player's `<img>` gets a truncated SVG and shows a broken image, and the rest of the SVG leaks into the page as markup. The `image` member still decodes to the whole SVG, so marketplaces' image views do not show the failure.
-- **In practice.** No `<script>` elements in the SVG, and no comments or CDATA sections containing `</script`. Nothing else needs care: SVG is XML, so any `<` in text content is already escaped as `&lt;`. You lose nothing, because scripts inside an SVG never run when it is shown through `<img>`, which is how both this page and marketplaces' `image` views show it.
-- **Test it in your contract.** The class never sees the SVG: it returns the pieces around it, and you splice the art in. So the rule belongs in your own tests, on your renderer's output. [`examples/beast_consumer`](../examples/beast_consumer) shows how: `assertArtSafe` in its scripts and `contains_script_end_tag` in its Cairo tests check the rendered SVG. A renderer built from fixed, reviewed literals and validated fields meets the rule by construction. In Beasts, for example, names are limited to `A-Z a-z 0-9`, space, `'` and `-`, and art URIs are strict base64.
-- **Where the ▶/❚❚ button goes (optional).** The root `<svg>` may carry `data-play-anchor="X Y S"`: a point (X, Y) in the SVG's own units (its `viewBox`, else `width` and `height`), and optionally the button's diameter S in the same units. The page puts the button's bottom-right corner at the point, inset by max(S/8, 6) units (6 px without S), wherever the `<img>` draws the art (it follows the image's own box, on resize too). The diameter is S times the art's scale on screen, between 44 CSS px (a touch target) and 128; without S it is 48 px. The icon scales with it. The Beasts card (250×350 viewBox) uses `data-play-anchor="235 202 32"`: the bottom-right corner of its 220×144 art frame, `<rect x='15' y='58' width='220' height='144' rx='8'>`, which surrounds the 32×32 Beast drawn at (62, 66) to (190, 194); the 6-unit inset clears the frame's 8-unit rounded corner. A last word `top-right` (`"235 58 20 top-right"`) makes the point the button's top-right corner instead, inset the same way, with the button growing down and left from it. The mapping assumes the default `preserveAspectRatio` (`xMidYMid meet`) and, with a `viewBox`, a `width` and `height` (if any) of the same aspect ratio: the art scaled uniformly to fit and centred. Without the attribute, or with a malformed or out-of-range one (not two or three numbers, S not positive, the point outside the art), the button stays 40 px in the viewport's bottom-right corner.
-- **`svg_b64`** is standard RFC 4648 base64 of the exact SVG bytes, with no line breaks. It may end with `=` padding, because it ends the HTML-layer stream. It is also the `image` value, so marketplaces and the page show the same bytes.
+State is `loading`, `stopped`, `starting`, `playing`, `paused` or `failed`. External non-running audio freezes playback status and NFT visuals; an actual external resume updates the state. Status exposes `audioState`, scheduled `startTime`, fixed first-pass `originTime`, `audioTime`, `passSeconds`, estimated `positionSeconds`, raw validated `outputLatency`/`baseLatency`, shared `latencySeconds` and `latencyRevision`. Unavailable times are null. State subscriptions also receive accepted latency updates, even when the state name stays the same. Composers compare `state`, `runId` and `latencyRevision` rather than treating every snapshot as a new run. Captured callback transitions are delivered in order; subscription exceptions are isolated. Reentrant stop/pause commands win over stale async completions. Unsubscribe is idempotent.
 
-## The player page
+All times use AudioContext seconds. The shared estimate is `outputLatency + baseLatency`: each component must be finite and in [0, 1] seconds, otherwise it contributes zero. The player polls every 250 ms and updates compensation for changes of at least 2 ms. Art, optional NFT-owned notes and pass events use this same estimate. Engine `startTime` can announce a scheduled future pass; pass events wait for the audio clock to reach `startTime + latencySeconds`. Initial events follow a successful start; subsequent missed/over-50-ms-late boundaries are skipped. Suspended audible position holds while current latency metadata continues updating; the latest compensation applies when the audio clock resumes. Pending audible boundaries survive pause and use current compensation after resume. Null-origin/tempo-only scores emit one immediate initial event and no fictitious recurring passes. Browser timers remain best effort.
 
-`PAGE` is [`tests/fixtures/page.html`](../tests/fixtures/page.html), byte for byte: head and styles, the engine gzipped in a `<script type="text/javascript+gzip" src="data:text/javascript;base64,...">` tag, the gunzip shim, a small ▶/❚❚ button, the player script, then the opening of the settings block. The per-token `D` and the SVG follow it. The shim inflates the engine while the page is parsed; the player ([`player/player.js`](../player/player.js) and [`player/settings.js`](../player/settings.js)) starts on DOMContentLoaded:
+The core owns no UI, art or media policy. The Genesis reference explicitly marks its NFT-owned body `data-trusted-art="inline-svg"`; its bootstrap decodes only that trusted art into inline SVG, pauses the root and every nested SVG, and defaults to **On play**: time zero until first tick zero reaches its estimated audible start, checked with animation frames against the audio clock. It seeks every timeline to the estimated audible position on start, resume, pass events and accepted latency changes. It freezes the SVG animation timelines and optional notes when the audio stops. A pause stays audible until the AudioContext's asynchronous suspend completes, so running art runs on until an animation frame sees the suspended clock, then freezes and seeks to the held `positionSeconds` plus the display lead; an external suspension freezes at the same held position, and art whose tick zero is not yet audible when the audio stops stays at zero. The read-only `OnchainArtMonitor` records current/maximum drift, initial alignment and latency events. Sampling never corrects drift: there is no periodic drift-correction configuration, checkbox or seek path.
 
-- **Art first.** It shows the art in an `<img>`, before and independently of the settings and the MIDI. The art fills the frame, and the button overlays its `data-play-anchor` (see [Art (SVG) requirements](#art-svg-requirements)), else the bottom-right corner.
-- **Settings and MIDI.** It parses `SETTINGS` strictly, and checks the MIDI with the page's MIDI check (the [MIDI contract](midi-contract.md)). Range checks on the settings are the class's alone: the class validates them before writing `SETTINGS`.
-- **Fail closed.** If the engine did not load, or on any settings or MIDI error, ▶ stays disabled, the exact error is shown at the bottom of the frame and in the button's title, and it is logged. The art stays: the player that shows it is not compressed, so it never depends on inflation.
-- **▶** (a click or tap) creates the synth (and builds its noise buffer) on the first press, resumes audio inside the gesture, plays the MIDI from tick 0, and loops at End-of-Track. It restarts the art when tick 0 is heard, using the engine's start time plus the audio output latency, so the browser starts the art's animation again in step with the sound.
-- **Every pass** restarts the art the same way, so the art can drift from the sound only by what builds up within one pass. When the pass is a whole multiple of the art's period, the restart is not seen; otherwise the art jumps back to its start at every loop point.
-- **❚❚** pauses: the `AudioContext` is suspended, so its clock stands still and every voice, envelope and scheduled event holds where it is; the next ▶ resumes it and the song carries on. Nothing is stopped or reloaded (to start over, reload the page). The art stands still with the music: ❚❚ restarts it at once with every SMIL animation that has no `begin` given `begin='-<p>s' repeatDur='<p+0.001>s' fill='freeze'` (p being the music's position in the pass), so it shows the frame at p, motionless; ▶ restarts it with `begin='-<p>s'` alone, so it runs on from there. Both are plain images, so this works in every engine and frame (a GIF in the art runs on, and starts at its first frame).
-- **Background audio and media controls.** ▶ also plays a silent, looping 6-second `<audio>` element (a WAV the page generates, as a `blob:` URL), and ❚❚ pauses it. Browsers treat the page as a media player: Android Chrome and desktop browsers show media controls, and playback continues with the screen locked or the tab hidden. `navigator.mediaSession` carries the title (the art SVG's `<title>`, else "Onchain music"), artwork made of the art's own bitmap (the first embedded PNG, GIF or WebP): a static 512×512 and 256×256 PNG with the bitmap's square frames (a sprite sheet's, else its one frame) side by side in one centred row on the card colour `#1e1e22`, scaled up without smoothing to a whole factor (a 32×32 sprite is 5× at 512 and 2× at 256). The row stays in the middle band because Android 13+ crops the artwork to a wide panel, while iOS shows the whole square, and play, pause and stop handlers that do what ▶ and ❚❚ do (stop pauses too). Pausing from the notification, a headset or a call pauses the player. On iOS, `navigator.audioSession.type = "playback"` makes the sound ignore the silent switch. The synth still plays through the `AudioContext`, so latency and the art's sync are unchanged. The artwork is never animated (updating the metadata would flicker and cost battery). Art without an embedded bitmap gets a title only: the card SVG itself is never drawn to a canvas, because its `<foreignObject>` can taint it. All of this is best effort and fails silently: where the element cannot play (a host CSP without `media-src blob:`), the music still plays, but there are no media controls and playback stops when the page is hidden.
-- **Safe to embed.** Plain JavaScript with no modules, no `eval`, no network requests, and no storage or cookies. It works in `<iframe sandbox="allow-scripts">` and under a CSP that allows only inline scripts and styles and `data:` images; add `media-src blob:` for the media controls and background playback.
+SVG timeline control applies to SVG/SMIL animation. Embedded animated GIFs have an independent image clock: `pauseAnimations()` cannot freeze them. The unchanged historical Warlock measurement fixture embeds a GIF, so it demonstrates composition and size parity rather than paused sprite animation. Browser synchronization acceptance uses explicit outer and nested SVG/SMIL timelines.
 
-**The gzipped engine.** A browser neither runs nor fetches a `<script>` of an unknown type, so the `text/javascript+gzip` tag is just data, and its base64 payload cannot close the tag. The shim ([`player/gunzip.js`](../player/gunzip.js), derived from fflate) base64-decodes and gunzips it, checks the gzip CRC-32 and length, and replaces the tag with an inline `<script>`, which runs before the player's script is parsed. On any failure the shim leaves the tag, and the player fails closed.
+`REFERENCE_DISPLAY_LEAD_SECONDS = 0.017` is a provisional NFT reference value from the lab, pending physical display/audio validation in [#52](https://github.com/Provable-Games/onchain-midi-player/issues/52). It is separate from the engine and shared latency estimate and does not establish physical accuracy. An optional NFT-owned notes layer can pass its `play/pause/stop` controls to `mountArtSync` and use the returned `clock()`; no notes library or dimming policy is shipped here.
 
-**Browsers.** Firefox runs Web Audio only with an audio output device: without one, ▶ turns into ❚❚ but nothing plays. WebKit reports an `outputLatency` of 0, so there the art restart includes only the engine's 100 ms scheduling offset. Audio can differ slightly across browsers and sample rates. The checks that CI runs on Chromium, Firefox and WebKit are in [Development](development.md#browser-validation).
+The reference's ▶/❚❚ button and media-session play action resume; media pause **and stop** preserve the approved prototype's pause policy. Public `player.stop()` remains a full transport reset. The silent background element pauses with audio; external element pause pauses the transport, and a hidden page without a playing background element pauses. Strict CSP can allow inline scripts/styles, `img-src data:` and `media-src blob:`. Trusted inline art with embedded data fonts also needs `font-src data:`; otherwise `default-src 'none'` blocks those fonts. Actual phones, routes and lock-screen behavior remain #52 device validation.
+
+## Isolated community art
+
+Use a complete `<img src="data:image/svg+xml;base64,...">` element. Original SVG bytes can remain unchanged, including script-like text; browser image isolation keeps that markup out of the parent document. Independently align/encode the whole HTML representation so later scripts and closing HTML remain intact. Do not insert supplied SVG markup into the parent, or splice a padded final-image base64 shortcut in the middle of the HTML stream. The metadata image and the document's art are independent consumer choices.

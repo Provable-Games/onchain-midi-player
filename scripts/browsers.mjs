@@ -46,7 +46,7 @@ export async function launchBrowser(options = {}) {
     process.exit(2);
   }
   const playwright = createRequire(import.meta.url)(PLAYWRIGHT_CORE);
-  const executablePath = engine === "chromium" && CHROME ? CHROME : undefined;
+  const executablePath = engine === "chromium" && CHROME ? CHROME : engine === "webkit" ? process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE : undefined;
   // Firefox fetches /favicon.ico for every http(s) top-level document, on its own (the tab icon, not
   // the page), which the checks' CSP and network blocking would report as the page's. The page never
   // asks for it, and a data: page never triggers it. Headless has no tab strip: turn tab icons off.

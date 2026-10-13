@@ -2,7 +2,7 @@
 name: sound-design
 description: Design the sound of an NFT that uses the onchain MIDI player (Provable-Games/onchain-midi-player) through the TinySynthSettings value its contract passes to midi_segment - quality, reverb, master volume, voices, custom waveforms (single-cycle sample tables and harmonic waves), fixed low-, high- and band-pass filters, and custom FM or chip timbres that replace General MIDI programs or drum notes. Use when choosing or tuning instruments and drums, defining chip waves such as stepped triangles, pulses or LFSR noise, filtering a voice (chip hi-hats, filtered leads and basses), converting a TinySynth soundedit timbre to Cairo fixed point, choosing the per-token subset a sound provider returns, fixing a settings revert from midi_segment (the TS errors), or previewing settings offline before deploying.
 license: Apache-2.0
-compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-midi-player whose VERSION in src/page_data.cairo equals the class's version(); Cairo steps need the Scarb version in its .tool-versions.
+compatibility: Needs Node 22 or later and a clone of https://github.com/Provable-Games/onchain-midi-player whose VERSION in src/segment_data.cairo equals the class's version(); Cairo steps need the Scarb version in its .tool-versions.
 ---
 
 # Sound design with `TinySynthSettings`
@@ -23,7 +23,7 @@ Boundary: the [midi-guide](../midi-guide/SKILL.md) skill covers what goes in the
    `preview` runs the JS reference of the class's `settings::validate` and encoder (same checks, order, messages and indices; parity fixtures keep them identical). An invalid value prints `midi_segment would revert with ('TS: …', …)`. A misspelt or missing field fails too.
 3. Port the values to Cairo (below), then test in the consumer that `midi_segment` accepts them.
 
-Get the tools: Node 22 or later, and a clone whose `grep 'pub const VERSION' src/page_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed. The same `VERSION` always means the same page bytes. `preview` needs no `npm ci`. Details: README, [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md#agent-skills).
+Get the tools: Node 22 or later, and a clone whose `rg 'pub const VERSION' src/segment_data.cairo` prints the class's `version()`: `main` while it matches, otherwise the last commit before `VERSION` changed. The same `VERSION` always means the same provider segment bytes. Install the pinned root tool dependencies with `npm ci` before using the preview/inspection tools. Details: README, [Agent skills](https://github.com/Provable-Games/onchain-midi-player/blob/main/README.md).
 
 ## What the class checks
 
@@ -72,7 +72,7 @@ See [Custom waves](https://github.com/Provable-Games/onchain-midi-player/blob/ma
 - **Reference shapes**, generated from their definitions in [`scripts/reference_waves.mjs`](https://github.com/Provable-Games/onchain-midi-player/blob/main/scripts/reference_waves.mjs) (generic chip shapes, not any collection's presets): a 64-sample 4-bit stepped triangle (`triangle4()`), 12.5%, 25% and 50% pulses of eight samples (`pulse(1)`, `pulse(2)`, `pulse(4)`), a 16-step 4-bit saw (`saw4()`), and 15-bit LFSR noise, short (93 steps) and long (32,767 steps) (`lfsr("short")`, `lfsr("long")`). The `reference_waves` entry of `tests/fixtures/settings.json` puts each on a timbre; preview it as the example timbres below.
 - **Noise tables are set by their step rate:** a table of `N` samples steps `N` times per cycle, so use `ratio` 0 and `offset_hz` = steps per second / `N` (the short LFSR at 20 kHz: 215.0538 Hz, stored as 2,150,538).
 - **Retune rule.** A noise table written straight into the engine's `noiseBuf`, as TinyChip does, plays one sample per frame at `playbackRate = f / 440`, so its step rate depends on the sample rate `R` it was tuned at. Registered as a `Samples` wave it steps at `f × N` on every device. Keep the sound with `f_new = f_old × R / (440 × N)`.
-- **Cost.** Each sample or harmonic is 2 to 6 bytes of `SETTINGS` (about 4.5 at full scale), and `SETTINGS` costs about 14.5M L2 gas per 1,000 bytes through `midi_segment`. Short chip waves are cheap: the six short reference waves on eight timbres take `midi_segment` with a full-size score to 77.2M, against 60.7M for the three reference sounds. The long LFSR (147,532 bytes) adds about 2.1B, which needs a node with a large call budget ([Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits)); deterministic `WhiteNoise` is the cheap alternative.
+- **Cost.** Each sample or harmonic is 2 to 6 bytes of `SETTINGS` (about 4.5 at full scale). Long sample tables add validation, serialization and encoding work; measure the provider and current class with realistic inputs ([SETTINGS size](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#the-size-of-settings), [Node limits](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#node-limits)). Deterministic `WhiteNoise` needs no table.
 - **Same on every load.** The waves' tables, and the engine's noise and reverb (seeded), are the same on every load at a given sample rate. Browsers differ slightly, so audition in more than one.
 
 ```cairo
@@ -100,7 +100,7 @@ See [Filters](https://github.com/Provable-Games/onchain-midi-player/blob/main/do
 - **Chip hi-hats:** `MetallicNoise` at `ratio` 0 and `offset_hz` 390 Hz through a 3 kHz high-pass (`cutoff` 30,000,000, `q` 7,071), as the closed and open hats of the `filters` entry in [`tests/fixtures/settings.json`](https://github.com/Provable-Games/onchain-midi-player/blob/main/tests/fixtures/settings.json). They measure at least 24 dB less energy below 1 kHz than above 4 kHz (about 34 to 36 dB, against about 9 dB unfiltered).
 - **Filtered leads and basses:** a sawtooth or square through a key-tracked low-pass, for example `cutoff` 40,000 (4× the note); a band-pass on `WhiteNoise` gives breath and formant textures.
 - **Porting from TinySynth:** `fl`, `ff`, `fq` and `fk` become `kind` (`lowpass` is `LowPass`, and so on), `cutoff` = `ff` × 10,000, `q` = `fq` × 10,000 (TinySynth's default `fq` is 0.7071) and `key_track` = `fk` == 1.
-- **Cost:** a filter adds 8 to 26 bytes of `SETTINGS` (a typical one 15 to 18). Six filtered voices take `midi_segment` with a full-size score to 62.4M, against 60.7M for the three reference sounds.
+- **Cost:** a filter adds 8 to 26 bytes of `SETTINGS` (a typical one 15 to 18); measure the current score/settings combination.
 - **Without a filter** an operator plays exactly as before: the player passes no filter fields, and the engine builds no filter node.
 
 ```cairo
@@ -122,7 +122,7 @@ let hat = Operator {
 
 - The class validates the settings, then writes them into the page as `SETTINGS`: a flat list of canonical decimal integers (only `0-9`, `-` and `,`), fields in declaration order, a length before every list, enums as their variant index, `bool` as 0/1, `Option` as 0 or 1 followed by the value. Format version 1. See [The `SETTINGS` format](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md#the-settings-format); grammar in [`src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/settings.cairo).
 - Size: `1,1,30,40,64,0,0` with the defaults, plus about 6 bytes per timbre, 50 per operator and 2 to 6 per wave sample or harmonic. `preview` prints the size. The class does not cap the length; the gas grows with it.
-- Gas: `SETTINGS` is base64-encoded at call time with the MIDI, about 14.5M L2 gas per 1,000 bytes ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#the-size-of-settings)).
+- Gas: `SETTINGS` is validated, serialized and base64-encoded at call time with the MIDI. Measure actual current inputs ([The size of `SETTINGS`](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/gas.md#the-size-of-settings)).
 
 ## `'TS: …'` errors
 
@@ -156,10 +156,10 @@ Fixed or live: for a given class hash, the same settings and MIDI always give th
 
 A composer's contract that implements the sound provider interface (`onchain_midi_player::interface::ISoundProvider`; see [Sound provider interface](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-provider.md)) returns each token's `TinySynthSettings` with its MIDI, in `get_sound(token_id) -> onchain_midi_player::types::TinySynthSound { midi, settings }`, the interface's only function; a tool that needs only the settings calls it and takes `.settings`. The per-token subset below depends on the programs the token's MIDI uses, so work the settings out from the same score the MIDI returns (and if the contract also exposes either through its own interfaces, they should equal the fields of `get_sound`). A MIDI file can select an instrument but not define one, so the definitions travel in the settings, and they must pass `settings::validate` in the class version the NFT calls.
 
-- **Return a per-token subset:** only the timbres for the programs and drum notes this token's MIDI plays, and only the waves those timbres select. A Beast's subset is about 0.9–1.4 KB of `SETTINGS`, against about 3.9 KB for a full chip bank, and `SETTINGS` costs about 14.5M L2 gas per 1,000 bytes through `midi_segment`, on every `token_uri` call.
+- **Return a per-token subset:** only the timbres for the programs and drum notes this token's MIDI plays, and only the waves those timbres select. A Beast's subset is about 0.9–1.4 KB of `SETTINGS`, against about 3.9 KB for a full chip bank. Every byte adds work on each call; measure the current class rather than applying a historical per-KB estimate.
 - **Renumber the waves in a subset.** `Waveform::Custom(index)` points into the `waves` you return, not into your bank: when you drop unused waves, remap each operator's index to the wave's new position.
-- **Hold the bank as constants in the provider's code** (functions returning literal values, as in [Building settings in Cairo](#building-settings-in-cairo)), not in storage: a storage read costs about 24K L2 gas per felt.
-- **Long sample tables cost what their size costs,** in the provider and again through `midi_segment`: the long LFSR adds about 2.1B (above, Custom waves). Prefer short tables, or `WhiteNoise`.
+- **Hold the bank as constants in the provider's code** (functions returning literal values, as in [Building settings in Cairo](#building-settings-in-cairo)). Field-by-field storage adds reads to each call; measure provider gas separately.
+- **Long sample tables add work** in the provider and again through `midi_segment`. Prefer short tables, or `WhiteNoise`, and measure realistic outputs against the node budget.
 - **Test the subset per token:** run `midi_segment` on the provider's output for a spread of tokens in snforge, and preview a few offline.
 
 ## Example timbres
