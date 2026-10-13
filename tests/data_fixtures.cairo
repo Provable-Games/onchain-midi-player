@@ -90,8 +90,8 @@ fn case_default_120bpm_independent_provider_composition() {
         case_default_120bpm_midi(),
         case_default_120bpm_settings(),
     );
-    assert_eq!(uri.len(), 72817);
-    assert_eq!(sha256(@uri), 0xf8a86d4635a0c7317291a45dece0743b8bcbf4b17ae558bc1b1e4ead34d41a79);
+    assert_eq!(uri.len(), 72145);
+    assert_eq!(sha256(@uri), 0x7e10a03072a5a692b37a6c30e0772d43469277be97ab5bfdd830a01c8d4fd71d);
 }
 pub fn case_beast_140bpm_midi() -> ByteArray {
     let mut felts = CASE_BEAST_140BPM_MIDI.span();
@@ -203,8 +203,8 @@ fn case_beast_140bpm_independent_provider_composition() {
         case_beast_140bpm_midi(),
         case_beast_140bpm_settings(),
     );
-    assert_eq!(uri.len(), 72445);
-    assert_eq!(sha256(@uri), 0x27aca239110d26d38ab561c182d495528a55bc728de09f7e2e8f592d2ff4d762);
+    assert_eq!(uri.len(), 71773);
+    assert_eq!(sha256(@uri), 0x4a7897248ad517a08881f253d91c9c47c5624c4e215f0b968d9916b60129c546);
 }
 pub fn case_six_timbres_format1_midi() -> ByteArray {
     let mut felts = CASE_SIX_TIMBRES_FORMAT1_MIDI.span();
@@ -338,8 +338,8 @@ fn case_six_timbres_format1_independent_provider_composition() {
         case_six_timbres_format1_midi(),
         case_six_timbres_format1_settings(),
     );
-    assert_eq!(uri.len(), 74057);
-    assert_eq!(sha256(@uri), 0x8e6c3bf79c3087bdc827fd1d326ccc61f734d946ec749ed4681ba19961539e52);
+    assert_eq!(uri.len(), 73385);
+    assert_eq!(sha256(@uri), 0x9d2da2f3133cba4f021df171cd6489b2179e7b8d350ea6054d11025919d2676e);
 }
 pub fn case_unicode_art_midi() -> ByteArray {
     let mut felts = CASE_UNICODE_ART_MIDI.span();
@@ -446,8 +446,8 @@ fn case_unicode_art_independent_provider_composition() {
         case_unicode_art_midi(),
         case_unicode_art_settings(),
     );
-    assert_eq!(uri.len(), 72445);
-    assert_eq!(sha256(@uri), 0x73c45250364d8b869bd215b124b8f78ebd47ba4067d764195c2a984e390362da);
+    assert_eq!(uri.len(), 71773);
+    assert_eq!(sha256(@uri), 0x9b6dad4a6b6b9c1f5b8158ac024bf408aa81ecd4a48649edfcf33744d5b50b61);
 }
 pub fn case_min_fields_midi() -> ByteArray {
     let mut felts = CASE_MIN_FIELDS_MIDI.span();
@@ -543,8 +543,8 @@ fn case_min_fields_independent_provider_composition() {
         case_min_fields_midi(),
         case_min_fields_settings(),
     );
-    assert_eq!(uri.len(), 73065);
-    assert_eq!(sha256(@uri), 0x65b088ed9d9469858f5584acec10e1df82c474da3fe1aa35535a53ed771df2e6);
+    assert_eq!(uri.len(), 72393);
+    assert_eq!(sha256(@uri), 0xbb1ea73f39a9f9afa859839c096c8766ee1af825b212ddcda2f73c67a7688d98);
 }
 pub fn case_max_fields_midi() -> ByteArray {
     let mut felts = CASE_MAX_FIELDS_MIDI.span();
@@ -707,8 +707,8 @@ fn case_max_fields_independent_provider_composition() {
         case_max_fields_midi(),
         case_max_fields_settings(),
     );
-    assert_eq!(uri.len(), 75049);
-    assert_eq!(sha256(@uri), 0x1fc90f9591bcb4ed54f5289514cec2138d219dd65605450997a08473badb3772);
+    assert_eq!(uri.len(), 74377);
+    assert_eq!(sha256(@uri), 0x718a35903c87c986dc909648727c5cebc964ab7fd07c922dcedb999361a5f02a);
 }
 pub fn case_slot_edges_midi() -> ByteArray {
     let mut felts = CASE_SLOT_EDGES_MIDI.span();
@@ -825,8 +825,8 @@ fn case_slot_edges_independent_provider_composition() {
         case_slot_edges_midi(),
         case_slot_edges_settings(),
     );
-    assert_eq!(uri.len(), 73437);
-    assert_eq!(sha256(@uri), 0xb47a6338fe725d8ecb3f31e7453b3da568503d60359f3d250ebed4d95fd07f77);
+    assert_eq!(uri.len(), 72765);
+    assert_eq!(sha256(@uri), 0x391cedccb43ded4aa1de0dc2b516bf0b3ac4f711fb0633fdec99cdb21b92ea06);
 }
 pub fn case_all_builtin_waves_midi() -> ByteArray {
     let mut felts = CASE_ALL_BUILTIN_WAVES_MIDI.span();
@@ -946,8 +946,8 @@ fn case_all_builtin_waves_independent_provider_composition() {
         case_all_builtin_waves_midi(),
         case_all_builtin_waves_settings(),
     );
-    assert_eq!(uri.len(), 73437);
-    assert_eq!(sha256(@uri), 0xb7a47217edbb167a01cb23c65eb7c8e8493abc62b257565c09182cbc6beb531f);
+    assert_eq!(uri.len(), 72765);
+    assert_eq!(sha256(@uri), 0xff5d646c0e724902e527f478e4d9d8b65b35fe10517c49b0c68e1e468022e470);
 }
 pub fn case_chip_waves_midi() -> ByteArray {
     let mut felts = CASE_CHIP_WAVES_MIDI.span();
@@ -1135,8 +1135,8 @@ fn case_chip_waves_independent_provider_composition() {
         case_chip_waves_midi(),
         case_chip_waves_settings(),
     );
-    assert_eq!(uri.len(), 75421);
-    assert_eq!(sha256(@uri), 0x0aeb0de348dbcede9f5680bdd352916ef73fd074d7b253525da5db6af1391ae5);
+    assert_eq!(uri.len(), 74749);
+    assert_eq!(sha256(@uri), 0x454b6e3fe178191dfdb32d5268a888e85d4d95a79e493c99aee9ed9e3c313ee6);
 }
 pub fn case_filtered_midi() -> ByteArray {
     let mut felts = CASE_FILTERED_MIDI.span();
@@ -1263,8 +1263,8 @@ fn case_filtered_independent_provider_composition() {
         case_filtered_midi(),
         case_filtered_settings(),
     );
-    assert_eq!(uri.len(), 73809);
-    assert_eq!(sha256(@uri), 0x87845444885bc1c5532be84a9cf7f341ebdc8314178942d2bd0aab8cfa8d8859);
+    assert_eq!(uri.len(), 73137);
+    assert_eq!(sha256(@uri), 0xf3b3f5f9e2484d3f2d9fb73fd9656bf590fd12ffdd843a5b33354dd736a63a7e);
 }
 pub fn case_every_slot_midi() -> ByteArray {
     let mut felts = CASE_EVERY_SLOT_MIDI.span();
@@ -2055,8 +2055,8 @@ fn case_every_slot_independent_provider_composition() {
         case_every_slot_midi(),
         case_every_slot_settings(),
     );
-    assert_eq!(uri.len(), 90301);
-    assert_eq!(sha256(@uri), 0xcb07d73ea8e1a7a58511cac75081436c19b3ac7bc2879f6ae674bae6303cca50);
+    assert_eq!(uri.len(), 89629);
+    assert_eq!(sha256(@uri), 0xe94a8ffe9d72e85e90ab432cd49852b2d6a1a945b427cfcd20b28ab33cee8dcf);
 }
 pub fn invalid_quality_2_settings() -> TinySynthSettings {
     let mut felts = INVALID_QUALITY_2_SETTINGS.span();

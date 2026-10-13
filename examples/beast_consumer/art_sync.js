@@ -24,13 +24,18 @@ export function artTime(s, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS) {
 }
 
 /**
- * Inline SVG the page controls (trusted art): seeks the root `<svg>` and every nested `<svg>`. The
- * art animates freely until the music is audible, follows the music until stop, a new run or a
- * failure, then animates freely again from where it is. It starts following at the initial pass
- * event, or, if that never reaches it (mounted mid-run, or an earlier pass listener paused during
- * it), at mount or the next transport change, from the player's clock. Optional NFT-owned `notes`
- * are played, paused and stopped with the art and can read `clock()`: audible seconds since tick
- * zero, or null.
+ * Inline SVG the page controls (trusted art): seeks the root `<svg>` and every nested `<svg>`.
+ * Where the art belongs is worked out from `player.getPlayStatus()` alone, never from what a
+ * notification says, so missed or out-of-date events cannot leave it wrong:
+ * - free (animating on its own, from where it is): before the run's music is audible, and after
+ *   stop, a new run or a failure;
+ * - running, aligned to the music: once the run is audible (its initial pass event, or the audio
+ *   clock past tick zero's audible start) while the AudioContext runs, which includes a pending
+ *   pause, whose sound plays on until the suspend completes;
+ * - frozen where the audio stopped: once audible, while the AudioContext does not run.
+ * It seeks on entering running or frozen, at each pass and on a latency change. Optional NFT-owned
+ * `notes` are played, paused and stopped with the art and can read `clock()`: audible seconds since
+ * tick zero, or null.
  * @param {SVGSVGElement} svgRoot
  * @param {OnchainMidiApi} player
  * @param {{displayLead?: number, notes?: {play(): void, pause(): void, stop(): void} | null,
@@ -39,72 +44,53 @@ export function artTime(s, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS) {
  */
 export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLAY_LEAD_SECONDS, notes = null, host = window } = {}) {
   const timelines = [svgRoot, ...svgRoot.querySelectorAll("svg")];
-  const start = player.getPlayStatus();
-  let synced = false, frozen = false, frame = 0, runId = start.runId, revision = start.latencyRevision;
-  const seek = () => { const t = artTime(player.getPlayStatus(), displayLead); for (const svg of timelines) svg.setCurrentTime(t); };
-  const run = () => { for (const svg of timelines) svg.unpauseAnimations(); frozen = false; notes?.play(); };
-  const freeze = () => { for (const svg of timelines) svg.pauseAnimations(); frozen = true; seek(); notes?.pause(); };
-  const stopWaiting = () => { host.cancelAnimationFrame(frame); frame = 0; };
-  // A pause is announced at once, but the sound plays on until the AudioContext's suspend completes,
-  // which nothing announces. Until then the art runs on; the first frame after it, it freezes where
-  // the audio stopped (getPlayStatus() holds that position).
-  const waitForSilence = () => {
-    const s = player.getPlayStatus();
-    frame = s.state === "paused" && s.audioState === "running" ? host.requestAnimationFrame(waitForSilence) : 0;
-    if (s.state === "paused" && s.audioState !== "running") freeze();
-  };
-  // Stop, a new run or a failure: animate freely again, without a reset.
-  const release = (/** @type {boolean} */ failed) => {
-    stopWaiting();
-    if (!synced) return;
-    synced = frozen = false;
-    for (const svg of timelines) svg.unpauseAnimations();
-    if (failed) notes?.pause(); else notes?.stop();
-  };
-  // The music is audible once the audio clock reaches tick zero's estimated audible start (the
-  // player fires the initial pass event then, up to 1 ms early).
+  /** @type {"free" | "running" | "frozen"} */ let mode = "free";
+  let heardRun = -1, revision = -1, frame = 0, live = true;
+  const seek = (/** @type {PlayStatus} */ s) => { const t = artTime(s, displayLead); for (const svg of timelines) svg.setCurrentTime(t); };
+  const animate = (/** @type {boolean} */ on) => { for (const svg of timelines) if (on) svg.unpauseAnimations(); else svg.pauseAnimations(); };
+  // The player fires the initial pass event when the audio clock reaches tick zero's estimated
+  // audible start (up to 1 ms early); a run stays audible until it ends.
   const audible = (/** @type {PlayStatus} */ s) =>
     s.originTime !== null && s.audioTime !== null && s.audioTime >= s.originTime + s.latencySeconds - 0.002;
-  // Start following a run that is already audible without its initial pass event reaching this
-  // helper: mounted mid-run, or an earlier pass listener paused during that event. The art ran
-  // freely until now: align it, or, paused, freeze it where the audio stops.
-  const follow = (/** @type {PlayStatus} */ s) => {
-    synced = true;
-    if (s.state === "playing" && s.audioState === "running") { seek(); run(); }
-    else if (s.audioState === "running") { seek(); frame = host.requestAnimationFrame(waitForSilence); }
-    else freeze();
+  /** @returns {"free" | "running" | "frozen"} */
+  const want = (/** @type {PlayStatus} */ s) => {
+    if (s.state !== "playing" && s.state !== "paused") return "free"; // Not started, stopped or failed.
+    if (s.runId !== heardRun) { if (!audible(s)) return "free"; heardRun = s.runId; }
+    return s.audioState === "running" ? "running" : "frozen";
   };
-  const offPass = player.onPassStart(() => {
-    seek();
-    if (!synced) { synced = true; run(); } // The music is audible: follow it from here.
-  });
-  const offState = player.onStateChange((s) => {
-    // Snapshots arrive in order, but an earlier subscriber may already have moved the player on
-    // (stop, pause or play). Its newer snapshot is queued behind this one: leave the art to that.
-    const now = player.getPlayStatus();
-    if (now.runId !== s.runId || now.state !== s.state) return;
-    const latencyChanged = s.latencyRevision !== revision;
-    revision = s.latencyRevision;
-    if (s.runId !== runId || s.state === "stopped" || s.state === "failed") { runId = s.runId; release(s.state === "failed"); return; }
-    if (!synced) {
-      // Before the music is audible, pause and resume leave the art alone.
-      if (audible(now)) follow(now);
-      return;
+  const update = (pass = false) => {
+    if (!live) return;
+    const s = player.getPlayStatus(), waited = frame !== 0;
+    if (pass) heardRun = s.runId; // Pass events come only while the run plays: it is audible.
+    host.cancelAnimationFrame(frame);
+    // A pause is announced at once, but the sound plays on until the suspend completes, which
+    // nothing announces: look again each frame until then.
+    frame = s.state === "paused" && s.audioState === "running" ? host.requestAnimationFrame(() => { frame = 0; update(); }) : 0;
+    const next = want(s);
+    if (next === "running") {
+      // Also a latency change, and a resume that came before a frame saw the suspend (the art ran on
+      // while the audio was held).
+      if (mode !== "running" || pass || s.latencyRevision !== revision || (waited && s.state === "playing")) seek(s);
+      if (mode !== "running") { animate(true); notes?.play(); }
+    } else if (next === "frozen") {
+      if (mode !== "frozen") { animate(false); seek(s); notes?.pause(); } // Where the audio stopped.
+    } else if (mode !== "free") {
+      animate(true); // From where it is, without a rewind.
+      if (s.state === "failed") notes?.pause(); else notes?.stop();
     }
-    if (s.state === "playing" && s.audioState === "running") {
-      // Resume, a latency change, or a resume before a pending suspend completed.
-      if (frozen || frame || latencyChanged) seek();
-      stopWaiting();
-      if (frozen) run();
-    } else if (s.state === "paused" && s.audioState === "running") {
-      // A pending suspend; when frozen already, a resume in progress: wait for "playing".
-      if (!frozen && !frame) frame = host.requestAnimationFrame(waitForSilence);
-    } else if (!frozen) { stopWaiting(); freeze(); } // Suspended: freeze at the held position.
-  });
-  if ((start.state === "playing" || start.state === "paused") && audible(start)) follow(start);
+    mode = next;
+    revision = s.latencyRevision;
+  };
+  const offPass = player.onPassStart(() => update(true));
+  const offState = player.onStateChange(() => update()); // A trigger only: the snapshot may be out of date.
+  update(); // Mounted mid-run: follow it at once.
   return {
     clock: () => { const s = player.getPlayStatus(); return s.positionSeconds === null ? null : Math.max(0, s.positionSeconds + displayLead); },
-    dispose() { offPass(); offState(); release(false); },
+    dispose() {
+      live = false; offPass(); offState(); host.cancelAnimationFrame(frame); frame = 0;
+      if (mode !== "free") { animate(true); notes?.stop(); }
+      mode = "free";
+    },
   };
 }
 

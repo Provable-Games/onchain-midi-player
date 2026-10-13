@@ -129,8 +129,8 @@ test('before the music is audible the art animates freely: no pause, seek, frame
  h.elapse(.1);free(h);near(h.root.getCurrentTime(),.6);h.sync.dispose();
 });
 test('the initial pass event seeks every timeline to the music, then unpauses it and starts the notes',()=>{
- const h=artHarness();h.set({runId:1,state:'playing',audioState:'running',originTime:1,startTime:1,audioTime:1.04,positionSeconds:.01,latencyRevision:1});h.elapse(.8);
- h.pass();
+ const h=artHarness();h.set({runId:1,state:'playing',audioState:'running',originTime:1,startTime:1,audioTime:1.02,positionSeconds:0,latencyRevision:1});h.elapse(.8);
+ Object.assign(h.status,{audioTime:1.04,positionSeconds:.01});h.pass();
  assert.deepEqual(h.calls,['outer:seek','nested:seek','outer:run','nested:run'],'seek first, then unpause');
  for(const [,t] of h.seeks)near(t,.01+LEAD);near(h.sync.clock(),.01+LEAD);assert.deepEqual(h.notes,['play']);assert.equal(h.frameCount,0,'no frame loop while playing');
  h.sync.dispose();
@@ -161,23 +161,23 @@ test('a pending suspend keeps running art running, then freezes first and seeks 
  const order=[];for(const svg of [h.root,h.nested]){const set=svg.setCurrentTime;svg.setCurrentTime=t=>{order.push(svg.animationsPaused());set(t);};}
  h.set({state:'paused',positionSeconds:1.9});const seeks=h.seeks.length;
  free(h);assert.equal(h.notes.at(-1),'play');assert.equal(h.frameCount,1,'a frame loop only while the suspend is pending');
- h.set({state:'paused',latencyRevision:2,latencySeconds:.05});assert.equal(h.frameCount,1,'one frame loop');assert.equal(h.seeks.length,seeks);
+ h.set({state:'paused',latencyRevision:2,latencySeconds:.05});assert.equal(h.frameCount,1,'one frame loop');assert.equal(h.seeks.length,seeks+2,'running art realigns on a latency change, also while still audible');order.length=0;
  h.status.positionSeconds=1.95;h.elapse(.05);h.frame();
- free(h);assert.equal(h.frameCount,1);assert.equal(h.seeks.length,seeks,'no seek while audible');
+ free(h);assert.equal(h.frameCount,1);assert.equal(h.seeks.length,seeks+2,'no other seek while audible');
  Object.assign(h.status,{audioState:'suspended',positionSeconds:2.03});h.frame(); // Suspended without a notification.
  frozenAt(h,2.03);assert.deepEqual(order,[true,true],'frozen before the seek');assert.equal(h.notes.at(-1),'pause');assert.equal(h.frameCount,0);
- h.frame();assert.equal(h.seeks.length,seeks+2,'one seek per timeline');
- h.set({state:'playing',audioState:'running'});assert.equal(h.seeks.length,seeks+4);near(h.root.getCurrentTime(),(2.03+LEAD)%2);near(h.nested.getCurrentTime(),(2.03+LEAD)%2);
+ h.frame();assert.equal(h.seeks.length,seeks+4,'one seek per timeline');
+ h.set({state:'playing',audioState:'running'});assert.equal(h.seeks.length,seeks+6);near(h.root.getCurrentTime(),(2.03+LEAD)%2);near(h.nested.getCurrentTime(),(2.03+LEAD)%2);
  free(h);assert.equal(h.notes.at(-1),'play');h.sync.dispose();
 });
-test('a resume in progress (paused, audio running) keeps frozen art frozen until playing, then seeks',()=>{
+test('a resume in progress (paused, audio running) runs frozen art, aligned, as soon as the audio clock runs',()=>{
  const h=artHarness();startArt(h);
  h.set({state:'paused'});Object.assign(h.status,{audioState:'suspended',positionSeconds:.5});h.frame();frozenAt(h,.5);const seeks=h.seeks.length;
- Object.assign(h.status,{audioState:'running'});h.frame();
- h.set({latencyRevision:2,latencySeconds:.05}); // The resume's latency refresh, still paused.
- frozenAt(h,.5);assert.equal(h.seeks.length,seeks);assert.equal(h.frameCount,0);assert.equal(h.notes.at(-1),'pause');h.frame();frozenAt(h,.5);
- h.set({state:'playing'});assert.equal(h.seeks.length,seeks+2);near(h.seeks.at(-1)[1],.517);free(h);assert.equal(h.notes.at(-1),'play');assert.equal(h.frameCount,0);
- h.set({latencyRevision:3,latencySeconds:.06});assert.equal(h.seeks.length,seeks+4,'one latency seek, no stale resynchronization');h.sync.dispose();
+ // The engine resumed the AudioContext; the player says paused until its resume settles.
+ Object.assign(h.status,{audioState:'running',positionSeconds:.51});h.set({latencyRevision:2,latencySeconds:.05}); // The resume's latency refresh.
+ free(h);assert.equal(h.seeks.length,seeks+2,'aligned once');near(h.seeks.at(-1)[1],.51+LEAD);assert.equal(h.notes.at(-1),'play');assert.equal(h.frameCount,1,'watching for a suspend while paused');
+ h.set({state:'playing',positionSeconds:.52});assert.equal(h.seeks.length,seeks+4,'playing realigns once');free(h);assert.equal(h.frameCount,0);
+ h.set({latencyRevision:3,latencySeconds:.06});assert.equal(h.seeks.length,seeks+6,'one latency seek');h.sync.dispose();
 });
 test('an external suspension freezes at the held position; latency updates while suspended do not move it',()=>{
  const h=artHarness();startArt(h);h.set({state:'paused',audioState:'suspended',positionSeconds:.8});frozenAt(h,.8);assert.equal(h.frameCount,0);assert.equal(h.notes.at(-1),'pause');
@@ -234,18 +234,18 @@ test('a new run without a stop (an earlier subscriber replaying) also releases t
  h.set({state:'paused',audioState:'suspended',positionSeconds:.38});h.set({state:'playing',audioState:'running',positionSeconds:.4});
  near(h.seeks.at(-1)[1],.417,'same-run resume retains phase');h.sync.dispose();
 });
-test('a superseded snapshot is left to the newer one, without using up its latency change',()=>{
- // Earlier subscribers pause on a latency update, then resume at once: the helper sees "playing",
- // "paused" and "playing" again, but only the last still matches getPlayStatus().
+test('a snapshot only triggers an update: the art ends where getPlayStatus() says, whatever earlier subscribers did',()=>{
+ // Earlier subscribers pause on a latency update, then resume at once (only a fake player can): the
+ // helper is notified three times, each time of what getPlayStatus() says by then.
  let step=0;
  const h=artHarness((player,set)=>player.onStateChange(s=>{
    if(step===1&&s.state==='playing'){step=2;set({state:'paused',audioState:'suspended'});}
    else if(step===2&&s.state==='paused'){step=3;set({state:'playing',audioState:'running'});}
  }));
- startArt(h);const count=h.seeks.length;h.calls.length=0;
+ startArt(h);
  step=1;h.set({latencyRevision:2,latencySeconds:.06,positionSeconds:.4});assert.equal(step,3);
- assert.deepEqual(h.calls,['outer:seek','nested:seek'],'never frozen by the superseded pause: one latency seek');
- assert.equal(h.seeks.length,count+2);near(h.root.getCurrentTime(),.4+LEAD);free(h);h.sync.dispose();
+ free(h);near(h.root.getCurrentTime(),.4+LEAD,'aligned to the fresh status');assert.equal(h.notes.at(-1),'play');assert.equal(h.frameCount,0);
+ const seeks=h.seeks.length;h.set({positionSeconds:.45});assert.equal(h.seeks.length,seeks,'the latency change is applied once');h.sync.dispose();
 });
 for(const stage of ['starting','playing','paused'])test(`terminal audio failure during ${stage} releases trusted art and stops synchronization`,()=>{
  const h=artHarness();
@@ -288,7 +288,7 @@ test('the monitor only reads: drift each frame while synced and playing, the ini
 // document clock; the audio clock advances only while the context runs. Timers fire on time, and
 // the engine announces each pass's start time 0.1 s ahead, so pass events come from the player.
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};}
-function playerArt({nullStart=false,before=()=>{}}={}){
+function playerArt({nullStart=false,before=()=>{},notes=null}={}){
  let wall=0,suspendGate=null,resumeGate=null,serial=0;const listeners=new Set(),frames=new Map(),timers=new Map(),intervals=new Map();
  const ctx={currentTime:1,state:'suspended',outputLatency:.02,baseLatency:0,addEventListener(_,fn){listeners.add(fn);},change(state){this.state=state;for(const fn of listeners)fn();},
   resume(){return (resumeGate?.promise??Promise.resolve()).then(()=>this.change('running'));},suspend(){return (suspendGate?.promise??Promise.resolve()).then(()=>this.change('suspended'));}};
@@ -307,7 +307,7 @@ function playerArt({nullStart=false,before=()=>{}}={}){
  const svg=()=>{let paused=false,base=0,at=0;return{pauseAnimations(){log.push('pause');if(!paused)base+=wall-at;paused=true;},unpauseAnimations(){log.push('run');if(paused)at=wall;paused=false;},animationsPaused:()=>paused,setCurrentTime(t){log.push('seek:'+t);seeks++;base=t;at=wall;},getCurrentTime:()=>paused?base:base+wall-at,shift(dt){base+=dt;}};};
  const nested=svg(),root=Object.assign(svg(),{querySelectorAll:()=>[nested]});
  before(api); // A subscriber registered before the helper: it is notified first.
- const sync=syncSvgToMusic(root,api,{host});
+ const sync=syncSvgToMusic(root,api,{host,notes});
  const engine=()=>{const origin=api.getPlayStatus().originTime;if(origin!==null&&status.startTime!==null)status.startTime=origin+Math.max(0,Math.floor((ctx.currentTime+.1-origin)/2))*2;};
  const due=()=>[...timers].find(([,t])=>t.at<=wall+1e-9);
  return{api,ctx,root,nested,sync,passes,log,get seeks(){return seeks;},
@@ -388,15 +388,14 @@ test('real player: an earlier subscriber replaying (stop, then play) releases th
  await replay;assert.equal(h.api.getPlayStatus().state,'playing');h.elapse(.05);runsFree(h,'the new run is not yet audible');assert.deepEqual(h.log.slice(seen),['run','run']);
  h.elapse(.1);assert.equal(h.passes.at(-1).initial,true);atPlayer(h,'synced at the new run\'s initial pass');h.api.stop();
 });
-test('real player: an earlier subscriber pausing again on resume keeps frozen art frozen',async()=>{
+test('real player: an earlier subscriber pausing again on resume: the art ends frozen where the audio stopped',async()=>{
  let armed=false,pausing=null;
  const h=playerArt({before:api=>api.onStateChange(s=>{if(armed&&s.state==='playing'){armed=false;pausing=api.pause();}})});
  await h.api.play();h.elapse(.2);h.elapse(.5);
- await h.api.pause();h.frame();assert.equal(h.root.animationsPaused(),true);const held=h.root.getCurrentTime(),seen=h.log.length;
+ await h.api.pause();h.frame();assert.equal(h.root.animationsPaused(),true);const held=h.root.getCurrentTime();
  armed=true;await h.api.resume();await pausing;assert.equal(h.api.getPlayStatus().state,'paused');
  h.elapse(.2);h.frame();
- assert.deepEqual(h.log.slice(seen),[],'the superseded "playing" neither seeks nor unpauses');
- for(const svg of [h.root,h.nested]){assert.equal(svg.animationsPaused(),true);assert.equal(svg.getCurrentTime(),held);}
+ for(const svg of [h.root,h.nested])assert.equal(svg.animationsPaused(),true);atPlayer(h,'frozen where the audio stopped');near(h.root.getCurrentTime(),held,'no audio ran in between');
  await h.api.resume();atPlayer(h,'a later resume seeks to the music');assert.equal(h.root.animationsPaused(),false);h.api.stop();
 });
 
@@ -482,4 +481,78 @@ test('real player: a helper mounted while the music is audible follows it at onc
  h.elapse(.6);const late=timeline(),second=syncSvgToMusic(late,h.api,{host});
  const s=h.api.getPlayStatus();assert.deepEqual(late.log,['seek','run']);near(late.getCurrentTime(),(s.positionSeconds+LEAD)%s.passSeconds,'aligned at mount');
  second.dispose();h.api.stop();
+});
+test('notes start when following begins during a pending suspend, even if the music resumes before a frame',()=>{
+ const h=artHarness();
+ // Audible and pausing, its suspend still pending, with no pass event seen (an earlier pass listener paused).
+ h.set({runId:1,state:'paused',audioState:'running',originTime:1,startTime:1,audioTime:1.1,positionSeconds:.07,latencyRevision:1});
+ free(h);near(h.root.getCurrentTime(),.07+LEAD,'aligned');assert.deepEqual(h.notes,['play'],'the music is audible: notes play');assert.equal(h.frameCount,1);
+ h.set({state:'playing',positionSeconds:.08});free(h);assert.equal(h.notes.at(-1),'play','still playing after the resume');assert.equal(h.frameCount,0);
+ near(h.root.getCurrentTime(),.08+LEAD);h.sync.dispose();assert.equal(h.notes.at(-1),'stop');
+});
+test('real player: a pause requested before audible whose suspend completes after it: the art aligns, then freezes where the audio stopped',async()=>{
+ const notes=[];const h=playerArt({notes:{play(){notes.push('play');},pause(){notes.push('pause');},stop(){notes.push('stop');}}});
+ await h.api.play();h.elapse(.05);runsFree(h,'not yet audible');
+ const suspend=h.gate('suspend'),p=h.api.pause();h.frame();runsFree(h,'paused before audible, still free');assert.deepEqual(notes,[]);
+ h.elapse(.1);h.frame(); // The audio clock runs on past tick zero's audible start before the suspend completes.
+ atPlayer(h,'aligned once audible');assert.equal(h.root.animationsPaused(),false);assert.deepEqual(notes,['play']);
+ suspend.resolve();await p;h.elapse(.2);h.frame();
+ atPlayer(h,'frozen where the audio stopped');assert.equal(h.root.animationsPaused(),true);assert.equal(h.nested.animationsPaused(),true);assert.deepEqual(notes,['play','pause']);
+ await h.api.resume();atPlayer(h,'resumed in step');assert.equal(h.root.animationsPaused(),false);assert.equal(notes.at(-1),'play');
+ h.api.stop();runsFree(h,'released');assert.equal(notes.at(-1),'stop');
+});
+test('real player: a pause whose suspend completes before audible leaves the art free',async()=>{
+ const h=playerArt();await h.api.play();h.elapse(.02);
+ const suspend=h.gate('suspend'),p=h.api.pause();h.elapse(.02);h.frame();suspend.resolve();await p;h.elapse(.3);h.frame();
+ runsFree(h,'never audible');assert.equal(h.seeks,0);
+ await h.api.resume();h.elapse(.2);assert.equal(h.passes.at(-1).initial,true);atPlayer(h,'synced at the initial pass after resume');h.api.stop();
+});
+// The art is a function of getPlayStatus(): random transport, timing and meddling subscribers must
+// never leave it, or the notes, anywhere else once a frame has run.
+test('real player, randomized: the art and notes always match what getPlayStatus() implies',async()=>{
+ const rng=seed=>()=>{seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+ const settle=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
+ const wrap=(d,p)=>d-Math.round(d/p)*p;
+ let checks=0;
+ for(let seed=1;seed<=150;seed++){
+  const r=rng(seed),notes=[],gates=[],trail=[],heard={};
+  const pauseOnPass=r()<.3,meddle=r()<.3;
+  const h=playerArt({notes:{play(){notes.push('play');},pause(){notes.push('pause');},stop(){notes.push('stop');}},before:api=>{
+   if(pauseOnPass)api.onPassStart(()=>{if(r()<.4)api.pause().catch(()=>{});});
+   if(meddle)api.onStateChange(s=>{const x=r();if(s.state==='playing'&&x<.1)api.pause().catch(()=>{});else if(s.state==='playing'&&x<.14)api.stop();});
+  }});
+  for(let step=0;step<40;step++){
+   const x=r(),now=h.api.getPlayStatus();
+   if(x<.2){trail.push('play');h.api.play().catch(()=>{});}
+   else if(x<.35){trail.push('pause');h.api.pause().catch(()=>{});}
+   else if(x<.47){trail.push('resume');h.api.resume().catch(()=>{});}
+   else if(x<.52){trail.push('stop');h.api.stop();}
+   else if(x<.57){trail.push('hold suspend');gates.push(h.gate('suspend'));}
+   else if(x<.61){trail.push('hold resume');gates.push(h.gate('resume'));}
+   else if(x<.69){trail.push('release');for(const g of gates.splice(0))g.resolve();}
+   else if(x<.74&&now.state==='playing'&&(now.positionSeconds??0)>.2){trail.push('latency');h.ctx.outputLatency=.02+r()*.03;h.elapse(.26);}
+   else{const dt=[.004,.03,.2,1.1][Math.floor(r()*4)];trail.push('elapse '+dt);h.elapse(dt);}
+   await settle();h.frame();await settle();
+   const s=h.api.getPlayStatus(),where=`seed ${seed}: ${trail.join(', ')} -> ${s.state}/${s.audioState}`;
+   for(const p of h.passes)heard[p.runId]=true;
+   const at=s.originTime===null||s.audioTime===null?null:s.audioTime-(s.originTime+s.latencySeconds);
+   const live=s.state==='playing'||s.state==='paused';
+   if(live&&at!==null&&at>=0)heard[s.runId]=true;
+   if(live&&at!==null&&at>-.0025&&at<0&&!heard[s.runId])continue; // Inside the player's early-dispatch tolerance.
+   checks++;
+   if(!(live&&heard[s.runId])){
+    for(const svg of [h.root,h.nested])assert.equal(svg.animationsPaused(),false,'free: '+where);
+    assert.notEqual(notes.at(-1),'play','notes not playing: '+where);
+   }else{
+    const frozen=s.audioState!=='running',expected=((s.positionSeconds??0)+LEAD)%s.passSeconds;
+    for(const svg of [h.root,h.nested]){
+     assert.equal(svg.animationsPaused(),frozen,(frozen?'frozen: ':'running: ')+where);
+     assert.ok(Math.abs(wrap(svg.getCurrentTime()-expected,s.passSeconds))<1e-6,`aligned: ${where}: art ${svg.getCurrentTime()} expected ${expected}`);
+    }
+    assert.equal(notes.at(-1),frozen?'pause':'play','notes: '+where);
+   }
+  }
+  for(const g of gates)g.resolve();h.api.stop();await settle();
+ }
+ assert.ok(checks>4000,`checked ${checks} states`);
 });
