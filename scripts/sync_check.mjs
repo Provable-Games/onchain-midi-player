@@ -7,6 +7,10 @@ import { openBrowser, composed, dataUrl, waitReady } from './browser_harness.mjs
 import { fixtureCase } from './fixture_pages.mjs';
 import { checkSchedule } from './schedule_observations.mjs';
 import { verifyLibraries } from './verify_engine.mjs';
+import { REFERENCE_DISPLAY_LEAD_SECONDS } from '../examples/beast_consumer/ui.js';
+// A suspended timeline is seeked to exactly this value. 5 ms covers each engine's SMIL time
+// representation (Firefox keeps whole milliseconds) and stays well under one 60 Hz frame (16.7 ms).
+const HELD_TOLERANCE_SECONDS = 0.005;
 const seconds = Number(process.env.SYNC_SECONDS || 60);
 const sampleSeconds = Number(process.env.SYNC_SAMPLE_SECONDS || 10);
 assert.ok(sampleSeconds > 0 && Number.isFinite(sampleSeconds));
@@ -27,28 +31,43 @@ try {
    const root = document.getElementById('beast-art'), svgs = [root,...root.querySelectorAll('svg')];
    return {status:OnchainMidiPlayer.getPlayStatus(),timelines:svgs.map(s=>({time:s.getCurrentTime(),paused:s.animationsPaused()})),monitor:window.OnchainArtMonitor,seeks:window.__seeks.length,calls:window.__check.calls,passes:window.__check.passes,sends:window.__check.sends,media:window.__check.media?.paused};
  });
+ // Paused art shows the audio's held position, where the suspend actually stopped it, plus the display lead.
+ const heldAt = (sample, label) => {
+   const { positionSeconds: position, passSeconds: pass } = sample.status, expected = (position + REFERENCE_DISPLAY_LEAD_SECONDS) % pass;
+   for (const s of sample.timelines) {
+     let d = s.time - expected; d -= Math.round(d / pass) * pass;
+     assert.ok(s.paused && Math.abs(d) < HELD_TOLERANCE_SECONDS, `${label}: SVG time ${s.time} is ${(d * 1000).toFixed(3)} ms from the held position ${position} + display lead`);
+   }
+ };
+ const suspends = [];
  const cold = await info(); assert.equal(cold.calls.length,0); assert.ok(cold.timelines.every(s=>s.paused&&s.time===0));
  await o.page.click('#play');
  await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
  await o.page.waitForFunction(()=>document.getElementById('beast-art').animationsPaused()===false);
  const initial = await info(); assert.equal(initial.timelines.length,2);assert.ok(initial.timelines.every(s=>!s.paused));assert.ok(Math.abs(initial.monitor.initialAlignment)<.05);
  for(let i=0;i<3;i++) {
+   const before=await o.page.evaluate(()=>window.__check.states.length);
    await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==='suspended');
-   const paused = await info();
+   // The art runs on while the suspend is pending; the first frame after it freezes every timeline.
+   await o.page.waitForFunction(()=>{const root=document.getElementById('beast-art');return [root,...root.querySelectorAll('svg')].every(s=>s.animationsPaused());});
+   const paused = await info();heldAt(paused,`pause ${i}`);
+   // The pause request's own notification carries the audio clock at the request; the held status, where it stopped.
+   const request=await o.page.evaluate(n=>window.__check.states.slice(n).find(s=>s.state==='paused'),before);
+   assert.ok(request,'pause notification');suspends.push({audio_ms:(paused.status.audioTime-request.audioTime)*1000,request_audio_state:request.audioState});
    if(i===0){
      await o.page.evaluate(()=>{const ctx=window.__check.synth.getAudioContext();Object.defineProperty(ctx,'outputLatency',{configurable:true,value:.05,writable:true});Object.defineProperty(ctx,'baseLatency',{configurable:true,value:.01,writable:true});});
      await o.page.waitForFunction(revision=>OnchainMidiPlayer.getPlayStatus().latencyRevision>revision,paused.status.latencyRevision);
      const metadata=await o.page.evaluate(()=>window.__check.states.at(-1));
      assert.equal(metadata.positionSeconds,paused.status.positionSeconds);assert.ok(Math.abs(metadata.latencySeconds-.06)<1e-9);
    }
-   await o.page.waitForTimeout(350);const held=await info();
+   await o.page.waitForTimeout(350);const held=await info();heldAt(held,`held ${i}`);
    assert.equal(held.status.state,'paused');assert.equal(held.status.audioTime,paused.status.audioTime);assert.equal(held.status.positionSeconds,paused.status.positionSeconds);assert.deepEqual(held.timelines,paused.timelines);assert.ok(held.timelines.every(s=>s.paused));assert.equal(held.media,true);assert.equal(held.sends.length,paused.sends.length,'scheduler stays held during pause');
    await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
    const resumed = await info();assert.equal(resumed.status.originTime,initial.status.originTime);assert.equal(resumed.status.runId,initial.status.runId);assert.ok(resumed.timelines.every(s=>!s.paused));assert.ok(Math.abs(resumed.status.positionSeconds-Math.max(0,resumed.status.audioTime-resumed.status.originTime-resumed.status.latencySeconds))<1e-9);
  }
  // External context suspension remains held despite an eligible explicit MIDI send and scheduler ticks.
  await o.page.evaluate(async()=>{await window.__check.synth.getAudioContext().suspend();window.__check.synth.send([0x90,60,1]);});
- await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='paused');const external=await info();
+ await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='paused');const external=await info();heldAt(external,'external suspension');
  await o.page.evaluate(()=>{window.__check.synth.getAudioContext().outputLatency+=.03;});
  await o.page.waitForFunction(revision=>OnchainMidiPlayer.getPlayStatus().latencyRevision>revision,external.status.latencyRevision);
  assert.equal(await o.page.evaluate(()=>window.__check.states.at(-1).positionSeconds),external.status.positionSeconds);
@@ -81,10 +100,10 @@ try {
  // The one-bar fixture has a unique channel-1 note 72 at tick zero. Match actual engine
  // sends, never a live getPlayStatus().startTime that lookahead may have advanced.
  const schedule=checkSchedule({sends:end.sends,passes:end.passes,origin:initial.status.originTime,period:c.midi_loop_seconds});
- const result={engine:run.engine,version:verified.version,player_source_sha256:verified.libraries.player.sha256,engine_sha256:verified.engine.sha256,seconds,schedule,checkpoints,initial_alignment_ms:initial.monitor.initialAlignment*1000,max_drift_ms:end.monitor.maxDrift*1000,current_drift_ms:end.monitor.currentDrift*1000,latency_events:end.monitor.latencyEvents,steady_passes:passCount,steady_svg_seeks:end.seeks-start.seeks,physical_audio_verified:false};
+ const result={engine:run.engine,version:verified.version,player_source_sha256:verified.libraries.player.sha256,engine_sha256:verified.engine.sha256,seconds,schedule,checkpoints,initial_alignment_ms:initial.monitor.initialAlignment*1000,max_drift_ms:end.monitor.maxDrift*1000,current_drift_ms:end.monitor.currentDrift*1000,latency_events:end.monitor.latencyEvents,steady_passes:passCount,steady_svg_seeks:end.seeks-start.seeks,pause_to_suspend_audio:suspends,physical_audio_verified:false};
  assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
  await o.page.evaluate(()=>OnchainMidiPlayer.stop());const stopped=await info();assert.equal(stopped.status.state,'stopped');assert.ok(stopped.timelines.every(s=>s.paused&&s.time===0));
  if(process.env.SYNC_RESULTS){mkdirSync(process.env.SYNC_RESULTS,{recursive:true});writeFileSync(`${process.env.SYNC_RESULTS}/sync-${run.engine}.json`,JSON.stringify(result,null,2)+'\n');}
  console.log(JSON.stringify(result,null,2));
- console.log(`${run.engine}: audio clock / SVG estimated max drift ${(result.max_drift_ms).toFixed(3)} ms; ${passCount} passes, ${end.seeks-start.seeks} boundary SVG seeks; ${result.latency_events.length} latency records; engine grid error ${schedule.max_grid_error_seconds} s, late ${schedule.late}; checks passed`);
+ console.log(`${run.engine}: audio clock / SVG estimated max drift ${(result.max_drift_ms).toFixed(3)} ms; ${passCount} passes, ${end.seeks-start.seeks} boundary SVG seeks; ${result.latency_events.length} latency records; engine grid error ${schedule.max_grid_error_seconds} s, late ${schedule.late}; pause request to completed suspend ${suspends.map(s=>s.audio_ms.toFixed(3)).join(', ')} ms on the audio clock; checks passed`);
 } catch(error) {console.error(JSON.stringify(await o.page.evaluate(()=>({state:OnchainMidiPlayer.getPlayStatus(),states:window.__check.states,calls:window.__check.calls,media:window.__check.media?.paused})),null,2));throw error;} finally { await o.context.close(); await run.browser.close(); }
