@@ -73,10 +73,11 @@ export async function generatedFiles() {
   }
   files.set("tests/fixtures/libraries/manifest.json",JSON.stringify({format:SEGMENT_FORMAT,toolchain:built.record.toolchain,libraries:fixtures},null,2)+"\n");
   const ui = await compile(["../examples/beast_consumer/art_sync.js", "../examples/beast_consumer/ui.js"], "startUi");
-  // The play button's settings: its diameter's limits (the art's data-play-anchor S times the art's
-  // scale, clamped; equal limits fix the size, here 16 px so the art keeps the focus) and the touch
-  // target, an invisible circle around a button smaller than it.
-  const style = ":root{--play-min:16px;--play-max:16px;--play-target:44px}html,body{margin:0;height:100%;overflow:hidden;background:#000}#beast-art{position:fixed;inset:0;width:100%;height:100%;object-fit:contain}button{position:fixed;right:12px;bottom:12px;width:48px;height:48px;padding:12px;border:0;z-index:1;border-radius:50%;background:rgba(0,0,0,.55);box-shadow:0 0 0 1px rgba(255,255,255,.4);color:#fff;cursor:pointer}button::before{content:'';position:absolute;inset:min(0px,calc(50% - var(--play-target)/2));border-radius:50%}button:disabled{opacity:.4}button svg{width:100%;height:100%;fill:currentColor}p{position:fixed;left:12px;right:64px;bottom:12px;z-index:1;color:#f88;background:#000;font:12px monospace}";
+  // The play button's settings: its diameter's limits and the touch target. The diameter is the art's
+  // data-play-anchor S times the art's scale (proportional to the card), else a 48 px default (an
+  // anchor without S, or the corner button), clamped to the limits; equal limits fix it. The touch
+  // target is an invisible circle around a button smaller than it.
+  const style = ":root{--play-min:16px;--play-max:128px;--play-target:44px}html,body{margin:0;height:100%;overflow:hidden;background:#000}#beast-art{position:fixed;inset:0;width:100%;height:100%;object-fit:contain}button{--play-d:clamp(var(--play-min),48px,var(--play-max));position:fixed;right:12px;bottom:12px;width:var(--play-d);height:var(--play-d);padding:calc(var(--play-d)/4);border:0;z-index:1;border-radius:50%;background:rgba(0,0,0,.55);box-shadow:0 0 0 1px rgba(255,255,255,.4);color:#fff;cursor:pointer}button::before{content:'';position:absolute;inset:min(0px,calc(50% - var(--play-target)/2));border-radius:50%}button:disabled{opacity:.4}button svg{width:100%;height:100%;fill:currentColor}p{position:fixed;left:12px;right:64px;bottom:12px;z-index:1;color:#f88;background:#000;font:12px monospace}";
   const body = '</head><body><button id="play" aria-label="Play" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path id="icon" d="M8 5v14l11-7z"/></svg></button><p id="error" role="alert" hidden></p>';
   const owned = {
     head: alignedFragment('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><title>Onchain music</title><style>'+style+'</style>'),

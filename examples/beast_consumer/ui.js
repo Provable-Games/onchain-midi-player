@@ -10,7 +10,8 @@ export const PAUSE_ICON = "M6 5h4v14H6zM14 5h4v14h-4z";
  * The button's bottom-right corner is placed at the point, inset by max(S/8, 6) art units (6 px without S: enough to clear a frame's rounded corner), where
  * the <img> draws it: `box` is the <img>'s own rectangle on screen (its `getBoundingClientRect()`),
  * and the art fills it as `object-fit: contain` does, scaled to fit and centred. The diameter is S
- * times the art's scale on screen, between `sizes.min` and `sizes.max` CSS px; without S it is 48.
+ * times the art's scale on screen, between `sizes.min` and `sizes.max` CSS px; without S it is the
+ * 48 px default between the same limits, as the stylesheet's corner button (no anchor) is.
  * The sizes are the page's settings, read from its stylesheet (`--play-min`, `--play-max`; see startUi),
  * and so is the touch target (`--play-target`), drawn by the stylesheet around a smaller button.
  * With a last word `top-right` (`"X Y S top-right"`), the point is the button's top-right corner
@@ -42,7 +43,7 @@ export function playAnchor(svg, box, vw, vh, sizes) {
   const [ax, ay, diameter] = anchor;
   if (!(w > 0 && h > 0 && box.width > 0 && box.height > 0) || !(anchor.length == 2 || (anchor.length == 3 && diameter > 0)) || !(ax >= x0 && ax <= x0 + w && ay >= y0 && ay <= y0 + h)) return null;
   const k = Math.min(box.width / w, box.height / h);
-  const size = anchor.length == 3 ? Math.min(sizes.max, Math.max(sizes.min, diameter * k)) : 48;
+  const size = Math.min(sizes.max, Math.max(sizes.min, anchor.length == 3 ? diameter * k : 48));
   const inset = anchor.length == 3 ? k * Math.max(diameter / 8, 6) : 6;
   const place = (/** @type {number} */ a, /** @type {number} */ a0, /** @type {number} */ len, /** @type {number} */ at, /** @type {number} */ span, /** @type {number} */ view, /** @type {boolean} */ below) =>
     Math.round(Math.max(0, Math.min(view - size, at + (span - len * k) / 2 + (a - a0) * k + (below ? inset : -size - inset))));
