@@ -332,6 +332,10 @@ export function mount(canvas, options) {
  * Titles and animations stay where they are (an animation applies to its parent). Unchanged without
  * a `data-notes-bg` child of the root. The `image` a marketplace shows is not touched: only the
  * page's copy. Uses the browser's DOMParser and XMLSerializer.
+ * The generated mask, its white base and the masked group carry inline `!important` declarations,
+ * so the art's own stylesheet (a `rect`, `mask` or `g` rule, say) cannot restyle them. Selectors
+ * that depend on structure (`svg > rect`, `:nth-child`, sibling combinators) may still match
+ * differently once those children are grouped.
  * @param {string} svg
  */
 export function cutout(svg) {
@@ -348,7 +352,9 @@ export function cutout(svg) {
     return e;
   };
   const all = { x: -1e4, y: -1e4, width: 2e4, height: 2e4 };
-  const mask = make("mask", { id: "onchain-midi-notes", maskUnits: "userSpaceOnUse", ...all });
+  // The art's stylesheet also reaches the generated elements: inline !important wins over it,
+  // and over its CSS animations. With mask-type alpha the black hole would count as opaque: no hole.
+  const mask = make("mask", { id: "onchain-midi-notes", maskUnits: "userSpaceOnUse", ...all, style: "mask-type:luminance!important" });
   const hole = /** @type {Element} */ (el.cloneNode(false));
   hole.removeAttribute("id");
   hole.setAttribute("fill", "#000");
@@ -356,9 +362,12 @@ export function cutout(svg) {
   // attribute or class says: inline !important beats every author rule. A filter could recolour it.
   const style = (hole.getAttribute("style") || "").trim();
   hole.setAttribute("style", (style && !style.endsWith(";") ? style + ";" : style) + "fill:#000!important;stroke:none!important;fill-opacity:1!important;opacity:1!important;filter:none!important");
-  mask.appendChild(make("rect", { ...all, fill: "#fff" }));
+  // The base must stay white and everywhere (a rule hiding, fading or scaling every rect would
+  // remove it, and with it the art in the group).
+  mask.appendChild(make("rect", { ...all, fill: "#fff", style: "fill:#fff!important;stroke:none!important;fill-opacity:1!important;opacity:1!important;filter:none!important;display:inline!important;visibility:visible!important;transform:none!important" }));
   mask.appendChild(hole);
-  const g = make("g", { mask: "url(#onchain-midi-notes)" });
+  // The group is not part of the art: a g rule's opacity, filter or transform must not apply to it.
+  const g = make("g", { mask: "url(#onchain-midi-notes)", style: "mask:url(#onchain-midi-notes)!important;opacity:1!important;filter:none!important;transform:none!important" });
   const next = el.nextSibling;
   for (let n = root.firstChild; n && n != next;) {
     const after = n.nextSibling;
