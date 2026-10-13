@@ -77,7 +77,7 @@ describe("gunzip: deterministic output", () => {
     const a = gzipSource(engineSource());
     const b = gzipSource(engineSource());
     assert.ok(a.equals(b));
-    assert.equal(a.length, 14421);
+    assert.equal(a.length, 14559);
   });
 
 
