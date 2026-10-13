@@ -22,7 +22,9 @@ try {
  const played=await o.page.evaluate(()=>({passes:window.__check.passes,calls:window.__check.calls,art:document.getElementById("beast-art")?.src,images:document.querySelectorAll("img#beast-art").length,media:window.__check.media?.paused,status:window.OnchainMidiPlayer.getPlayStatus(),firstPlay:window.__check.playingAt-window.__check.gestureAt,anchor:document.getElementById("play").getBoundingClientRect().toJSON(),artwork:navigator.mediaSession?.metadata?.artwork}));
  assert.ok(played.calls.indexOf("prewarm")<played.calls.indexOf("resume"));assert.equal(played.passes[0].initial,true);
  assert.ok(played.passes[0].audioTime >= played.passes[0].audibleTime-.02);assert.ok(/^data:image\/svg\+xml;r=\d+;base64,/.test(played.art));assert.equal(played.images,1);assert.equal(played.media,false);
- if(c.name==="full_warlock"){assert.ok(played.anchor.width>=44&&played.anchor.width<=128);await o.page.waitForFunction(()=>navigator.mediaSession.metadata?.artwork.length===2);}
+ // No reference art carries a data-play-anchor: the stylesheet's corner button takes the 48 px default between the settings' limits.
+ assert.equal(played.anchor.width,48);assert.equal(played.anchor.height,48);
+ if(c.name==="full_warlock"){await o.page.waitForFunction(()=>navigator.mediaSession.metadata?.artwork.length===2);}
  await o.page.click("#play");await o.page.waitForFunction(()=>window.OnchainMidiPlayer.getPlayStatus().state==="paused");
  const stopped=await o.page.evaluate(()=>({count:window.__check.passes.length,media:window.__check.media.paused,states:window.__check.states.map(s=>s.state).filter((state,i,list)=>i===0||state!==list[i-1]),violations:window.__check.violations}));
  assert.equal(stopped.media,true);assert.deepEqual(stopped.states,["starting","playing","paused"]);assert.deepEqual(stopped.violations,[]);
@@ -69,7 +71,18 @@ try {
    console.log('PASS unique SVG data rejected by extractor and player');
  }finally{await o.context.close();}}
  // The NFT-owned button follows a supplied SVG anchor, including object-fit scaling.
- {const o=await run.page();try{await o.page.setViewportSize({width:500,height:700});const c=fixtureCase("beast_140bpm"),svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350" data-play-anchor="235 202 32"><rect width="250" height="350" fill="black"/></svg>';await o.page.goto(dataUrl(composed({...c,svg})));await waitReady(o.page);const box=await o.page.locator('#play').boundingBox();assert.deepEqual(box,{x:394,y:328,width:64,height:64});assert.deepEqual(await o.errors(),[]);console.log("PASS NFT button anchor and scaled touch target");}finally{await o.context.close();}}
+ {const o=await run.page();try{await o.page.setViewportSize({width:500,height:700});const c=fixtureCase("beast_140bpm"),svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350" data-play-anchor="235 202 32"><rect width="250" height="350" fill="black"/></svg>';await o.page.goto(dataUrl(composed({...c,svg})));await waitReady(o.page);const box=await o.page.locator('#play').boundingBox();
+   // The shipped limits (16-128 px) keep the art's own diameter: 32 units at scale 2 are 64 px, the inset 6 units (12 px).
+   assert.deepEqual(box,{x:394,y:328,width:64,height:64});
+   // The size is a page setting: equal limits fix it with no code change, and --play-target keeps a 44 px
+   // touch target around the smaller button (a tap 10 px outside the drawn circle still reaches it).
+   await o.page.addStyleTag({content:":root{--play-min:16px;--play-max:16px}"});await o.page.evaluate(()=>window.dispatchEvent(new Event("resize")));
+   const fixed=await o.page.locator('#play').boundingBox();assert.deepEqual(fixed,{x:470-12-16,y:404-12-16,width:16,height:16});
+   assert.equal(await o.page.evaluate(([x,y])=>document.elementFromPoint(x,y)?.id,[fixed.x-10,fixed.y+8]),"play");
+   // An anchor without S takes the 48 px default between the same limits, at the unscaled 6 px inset.
+   await o.page.goto(dataUrl(composed({...c,svg:svg.replace('data-play-anchor="235 202 32"','data-play-anchor="235 202"')})));await waitReady(o.page);
+   assert.deepEqual(await o.page.locator('#play').boundingBox(),{x:470-6-48,y:404-6-48,width:48,height:48});
+   assert.deepEqual(await o.errors(),[]);console.log("PASS NFT button anchor, stylesheet size settings and touch target");}finally{await o.context.close();}}
  // A changed consumer head and isolated script-like art are accepted by the real HTML parser.
  {const c=fixtureCase("beast_140bpm"),svg=c.svg.replace('</svg>','<script>window.artInjection=true</script><desc><![CDATA[</SCRIPT>]]></desc></svg>');
  const o=await run.page();try{await o.page.goto(dataUrl(composed({...c,svg})));await waitReady(o.page);assert.equal(await o.page.evaluate(()=>window.artInjection),undefined);assert.equal(await o.page.locator('#beast-art').count(),1);assert.deepEqual(await o.errors(),[]);}finally{await o.context.close();}}
