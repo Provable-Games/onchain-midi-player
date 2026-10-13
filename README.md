@@ -1,8 +1,8 @@
 # Onchain MIDI library
 
-`TinySynth` is a storage-free Starknet class, declared and called with `library_call`. The unissued 0.7.0 candidate supplies independently composable, offline browser libraries. NFTs own their JSON, complete HTML document, art and UI.
+`TinySynth` is a storage-free Starknet class, declared and called with `library_call`. The 0.7.0 class supplies independently composable, offline browser libraries. NFTs own their JSON, complete HTML document, art and UI.
 
-The engine is the signed release `v2.0.1` of [pocket-synth](https://github.com/Provable-Games/pocket-synth), Provable Games' fork of g200kg's webaudio-tinysynth, a reproducibly verified build; its exact source/build/NOTICE identities are recorded in the [vendor provenance](tests/vendor/README.md) and library manifest. Release readiness still requires device validation. Neither candidate has been declared or released; [deployment records](deployments/sepolia.json) describe historical test classes.
+The engine is the signed release `v2.0.1` of [pocket-synth](https://github.com/Provable-Games/pocket-synth), Provable Games' fork of g200kg's webaudio-tinysynth, a reproducibly verified build; its exact source/build/NOTICE identities are recorded in the [vendor provenance](tests/vendor/README.md) and library manifest. Release readiness still requires device validation. 0.7.0 is declared on Sepolia as a test class without a release tag, with the Beast reference example deployed against it ([deployment record](deployments/sepolia.json)); it has not been released or declared on mainnet.
 
 | `ITinySynth` entry point | Result |
 | --- | --- |
