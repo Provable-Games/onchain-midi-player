@@ -7,7 +7,5 @@
 //! - `repetitions` (generated from `repetitions.json`): bars of music per token.
 
 pub mod assembly;
-
-pub mod owned_assets;
 pub mod repetitions;
 pub mod stress_nft;

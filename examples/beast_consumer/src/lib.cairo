@@ -12,6 +12,4 @@
 pub mod assembly;
 pub mod beast_data;
 pub mod beast_like_nft;
-
-pub mod owned_assets;
 pub mod sound;

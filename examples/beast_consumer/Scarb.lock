@@ -6,6 +6,7 @@ name = "beast_consumer"
 version = "0.1.0"
 dependencies = [
  "onchain_midi_player",
+ "owned_assets",
  "snforge_std",
 ]
 
@@ -20,6 +21,10 @@ version = "0.1.0"
 dependencies = [
  "game_components_encoding",
 ]
+
+[[package]]
+name = "owned_assets"
+version = "0.1.0"
 
 [[package]]
 name = "snforge_scarb_plugin"

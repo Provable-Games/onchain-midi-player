@@ -1,6 +1,6 @@
 # Beast reference consumer
 
-The NFT owns its complete document, SVG image, styles, title/favicon, controls, anchoring, controlled inline SVG timelines and background/media-session policy. Its generated `owned_assets.cairo` is separate from every TinySynth class constant. `assembly.cairo` directly splices standalone library fragments and runtime metadata/art/data using an encoder compiled into the consumer.
+The NFT owns its complete document, SVG image, styles, title/favicon, controls, anchoring, controlled inline SVG timelines and background/media-session policy. Its generated fragments are the [`owned_assets`](../owned_assets) package, separate from every TinySynth class constant; [`stress_nft`](../stress_nft) and the root package's tests use the same package. `assembly.cairo` directly splices standalone library fragments and runtime metadata/art/data using an encoder compiled into the consumer.
 
 Metadata and initial document art use a complete encoded `<img>`. Only this contract's own renderer opts into `data-trusted-art="inline-svg"`: bootstrap imports trusted Genesis art as inline SVG, which animates from page load. Generic composition defaults to isolated images for arbitrary/community SVG. A failed library still leaves ordinary art visible.
 

@@ -11,8 +11,13 @@ name = "onchain_midi_player"
 version = "0.1.0"
 dependencies = [
  "game_components_encoding",
+ "owned_assets",
  "snforge_std",
 ]
+
+[[package]]
+name = "owned_assets"
+version = "0.1.0"
 
 [[package]]
 name = "snforge_scarb_plugin"
