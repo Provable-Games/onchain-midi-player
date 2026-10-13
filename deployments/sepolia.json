@@ -17,11 +17,11 @@
   "example": {
     "package": "beast_consumer",
     "contract": "BeastLikeNft",
-    "class_hash": "0x058b5d382a3f4fdf8f8657a9738dc93578ce13a008346f929560462b18b4a65c",
-    "declare_tx": "0x06c84a859f46dc261355a564800db87ba018597e2e55b31cf62630677a88da3d",
-    "address": "0x07d2541c21228d9ee8e7a3fcc15c51123f3518ec6488448c89de92614778433a",
-    "deploy_tx": "0x03c6c53c26f2fd3c84764cf15f738bb77049f7eac2c0102b44fbee64ee61c4bf",
+    "class_hash": "0x0171fce0fdfa07cba9680c835b89874d16872f9beb8b483044e276c33e833c13",
+    "declare_tx": "0x0336908deee7e911a100814b281a6a32929bfd1a5f14eddb3f8030ff59ccbe3b",
+    "address": "0x04de6644ac5871fd6132f78939e4d287b5249bff343102bce1413eef78fa44c4",
+    "deploy_tx": "0x063ad74849e7d3ff3cac16acc6aacdb4e620cb2b2e90e8babb73b52d274677f7",
     "player_class_hash": "0x0375f8a992d6016b1950808efa864000feadcb61b99dfc35169b554e2f50946b",
-    "built_from": "63aa7390f1c1a20a61ed1bffde288ced2cb07d33"
+    "built_from": "d806a5a4bb59f498b0e6b467775d980f829b7077"
   }
 }
