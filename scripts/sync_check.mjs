@@ -34,15 +34,26 @@ try {
  const initial = await info(); assert.equal(initial.timelines.length,2);assert.ok(initial.timelines.every(s=>!s.paused));assert.ok(Math.abs(initial.monitor.initialAlignment)<.05);
  for(let i=0;i<3;i++) {
    await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==='suspended');
-   const paused = await info();await o.page.waitForTimeout(350);const held=await info();
-   assert.equal(held.status.state,'paused');assert.equal(held.status.audioTime,paused.status.audioTime);assert.deepEqual(held.timelines,paused.timelines);assert.ok(held.timelines.every(s=>s.paused));assert.equal(held.media,true);assert.equal(held.sends.length,paused.sends.length,'scheduler stays held during pause');
+   const paused = await info();
+   if(i===0){
+     await o.page.evaluate(()=>{const ctx=window.__check.synth.getAudioContext();Object.defineProperty(ctx,'outputLatency',{configurable:true,value:.05,writable:true});Object.defineProperty(ctx,'baseLatency',{configurable:true,value:.01,writable:true});});
+     await o.page.waitForFunction(revision=>OnchainMidiPlayer.getPlayStatus().latencyRevision>revision,paused.status.latencyRevision);
+     const metadata=await o.page.evaluate(()=>window.__check.states.at(-1));
+     assert.equal(metadata.positionSeconds,paused.status.positionSeconds);assert.ok(Math.abs(metadata.latencySeconds-.06)<1e-9);
+   }
+   await o.page.waitForTimeout(350);const held=await info();
+   assert.equal(held.status.state,'paused');assert.equal(held.status.audioTime,paused.status.audioTime);assert.equal(held.status.positionSeconds,paused.status.positionSeconds);assert.deepEqual(held.timelines,paused.timelines);assert.ok(held.timelines.every(s=>s.paused));assert.equal(held.media,true);assert.equal(held.sends.length,paused.sends.length,'scheduler stays held during pause');
    await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
-   const resumed = await info();assert.equal(resumed.status.originTime,initial.status.originTime);assert.equal(resumed.status.runId,initial.status.runId);assert.ok(resumed.timelines.every(s=>!s.paused));
+   const resumed = await info();assert.equal(resumed.status.originTime,initial.status.originTime);assert.equal(resumed.status.runId,initial.status.runId);assert.ok(resumed.timelines.every(s=>!s.paused));assert.ok(Math.abs(resumed.status.positionSeconds-Math.max(0,resumed.status.audioTime-resumed.status.originTime-resumed.status.latencySeconds))<1e-9);
  }
  // External context suspension remains held despite an eligible explicit MIDI send and scheduler ticks.
  await o.page.evaluate(async()=>{await window.__check.synth.getAudioContext().suspend();window.__check.synth.send([0x90,60,1]);});
- await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='paused');const external=await info();await o.page.waitForTimeout(350);
- const externalHeld=await info();assert.equal(externalHeld.status.audioState,'suspended');assert.equal(externalHeld.status.audioTime,external.status.audioTime);assert.deepEqual(externalHeld.timelines,external.timelines);assert.equal(externalHeld.sends.length,external.sends.length);
+ await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='paused');const external=await info();
+ await o.page.evaluate(()=>{window.__check.synth.getAudioContext().outputLatency+=.03;});
+ await o.page.waitForFunction(revision=>OnchainMidiPlayer.getPlayStatus().latencyRevision>revision,external.status.latencyRevision);
+ assert.equal(await o.page.evaluate(()=>window.__check.states.at(-1).positionSeconds),external.status.positionSeconds);
+ await o.page.waitForTimeout(350);
+ const externalHeld=await info();assert.equal(externalHeld.status.audioState,'suspended');assert.equal(externalHeld.status.audioTime,external.status.audioTime);assert.equal(externalHeld.status.positionSeconds,external.status.positionSeconds);assert.deepEqual(externalHeld.timelines,external.timelines);assert.equal(externalHeld.sends.length,external.sends.length);
  await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
  // All consumers see one latency estimate. 1ms noise is ignored, 30ms route change resynchronizes.
  await o.page.evaluate(()=>{const ctx=window.__check.synth.getAudioContext();window.__oldLatency=OnchainMidiPlayer.getPlayStatus().latencySeconds;Object.defineProperty(ctx,'outputLatency',{configurable:true,value:.2,writable:true});Object.defineProperty(ctx,'baseLatency',{configurable:true,value:.01,writable:true});});

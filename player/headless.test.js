@@ -110,3 +110,37 @@ test("unique foreign-namespace or non-script data elements reject initialization
 test('new pause cancels resume queued behind a still-pending suspension',async()=>{
  const suspend=deferred(),h=harness({suspend});await h.api.play();const p=h.api.pause(),r=h.api.resume(),aborted=assert.rejects(r,{name:'AbortError'});assert.equal(h.api.pause(),p);await aborted;suspend.resolve();await p;await flush();assert.equal(h.api.getPlayStatus().state,'paused');assert.equal(h.ctx.state,'suspended');assert.equal(h.calls.filter(c=>c==='resume').length,1);h.api.stop();
 });
+
+for(const mode of ['explicit','suspended','interrupted'])test(`audible position holds across published latency updates during ${mode} pause`,async()=>{
+ const h=harness(),changes=[];h.api.onStateChange(s=>changes.push(s));await h.api.play();h.ctx.currentTime=1.5;
+ if(mode==='explicit')await h.api.pause();else h.ctx.change(mode);
+ const before=h.api.getPlayStatus();assert.ok(Math.abs(before.positionSeconds-.38)<1e-9);
+ h.ctx.outputLatency=.05;h.poll();const after=h.api.getPlayStatus();
+ assert.equal(after.positionSeconds,before.positionSeconds);assert.equal(after.audioTime,before.audioTime);assert.equal(after.latencySeconds,.05);assert.ok(after.latencyRevision>before.latencyRevision);
+ assert.equal(changes.at(-1).positionSeconds,before.positionSeconds);assert.equal(changes.at(-1).latencySeconds,.05);
+ await h.api.resume();assert.ok(Math.abs(h.api.getPlayStatus().positionSeconds-.35)<1e-9);
+ assert.equal(h.api.getPlayStatus().originTime,before.originTime);assert.equal(h.api.getPlayStatus().runId,before.runId);
+ assert.equal(h.calls.filter(c=>c==='load').length,1);assert.equal(h.calls.filter(c=>c==='play').length,1);assert.equal(h.calls.filter(c=>c==='prewarm').length,1);h.api.stop();
+});
+test('async suspension anchors the final advancing clock and stop/new run clears held position',async()=>{
+ const suspend=deferred(),h=harness();h.ctx.suspend=()=>{h.calls.push('suspend');return suspend.promise.then(()=>h.ctx.change('suspended'));};
+ await h.api.play();h.ctx.currentTime=1.5;const pause=h.api.pause();
+ assert.equal(h.api.getPlayStatus().state,'paused');assert.equal(h.ctx.state,'running');
+ h.ctx.currentTime=1.6;assert.ok(Math.abs(h.api.getPlayStatus().positionSeconds-.48)<1e-9);
+ h.ctx.currentTime=1.65;suspend.resolve();await pause;const frozen=h.api.getPlayStatus().positionSeconds;assert.ok(Math.abs(frozen-.53)<1e-9);
+ h.ctx.outputLatency=.05;h.poll();assert.equal(h.api.getPlayStatus().positionSeconds,frozen);
+ h.api.stop();assert.equal(h.api.getPlayStatus().positionSeconds,null);h.ctx.currentTime=3;await h.api.play();assert.equal(h.api.getPlayStatus().positionSeconds,0);h.api.stop();
+});
+test('null-origin paused score publishes latency metadata without inventing a position',async()=>{
+ const h=harness({nullStart:true});await h.api.play();await h.api.pause();h.ctx.outputLatency=.05;h.poll();
+ assert.equal(h.api.getPlayStatus().positionSeconds,null);assert.equal(h.api.getPlayStatus().latencySeconds,.05);await h.api.resume();assert.equal(h.api.getPlayStatus().positionSeconds,null);h.api.stop();
+});
+
+test('paused latency callback stop/replay preserves captured position and clears the held cache for the new run',async()=>{
+ const h=harness(),seen=[];await h.api.play();h.ctx.currentTime=1.5;await h.api.pause();const old=h.api.getPlayStatus();let replay,armed=true;
+ h.api.onStateChange(s=>{if(armed&&s.state==='paused'&&s.latencyRevision>old.latencyRevision){armed=false;h.api.stop();replay=h.api.play();}});
+ h.api.onStateChange(s=>seen.push(s));h.ctx.outputLatency=.05;h.poll();await replay;
+ assert.equal(seen[0].positionSeconds,old.positionSeconds);assert.equal(seen[0].runId,old.runId);
+ assert.equal(seen.find(s=>s.state==='stopped').positionSeconds,null);assert.equal(h.api.getPlayStatus().positionSeconds,0);
+ assert.ok(h.api.getPlayStatus().runId>old.runId);assert.equal(h.calls.filter(c=>c==='load').length,2);h.api.stop();
+});

@@ -1894,5 +1894,600 @@
       "applicable provider/mainnet qualification",
       "separately authorized declaration/deployment/release actions"
     ]
+  },
+  "suspended_position_candidate_refresh": {
+    "capture_date_utc": "2026-10-12",
+    "reviewed_parent_commit": "14baed5caff80a5030ae6b34c14ca896bc4a1857",
+    "scope": "New combined headless player payload holds suspended audible position across accepted latency metadata changes. The candidate remains unissued/undeployed; only its 0.6.0 entry was explicitly replaced, with the normal immutable-version guard intact and 0.5.0 bytes preserved.",
+    "superseded_candidate_record": {
+      "format": 1,
+      "fixed_alignment": 279,
+      "dynamic_alignment": 9,
+      "toolchain": {
+        "fflate": "0.8.3",
+        "terser": "5.51.2",
+        "minify": {
+          "ecma": 2020,
+          "compress": {
+            "passes": 2,
+            "ecma": 2020
+          },
+          "mangle": true,
+          "format": {
+            "ascii_only": true,
+            "ecma": 2020
+          }
+        },
+        "gzip": {
+          "level": 9,
+          "mtime": 0
+        }
+      },
+      "inputs": {
+        "player/gunzip.js": {
+          "sha256": "17945521b35cd5cf1e454518ac8d849e47ea8bcfd9d796eb7cfc685ab9bb43f1",
+          "bytes": 13156
+        },
+        "player/settings.js": {
+          "sha256": "b054bbac7bfacb5f3778ce5a08cc407bdf2ce657a974c81595d2ba8b4be6542e",
+          "bytes": 12898
+        },
+        "player/player.js": {
+          "sha256": "e912cf963edeb9d4fe89cb803da8693678b42725dce86d378225911401869804",
+          "bytes": 21606
+        }
+      },
+      "engine_build": {
+        "provisional": false,
+        "sourceCommit": "8fd8b94c8bb1fd2df3d144404620520c4b7f3725",
+        "distributionCommit": "2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a",
+        "ciRun": "https://github.com/Provable-Games/webaudio-tinysynth/actions/runs/38269640215",
+        "sourceMapSha256": "55d24636b60db7a6b7d16b557dc7eb89a387580ce2978d8d10e9054ef33ce60c",
+        "sourceSha256": "8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7",
+        "recipe": "node scripts/build.js <output-dir>",
+        "recipeSha256": "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
+        "packageLockSha256": "67402d41acd7d49ed3c1a1f689e7f91a81bff1b7dc1727b355d1d3b3dec4197d",
+        "terser": "5.51.2"
+      },
+      "engine_ref": "2cb8b40",
+      "engine_commit": "2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a",
+      "script_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+      "artifacts": {
+        "gunzip": {
+          "source_sha256": "9077d45fe8ad01be4379f4e4a7eaabcc0318aa429ef256160be2e194ae888052",
+          "source_len": 4524,
+          "raw_sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+          "raw_len": 4743,
+          "returned_sha256": "869be0afd09b9b8416b1f306a166a518e48ce4397d4d01b82ef004e934f6e7d7",
+          "returned_len": 8432,
+          "returned_felts": 275
+        },
+        "player": {
+          "source_sha256": "613c6f45e09e94f9bb9c04ef95732bc8d32a9e20ad2b8d7be282680f0e746f2b",
+          "source_len": 58237,
+          "raw_sha256": "9e781a38a911fcc80cf9f414f7f54f379eb936e19a67d82eeec030c0ee1b3923",
+          "raw_len": 25389,
+          "returned_sha256": "0a6901bb1ac1159ead3d5c3226719e4033aa20be53b53ccec412eda08dd57a38",
+          "returned_len": 45136,
+          "returned_felts": 1459,
+          "embedded_engine": {
+            "offset": 0,
+            "length": 47424,
+            "sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65"
+          },
+          "wrapper": {
+            "offset": 47427,
+            "length": 10810,
+            "sha256": "83d380f8cd7dd79208799e967010593f8d6e8fc5d3583c39c6ed7013aae5733a"
+          },
+          "gzip_sha256": "ab91d57c06773ab956cc92c8641117fa62db7f3882eb95d59dc787fb1bb49340",
+          "gzip_len": 18737,
+          "gzip_base64_len": 24984
+        }
+      },
+      "license_sha256": "9c68224366c7fc70f05d5a614c497bd7c13dcc8ec7f72b65d4c20316e2996cb8",
+      "license_len": 11033
+    },
+    "current_candidate_record": {
+      "format": 1,
+      "fixed_alignment": 279,
+      "dynamic_alignment": 9,
+      "toolchain": {
+        "fflate": "0.8.3",
+        "terser": "5.51.2",
+        "minify": {
+          "ecma": 2020,
+          "compress": {
+            "passes": 2,
+            "ecma": 2020
+          },
+          "mangle": true,
+          "format": {
+            "ascii_only": true,
+            "ecma": 2020
+          }
+        },
+        "gzip": {
+          "level": 9,
+          "mtime": 0
+        }
+      },
+      "inputs": {
+        "player/gunzip.js": {
+          "sha256": "17945521b35cd5cf1e454518ac8d849e47ea8bcfd9d796eb7cfc685ab9bb43f1",
+          "bytes": 13156
+        },
+        "player/settings.js": {
+          "sha256": "b054bbac7bfacb5f3778ce5a08cc407bdf2ce657a974c81595d2ba8b4be6542e",
+          "bytes": 12898
+        },
+        "player/player.js": {
+          "sha256": "71128031a7e0072760c2bf95b3aed00c380d2c5c4f533a239bb1daff012f5643",
+          "bytes": 22238
+        }
+      },
+      "engine_build": {
+        "provisional": false,
+        "sourceCommit": "8fd8b94c8bb1fd2df3d144404620520c4b7f3725",
+        "distributionCommit": "2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a",
+        "ciRun": "https://github.com/Provable-Games/webaudio-tinysynth/actions/runs/38269640215",
+        "sourceMapSha256": "55d24636b60db7a6b7d16b557dc7eb89a387580ce2978d8d10e9054ef33ce60c",
+        "sourceSha256": "8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7",
+        "recipe": "node scripts/build.js <output-dir>",
+        "recipeSha256": "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
+        "packageLockSha256": "67402d41acd7d49ed3c1a1f689e7f91a81bff1b7dc1727b355d1d3b3dec4197d",
+        "terser": "5.51.2"
+      },
+      "engine_ref": "2cb8b40",
+      "engine_commit": "2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a",
+      "script_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+      "artifacts": {
+        "gunzip": {
+          "source_sha256": "9077d45fe8ad01be4379f4e4a7eaabcc0318aa429ef256160be2e194ae888052",
+          "source_len": 4524,
+          "raw_sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+          "raw_len": 4743,
+          "returned_sha256": "869be0afd09b9b8416b1f306a166a518e48ce4397d4d01b82ef004e934f6e7d7",
+          "returned_len": 8432,
+          "returned_felts": 275
+        },
+        "player": {
+          "source_sha256": "4506724d43938df795ebc4a846263afb6d9c0f388e0b7a198784d80e7ba078d9",
+          "source_len": 58354,
+          "raw_sha256": "7d7c922b614ba7c35cfb1873c5019aeae49878cacde55382456993d381a4ebd2",
+          "raw_len": 25389,
+          "returned_sha256": "86881e543daea6fd722a3645d14c82bea8873eaecd709015c3e83a6f6786c650",
+          "returned_len": 45136,
+          "returned_felts": 1459,
+          "embedded_engine": {
+            "offset": 0,
+            "length": 47424,
+            "sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65"
+          },
+          "wrapper": {
+            "offset": 47427,
+            "length": 10927,
+            "sha256": "59ee3f5d151d2dc4c447af20962a93bb3e6bb8f926b045076c8e5b85af81eec4"
+          },
+          "gzip_sha256": "d3a9b6a1f908571e3d5ef6169961079f7146872f32dfe5ac1f155ee58b0db4c7",
+          "gzip_len": 18780,
+          "gzip_base64_len": 25040
+        }
+      },
+      "license_sha256": "9c68224366c7fc70f05d5a614c497bd7c13dcc8ec7f72b65d4c20316e2996cb8",
+      "license_len": 11033
+    },
+    "bindings": {
+      "changed_player_and_prepared_artifacts": {
+        "player/player.js": {
+          "before": {
+            "sha256": "e912cf963edeb9d4fe89cb803da8693678b42725dce86d378225911401869804",
+            "bytes": 21606
+          },
+          "after": {
+            "sha256": "71128031a7e0072760c2bf95b3aed00c380d2c5c4f533a239bb1daff012f5643",
+            "bytes": 22238
+          }
+        },
+        "tests/fixtures/segments/player.html": {
+          "before": {
+            "sha256": "9e781a38a911fcc80cf9f414f7f54f379eb936e19a67d82eeec030c0ee1b3923",
+            "bytes": 25389
+          },
+          "after": {
+            "sha256": "7d7c922b614ba7c35cfb1873c5019aeae49878cacde55382456993d381a4ebd2",
+            "bytes": 25389
+          }
+        },
+        "src/segment_data.cairo": {
+          "before": {
+            "sha256": "f8b0a883465e0e780e1b282c89f57c47329bfbf631d0592eb533955d36f861dc",
+            "bytes": 79231
+          },
+          "after": {
+            "sha256": "ee9c6d42b8731d72c1ff7525b9e323f9803e09159f525d9569a8b62d1c9df3f4",
+            "bytes": 79231
+          }
+        },
+        "examples/beast_consumer/fixtures/animation.html": {
+          "before": {
+            "sha256": "464d204cba47dd058218a7e8d85ce74a58943b700bd1895739f21805c87ccfc8",
+            "bytes": 40158
+          },
+          "after": {
+            "sha256": "fd8ce674b3cbd765605ed0a2b9cdd658c1bedd438aaa2fc206e34c009e0cdfed",
+            "bytes": 40158
+          }
+        },
+        "examples/beast_consumer/fixtures/token_uri.txt": {
+          "before": {
+            "sha256": "39eb98e0b36d02ce5828a777fdb66d645965a3753cba50f29424ede15580ef19",
+            "bytes": 73762
+          },
+          "after": {
+            "sha256": "30e4dddfc2b1bfeb10ce9ceee41b8f3035415067d7b3e1a69e11b6c094f45f52",
+            "bytes": 73762
+          }
+        }
+      },
+      "unchanged_engine_loader_and_nft_ui": {
+        "scripts/engine.mjs": {
+          "sha256": "790273888257c6f7538b6c8fefa783f2a74deb9c03c2bc677d7bbc4928a977d9",
+          "bytes": 3499
+        },
+        "tests/vendor/webaudio-tinysynth-2cb8b40.min.js": {
+          "sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+          "bytes": 47424
+        },
+        "tests/vendor/webaudio-tinysynth-2cb8b40.NOTICE": {
+          "sha256": "9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708",
+          "bytes": 6499
+        },
+        "tests/fixtures/segments/gunzip.html": {
+          "sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+          "bytes": 4743
+        },
+        "examples/beast_consumer/ui.js": {
+          "sha256": "ffd845e30d588ffbb69c0538fac1680886cbb707733301115ffcfa1fd8da50f4",
+          "bytes": 17655
+        },
+        "examples/beast_consumer/fixtures/footer.html": {
+          "sha256": "802105afdffb5a66c0f1a698fa70524356ae345b43d234032a6a9f17eaadae34",
+          "bytes": 6840
+        }
+      },
+      "browser_probe_source": {
+        "scripts/browser_harness.mjs": {
+          "sha256": "fbbe3dcab05bb3dde7b268b586564bd25e9622134382dc19827d9e6ba3636b9c",
+          "bytes": 3415
+        },
+        "scripts/sync_check.mjs": {
+          "sha256": "6575eca85d20cda2516d426006c085c703498af51aed52cf3913d4f1dc6d9ad7",
+          "bytes": 10398
+        },
+        "scripts/schedule_observations.mjs": {
+          "sha256": "fbc0f971196ad326fa5fbfaed18b1ed99fb0f14ccc5bf27a96136dc94e67fff8",
+          "bytes": 1463
+        },
+        "scripts/page_check.mjs": {
+          "sha256": "d37c01ab96cd04b3df7166836e8a0a2251e86e4fbbcdaffef26a37dc37af15cf",
+          "bytes": 19255
+        },
+        "scripts/hosting_check.mjs": {
+          "sha256": "eefe99637eef1b0018fcb608568fb46bfc2adc0f1447ead03252dfcdc1a6a25b",
+          "bytes": 3332
+        }
+      },
+      "current_release_class_artifacts": {
+        "target/release/onchain_midi_player_TinySynth.contract_class.json": {
+          "sha256": "d0d64b9065ce5ac6076ac87e13123d2f682d69ac9df0802f84774409a508e636",
+          "bytes": 986703
+        },
+        "examples/beast_consumer/target/release/beast_consumer_BeastLikeNft.contract_class.json": {
+          "sha256": "d9aa3a4ea970875828db371af5b09c8e954c8841131d970d5fd5886cad016116",
+          "bytes": 779043
+        },
+        "examples/stress_nft/target/release/stress_nft_StressNft.contract_class.json": {
+          "sha256": "c728a5ebca74b62f93e7211041e5718db09de1c9d5fa91b97e356cbb470bd5e7",
+          "bytes": 630026
+        }
+      }
+    },
+    "position_regressions": [
+      "explicit pause publishes accepted latency/revision but holds direct/captured audible position",
+      "external suspension and interruption hold position through metadata updates",
+      "asynchronous suspend anchors the last advancing audio time",
+      "actual resume uses latest compensation without MIDI/voice rebuild or origin/runId change",
+      "null-origin remains null",
+      "reentrant paused metadata stop/replay retains old captured snapshot but clears position for the new run"
+    ],
+    "composed_page_cases_per_engine": 32,
+    "hosting_cases_per_engine": 12,
+    "font_negative_control": {
+      "browser": "chromium 153.0.8010.12",
+      "font": "VT323",
+      "policy": "default-src none without font-src data",
+      "font_status": "error",
+      "violation": {
+        "directive": "font-src",
+        "uri": "data"
+      }
+    },
+    "font_positive_control": "All three browsers loaded a nonempty set of VT323 FontFace objects with loaded status and no font-src violations in trusted data/srcdoc sandboxes; allowed/blocked/omitted media policy was unchanged.",
+    "sync_seconds": 60,
+    "sync_results": {
+      "chromium": {
+        "engine": "chromium",
+        "version": "0.6.0",
+        "player_source_sha256": "4506724d43938df795ebc4a846263afb6d9c0f388e0b7a198784d80e7ba078d9",
+        "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+        "seconds": 60,
+        "schedule": {
+          "observed_passes": 36,
+          "scheduled_messages": 682,
+          "max_grid_error_seconds": 3.979039320256561e-13,
+          "minimum_lead_seconds": 0.09787154931974484,
+          "late": 0
+        },
+        "checkpoints": [
+          {
+            "elapsed_seconds": 10,
+            "audioTime": 11.122358276643991,
+            "current_drift_ms": 2.300689343725182,
+            "max_drift_ms": 23.50247685575546
+          },
+          {
+            "elapsed_seconds": 20,
+            "audioTime": 21.118548752834467,
+            "current_drift_ms": 9.150197264080617,
+            "max_drift_ms": 57.461160091015095
+          },
+          {
+            "elapsed_seconds": 30,
+            "audioTime": 31.184399092970523,
+            "current_drift_ms": 11.462865622406504,
+            "max_drift_ms": 57.461160091015095
+          },
+          {
+            "elapsed_seconds": 40,
+            "audioTime": 41.203809523809525,
+            "current_drift_ms": 11.792403563915421,
+            "max_drift_ms": 57.461160091015095
+          },
+          {
+            "elapsed_seconds": 50,
+            "audioTime": 51.22321995464853,
+            "current_drift_ms": 17.312010148271106,
+            "max_drift_ms": 57.461160091015095
+          },
+          {
+            "elapsed_seconds": 60,
+            "audioTime": 61.25424036281179,
+            "current_drift_ms": 17.5415911004988,
+            "max_drift_ms": 57.461160091015095
+          }
+        ],
+        "initial_alignment_ms": -0.0007738317626820868,
+        "max_drift_ms": 57.461160091015095,
+        "current_drift_ms": 22.631643149405356,
+        "latency_events": [
+          {
+            "audioTime": 0.011609977324263039,
+            "latencySeconds": 0.011609977324263039,
+            "revision": 1
+          },
+          {
+            "audioTime": 0.17414965986394557,
+            "latencySeconds": 0.060000000000000005,
+            "revision": 2
+          },
+          {
+            "audioTime": 0.37151927437641724,
+            "latencySeconds": 0.09,
+            "revision": 3
+          },
+          {
+            "audioTime": 0.4992290249433107,
+            "latencySeconds": 0.21000000000000002,
+            "revision": 4
+          },
+          {
+            "audioTime": 0.9984580498866213,
+            "latencySeconds": 0.24100000000000002,
+            "revision": 5
+          }
+        ],
+        "steady_passes": 35,
+        "steady_svg_seeks": 70,
+        "physical_audio_verified": false
+      },
+      "firefox": {
+        "engine": "firefox",
+        "version": "0.6.0",
+        "player_source_sha256": "4506724d43938df795ebc4a846263afb6d9c0f388e0b7a198784d80e7ba078d9",
+        "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+        "seconds": 60,
+        "schedule": {
+          "observed_passes": 36,
+          "scheduled_messages": 679,
+          "max_grid_error_seconds": 3.907985046680551e-13,
+          "minimum_lead_seconds": 0.09129251700680273,
+          "late": 0
+        },
+        "checkpoints": [
+          {
+            "elapsed_seconds": 10,
+            "audioTime": 10.922086167800453,
+            "current_drift_ms": 1.1302988480856868,
+            "max_drift_ms": 49.31796609781269
+          },
+          {
+            "elapsed_seconds": 20,
+            "audioTime": 20.996643990929705,
+            "current_drift_ms": 31.081472844824987,
+            "max_drift_ms": 49.31796609781269
+          },
+          {
+            "elapsed_seconds": 30,
+            "audioTime": 31.010249433106576,
+            "current_drift_ms": 23.286018415370258,
+            "max_drift_ms": 49.31796609781269
+          },
+          {
+            "elapsed_seconds": 40,
+            "audioTime": 41.01804988662131,
+            "current_drift_ms": 30.384590543618195,
+            "max_drift_ms": 49.31796609781269
+          },
+          {
+            "elapsed_seconds": 50,
+            "audioTime": 51.04907029478458,
+            "current_drift_ms": 3.0682367397902865,
+            "max_drift_ms": 49.31796609781269
+          },
+          {
+            "elapsed_seconds": 60,
+            "audioTime": 61.08009070294784,
+            "current_drift_ms": 3.0692531311968807,
+            "max_drift_ms": 49.31796609781269
+          }
+        ],
+        "initial_alignment_ms": 0.31972700291740125,
+        "max_drift_ms": 49.31796609781269,
+        "current_drift_ms": -0.24818763593703608,
+        "latency_events": [
+          {
+            "audioTime": 0.0029024943310657597,
+            "latencySeconds": 0.04154195,
+            "revision": 1
+          },
+          {
+            "audioTime": 0.24090702947845805,
+            "latencySeconds": 0.060000000000000005,
+            "revision": 2
+          },
+          {
+            "audioTime": 0.34829931972789113,
+            "latencySeconds": 0.09,
+            "revision": 3
+          },
+          {
+            "audioTime": 0.42376417233560093,
+            "latencySeconds": 0.21000000000000002,
+            "revision": 4
+          },
+          {
+            "audioTime": 0.9171882086167801,
+            "latencySeconds": 0.24100000000000002,
+            "revision": 5
+          }
+        ],
+        "steady_passes": 35,
+        "steady_svg_seeks": 70,
+        "physical_audio_verified": false
+      },
+      "webkit": {
+        "engine": "webkit",
+        "version": "0.6.0",
+        "player_source_sha256": "4506724d43938df795ebc4a846263afb6d9c0f388e0b7a198784d80e7ba078d9",
+        "engine_sha256": "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65",
+        "seconds": 60,
+        "schedule": {
+          "observed_passes": 36,
+          "scheduled_messages": 679,
+          "max_grid_error_seconds": 3.979039320256561e-13,
+          "minimum_lead_seconds": 0.08183641326530616,
+          "late": 0
+        },
+        "checkpoints": [
+          {
+            "elapsed_seconds": 10,
+            "audioTime": 10.96562358276644,
+            "current_drift_ms": -0.2268836135712604,
+            "max_drift_ms": 2.7746726971589197
+          },
+          {
+            "elapsed_seconds": 20,
+            "audioTime": 20.982131519274375,
+            "current_drift_ms": -1.2734374805454252,
+            "max_drift_ms": 13.009037200521156
+          },
+          {
+            "elapsed_seconds": 30,
+            "audioTime": 31.04798185941043,
+            "current_drift_ms": 0.3509605179532471,
+            "max_drift_ms": 13.009037200521156
+          },
+          {
+            "elapsed_seconds": 40,
+            "audioTime": 41.0615873015873,
+            "current_drift_ms": 0.47851757021444286,
+            "max_drift_ms": 13.009037200521156
+          },
+          {
+            "elapsed_seconds": 50,
+            "audioTime": 51.07809523809524,
+            "current_drift_ms": -0.2100841284855548,
+            "max_drift_ms": 13.009037200521156
+          },
+          {
+            "elapsed_seconds": 60,
+            "audioTime": 61.09750566893424,
+            "current_drift_ms": -0.8910833344915048,
+            "max_drift_ms": 13.009037200521156
+          }
+        ],
+        "initial_alignment_ms": 0.029999966591681,
+        "max_drift_ms": 13.009037200521156,
+        "current_drift_ms": -0.8910833344915048,
+        "latency_events": [
+          {
+            "audioTime": 0.020317460317460317,
+            "latencySeconds": 0.0029024943310657597,
+            "revision": 1
+          },
+          {
+            "audioTime": 0.16834467120181407,
+            "latencySeconds": 0.060000000000000005,
+            "revision": 2
+          },
+          {
+            "audioTime": 0.2873469387755102,
+            "latencySeconds": 0.09,
+            "revision": 3
+          },
+          {
+            "audioTime": 0.4092517006802721,
+            "latencySeconds": 0.21000000000000002,
+            "revision": 4
+          },
+          {
+            "audioTime": 0.9113832199546485,
+            "latencySeconds": 0.24100000000000002,
+            "revision": 5
+          }
+        ],
+        "steady_passes": 35,
+        "steady_svg_seeks": 70,
+        "physical_audio_verified": false
+      }
+    },
+    "functional_checks": {
+      "root_javascript": 344,
+      "consumer_javascript": 47,
+      "cairo_root": 267,
+      "cairo_beast": 28,
+      "cairo_stress": 11,
+      "existing_cairo_ignored": 21,
+      "generation_abi_player_ui_types_and_format": "passed"
+    },
+    "historical_evidence_scope": "All earlier player/grid/art/audio/gas/NFT records retain their original payload, source and artifact bindings. No historical player/grid or gas record is claimed as validation of this changed payload; the fresh current one-minute/page/hosting results stand separately. No new ten-minute, native-device or gas capture is claimed.",
+    "physical_audio_verified": false,
+    "release_prerequisites": [
+      "tagged fork release",
+      "issue #52 hardware/display/audio-route qualification of provisional 17 ms reference display lead",
+      "applicable provider/mainnet qualification",
+      "separately authorized declaration/deployment/release actions"
+    ]
   }
 }

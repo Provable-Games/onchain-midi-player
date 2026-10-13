@@ -166,6 +166,7 @@ export function startPlayer(host = window) {
   let runId = 0, operationId = 0, timer = 0, poll = 0, latencyPoll = 0;
   let origin = /** @type {number | null} */ (null), latencySeconds = 0, latencyRevision = 0;
   let nextPass = 0, resumeRequests = 0, holdSuspension = false;
+  /** @type {number | null} */ let heldPosition = null;
   /** @type {() => void} */ let syncBoundary = () => {};
   /** @type {Promise<void> | null} */ let pausing = null;
   /** @type {{promise: Promise<void>, reject: (cause: Error) => void} | null} */ let pending = null;
@@ -176,9 +177,18 @@ export function startPlayer(host = window) {
   // Browser estimates only: discard malformed/implausible components independently.
   const component = (/** @type {any} */ x) => number(x) !== null && x >= 0 && x <= 1 ? x : 0;
   const estimateLatency = () => component(audio()?.outputLatency) + component(audio()?.baseLatency);
+  const position = () => {
+    if (origin === null) { heldPosition = null; return null; }
+    const ctx = audio();
+    const audible = Math.max(0, (number(ctx?.currentTime) ?? origin) - origin - latencySeconds);
+    if (ctx?.state === "running") { heldPosition = null; return audible; }
+    // Anchor at the actual frozen clock, including an asynchronous suspend's last advancing time.
+    return heldPosition ??= audible;
+  };
   const refreshLatency = () => {
     const value = estimateLatency();
     if (Math.abs(value - latencySeconds) < 0.002 - 1e-9) return;
+    position(); // Preserve suspended audibility before publishing a new compensation estimate.
     latencySeconds = value; ++latencyRevision;
     host.clearTimeout(timer); timer = 0;
     transition(state, true); syncBoundary();
@@ -190,7 +200,7 @@ export function startPlayer(host = window) {
       passSeconds: number(score?.seconds), outputLatency: component(audio()?.outputLatency),
       baseLatency: component(audio()?.baseLatency), latencySeconds, latencyRevision,
       audioState: audio()?.state ?? null,
-      positionSeconds: origin === null ? null : Math.max(0, (number(audio()?.currentTime) ?? origin) - origin - latencySeconds),
+      positionSeconds: position(),
       runId, error };
   };
   /** @type {{value: import("./api.d.ts").PlayStatus, listeners: ((s: import("./api.d.ts").PlayStatus) => void)[]}[]} */
@@ -289,6 +299,7 @@ export function startPlayer(host = window) {
   };
   const contextChanged = () => {
     const ctx = audio();
+    position(); // Observe clock transitions even when an in-flight transport suppresses state changes.
     if (ctx.state === "closed" && (state === "playing" || state === "paused" || state === "starting")) {
       ++operationId; abortPending(); fail(new Error("player: AudioContext closed"));
     } else if (state === "playing" && ctx.state !== "running") {
@@ -311,7 +322,7 @@ export function startPlayer(host = window) {
       if (state === "loading") return Promise.reject(new Error("player: await OnchainMidiPlayer.ready before play()"));
       if (pending) return pending.promise;
       if (state === "playing") return Promise.resolve();
-      holdSuspension = false;
+      holdSuspension = false; heldPosition = null;
       const current = ++runId, operation = ++operationId;
       /** @type {() => void} */ let resolve = () => {};
       /** @type {(cause: Error) => void} */ let reject = () => {};
@@ -413,7 +424,7 @@ export function startPlayer(host = window) {
     stop() {
       if (state !== "starting" && state !== "playing" && state !== "paused") return;
       holdSuspension = false;
-      ++runId; ++operationId; cancelTimers(); abortPending(); origin = null;
+      ++runId; ++operationId; cancelTimers(); abortPending(); origin = null; heldPosition = null;
       try { synth?.stopMIDI(); } catch (cause) { fail(cause); return; }
       transition("stopped");
     },
