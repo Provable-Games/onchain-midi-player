@@ -7504,7 +7504,7 @@ pub fn token_uri_4_digest() -> (u32, u256) {
 }
 /// Token 5, minted after deployment as Kraken, tier 4: its token_uri's length and SHA-256.
 pub fn minted_token_uri_digest() -> (u32, u256) {
-    (75329, 0xa13d9d9dc1387c281eb3952be296ce0fad0416d72baa13f6e307d7dfd6d43a7d)
+    (76081, 0x34ab81976e38ca28fd34bf938e65b96829d8112f3e92ac5441580f64277a80e2)
 }
 pub fn gunzip() -> ByteArray {
     let mut felts = GUNZIP.span();
