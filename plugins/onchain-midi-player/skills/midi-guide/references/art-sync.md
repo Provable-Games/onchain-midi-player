@@ -44,7 +44,7 @@ Then look at what each animation does. In that SVG:
 
 ## 3. Choose
 
-**From the frame period to a tempo.** For art made of frames, with frame period `F` in µs (a GIF's delay, a sprite sheet's step), the tempo `Q` in µs per quarter note that puts `n` frames in each quarter is `Q = n × F`. This holds for any engine and any art.
+**From the frame period to a tempo.** For art made of frames, with frame period `F` in µs (a GIF's delay, a sprite sheet's step), the tempo `Q` in µs per quarter note that puts `n` frames in each quarter is `Q = n × F`. This matches periods; phase alignment additionally requires NFT code to control the animation timeline or actively align/restart the image.
 
 - One frame per eighth note is `n = 2` (`Q = 2F`), per triplet eighth `n = 3`, per sixteenth `n = 4`.
 - GIF delays are whole centiseconds (10,000 µs), so an eighth note is a whole number of them only when `Q` is a multiple of 20,000 µs (a sixteenth: 40,000 µs). That includes 60, 75, 100, 120, 125 and 150 BPM, but not 140 (428,571 µs) or 131.87 BPM (455,000 µs).
@@ -52,7 +52,7 @@ Then look at what each animation does. In that SVG:
 - Use ticks per quarter note that the subdivision divides evenly (480, for example), so every frame boundary lands on a tick.
 - When NFT code seeks trusted SVG from `onPassStart`, only drift within one pass matters. The headless player emits timing events and never controls art itself.
 
-For Beast art, a GIF with 20 cs (200 ms) frames: 150 BPM (400,000 µs) is exactly one frame per eighth note, 75 BPM (800,000 µs) one per sixteenth, and 100 BPM (600,000 µs) one per triplet eighth. At 150 BPM a 4/4 bar is 1.6 s, two loops of the 4-frame GIF, so a whole number of bars keeps the GIF in phase.
+For a transport-controlled SVG/SMIL sprite with the Beast GIF's 20 cs (200 ms) frame periods: 150 BPM (400,000 µs) is exactly one frame per eighth note, 75 BPM (800,000 µs) one per sixteenth, and 100 BPM (600,000 µs) one per triplet eighth. At 150 BPM a 4/4 bar is 1.6 s, two loops of the 4-frame sprite, so transport alignment and a whole number of bars preserve that sprite's phase.
 
 Pick a tempo whose beat, or a subdivision of it, is a whole number of frames. Then pick a pass length that is a whole number of bars and a multiple of the art's loops. For 200 ms frames and 0.4, 0.6, 0.8 or 1.2 s loops:
 
@@ -68,10 +68,10 @@ The example's token 4 is a full-size Beast on Sepolia (the example in [`deployme
 - 55,510 ms / 800 ms = 69.39 GIF loops per pass, so a pass ends 0.39 of the way through a GIF loop.
 - The 455 ms beat and the 800 ms GIF loop line up every lcm(455, 800) = 72,800 ms, longer than the pass. Within a pass, the beat never lines up with the GIF again.
 
-The GIF and beat therefore have different periods. An embedded GIF continues on its independent image clock even when SVG timelines pause or seek. For a transport-controlled SVG sprite with the same frame durations, choose matching music/art periods:
+The GIF and beat therefore have different periods. An embedded GIF continues on its independent image clock even when SVG timelines pause or seek. The current reference neither restarts nor freezes embedded GIFs, and the isolated-image path does not restart images at pass boundaries. The following arithmetic applies to a transport-controlled SVG/SMIL sprite with the same frame durations, or custom NFT code that actively aligns/restarts the image:
 
-- At 100 BPM, a pass of whole bars keeps the GIF in phase (3 GIF loops per 2.4 s bar). Retune the wrapper's 3 s and 6 s animations to 2.4 s and 4.8 s, or keep them and make the pass a multiple of 12 s (5 bars), the lcm of 2.4, 3 and 6 s.
-- At 120 BPM (500,000 µs, the other production tempo), make the pass a multiple of 4 s for the GIF; 3 s and 6 s then need a multiple of 12 s (6 bars).
+- At 100 BPM, a pass of whole bars keeps the controlled sprite in phase (3 sprite loops per 2.4 s bar). Retune the wrapper's 3 s and 6 s animations to 2.4 s and 4.8 s, or keep them and make the pass a multiple of 12 s (5 bars), the lcm of 2.4, 3 and 6 s.
+- At 120 BPM (500,000 µs, the other production tempo), make the pass a multiple of 4 s for the controlled sprite; 3 s and 6 s then need a multiple of 12 s (6 bars).
 
 ## Changing the art instead
 
