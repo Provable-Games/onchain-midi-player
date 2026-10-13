@@ -1,8 +1,9 @@
 name: Drift
 
-# Ten-minute transport/SVG acceptance and read-only drift observations in three browsers.
+# Ten-minute transport/SVG acceptance and read-only drift observations in three browsers; the
+# session's maximum drift must stay below a coarse per-engine limit (scripts/sync_check.mjs).
 # Sampling never corrects drift; physical route/display acceptance remains issue #52.
-# Runs weekly, on demand, and when the acceptance harness changes.
+# Runs weekly, on demand, and when the acceptance harness or the sync code under test changes.
 
 on:
   schedule:
@@ -18,6 +19,9 @@ on:
       - scripts/drift_check.mjs
       - scripts/sync_check.mjs
       - scripts/browser_harness.mjs
+      - player/player.js
+      - examples/beast_consumer/art_sync.js
+      - examples/beast_consumer/ui.js
 
 permissions:
   contents: read

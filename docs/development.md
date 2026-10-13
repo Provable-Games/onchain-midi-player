@@ -35,10 +35,10 @@ Install the pinned tools with `(cd .github/ci-tools && npm ci)`. Set `PLAYWRIGHT
 npm run page-check
 npm run render-check
 npm run hosting-check
+# Asserts pause/resume, boundaries, latency resynchronization and a coarse per-engine limit on
+# trusted SVG/audio drift (the CI browser job runs 1 minute; the Drift workflow runs 10):
 npm run drift-check -- --minutes 1 --every 10
 node examples/beast_consumer/scripts/browser_check.mjs
-# CI reports trusted SVG/audio drift while asserting pause/resume, boundaries and latency resynchronization:
-npm run drift-check -- --minutes 1 --drift-info
 ```
 
 Composed pages run offline with request blocking, complete namespaced data and independently provided fixture/dependent libraries. Hosting checks use `sandbox="allow-scripts"` with data/srcdoc frames and strict CSP: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src blob:`. Blocked-blob variants retain ordinary playback and exercise the NFT's hidden-page fallback; only the expected blob-media CSP report is accepted. No eval/network dependency is introduced. Audio render checks retain PCM/engine/noise/reverb comparisons against the pinned engine. Drift probes use the new consumer harness and the audio/SVG clock measurements.
