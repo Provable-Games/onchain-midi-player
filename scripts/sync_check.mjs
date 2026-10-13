@@ -7,7 +7,7 @@ import { openBrowser, composed, dataUrl, waitReady } from './browser_harness.mjs
 import { fixtureCase } from './fixture_pages.mjs';
 import { checkSchedule } from './schedule_observations.mjs';
 import { verifyLibraries } from './verify_engine.mjs';
-import { REFERENCE_DISPLAY_LEAD_SECONDS } from '../examples/beast_consumer/ui.js';
+import { REFERENCE_DISPLAY_LEAD_SECONDS } from '../examples/beast_consumer/art_sync.js';
 // A suspended timeline is seeked to exactly this value. 5 ms covers each engine's SMIL time
 // representation (Firefox keeps whole milliseconds) and stays well under one 60 Hz frame (16.7 ms).
 const HELD_TOLERANCE_SECONDS = 0.005;
@@ -39,12 +39,19 @@ try {
      assert.ok(s.paused && Math.abs(d) < HELD_TOLERANCE_SECONDS, `${label}: SVG time ${s.time} is ${(d * 1000).toFixed(3)} ms from the held position ${position} + display lead`);
    }
  };
+ // Not synced (before play and after stop): every timeline runs freely on the page clock.
+ const runningFreely = async (label) => {
+   const a = await info(); await o.page.waitForTimeout(200); const b = await info();
+   b.timelines.forEach((s,i)=>assert.ok(!a.timelines[i].paused&&!s.paused&&s.time>a.timelines[i].time+.1,`${label}: timeline ${i} runs freely (${a.timelines[i].time} -> ${s.time})`));
+   return b;
+ };
  const suspends = [];
- const cold = await info(); assert.equal(cold.calls.length,0); assert.ok(cold.timelines.every(s=>s.paused&&s.time===0));
+ const cold = await runningFreely('before play'); assert.equal(cold.calls.length,0); assert.equal(cold.seeks,0);
  await o.page.click('#play');
  await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');
- await o.page.waitForFunction(()=>document.getElementById('beast-art').animationsPaused()===false);
- const initial = await info(); assert.equal(initial.timelines.length,2);assert.ok(initial.timelines.every(s=>!s.paused));assert.ok(Math.abs(initial.monitor.initialAlignment)<.05);
+ // The initial pass event, when the music becomes audible, seeks every timeline; the monitor measures right after it.
+ await o.page.waitForFunction(()=>window.__check.passes.length>0&&window.OnchainArtMonitor.initialAlignment!==null);
+ const initial = await info(); assert.equal(initial.timelines.length,2);assert.ok(initial.timelines.every(s=>!s.paused));assert.ok(initial.seeks>=2);assert.ok(Math.abs(initial.monitor.initialAlignment)<.05);
  for(let i=0;i<3;i++) {
    const before=await o.page.evaluate(()=>window.__check.states.length);
    await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==='suspended');
@@ -102,7 +109,8 @@ try {
  const schedule=checkSchedule({sends:end.sends,passes:end.passes,origin:initial.status.originTime,period:c.midi_loop_seconds});
  const result={engine:run.engine,version:verified.version,player_source_sha256:verified.libraries.player.sha256,engine_sha256:verified.engine.sha256,seconds,schedule,checkpoints,initial_alignment_ms:initial.monitor.initialAlignment*1000,max_drift_ms:end.monitor.maxDrift*1000,current_drift_ms:end.monitor.currentDrift*1000,latency_events:end.monitor.latencyEvents,steady_passes:passCount,steady_svg_seeks:end.seeks-start.seeks,pause_to_suspend_audio:suspends,physical_audio_verified:false};
  assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
- await o.page.evaluate(()=>OnchainMidiPlayer.stop());const stopped=await info();assert.equal(stopped.status.state,'stopped');assert.ok(stopped.timelines.every(s=>s.paused&&s.time===0));
+ // Stop releases the art: it keeps animating from where it was, without a rewind.
+ await o.page.evaluate(()=>OnchainMidiPlayer.stop());const stopped=await runningFreely('after stop');assert.equal(stopped.status.state,'stopped');
  if(process.env.SYNC_RESULTS){mkdirSync(process.env.SYNC_RESULTS,{recursive:true});writeFileSync(`${process.env.SYNC_RESULTS}/sync-${run.engine}.json`,JSON.stringify(result,null,2)+'\n');}
  console.log(JSON.stringify(result,null,2));
  console.log(`${run.engine}: audio clock / SVG estimated max drift ${(result.max_drift_ms).toFixed(3)} ms; ${passCount} passes, ${end.seeks-start.seeks} boundary SVG seeks; ${result.latency_events.length} latency records; engine grid error ${schedule.max_grid_error_seconds} s, late ${schedule.late}; pause request to completed suspend ${suspends.map(s=>s.audio_ms.toFixed(3)).join(', ')} ms on the audio clock; checks passed`);
