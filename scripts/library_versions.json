@@ -110,8 +110,8 @@
         "bytes": 12898
       },
       "player/player.js": {
-        "sha256": "71128031a7e0072760c2bf95b3aed00c380d2c5c4f533a239bb1daff012f5643",
-        "bytes": 22238
+        "sha256": "6c73cddfcaf549d4305957fea5e5498e12773a47abb6bf2698c61565f92b3cb2",
+        "bytes": 22440
       }
     },
     "engine_build": {
@@ -140,11 +140,11 @@
         "returned_felts": 275
       },
       "player": {
-        "source_sha256": "4506724d43938df795ebc4a846263afb6d9c0f388e0b7a198784d80e7ba078d9",
-        "source_len": 58354,
-        "raw_sha256": "7d7c922b614ba7c35cfb1873c5019aeae49878cacde55382456993d381a4ebd2",
+        "source_sha256": "1b9396d7040e8b99023038e76f8eacfb3bcefdefe8bb65b2ea204795f0b9443d",
+        "source_len": 58393,
+        "raw_sha256": "4405139afb1a925225cd7abe17494c655c694d94dcb3d69ebe5c2390df5c0bf0",
         "raw_len": 25389,
-        "returned_sha256": "86881e543daea6fd722a3645d14c82bea8873eaecd709015c3e83a6f6786c650",
+        "returned_sha256": "a3ffef825d3b6e85364a900c550b969998f5c2e6b2707f448c83b732a9473850",
         "returned_len": 45136,
         "returned_felts": 1459,
         "embedded_engine": {
@@ -154,12 +154,12 @@
         },
         "wrapper": {
           "offset": 47427,
-          "length": 10927,
-          "sha256": "59ee3f5d151d2dc4c447af20962a93bb3e6bb8f926b045076c8e5b85af81eec4"
+          "length": 10966,
+          "sha256": "a7d93494c9f59204e64adf833d75a12383840864e493ff5e8655231980f1ee76"
         },
-        "gzip_sha256": "d3a9b6a1f908571e3d5ef6169961079f7146872f32dfe5ac1f155ee58b0db4c7",
-        "gzip_len": 18780,
-        "gzip_base64_len": 25040
+        "gzip_sha256": "8677ca009db48cb36581facac0be9afa229e30124146f8f0242d539321ab8f1d",
+        "gzip_len": 18792,
+        "gzip_base64_len": 25056
       }
     },
     "license_sha256": "9c68224366c7fc70f05d5a614c497bd7c13dcc8ec7f72b65d4c20316e2996cb8",

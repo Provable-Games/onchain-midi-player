@@ -226,8 +226,10 @@ export function startPlayer(host = window) {
   };
   const fail = (/** @type {unknown} */ cause) => {
     error = cause instanceof Error ? cause : new Error(String(cause));
-    cancelTimers();
+    ++operationId; cancelTimers();
     try { synth?.stopMIDI(); } catch (_) {}
+    // Invalidate in-flight transport and settle it with the real cause before reentrant listeners run.
+    if (pending) { const settle = pending; pending = null; settle.reject(error); }
     transition("failed");
     return error;
   };

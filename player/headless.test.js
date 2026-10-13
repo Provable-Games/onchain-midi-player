@@ -144,3 +144,22 @@ test('paused latency callback stop/replay preserves captured position and clears
  assert.equal(seen.find(s=>s.state==='stopped').positionSeconds,null);assert.equal(h.api.getPlayStatus().positionSeconds,0);
  assert.ok(h.api.getPlayStatus().runId>old.runId);assert.equal(h.calls.filter(c=>c==='load').length,2);h.api.stop();
 });
+test('stale re-suspend failure cancels an in-flight resume; failed stays terminal',async()=>{
+ const h=harness(),r1=deferred(),s2=deferred(),r3=deferred();await h.api.play();await h.api.pause();
+ h.ctx.resume=()=>{h.calls.push('resume');return r1.promise.then(()=>h.ctx.change('running'));};
+ h.api.resume().catch(()=>{});await h.api.pause();h.ctx.suspend=()=>{h.calls.push('suspend');return s2.promise;};r1.resolve();await flush();
+ h.ctx.resume=()=>{h.calls.push('resume');return r3.promise.then(()=>h.ctx.change('running'));};
+ let settled='unsettled';h.api.resume().then(()=>{settled='resolved';},e=>{settled=e;});
+ s2.reject(Error('suspend failed'));await flush();assert.equal(h.api.getPlayStatus().state,'failed');r3.resolve();await flush();await flush();
+ const s=h.api.getPlayStatus();assert.equal(s.state,'failed');assert.equal(s.error.message,'suspend failed');assert.equal(settled,s.error);
+ assert.equal(h.intervals.size,0);assert.equal(h.timers.size,0);assert.equal(h.calls.filter(c=>c==='load').length,1);await assert.rejects(h.api.resume(),/suspend failed/);
+});
+test('stale re-suspend failure settles an in-flight play; failed stays terminal',async()=>{
+ const h=harness(),r1=deferred(),s2=deferred(),r3=deferred();h.ctx.resume=()=>{h.calls.push('resume');return r1.promise.then(()=>h.ctx.change('running'));};
+ h.api.play().catch(()=>{});await h.api.pause();h.ctx.suspend=()=>{h.calls.push('suspend');return s2.promise;};r1.resolve();await flush();
+ h.ctx.resume=()=>{h.calls.push('resume');return r3.promise.then(()=>h.ctx.change('running'));};
+ let settled='unsettled';h.api.play().then(()=>{settled='resolved';},e=>{settled=e;});assert.equal(h.api.getPlayStatus().state,'starting');
+ s2.reject(Error('suspend failed'));await flush();r3.resolve();await flush();await flush();
+ const s=h.api.getPlayStatus();assert.equal(s.state,'failed');assert.equal(s.error.message,'suspend failed');assert.equal(settled,s.error);
+ assert.equal(h.intervals.size,0);assert.equal(h.timers.size,0);assert.ok(!h.calls.includes('load'));
+});
