@@ -180,7 +180,7 @@ export function tokenParts(tokenId) {
 }
 
 /** The example's consumer word-aligns its two largest appends (see consumerPieces). */
-export const ALIGN = { align: true };
+export const ALIGN = { align: true, trustedArt: true };
 
 /** What the contract assembles, piece by piece. */
 export const tokenUriSpliced = (tokenId) => spliceTokenUri(tokenParts(tokenId), ALIGN);

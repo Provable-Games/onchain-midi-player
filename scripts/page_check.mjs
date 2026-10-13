@@ -21,9 +21,9 @@ try {
  assert.ok(played.calls.indexOf("prewarm")<played.calls.indexOf("resume"));assert.equal(played.passes[0].initial,true);
  assert.ok(played.passes[0].audioTime >= played.passes[0].audibleTime-.02);assert.ok(/^data:image\/svg\+xml;(?:r=\d+;)?base64,/.test(played.art));assert.equal(played.media,false);
  if(c.name==="full_warlock"){assert.ok(played.anchor.width>=44&&played.anchor.width<=128);await o.page.waitForFunction(()=>navigator.mediaSession.metadata?.artwork.length===2);}
- await o.page.click("#play");await o.page.waitForFunction(()=>window.OnchainMidiPlayer.getPlayStatus().state==="stopped");
- const stopped=await o.page.evaluate(()=>({count:window.__check.passes.length,media:window.__check.media.paused,states:window.__check.states.map(s=>s.state),violations:window.__check.violations}));
- assert.equal(stopped.media,true);assert.deepEqual(stopped.states,["starting","playing","stopped"]);assert.deepEqual(stopped.violations,[]);
+ await o.page.click("#play");await o.page.waitForFunction(()=>window.OnchainMidiPlayer.getPlayStatus().state==="paused");
+ const stopped=await o.page.evaluate(()=>({count:window.__check.passes.length,media:window.__check.media.paused,states:window.__check.states.map(s=>s.state).filter((state,i,list)=>i===0||state!==list[i-1]),violations:window.__check.violations}));
+ assert.equal(stopped.media,true);assert.deepEqual(stopped.states,["starting","playing","paused"]);assert.deepEqual(stopped.violations,[]);
  assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);measurements.push({case:c.name,startup_ms:ready.ms,first_play_ms:played.firstPlay});
  console.log(`PASS ${c.name}: independent/dependent providers, lazy audio, pass event and NFT controls`);
  }finally{await o.context.close();}}
@@ -72,6 +72,31 @@ try {
  {const c=fixtureCase("beast_140bpm"),svg=c.svg.replace('</svg>','<script>window.artInjection=true</script><desc><![CDATA[</SCRIPT>]]></desc></svg>');
  const o=await run.page();try{await o.page.goto(dataUrl(composed({...c,svg})));await waitReady(o.page);assert.equal(await o.page.evaluate(()=>window.artInjection),undefined);assert.equal(await o.page.locator('#beast-art').count(),1);assert.deepEqual(await o.errors(),[]);}finally{await o.context.close();}}
  for(const name of ["player"]){const o=await run.page();try{await o.page.goto(dataUrl(withoutBlock(composed(),name)));await o.page.waitForFunction(()=>!document.getElementById("error").hidden);assert.equal(await o.page.locator('#beast-art').count(),1);assert.ok(await o.page.locator('#play').isDisabled());assert.equal(await o.page.evaluate(()=>window.__check.created),0);}finally{await o.context.close();}console.log(`PASS missing ${name}: art stays visible`);}
+ // Trusted inline art recovers its own animation clocks when MIDI readiness fails.
+ {const o=await run.page();try{
+   const c=fixtureCase('beast_140bpm'),svg='<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect><svg><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect></svg></svg>';
+   await o.page.goto(dataUrl(withoutBlock(composed({...c,svg},{fixture:true,dependent:true,trustedArt:true}),'player')));
+   await o.page.waitForFunction(()=>!document.getElementById('error').hidden);
+   assert.ok(await o.page.locator('#play').isDisabled());
+   const paused=await o.page.evaluate(()=>{const root=document.getElementById('beast-art');return[root,...root.querySelectorAll('svg')].map(s=>s.animationsPaused());});
+   assert.deepEqual(paused,[false,false]);assert.equal(await o.page.evaluate(()=>window.__check.created),0);
+   assert.deepEqual(await o.errors(),[]);console.log('PASS missing player: trusted outer/nested SVG animations recover');
+ }finally{await o.context.close();}}
+ // Public engine resume rejection is a terminal player failure, with independently running art.
+ {const o=await run.page();try{
+   const c=fixtureCase('beast_140bpm'),svg='<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect><svg><rect width="10" height="10"><animate attributeName="x" from="0" to="10" dur="1s" repeatCount="indefinite"/></rect></svg></svg>';
+   await o.page.goto(dataUrl(composed({...c,svg},{fixture:true,dependent:true,trustedArt:true})));await waitReady(o.page);
+   await o.page.click('#play');await o.page.waitForFunction(()=>!document.getElementById('beast-art').animationsPaused());
+   await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='paused');
+   await o.page.evaluate(()=>{window.__check.synth.resume=()=>Promise.reject(Error('fixture resume failure'));});
+   await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='failed'&&!document.getElementById('error').hidden);
+   assert.ok(await o.page.locator('#play').isDisabled());assert.match(await o.page.locator('#error').textContent(),/fixture resume failure/);
+   const timelines=()=>o.page.evaluate(()=>{const root=document.getElementById('beast-art');return[root,...root.querySelectorAll('svg')].map(s=>({paused:s.animationsPaused(),time:s.getCurrentTime()}));});
+   const before=await timelines();assert.ok(before.every(s=>!s.paused));await o.page.waitForTimeout(300);
+   const after=await timelines();assert.ok(after.every((s,i)=>!s.paused&&s.time>before[i].time+.05));
+   assert.equal(await o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus().state),'failed');
+   assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);console.log('PASS terminal resume failure: disabled controls/error and independently running outer/nested SVG');
+ }finally{await o.context.close();}}
  // Synchronous library failure does not prevent an independent later provider from executing.
  {const o=await run.page();try{const bad=alignedFragment(gzipFragment('broken-library',gzipSource('throw Error("fixture evaluation failure")'))),html=composed().replace(fixedFragment('player'),fixedFragment('player')+bad);
  await o.page.goto(dataUrl(html));const result=await o.page.evaluate(async()=>{try{await window.OnchainLibraries.ready;return "resolved";}catch(e){return e.message;}});assert.match(result,/broken-library/);assert.equal(await o.page.evaluate(()=>window.DependentFixture),'fixture:dependent');
@@ -115,6 +140,6 @@ try {
  await o.page.click("#transport");await o.page.waitForFunction(()=>document.getElementById("pulse").textContent!=="0");assert.equal(await o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus().state),"playing");await o.page.click("#transport");assert.equal(await o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus().state),"stopped");assert.equal(await o.page.locator('#play,#beast-art,#settings,#midi,#art').count(),0);assert.deepEqual(await o.errors(),[]);assert.deepEqual(o.requests,[]);console.log("PASS independent NFT controls and visuals with headless API");
  }finally{await o.context.close();}}
  // Optional background/media APIs may fail without preventing ordinary Web Audio playback.
- {const o=await run.page();try{await o.context.addInitScript(()=>{URL.createObjectURL=()=>{throw Error("optional blob support")};window.MediaMetadata=function(){throw Error("optional media metadata")};});await o.page.goto(dataUrl(composed()));await waitReady(o.page);await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');await o.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});assert.equal(await o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus().state),'stopped');assert.deepEqual(await o.errors(),[]);assert.deepEqual(o.requests,[]);console.log("PASS optional NFT media failures preserve ordinary playback and hidden fallback");}finally{await o.context.close();}}
+ {const o=await run.page();try{await o.context.addInitScript(()=>{URL.createObjectURL=()=>{throw Error("optional blob support")};window.MediaMetadata=function(){throw Error("optional media metadata")};});await o.page.goto(dataUrl(composed()));await waitReady(o.page);await o.page.click('#play');await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==='playing');await o.page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});assert.equal(await o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus().state),'paused');assert.deepEqual(await o.errors(),[]);assert.deepEqual(o.requests,[]);console.log("PASS optional NFT media failures preserve ordinary playback and hidden fallback");}finally{await o.context.close();}}
  console.log(JSON.stringify({engine:run.engine,measurements},null,2));
 }finally{await run.browser.close();}

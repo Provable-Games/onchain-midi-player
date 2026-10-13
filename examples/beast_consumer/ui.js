@@ -1,22 +1,9 @@
 // @ts-check
 // NFT-owned visual and background-audio helpers.
 export const PLAY_ICON = "M8 5v14l11-7z";
-export const STOP_ICON = "M6 6h12v12H6z";
+export const PAUSE_ICON = "M6 5h4v14H6zM14 5h4v14h-4z";
 /**
- * The art as a data URL: the SVG text re-encoded as UTF-8 and base64. `restart` > 0 adds a media
- * type parameter, which gives an equivalent image with a distinct URL, so the browser builds a new
- * image (and animation timeline) rather than reusing the running one.
- * @param {string} svg
- * @param {number} [restart]
- */
-export function artUrl(svg, restart = 0) {
-  let bin = "";
-  for (const b of new TextEncoder().encode(svg)) bin += String.fromCharCode(b);
-  return "data:image/svg+xml;" + (restart ? "r=" + restart + ";" : "") + "base64," + btoa(bin);
-}
-
-/**
- * Where the ▶/■ button goes when the art's root `<svg>` carries `data-play-anchor="X Y"` or
+ * Where the ▶/❚❚ button goes when the art's root `<svg>` carries `data-play-anchor="X Y"` or
  * `"X Y S"`: a point in the SVG's own units (its `viewBox`, else `width` and `height`), such as the
  * bottom-right corner of a sprite's box, and optionally the button's diameter S in the same units.
  * The button's bottom-right corner is placed at the point, inset by max(S/8, 6) art units (6 px without S: enough to clear a frame's rounded corner), where
@@ -65,6 +52,104 @@ export function silentWav() {
 }
 
 
+// Provisional NFT reference policy: lab value, pending physical display/audio checks in #52.
+export const REFERENCE_DISPLAY_LEAD_SECONDS = 0.017;
+/**
+ * Control every trusted inline SVG timeline with the player's shared audible clock.
+ * Optional NFT-owned notes implement play/pause/stop and use clock() below. No correction loop:
+ * seeks happen only on start, resume, pass boundaries, accepted latency changes and suspension.
+ * A pause stays audible until the AudioContext's suspend completes: running art runs on and
+ * freezes at the player's held position, where the audio actually stopped.
+ * @param {SVGSVGElement} root
+ * @param {import('../../player/api.d.ts').OnchainMidiApi} player
+ * @param {{host?: any, notes?: any, displayLead?: number}} [options]
+ */
+export function mountArtSync(root, player, { host = window, notes = null, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS } = {}) {
+  const timelines = [root, ...root.querySelectorAll('svg')];
+  let frame = 0, active = false, suspending = false, revision = -1, started = false, runId = -1;
+  let currentDrift = 0, maxDrift = 0;
+  /** @type {number | null} */ let initialAlignment = null;
+  /** @type {{audioTime: number | null, latencySeconds: number, revision: number}[]} */ const latencyEvents = [];
+  const monitor = () => Object.freeze({ currentDrift, maxDrift, initialAlignment,
+    latencyEvents: Object.freeze(latencyEvents.map(event => Object.freeze({ ...event }))) });
+  const clock = (s = player.getPlayStatus()) => {
+    return s.positionSeconds === null ? null : Math.max(0, s.positionSeconds + displayLead);
+  };
+  const phase = (s = player.getPlayStatus()) => {
+    const position = clock(s);
+    return position === null ? 0 : s.passSeconds ? position % s.passSeconds : position;
+  };
+  const pause = () => {
+    host.cancelAnimationFrame(frame); frame = 0; active = suspending = false;
+    for (const svg of timelines) svg.pauseAnimations();
+    notes?.pause();
+  };
+  const seek = (s = player.getPlayStatus()) => { const position = phase(s); for (const svg of timelines) svg.setCurrentTime(position); };
+  const sample = (s = player.getPlayStatus()) => {
+    const expected = phase(s);
+    for (const svg of timelines) {
+      let drift = svg.getCurrentTime() - expected;
+      if (s.passSeconds) drift -= Math.round(drift / s.passSeconds) * s.passSeconds;
+      if (svg === root) currentDrift = drift;
+      maxDrift = Math.max(maxDrift, Math.abs(drift));
+    }
+  };
+  const tick = () => {
+    frame = 0;
+    const s = player.getPlayStatus();
+    if (s.audioState !== 'running' || (s.state !== 'playing' && !suspending)) {
+      // The audio stopped: freeze, then seek to the held position where it stopped.
+      pause(); if (started && s.state !== 'stopped' && s.state !== 'failed') seek(s);
+      return;
+    }
+    if (!started) {
+      // On play: freeze at zero until tick zero reaches its estimated audible start.
+      const ready = s.originTime !== null && s.audioTime !== null && s.audioTime >= s.originTime + s.latencySeconds;
+      if (ready) {
+        seek(s); for (const svg of timelines) svg.unpauseAnimations(); notes?.play();
+        started = true; sample(s); initialAlignment ??= currentDrift;
+      }
+    } else sample(s); // Read-only drift observation; never seeks or changes compensation here.
+    frame = host.requestAnimationFrame(tick);
+  };
+  const synchronize = (s = player.getPlayStatus()) => {
+    // State notifications are captured snapshots: an earlier listener may already have replayed.
+    if (runId !== s.runId) {
+      runId = s.runId; started = false; pause();
+      for (const svg of timelines) svg.setCurrentTime(0);
+      notes?.stop();
+    }
+    if (revision !== s.latencyRevision) {
+      if (revision >= 0) latencyEvents.push({ audioTime: s.audioTime, latencySeconds: s.latencySeconds, revision: s.latencyRevision });
+      revision = s.latencyRevision;
+      if (started && s.state === 'playing' && s.audioState === 'running') seek(s);
+    }
+    if (s.state !== 'playing' || s.audioState !== 'running') {
+      // A pending suspend is still audible: active art runs on until tick() sees the audio stop.
+      if (s.state === 'paused' && s.audioState === 'running' && active) { suspending = true; return; }
+      pause();
+      if (s.state === 'stopped') { started = false; for (const svg of timelines) svg.setCurrentTime(0); notes?.stop(); }
+      // A terminal audio failure releases trusted art to animate independently.
+      if (s.state === 'failed') for (const svg of timelines) svg.unpauseAnimations();
+      else if (started && s.audioState !== 'running') seek(s); // Already suspended: freeze at the held position.
+      return;
+    }
+    if (!active) {
+      active = true;
+      if (started) { seek(s); for (const svg of timelines) svg.unpauseAnimations(); notes?.play(); }
+      frame = host.requestAnimationFrame(tick);
+    } else if (suspending) {
+      // Resumed before tick() saw the suspension: the art ran on while the audio was held.
+      suspending = false; if (started) seek(s);
+    }
+  };
+  for (const svg of timelines) { svg.pauseAnimations(); svg.setCurrentTime(0); }
+  const offState = player.onStateChange(synchronize);
+  const offPass = player.onPassStart(() => { if (started && active) seek(); });
+  synchronize();
+  return Object.freeze({ clock, getMonitor: monitor, dispose() { pause(); offState(); offPass(); } });
+}
+
 /** NFT bootstrap. Only the player API owns sound/timing; all media and visual policy is here. */
 export async function startUi() {
     const $ = (/** @type {string} */ id) => /** @type {HTMLElement} */ (document.getElementById(id));
@@ -80,34 +165,22 @@ export async function startUi() {
 
     };
 
-    let run = 0; // every press of ▶/■ invalidates a pending start and art restart
-
-    let art = /** @type {HTMLImageElement | null} */ (document.getElementById("beast-art"));
-    let svg = "", restarts = 0;
+    let art = /** @type {HTMLImageElement | SVGSVGElement | null} */ (document.getElementById("beast-art"));
+    let svg = "";
     try { svg = new TextDecoder().decode(Uint8Array.from(atob(/** @type {HTMLImageElement} */ (art).src.split(",")[1]), c => c.charCodeAt(0))); } catch (_) {}
     try { document.title = new DOMParser().parseFromString(svg, "image/svg+xml").getElementsByTagName("title")[0]?.textContent || MEDIA_TITLE; } catch (_) {}
-    let shown = 0; // the restart whose image is shown
-    /**
-     * Restarts the art: a new <img> with a distinct URL, swapped in once decoded (so the art never
-     * blinks out), unless ▶/■ was pressed again in the meantime, or a later restart's image is
-     * already shown (restarts at every pass can decode out of order).
-     * @param {number} current the press that scheduled it
-     */
-    const restartArt = (current) => {
-      if (!art) return;
-      const n = ++restarts;
-      const img = document.createElement("img");
-      img.alt = "";
-      img.id = "beast-art";
-      img.onload = () => {
-        if (current !== run || n < shown || !art) return;
-        shown = n;
-        art.replaceWith(img);
-        art = img;
-        watch(art);
-      };
-      img.src = artUrl(svg, n);
-    };
+    // Only this explicit NFT-owned trust marker enables active inline SVG. Community art stays an image.
+    if (document.body.dataset.trustedArt === "inline-svg" && art && svg) {
+      const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
+      const root = parsed.documentElement;
+      if (root.localName === "svg" && root.namespaceURI === "http://www.w3.org/2000/svg") {
+        const inline = /** @type {SVGSVGElement} */ (/** @type {unknown} */ (document.importNode(root, true)));
+        inline.id = "beast-art";
+        // Attached first: a detached <svg> may have no timeline to pause yet. No paint runs in between.
+        art.replaceWith(inline); art = inline;
+        for (const timeline of [inline, ...inline.querySelectorAll("svg")]) { timeline.pauseAnimations(); timeline.setCurrentTime(0); }
+      }
+    }
 
     /** @param {() => unknown} f best effort: a failure is silent */
     const attempt = (f) => {
@@ -129,7 +202,7 @@ export async function startUi() {
     });
     /** @type {ResizeObserver | undefined} */
     let observer;
-    /** @param {HTMLImageElement | null} img the current art image */
+    /** @param {HTMLImageElement | SVGSVGElement | null} img the current art image */
     const watch = (img) => attempt(() => {
       observer = observer || new ResizeObserver(place);
       observer.disconnect();
@@ -139,9 +212,13 @@ export async function startUi() {
     watch(art);
     attempt(() => window.addEventListener("resize", place));
 
-    let playing = false;
+    let playing = false, resuming = false;
     try { await window.OnchainLibraries.ready; if (!window.OnchainMidiPlayer) throw new Error("player: library did not load"); await window.OnchainMidiPlayer.ready; }
-    catch (e) { fail(e); return; }
+    catch (e) {
+      fail(e);
+      if (art instanceof SVGSVGElement) for (const timeline of [art, ...art.querySelectorAll("svg")]) timeline.unpauseAnimations();
+      return;
+    }
     const player = window.OnchainMidiPlayer;
     /** @type {HTMLAudioElement | null} the silent element of the media session */
     let silent = null;
@@ -150,13 +227,13 @@ export async function startUi() {
     /** @param {boolean} on */
     const setPlaying = (on) => {
       playing = on;
-      icon.setAttribute("d", on ? STOP_ICON : PLAY_ICON);
-      button.setAttribute("aria-label", on ? "Stop" : "Play");
+      icon.setAttribute("d", on ? PAUSE_ICON : PLAY_ICON);
+      button.setAttribute("aria-label", on ? "Pause" : "Play");
       if (!on) attempt(() => silent && silent.pause());
       attempt(() => (navigator.mediaSession.playbackState = on ? "playing" : "paused"));
     };
-    const stop = () => { ++run; player.stop(); setPlaying(false); };
-    /** The media session, once: the title and art, and the handlers that run ▶ and ■. */
+    const pause = () => { resuming = false; const promise = player.pause(); setPlaying(false); promise.catch(fail); return promise; };
+    /** The media session, once: the title and art, and the handlers that resume or pause. Media stop also pauses, preserving #60's policy. */
     const arm = () => {
       armed = true;
       /** @param {Array<{src: string, sizes: string, type: string}>} artwork */
@@ -165,7 +242,7 @@ export async function startUi() {
       attempt(() => (title = new DOMParser().parseFromString(svg, "image/svg+xml").getElementsByTagName("title")[0].textContent || title));
       meta([]);
       for (const action of /** @type {const} */ (["play", "pause", "stop"])) {
-        attempt(() => navigator.mediaSession.setActionHandler(action, action == "play" ? () => playing || button.disabled || start() : () => playing && stop()));
+        attempt(() => navigator.mediaSession.setActionHandler(action, action == "play" ? () => playing || button.disabled || start() : () => playing && pause()));
       }
       // Artwork: the art's own bitmap (the first embedded PNG, GIF or WebP: a Beast's 32x32 sprite),
       // as a static frame row on a dark card colour, at the sizes Chrome Android asks for (512, and
@@ -210,27 +287,39 @@ export async function startUi() {
         if (!silent) {
           silent = new Audio(URL.createObjectURL(new Blob([silentWav()], { type: "audio/wav" })));
           silent.loop = true;
-          // Paused from outside (the notification, a headset, a call): the same as ■. It is paused
+          // Paused from outside (the notification, a headset, a call): the same transport pause. It is paused
           // here only if ▶ has not started it again since.
-          silent.onpause = () => playing && silent && silent.paused && stop();
+          silent.onpause = () => playing && silent && silent.paused && pause();
         }
         silent.play().then(() => (background = true), () => {});
       });
       if (!armed) attempt(arm);
     };
-    // Without a media session to keep it playing, a hidden page stops.
-    document.addEventListener("visibilitychange", () => document.hidden && playing && !background && stop());
+    // Without a playing background element, a hidden page pauses.
+    document.addEventListener("visibilitychange", () => document.hidden && playing && !background && pause());
     const start = () => {
-      ++run;
+      resuming = true; setPlaying(true);
       session();
       const promise = player.play();
-      setPlaying(player.getPlayStatus().state === "starting" || player.getPlayStatus().state === "playing");
-      promise.catch(e => { if (e.name !== "AbortError") { setPlaying(false); fail(e); } });
+      promise.then(() => {
+        resuming = false;
+        const status = player.getPlayStatus(); setPlaying(status.state === "starting" || status.state === "playing");
+      }, e => { resuming = false; if (e.name !== "AbortError") { setPlaying(false); fail(e); } });
       return promise;
     };
-    player.onPassStart(() => restartArt(run));
-    player.onStateChange(status => { setPlaying(status.state === "starting" || status.state === "playing"); if (status.error) fail(status.error); });
-    button.onclick = () => playing ? stop() : start();
+    if (art instanceof SVGSVGElement) {
+      const sync = mountArtSync(art, player);
+      // NFT-owned, read-only instrumentation for lab/browser acceptance.
+      Object.defineProperty(window, "OnchainArtMonitor", { configurable: true, get: sync.getMonitor });
+    }
+    player.onStateChange(status => {
+      if (status.state === "playing" || status.state === "stopped" || status.state === "failed") resuming = false;
+      // A resume promise keeps paused status until the clock runs. Do not pause the background
+      // element just started in this gesture while waiting for that explicit transport command.
+      if (!(resuming && status.state === "paused")) setPlaying(status.state === "starting" || status.state === "playing");
+      if (status.error) fail(status.error);
+    });
+    button.onclick = () => playing ? pause() : start();
     if ((/** @type {any} */ (window)).CompositionFixture) button.dataset.fixture = (/** @type {any} */ (window)).CompositionFixture.label("ready");
     if ((/** @type {any} */ (window)).DependentFixture) button.dataset.dependent = (/** @type {any} */ (window)).DependentFixture;
     button.disabled = false;

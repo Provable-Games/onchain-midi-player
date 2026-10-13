@@ -1,8 +1,8 @@
 # Onchain MIDI library
 
-`TinySynth` is a storage-free Starknet class, declared and called with `library_call`. Version 0.5.0 supplies independently composable, offline browser libraries. NFTs own their JSON, complete HTML document, art and UI.
+`TinySynth` is a storage-free Starknet class, declared and called with `library_call`. The unissued 0.6.0 candidate supplies independently composable, offline browser libraries. NFTs own their JSON, complete HTML document, art and UI.
 
-No 0.5.0 declaration or release has occurred; [deployment records](deployments/sepolia.json) describe historical test classes.
+The engine is the fork's reproducibly verified post-merge CI distribution build; its exact source/build/NOTICE identities are recorded in the [vendor provenance](tests/vendor/README.md) and library manifest. Release readiness still requires a tagged fork release and device validation. Neither candidate has been declared or released; [deployment records](deployments/sepolia.json) describe historical test classes.
 
 | `ITinySynth` entry point | Result |
 | --- | --- |
@@ -23,10 +23,14 @@ await OnchainLibraries.ready;
 await OnchainMidiPlayer.ready;
 OnchainMidiPlayer.onPassStart(event => restartMyVisual(event));
 myPlayButton.onclick = () => OnchainMidiPlayer.play().catch(showError);
+myPauseButton.onclick = () => OnchainMidiPlayer.pause().catch(showError);
+myResumeButton.onclick = () => OnchainMidiPlayer.resume().catch(showError);
 myStopButton.onclick = () => OnchainMidiPlayer.stop();
 ```
 
-Readiness creates no synth, audio context or UI. Playback resumes audio synchronously inside the user gesture, then starts from tick zero. The player exposes status and pass/state subscriptions; NFTs choose media-session/background behavior. The [Beast reference](examples/beast_consumer/README.md) preserves art synchronization, button positioning and background-media behavior in a separate NFT-owned asset. Supplied SVG belongs in an encoded `<img>`; scripts/data/closing HTML may follow it safely.
+A pass is heard at `event.audibleTime` (`startTime + latencySeconds`); `outputLatency` and `baseLatency` are informational components, so `startTime + outputLatency` is early. `onStateChange` subscribers also receive accepted latency updates without a state change, for example `playing` then `playing`; compare `state`, `runId` and `latencyRevision` rather than treating every snapshot as a new run.
+
+Readiness creates no synth, audio context or UI. Play from stopped resumes audio inside the user gesture and starts from tick zero; play from paused resumes the existing score. Pause suspends the AudioContext; resume retains the score, voices and envelopes. `play()` also resumes a paused score. The player exposes status and pass/state subscriptions; NFTs choose media-session/background behavior. The [Beast reference](examples/beast_consumer/README.md) preserves art synchronization, button positioning and background-media behavior in a separate NFT-owned asset. The trusted Genesis reference opts into inline SVG and controls outer and nested timelines, with a read-only drift monitor. Arbitrary/community SVG belongs in an encoded `<img>`; scripts/data/closing HTML may follow it safely.
 
 The independent composition fixture is a 78-byte named-export library from a separate Cairo provider. A second dependent test library demonstrates execution order. A future independent p5.js provider can use the same format and shared loader; real p5.js packaging, integration and benchmarking are outside this implementation.
 

@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { encodeSettings } from "../player/encode.js";
 import { validateSettings } from "../player/validate.js";
 import { ENGINE_PIN, engineNotice } from "./engine.mjs";
-export const VERSION = "0.5.0";
+export const VERSION = "0.6.0";
 export const SEGMENT_FORMAT = 1;
 export const FIXED_ALIGNMENT = 279;
 export const MANIFEST_PATH = new URL("./library_versions.json", import.meta.url);

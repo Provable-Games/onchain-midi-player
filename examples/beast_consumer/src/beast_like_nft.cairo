@@ -102,8 +102,9 @@ pub fn render_svg(name: @ByteArray, tier: u8, image: @ByteArray) -> ByteArray {
 }
 
 /// The token's SVG: `render_svg` for the sample tokens; for token 4, a real Beast's SVG as the
-/// Beasts renderer produced it (22,733 bytes, `beast_data::warlock_svg`, isolated as an encoded
-/// image).
+/// Beasts renderer produced it (22,733 bytes, `beast_data::warlock_svg`). The reference opts into
+/// trusted renderer-owned inline SVG; the metadata image remains encoded. Embedded GIF clocks
+/// are independent of SVG timeline suspension.
 pub fn token_svg(token_id: u256, name: @ByteArray, tier: u8) -> ByteArray {
     if token_id == 4 {
         crate::beast_data::warlock_svg()
@@ -173,6 +174,7 @@ pub mod BeastLikeNft {
                 sound::token_midi(token_id),
                 sound::token_settings(token_id, tier),
                 "",
+                true // Only this contract's trusted renderer is eligible for inline SVG.
             )
         }
 

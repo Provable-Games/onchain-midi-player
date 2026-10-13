@@ -268,7 +268,7 @@ export function toTinySynthOps(timbre, waves = []) {
  * @param {TinySynthSettings} s
  */
 export function createSynth(WebAudioTinySynth, s) {
-  const synth = new WebAudioTinySynth({ quality: s.quality, useReverb: s.reverb > 0 ? 1 : 0, voices: s.voices });
+  const synth = new WebAudioTinySynth({ autoResume: false, quality: s.quality, useReverb: s.reverb > 0 ? 1 : 0, voices: s.voices });
   installSettings(synth, s);
   return synth;
 }

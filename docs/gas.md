@@ -2,6 +2,12 @@
 
 The unreleased 0.5.0 build combines the unchanged TinySynth engine and headless API in one gzip fragment. The original packaging capture compares combined head `f1ee9c5df6cb73a84fcb42f627b9503e26678dab` with the recoverable split-fragment head `4a76614193d87f045230693fe972bbd5ac457386`. [Results and bindings](measurements/issue59.json) record the tool binaries, source/input/artifact hashes, complete case inventory and repeated captures from 2026-10-07. Those captures used #57’s then-pending head `32f776185370ed519e1f14f94a0975a843069702`. It is now merged on main as `d92159283dc71e76000d6338f53f0f79f9ea1522`; the original and merged baseline file trees are identical. Merged-baseline revalidation is recorded separately, preserving the historical capture identities. No declaration, deployment or release occurred.
 
+## Unissued 0.6.0 pause candidate
+
+The 0.6.0 build uses the verified post-merge CI engine described in [vendor provenance](../tests/vendor/README.md). Its current manifest records a 47,424-byte exact engine and 10,981-byte public API wrapper, combined 58,408 bytes and 18,793 gzipped bytes. The player HTML fragment is 25,389 bytes and its returned segment 45,136 bytes /1,459 serialized felts; the shared loader remains 8,432 returned bytes /275 felts. Total fixed returns are 53,568 bytes. These candidate sizes do not represent a published or declared class.
+
+The matched production-shaped gas captures above remain historical 0.5.0 evidence; they were not rerun as a #62 architecture benchmark. The constructor-review captures below likewise remain bound to their recorded 0.5.0 NFT artifacts. This 0.6.0 candidate inherits the compiled-version constructor policy, which changes its NFT artifacts; no new 0.6.0 constructor or token URI gas capture is claimed. Routine current Cairo tests cover library calls, full metadata composition, direct/runtime byte equality and gas probe paths. The finalized CI pin retains the same engine, loader, player and UI bytes; its provenance binding is recorded separately in the measurements.
+
 ## Production-shaped comparison
 
 These tables are the 2026-10-07 frozen packaging experiment, bound to the revisions above. The namespace review fixes change browser code bytes; the [review refresh](#review-refresh) records their fresh production capture separately.
