@@ -1,21 +1,26 @@
 # Current engine provenance
 
-The unissued 0.6.0 class embeds `webaudio-tinysynth-2cb8b40.min.js` from fork CI distribution commit `2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a`. Its bot commit names merged source `8fd8b94c8bb1fd2df3d144404620520c4b7f3725` and [the successful build workflow](https://github.com/Provable-Games/webaudio-tinysynth/actions/runs/38269640215). The established `scripts/vendor_engine.mjs` helper copies that commit's exact minified script and NOTICE; neither file is patched locally.
+The engine is [pocket-synth](https://github.com/Provable-Games/pocket-synth), Provable Games' fork of g200kg's [webaudio-tinysynth](https://github.com/g200kg/webaudio-tinysynth); its distribution files keep the `webaudio-tinysynth.*` names. The unissued 0.7.0 class embeds `webaudio-tinysynth-v2.0.1.min.js` from the signed fork release tag `v2.0.1` (GPG-signed by loothero), commit `4b829693d112d27e4dfaeb126d1912ff89216324` on the fork's main. The release pull request #111 built and committed the minified script and source map on `release/v2.0.1` at `c17c7427031f489f27d11d83d5502c1d4746fa77`; [its CI run](https://github.com/Provable-Games/pocket-synth/actions/runs/38368777784) verified that the committed files equal a fresh build. Main's squash merge `f53de0814539a78f57b41a2b89593e1815967121` and the tag carry the identical source, NOTICE, script and map; the tag's `package-lock.json` differs from `c17c742`'s only in the test-only `playwright-core` version. No post-merge Dist rebuild exists for this release. The established `scripts/vendor_engine.mjs` helper copies the tag's exact minified script and NOTICE; neither file is patched locally.
 
-`ENGINE_BUILD` and the manifest are non-provisional and record the source SHA-256, build recipe, lockfile, source map and CI workflow. To reproduce, check out the distribution commit in an isolated fork clone, run `npm ci`, then `node scripts/build.js <output-dir>` and compare both outputs against the committed files. The pinned compiler is Terser 5.51.2.
+`ENGINE_PIN` names the tag commit. `ENGINE_BUILD` and the manifest are non-provisional and record the release build commit (`sourceCommit` and `distributionCommit`), its CI run, the source SHA-256, build recipe, that commit's lockfile and the source map. To reproduce, check out `v2.0.1` in an isolated fork clone, run `npm ci`, then `node scripts/build.js <output-dir>` and compare both outputs against the committed files. The pinned compiler is Terser 5.51.2.
 
-- Engine: 47,424 bytes, SHA-256 `df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65`.
-- Source: SHA-256 `8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7`.
-- Source map: SHA-256 `55d24636b60db7a6b7d16b557dc7eb89a387580ce2978d8d10e9054ef33ce60c`.
-- NOTICE: SHA-256 `9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708`.
+- Engine: 47,804 bytes, SHA-256 `8ffa2519cdd0ac9c4876101681014e39cbfd07e71d45ea1fa5dc15d53233f94b`.
+- Source: SHA-256 `a741647d1b6e4c94a7630da5b0b457377879f37f17971f4b42f704f1244839e0`.
+- Source map: 76,015 bytes, SHA-256 `0afc9143aff436bdb165619f8f8229ca3ac9d87529f00ff1dbbd420e6c762f6a`.
+- NOTICE: SHA-256 `0e4f6ad003a1cf9e2ea2620b57a8a7eec4b396064e222316782b70cb6693652b`.
 - `scripts/build.js`: SHA-256 `ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728`.
-- `package-lock.json`: SHA-256 `67402d41acd7d49ed3c1a1f689e7f91a81bff1b7dc1727b355d1d3b3dec4197d`.
+- `package-lock.json` (`c17c742`, used by the CI build): SHA-256 `8e929f89b90456fcc607b9396d80d465deffd8f915a6a2c963901883175ae5b0`. The tag's lock (SHA-256 `e778921a16bcbd0541718eb4466ed3149269d509970434eba0a3c1411a39337a`) differs only in the test-only `playwright-core` version; a fresh `npm ci` build of the tag reproduces the same script and map.
 
-The earlier local development build and current CI distribution have identical engine/NOTICE bytes. Historical development capture metadata remains in [the measurements](../../docs/measurements/issue62.json) and its original Git revisions; the redundant `dev-` files are removed from the current checkout. The retained 31fb18d files below support 0.5.0 provenance. Current `license()` attribution names the CI distribution commit, so its hash and compiled class identity change even though browser payloads do not.
-
-This is a verified CI commit, not a tagged fork release. Tagged-fork-release and applicable device/provider evidence remain release prerequisites; the unissued candidate is not a declared or mainnet-qualified release.
+This pin is a tagged fork release. Applicable device/provider evidence remains a release prerequisite; the unissued candidate is not a declared or mainnet-qualified release.
 
 ## Historical engine and licenses
+
+The retained 0.6.0 engine, `webaudio-tinysynth-2cb8b40.min.js` (47,424 bytes, SHA-256
+`df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65`) and `webaudio-tinysynth-2cb8b40.NOTICE` (SHA-256
+`9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708`), is fork CI distribution commit
+`2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a`, built from source `8fd8b94c8bb1fd2df3d144404620520c4b7f3725` by
+[its workflow](https://github.com/Provable-Games/webaudio-tinysynth/actions/runs/38269640215). Its provenance is recorded
+in the 0.6.0 manifest entry.
 
 The retained 0.5.0 TinySynth engine, from the Provable-Games fork, <https://github.com/Provable-Games/webaudio-tinysynth>,
 at commit `31fb18d8e04125519776773042da0d5b2db591a9` on the fork's `improve/integration` branch (the NOTICE entry for the
@@ -39,25 +44,25 @@ bytes, independently of the combined source/gzip hashes. The engine tests and th
 the one line `ENGINE_PIN` in [`scripts/engine.mjs`](../../scripts/engine.mjs), which checks both hashes on every load,
 so a mismatch fails before anything is generated. Nothing needs network access.
 
-To verify the historical file: `git -C <fork> show 31fb18d:webaudio-tinysynth.min.js | sha256sum`.
+To verify a historical file: `git -C <fork> show 31fb18d:webaudio-tinysynth.min.js | sha256sum` (or `2cb8b40`).
 
 ## Re-pinning
 
-To a later commit, or to a tagged fork release once the fork publishes them:
+To a later tagged fork release (or, for a test class, a CI commit):
 
-1. Pick the ref. On `improve/integration`, pin a commit the fork's CI made after a merge, "Rebuild
-   webaudio-tinysynth.min.js for `<sha>`" (by github-actions[bot]), not the merge commit: pull requests do not carry
-   the minified build, so a merge commit can carry a stale one. Check that the fork's `webaudio-tinysynth.min.js` at the
-   ref is its reproducible build: check out the ref in a clone, then `npm ci && npm run verify` (it rebuilds the file
-   with the fork's pinned Terser and compares the bytes; commits before `npm run verify` existed: `npm ci && npm run
-   build`, then compare).
+1. Pick the ref. Prefer a signed fork release tag (`git tag -v <tag>`) of
+   [pocket-synth](https://github.com/Provable-Games/pocket-synth). Find the commit that built its minified files (a
+   release pull request's build commit, checked against a fresh build by that pull request's CI, or an
+   `improve/integration` "Rebuild webaudio-tinysynth.min.js for `<sha>`" commit by github-actions[bot]) and check that
+   the tag carries the same files: ordinary pull requests do not carry the minified build, so a merge can carry a
+   stale one. Without a tag, pin that build commit itself. Check that the fork's `webaudio-tinysynth.min.js` at the ref is its reproducible build: check out
+   the ref in a clone, then `npm ci && npm run verify` (it rebuilds the file with the fork's pinned Terser and compares
+   the bytes; commits before `npm run verify` existed: `npm ci && npm run build`, then compare).
 2. `node scripts/vendor_engine.mjs <fork checkout> <commit or tag>` copies the two files here (named after the short
    commit or the tag) and prints the new `ENGINE_PIN` line. It only reads the checkout.
 3. Replace `ENGINE_PIN` in `scripts/engine.mjs` and update the verified `ENGINE_BUILD` source/build/CI identities.
    Remove old vendor files only when no historical verification requires them. Choose a new `VERSION` in
    `scripts/segments.mjs`: changes to any recorded entry are rejected even with `--record`.
-   The explicitly documented unissued 0.6.0 CI-pin finalization and paused-position and terminal-failure
-   candidate refreshes are recorded in the development guide; they do not change this immutable-version guard.
 4. From the full checkout with `npm ci` installed, regenerate:
 
    ```sh

@@ -8,27 +8,30 @@
 // Re-pinning updates ENGINE_PIN and verified ENGINE_BUILD identities, after vendoring files with
 //   node scripts/vendor_engine.mjs <fork checkout> <commit or tag>
 // which prints the new line. `ref` names the vendored files and is recorded with the VERSION in
-// scripts/library_versions.json; it is the short commit SHA or, once the fork publishes tagged releases,
+// scripts/library_versions.json; it is the short commit SHA or, for a tagged fork release,
 // the tag. Changes to recorded provenance/artifacts normally require a new VERSION.
-// The unissued 0.6.0 development-record replacement is documented in docs/development.md.
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Post-merge fork distribution build, reproducibly verified against its pinned source/recipe/lock.
-export const ENGINE_PIN = { ref: "2cb8b40", commit: "2cb8b405ede0d91a431f3ef3e4175f0bf3b0c18a", sha256: "df839b0d8b0479e799b2b19bdf5c714d92287a501d9d026335a0854ad491da65", noticeSha256: "9b4effe6aa89960e79172b20469634f905857fdd3b63e97ec5055349b2a23708" };
+// Signed fork release v2.0.1 of pocket-synth (tag commit 4b82969 on main). The fork's release PR #111 built
+// and committed the minified script and map on release/v2.0.1 (c17c742), and that PR's CI run checked them
+// against a fresh build; the tag carries the identical source, NOTICE, script and map. The lock below is
+// c17c742's, which that CI build used; the tag's differs only in test-only playwright-core, and a fresh
+// `npm ci` build of the tag reproduces both files.
+export const ENGINE_PIN = { ref: "v2.0.1", commit: "4b829693d112d27e4dfaeb126d1912ff89216324", sha256: "8ffa2519cdd0ac9c4876101681014e39cbfd07e71d45ea1fa5dc15d53233f94b", noticeSha256: "0e4f6ad003a1cf9e2ea2620b57a8a7eec4b396064e222316782b70cb6693652b" };
 export const ENGINE_BUILD = {
   provisional: false,
-  sourceCommit: "8fd8b94c8bb1fd2df3d144404620520c4b7f3725",
-  distributionCommit: ENGINE_PIN.commit,
-  ciRun: "https://github.com/Provable-Games/webaudio-tinysynth/actions/runs/38269640215",
-  sourceMapSha256: "55d24636b60db7a6b7d16b557dc7eb89a387580ce2978d8d10e9054ef33ce60c",
-  sourceSha256: "8ca7fa60212ac58649337c507549b985f12c238da2c003aae3e0ee5db7109fb7",
+  sourceCommit: "c17c7427031f489f27d11d83d5502c1d4746fa77",
+  distributionCommit: "c17c7427031f489f27d11d83d5502c1d4746fa77",
+  ciRun: "https://github.com/Provable-Games/pocket-synth/actions/runs/38368777784",
+  sourceMapSha256: "0afc9143aff436bdb165619f8f8229ca3ac9d87529f00ff1dbbd420e6c762f6a",
+  sourceSha256: "a741647d1b6e4c94a7630da5b0b457377879f37f17971f4b42f704f1244839e0",
   recipe: "node scripts/build.js <output-dir>",
   recipeSha256: "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
-  packageLockSha256: "67402d41acd7d49ed3c1a1f689e7f91a81bff1b7dc1727b355d1d3b3dec4197d",
+  packageLockSha256: "8e929f89b90456fcc607b9396d80d465deffd8f915a6a2c963901883175ae5b0",
   terser: "5.51.2"
 };
 

@@ -101,7 +101,7 @@ pub const SETTINGS_FORMAT_VERSION: u32 = 1;
 
 // The counts are what the format and the engine require, and nothing tighter: every slot once,
 // every wave `Waveform::Custom(u8)` can index, and per wave what the engine's custom-wave API takes
-// (webaudio-tinysynth #26, decision D-028 of the fork's docs/improvements/decisions.md): at least
+// (pocket-synth #26, decision D-028 of the fork's docs/improvements/decisions.md): at least
 // one harmonic or one sample, with no upper bound. There is no byte cap on `SETTINGS` either: the
 // network prices its size in gas (docs/gas.md).
 

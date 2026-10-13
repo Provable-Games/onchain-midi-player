@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { encodeSettings } from "../player/encode.js";
 import { validateSettings } from "../player/validate.js";
 import { ENGINE_PIN, engineNotice } from "./engine.mjs";
-export const VERSION = "0.6.0";
+export const VERSION = "0.7.0";
 export const SEGMENT_FORMAT = 1;
 export const FIXED_ALIGNMENT = 279;
 export const MANIFEST_PATH = new URL("./library_versions.json", import.meta.url);
@@ -128,7 +128,7 @@ export function licenseText() {
     "License.",
     "",
     `This class (version ${VERSION}) embeds in its combined player segment the minified build of commit ${ENGINE_PIN.commit}`,
-    `of https://github.com/Provable-Games/webaudio-tinysynth (SHA-256 ${ENGINE_PIN.sha256},`,
+    `of https://github.com/Provable-Games/pocket-synth (SHA-256 ${ENGINE_PIN.sha256},`,
     "returned by script_sha256()). The NOTICE of that repository follows.",
     "",
     engineNotice().trimEnd(),

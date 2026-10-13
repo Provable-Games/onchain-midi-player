@@ -4,7 +4,7 @@ Codex (`.github/workflows/codex-review.yml`) and Claude
 (`.github/workflows/claude-review.yml`) review every same-repository pull request
 with one onchain-midi-player reviewer role and one shared output policy. The design
 mirrors the Provable-Games TinySynth fork's review workflows
-(`webaudio-tinysynth`, `.github/` on `improve/integration`), adapted to this
+(`pocket-synth`, `.github/` on `improve/integration`), adapted to this
 repository's prompt, paths and job names, plus one addition: a review whose
 secret or variables are not configured is skipped (see Policies).
 
