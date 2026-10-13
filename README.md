@@ -28,6 +28,8 @@ myResumeButton.onclick = () => OnchainMidiPlayer.resume().catch(showError);
 myStopButton.onclick = () => OnchainMidiPlayer.stop();
 ```
 
+A pass is heard at `event.audibleTime` (`startTime + latencySeconds`); `outputLatency` and `baseLatency` are informational components, so `startTime + outputLatency` is early. `onStateChange` subscribers also receive accepted latency updates without a state change, for example `playing` then `playing`; compare `state`, `runId` and `latencyRevision` rather than treating every snapshot as a new run.
+
 Readiness creates no synth, audio context or UI. Play from stopped resumes audio inside the user gesture and starts from tick zero; play from paused resumes the existing score. Pause suspends the AudioContext; resume retains the score, voices and envelopes. `play()` also resumes a paused score. The player exposes status and pass/state subscriptions; NFTs choose media-session/background behavior. The [Beast reference](examples/beast_consumer/README.md) preserves art synchronization, button positioning and background-media behavior in a separate NFT-owned asset. The trusted Genesis reference opts into inline SVG and controls outer and nested timelines, with a read-only drift monitor. Arbitrary/community SVG belongs in an encoded `<img>`; scripts/data/closing HTML may follow it safely.
 
 The independent composition fixture is a 78-byte named-export library from a separate Cairo provider. A second dependent test library demonstrates execution order. A future independent p5.js provider can use the same format and shared loader; real p5.js packaging, integration and benchmarking are outside this implementation.
