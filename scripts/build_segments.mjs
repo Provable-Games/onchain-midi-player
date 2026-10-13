@@ -72,7 +72,7 @@ export async function generatedFiles() {
     if (name === "fixture") files.set("tests/fixture_provider.cairo",`//! Independent test-only provider. Never part of TinySynth.\n#[starknet::interface]\npub trait IFixtureProvider<T> { fn library_segment(self: @T) -> ByteArray; }\n#[starknet::contract]\npub mod FixtureProvider {\n    #[storage]\n    struct Storage {}\n    #[abi(embed_v0)]\n    impl Provider of super::IFixtureProvider<ContractState> {\n        fn library_segment(self: @ContractState) -> ByteArray { "${returned}" }\n    }\n}\n`);
   }
   files.set("tests/fixtures/libraries/manifest.json",JSON.stringify({format:SEGMENT_FORMAT,toolchain:built.record.toolchain,libraries:fixtures},null,2)+"\n");
-  const ui = await compile(["../examples/beast_consumer/ui.js"], "startUi");
+  const ui = await compile(["../examples/beast_consumer/art_sync.js", "../examples/beast_consumer/ui.js"], "startUi");
   const style = "html,body{margin:0;height:100%;overflow:hidden;background:#000}#beast-art{position:fixed;inset:0;width:100%;height:100%;object-fit:contain}button{position:fixed;right:12px;bottom:12px;width:48px;height:48px;padding:12px;border:0;z-index:1;border-radius:50%;background:rgba(0,0,0,.55);box-shadow:0 0 0 1px rgba(255,255,255,.4);color:#fff;cursor:pointer}button:disabled{opacity:.4}button svg{width:100%;height:100%;fill:currentColor}p{position:fixed;left:12px;right:64px;bottom:12px;z-index:1;color:#f88;background:#000;font:12px monospace}";
   const body = '</head><body><button id="play" aria-label="Play" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path id="icon" d="M8 5v14l11-7z"/></svg></button><p id="error" role="alert" hidden></p>';
   const owned = {
