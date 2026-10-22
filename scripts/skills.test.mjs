@@ -245,7 +245,7 @@ describe("content kept in step with the code", () => {
       assert.ok(table.includes(row), `row: ${row}`);
     }
     assert.ok(table.includes("| `route` | `g` | `u8` | 0 |"));
-    // No validation ranges: they are the check table's to state (src/settings.cairo).
+    // No validation ranges: they are the check table's to state (types/src/settings.cairo).
     assert.doesNotMatch(table, /\d to [\d,]+ \|/);
   });
 
@@ -276,18 +276,18 @@ describe("content kept in step with the code", () => {
 
 describe("settings limits are not hardcoded", () => {
   // The class checks what the engine and the format require and lets gas decide cost, so these limits
-  // can change between versions: the skills name the constants in src/settings.cairo instead.
-  test("every MAX_ constant the skills name exists in src/settings.cairo", () => {
-    const cairo = read("src/settings.cairo");
+  // can change between versions: the skills name the constants in types/src/settings.cairo instead.
+  test("every MAX_ constant the skills name exists in types/src/settings.cairo", () => {
+    const cairo = read("types/src/settings.cairo");
     for (const file of markdown) {
       for (const [name] of readFileSync(file, "utf8").matchAll(/\bMAX_[A-Z_]+\b/g)) {
-        assert.match(cairo, new RegExp(`^pub const ${name}: `, "m"), `${relative(ROOT, file)}: ${name} is not a constant in src/settings.cairo`);
+        assert.match(cairo, new RegExp(`^pub const ${name}: `, "m"), `${relative(ROOT, file)}: ${name} is not a constant in types/src/settings.cairo`);
       }
     }
   });
 
   test("no count or length limit appears as a number next to what it limits", () => {
-    const cairo = read("src/settings.cairo");
+    const cairo = read("types/src/settings.cairo");
     const value = (/** @type {string} */ name) => cairo.match(new RegExp(`^pub const ${name}: u32 = ([\\d_]+);`, "m"))?.[1].replace(/_/g, "");
     /** @type {Array<[string, RegExp]>} */
     const limits = [["MAX_TIMBRES", /timbre/i], ["MAX_OPERATORS", /operator/i], ["MAX_WAVES", /\bwaves?\b/i], ["MAX_HARMONICS", /harmonic/i], ["MAX_SAMPLES", /sample/i], ["MAX_SETTINGS_LEN", /SETTINGS|settings/]];

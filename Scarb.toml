@@ -10,6 +10,10 @@ license = "Apache-2.0"
 
 [dependencies]
 starknet = "2.20.1"
+# The sound types, the interfaces and `settings::validate`: the package in types/, which depends on
+# nothing but starknet. src/types.cairo, src/interface.cairo and src/settings.cairo re-export it at
+# this crate's old paths.
+onchain_midi_types = { path = "types" }
 # The base64 encoder (src/base64.cairo re-exports it): `packages/encoding` of game-components, at
 # the release tag v3.1.0. Scarb.lock records the commit it resolves to,
 # 66ce934e750f8162de4f6a377357b2b8f8e5c4c0, and CI fails if a build changes the lockfile.

@@ -2,7 +2,7 @@
   {
     "type": "impl",
     "name": "TinySynthImpl",
-    "interface_name": "onchain_midi_player::interface::ITinySynth"
+    "interface_name": "onchain_midi_types::interface::ITinySynth"
   },
   {
     "type": "struct",
@@ -44,7 +44,7 @@
   },
   {
     "type": "enum",
-    "name": "onchain_midi_player::types::WaveDef",
+    "name": "onchain_midi_types::types::WaveDef",
     "variants": [
       {
         "name": "Harmonics",
@@ -58,11 +58,11 @@
   },
   {
     "type": "struct",
-    "name": "core::array::Span::<onchain_midi_player::types::WaveDef>",
+    "name": "core::array::Span::<onchain_midi_types::types::WaveDef>",
     "members": [
       {
         "name": "snapshot",
-        "type": "@core::array::Array::<onchain_midi_player::types::WaveDef>"
+        "type": "@core::array::Array::<onchain_midi_types::types::WaveDef>"
       }
     ]
   },
@@ -82,7 +82,7 @@
   },
   {
     "type": "enum",
-    "name": "onchain_midi_player::types::Waveform",
+    "name": "onchain_midi_types::types::Waveform",
     "variants": [
       {
         "name": "Sine",
@@ -116,7 +116,7 @@
   },
   {
     "type": "enum",
-    "name": "onchain_midi_player::types::FilterKind",
+    "name": "onchain_midi_types::types::FilterKind",
     "variants": [
       {
         "name": "LowPass",
@@ -134,11 +134,11 @@
   },
   {
     "type": "struct",
-    "name": "onchain_midi_player::types::Filter",
+    "name": "onchain_midi_types::types::Filter",
     "members": [
       {
         "name": "kind",
-        "type": "onchain_midi_player::types::FilterKind"
+        "type": "onchain_midi_types::types::FilterKind"
       },
       {
         "name": "cutoff",
@@ -156,11 +156,11 @@
   },
   {
     "type": "enum",
-    "name": "core::option::Option::<onchain_midi_player::types::Filter>",
+    "name": "core::option::Option::<onchain_midi_types::types::Filter>",
     "variants": [
       {
         "name": "Some",
-        "type": "onchain_midi_player::types::Filter"
+        "type": "onchain_midi_types::types::Filter"
       },
       {
         "name": "None",
@@ -170,7 +170,7 @@
   },
   {
     "type": "struct",
-    "name": "onchain_midi_player::types::Operator",
+    "name": "onchain_midi_types::types::Operator",
     "members": [
       {
         "name": "route",
@@ -178,7 +178,7 @@
       },
       {
         "name": "wave",
-        "type": "onchain_midi_player::types::Waveform"
+        "type": "onchain_midi_types::types::Waveform"
       },
       {
         "name": "volume",
@@ -226,23 +226,23 @@
       },
       {
         "name": "filter",
-        "type": "core::option::Option::<onchain_midi_player::types::Filter>"
+        "type": "core::option::Option::<onchain_midi_types::types::Filter>"
       }
     ]
   },
   {
     "type": "struct",
-    "name": "core::array::Span::<onchain_midi_player::types::Operator>",
+    "name": "core::array::Span::<onchain_midi_types::types::Operator>",
     "members": [
       {
         "name": "snapshot",
-        "type": "@core::array::Array::<onchain_midi_player::types::Operator>"
+        "type": "@core::array::Array::<onchain_midi_types::types::Operator>"
       }
     ]
   },
   {
     "type": "struct",
-    "name": "onchain_midi_player::types::Timbre",
+    "name": "onchain_midi_types::types::Timbre",
     "members": [
       {
         "name": "drum",
@@ -254,23 +254,23 @@
       },
       {
         "name": "operators",
-        "type": "core::array::Span::<onchain_midi_player::types::Operator>"
+        "type": "core::array::Span::<onchain_midi_types::types::Operator>"
       }
     ]
   },
   {
     "type": "struct",
-    "name": "core::array::Span::<onchain_midi_player::types::Timbre>",
+    "name": "core::array::Span::<onchain_midi_types::types::Timbre>",
     "members": [
       {
         "name": "snapshot",
-        "type": "@core::array::Array::<onchain_midi_player::types::Timbre>"
+        "type": "@core::array::Array::<onchain_midi_types::types::Timbre>"
       }
     ]
   },
   {
     "type": "struct",
-    "name": "onchain_midi_player::types::TinySynthSettings",
+    "name": "onchain_midi_types::types::TinySynthSettings",
     "members": [
       {
         "name": "quality",
@@ -290,11 +290,11 @@
       },
       {
         "name": "waves",
-        "type": "core::array::Span::<onchain_midi_player::types::WaveDef>"
+        "type": "core::array::Span::<onchain_midi_types::types::WaveDef>"
       },
       {
         "name": "timbres",
-        "type": "core::array::Span::<onchain_midi_player::types::Timbre>"
+        "type": "core::array::Span::<onchain_midi_types::types::Timbre>"
       }
     ]
   },
@@ -314,7 +314,7 @@
   },
   {
     "type": "interface",
-    "name": "onchain_midi_player::interface::ITinySynth",
+    "name": "onchain_midi_types::interface::ITinySynth",
     "items": [
       {
         "type": "function",
@@ -348,7 +348,7 @@
           },
           {
             "name": "settings",
-            "type": "onchain_midi_player::types::TinySynthSettings"
+            "type": "onchain_midi_types::types::TinySynthSettings"
           }
         ],
         "outputs": [
