@@ -46,7 +46,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/scarb
-          key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'types/Scarb.lock', 'examples/owned_assets/Scarb.lock', 'examples/beast_consumer/Scarb.lock', 'examples/stress_nft/Scarb.lock') }}
+          key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'examples/owned_assets/Scarb.lock', 'examples/beast_consumer/Scarb.lock', 'examples/stress_nft/Scarb.lock') }}
           restore-keys: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-
 
       # Versions come from .tool-versions: scarb 2.20.1, starknet-foundry 0.64.0.
@@ -65,8 +65,9 @@ jobs:
           snforge --version
           uname -m
 
-      # The sound types, interfaces and settings::validate, with no dependency but starknet. The root
-      # package depends on it and re-exports it; the root's tests cover validate.
+      # The sound types, interfaces and settings::validate, with no dependency but starknet: the root
+      # workspace's member, so it shares the root Scarb.lock. The root package depends on it and
+      # re-exports it; the root's tests cover validate.
       - name: types (onchain_midi_types)
         working-directory: types
         run: |
@@ -102,7 +103,7 @@ jobs:
 
       # Scarb 2.20.1 has no --locked flag; fail if a build rewrote a lockfile.
       - name: Lockfiles unchanged
-        run: git diff --exit-code -- Scarb.lock types/Scarb.lock examples/owned_assets/Scarb.lock examples/beast_consumer/Scarb.lock examples/stress_nft/Scarb.lock
+        run: git diff --exit-code -- Scarb.lock examples/owned_assets/Scarb.lock examples/beast_consumer/Scarb.lock examples/stress_nft/Scarb.lock
 
   javascript:
     name: javascript
@@ -207,7 +208,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/scarb
-          key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'types/Scarb.lock', 'examples/owned_assets/Scarb.lock', 'examples/beast_consumer/Scarb.lock', 'examples/stress_nft/Scarb.lock') }}
+          key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'examples/owned_assets/Scarb.lock', 'examples/beast_consumer/Scarb.lock', 'examples/stress_nft/Scarb.lock') }}
           restore-keys: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-
 
       - name: Regenerate the ABIs in abi/

@@ -7,8 +7,10 @@ repository = "https://github.com/Provable-Games/onchain-midi-player"
 license = "Apache-2.0"
 
 # Nothing but `starknet`, and no dev-dependencies: a package that depends on this one resolves no
-# other package through it. The root package `onchain_midi_player` (the TinySynth class) depends on
-# it by path and re-exports it at its old paths; its tests cover `settings::validate`.
+# other package through it. A member of the repository's root workspace, which is how a git
+# dependency on the repository finds it (Scarb.lock and target/ are the root's). The root package
+# `onchain_midi_player` (the TinySynth class) depends on it by path and re-exports it at its old
+# paths; its tests cover `settings::validate`.
 [dependencies]
 starknet = "2.20.1"
 

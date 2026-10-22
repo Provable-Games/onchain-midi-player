@@ -23,8 +23,8 @@
 //! # How settings reach the browser
 //!
 //! The class writes the settings into the page next to the MIDI, as an inert block of
-//! ASCII digits, `-` and `,` (the `SETTINGS` format, specified in `crate::settings`). The
-//! player reads that block, registers the custom waves, configures TinySynth, then installs
+//! ASCII digits, `-` and `,` (the `SETTINGS` format, specified in `onchain_midi_player::settings`).
+//! The player reads that block, registers the custom waves, configures TinySynth, then installs
 //! each `Timbre` with `setTimbre`. Values are treated as data only, never evaluated. Custom
 //! timbres are installed after construction and after the quality mode is applied, because
 //! TinySynth's `setQuality()` resets every program and drum to the built-ins.

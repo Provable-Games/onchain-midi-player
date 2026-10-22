@@ -13,6 +13,7 @@ node examples/stress_nft/scripts/gen_fixtures.mjs
 scarb fmt
 scarb build
 snforge test
+(cd types && scarb fmt && scarb build)
 (cd examples/owned_assets && scarb fmt && scarb build)
 (cd examples/beast_consumer && scarb fmt && scarb build && snforge test)
 (cd examples/stress_nft && scarb fmt && scarb build && snforge test)
@@ -25,6 +26,8 @@ npm run check:abi
 ```
 
 The generator builds standalone shared loader and combined engine/headless-player fragments; the canonical class artifacts are segments. Consumer fixtures are complete pages generated separately. The combined player uses deterministic fflate 0.8.3 level 9, `mtime: 0`, no filename. Terser 5.51.2 minifies the loader and API classic IIFEs. The already minified engine is copied byte for byte, followed by a statement delimiter and the separately compiled API; it is not minified again. Build records contain the exact raw/returned/source/compressed identities. A recorded artifact change without a class-version bump fails. Version 0.5.0 remains unreleased, and its finalized record is unchanged. `--record` adds a new version; it cannot overwrite an existing version. The source of the independent fixture provider/dependent library and their records remains separate from the class.
+
+The sound types, `ITinySynth`, `ISoundProvider` and `settings::validate` are the package `onchain_midi_types` in [`types/`](../types), a member of the root workspace that depends on nothing but `starknet`, so other projects can depend on it without the class's dependencies ([Depending on the types](sound-provider.md#depending-on-the-types)). The root package depends on it by path and re-exports it at the earlier paths (`src/types.cairo`, `src/interface.cairo`, and `src/settings.cairo`, which keeps the `SETTINGS` encoder); the root's tests cover `validate`. Commands in the root act on the root package (`--workspace` for both); in `types/` they act on `onchain_midi_types`, with the root's `Scarb.lock` and `target/`. The ABIs name the moved types and interfaces by their declaring path, `onchain_midi_types::...`. The move changed the TinySynth class hash a build of this source gives, though not its CASM bytecode or any measured gas: the 0.7.0 class declared on Sepolia was built before it, from the commit [`deployments/sepolia.json`](../deployments/sepolia.json) records, and a new declaration records the new hash.
 
 The Beast-owned UI/document assets are generated separately into their own Cairo package, [`examples/owned_assets`](../examples/owned_assets), which both examples depend on and the root package's tests use as a dev-dependency. It depends on nothing, so no dependency cycle forms. Consumers compile their own encoder. Generators use the pinned Scarb formatter. Regeneration plus `scarb fmt` must leave the committed tree unchanged. ABI generation builds release/test artifacts and checks the seven-entry interface and sound-provider ABI. 0.5.0 and 0.6.0 were never declared. 0.7.0 is declared on Sepolia as a test class (`release_tag` null) with the Beast reference example deployed against it; [`deployments/sepolia.json`](../deployments/sepolia.json) records the class hash, transactions, addresses and build commit.
 
@@ -79,5 +82,7 @@ A subsequent terminal-failure fix (#67) changes the combined player payload agai
 [Gas documentation](gas.md) distinguishes the matched split/combined packaging experiment, its review refresh and historical 0.4.0 whole-page evidence. It also records independent-fixture composition, runtime encoding, fixed/dynamic alignment, payload/token URI sizes and release Sierra/CASM size. Fixture figures are not p5.js benchmarks. For reproducible L2 values use the documented production-shaped selector commands; root helper `gas_` test-wide figures include different work.
 
 ## Release process
+
+`onchain_midi_types` is released on its own, with a tag `onchain_midi_types-v<version>` on the commit to pin, `<version>` being the `version` in [`types/Scarb.toml`](../types/Scarb.toml); bump it for every release that changes the package, and keep the felt layouts of `TinySynthSettings` and `TinySynthSound` fixed once released. Consumers pin that tag with one identical source string ([Depending on the types](sound-provider.md#depending-on-the-types)). Class releases keep the tag `v<version>`.
 
 Release readiness requires a tagged fork release with its published SHA-256, applicable real-device/provider validation and release-profile class/manifest/ABI artifacts. A verified CI build alone does not establish a tagged release or mainnet readiness. Declaration, deployment and release transactions remain separately authorized maintainer actions. Keep `deployments/` truthful: historical network records remain historical, and current build readiness is independent of them.

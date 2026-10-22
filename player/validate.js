@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * JS reference of Cairo's `settings::validate` (src/settings.cairo), for Node and tooling only: the
+ * JS reference of Cairo's `settings::validate` (types/src/settings.cairo), for Node and tooling only: the
  * fixture generators, the reference encoder's callers and the parity tests. It is not part of the
  * page: semantic validation is the class's job, and the page only parses SETTINGS
  * strictly (`decodeSettings` in player/settings.js).
@@ -12,7 +12,7 @@ import { SettingsError } from "./settings.js";
 
 /** @typedef {import("./settings.js").TinySynthSettings} TinySynthSettings */
 
-// Cairo's caps, as in src/settings.cairo: what the format and the engine require. They equal the
+// Cairo's caps, as in types/src/settings.cairo: what the format and the engine require. They equal the
 // page's parse bounds (player/settings.js) but are kept apart from them, so a Cairo cap can change
 // within those bounds without changing the page.
 /** All that `Waveform::Custom(u8)` can index. */
@@ -29,7 +29,7 @@ export const MIN_VOICES = 1;
 const MAX_ROUTE = 10 + MAX_OPERATORS;
 
 /**
- * Applies the checks of `src/settings.cairo`, in the same order and with the same messages and
+ * Applies the checks of `types/src/settings.cairo`, in the same order and with the same messages and
  * indices, and throws a `SettingsError` on the first failure. The other numeric fields, and every
  * wave sample and harmonic, take any value of their type, except a filter's cutoff and Q, which
  * must be above 0 (checks 16-17).
