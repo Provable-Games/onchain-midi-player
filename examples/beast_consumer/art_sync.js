@@ -39,14 +39,17 @@ export function artTime(s, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS) {
  * increase ahead, and realigns at the next pass. Optional NFT-owned
  * `notes` are played, paused and stopped with the art and can read `clock()`: audible seconds since
  * tick zero, or null. Without a root (null: art the page cannot seek, an isolated `<img>`), nothing
- * is seeked or paused, and the notes and `clock()` follow the music all the same.
+ * is seeked or paused, and the notes and `clock()` follow the music all the same. Optional `img`
+ * controls (restartImgOnPass's) are played, paused and stopped like the notes: an isolated image
+ * freezes where the audio stops and moves again when it runs or the run ends.
  * @param {SVGSVGElement | null} svgRoot
  * @param {OnchainMidiApi} player
  * @param {{displayLead?: number, notes?: {play(): void, pause(): void, stop(): void} | null,
+ *   img?: {play(): void, pause(): void, stop(): void} | null,
  *   host?: {requestAnimationFrame(f: () => void): number, cancelAnimationFrame(id: number): void}}} [options]
  * @returns {{clock(): number | null, dispose(): void}}
  */
-export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLAY_LEAD_SECONDS, notes = null, host = window } = {}) {
+export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLAY_LEAD_SECONDS, notes = null, img = null, host = window } = {}) {
   const timelines = svgRoot ? [svgRoot, ...svgRoot.querySelectorAll("svg")] : [];
   /** @type {"free" | "running" | "frozen"} */ let mode = "free";
   let heardRun = -1, revision = -1, frame = 0, live = true;
@@ -80,17 +83,18 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
       // Also a latency change, and a resume that came before a frame saw the suspend (the art ran on
       // while the audio was held).
       if (mode !== "running" || pass || s.latencyRevision !== revision || (waited && s.state === "playing")) seek(s);
-      if (mode !== "running") { animate(true); notes?.play(); }
+      if (mode !== "running") { animate(true); notes?.play(); img?.play(); }
     } else if (next === "frozen") {
       if (mode !== "frozen") {
         animate(false); seek(s); // Where the audio stopped.
         // Heard, now paused: notes that never played start, so they read the clock, then hold.
         if (mode === "free") notes?.play();
-        notes?.pause();
+        notes?.pause(); img?.pause();
       }
     } else if (mode !== "free") {
       animate(true); // From where it is, without a rewind.
       if (s.state === "failed") notes?.pause(); else notes?.stop();
+      img?.stop();
     }
     mode = next;
     revision = s.latencyRevision;
@@ -103,7 +107,7 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
     clock: () => { const s = player.getPlayStatus(); return s.positionSeconds === null ? null : Math.max(0, s.positionSeconds + displayLead); },
     dispose() {
       live = false; offPass(); offState(); host.cancelAnimationFrame(frame); frame = 0;
-      if (mode !== "free") { animate(true); notes?.stop(); }
+      if (mode !== "free") { animate(true); notes?.stop(); img?.stop(); }
       mode = "free";
     },
   };
@@ -117,32 +121,226 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
  * with a distinct `r=<n>` parameter added to its media type, so the browser decodes it afresh: the
  * media type, its other parameters and the payload stay byte for byte, whatever the art's encoding.
  * An image from any other URL is never restarted: changing that URL could fetch something else.
- * Limits: the restart lands up to one decode late; the image keeps animating while paused; and no
- * page can control GIF frames inside any art (use SMIL sprite animation for motion synced to the music).
+ *
+ * The returned dispose function also carries `pause`, `play` and `stop` (syncSvgToMusic's `img`).
+ * `pause` freezes the art: no page can stop a GIF inside an image, or read the frame it shows
+ * (canvas `drawImage` gets the first frame), so the page works out that frame from the audio
+ * clock's time since the shown image started (audioElapsedMs), plus any suspension it played
+ * through unfrozen (seen at each transport change and pass), or the page time without that clock,
+ * and its GIF's own delays, and shows the art with that GIF replaced by a
+ * PNG of the frame (`stillSvg`), decoded off screen like a restart. Restarts wait while frozen.
+ * `play` and `stop` restart the art from its first frame, if the still was shown; the next pass
+ * realigns it. A pause while the still is still shown (the restart after a resume not yet
+ * decoded) keeps that still. Only the latest pause's still is ever shown. Art without a GIF it can
+ * still, or a still that fails to be made or decoded, keeps moving and restarting at passes, and so does any other
+ * animation in the art (SVG/SMIL). On a hidden page the still is made once the page is visible
+ * again; dispose drops a still still waiting for that.
+ * Limits: a restart lands up to one decode late, a freeze also, and no page can pause, seek or
+ * phase-align GIF frames inside any art (use SMIL sprite animation for motion synced to the music).
  * @param {HTMLImageElement} img the shown art
  * @param {OnchainMidiApi} player
- * @param {{onSwap?: (img: HTMLImageElement) => void}} [options] onSwap: each new image once shown
- *   (re-attach observers of the art, such as the play button's placement)
- * @returns {() => void} dispose
+ * @param {{onSwap?: (img: HTMLImageElement) => void,
+ *   still?: (svg: string, ms: number, doc: Document) => Promise<string | null>}} [options] onSwap:
+ *   each new image once shown (re-attach observers of the art, such as the play button's
+ *   placement); still: the art's text frozen `ms` after its image started (stillSvg)
+ * @returns {(() => void) & {play(): void, pause(): void, stop(): void}} dispose, with the freeze controls
  */
-export function restartImgOnPass(img, player, { onSwap = () => {} } = {}) {
+export function restartImgOnPass(img, player, { onSwap = () => {}, still = stillSvg } = {}) {
   // data:<media type>[;base64],<payload>, split where the browser splits it (the first comma).
   const url = /^data:([^,]*?)(;\x20*base64[\t\n\f\r ]*)?(,[\s\S]*)$/i.exec(img.src);
-  if (!url) return () => {};
-  const [, type, base64 = "", payload] = url;
-  let restarts = 0, shown = 0, live = true;
-  const off = player.onPassStart(() => {
-    const n = ++restarts, runId = player.getPlayStatus().runId;
-    const next = img.ownerDocument.createElement("img");
+  const none = () => {};
+  if (!url) return Object.assign(none, { play: none, pause: none, stop: none });
+  const [, type, base64 = "", payload] = url, doc = img.ownerDocument;
+  // frozen: a still is wanted (pending or shown); held: a still is shown; gen: the latest pause;
+  // shownAt and shownStatus: when the image now shown started, on the page and the audio clocks;
+  // stalled: how long it has played while the audio clock stood still (suspensions it ran through).
+  let restarts = 0, shown = 0, live = true, frozen = false, held = false, gen = 0, shownAt = performance.now(), stalled = 0;
+  /** @type {PlayStatus | null} */ let shownStatus = null;
+  /** @type {(() => void) | null} */ let waiting = null;
+  const unwait = () => { if (waiting) doc.removeEventListener("visibilitychange", waiting); waiting = null; };
+  /** Decodes `src(n)` off screen and shows it, unless disposed, a newer image is shown or `wanted()` fails. */
+  const show = (/** @type {(n: number) => string} */ src, /** @type {() => boolean} */ wanted, still = false) => {
+    const n = ++restarts, next = doc.createElement("img");
     for (const { name, value } of img.attributes) if (name !== "src") next.setAttribute(name, value);
     next.onload = () => {
-      if (!live || n < shown || player.getPlayStatus().runId !== runId) return;
-      shown = n;
+      if (!live || n < shown || !wanted()) return;
+      shown = n; held = still; shownAt = performance.now(); shownStatus = player.getPlayStatus(); stalled = 0;
       img.replaceWith(next);
       img = next;
       onSwap(next);
     };
-    next.src = "data:" + type + ";r=" + n + base64 + payload; // The same bytes at a distinct URL.
+    // A still that fails to decode gives up the freeze it was for: the art moves and restarts at passes.
+    next.onerror = () => { if (live && still && wanted()) frozen = false; };
+    next.src = src(n); // The same bytes at a distinct URL.
+  };
+  const restart = () => {
+    const runId = player.getPlayStatus().runId;
+    show((n) => "data:" + type + ";r=" + n + base64 + payload, () => !frozen && player.getPlayStatus().runId === runId);
+  };
+  // While the audio runs, the page time the shown image has played beyond the audio clock is the
+  // suspensions it ran through (a resume that cancelled a pending still, or a pause and resume the
+  // transport never reported here): look at each transport change and pass, and remember it.
+  const ran = () => {
+    const s = player.getPlayStatus(), audio = audioElapsedMs(shownStatus, s);
+    if (s.audioState === "running" && audio !== null) stalled = Math.max(0, performance.now() - shownAt - audio);
+  };
+  const offState = player.onStateChange(ran);
+  const offPass = player.onPassStart(() => { ran(); if (!frozen) restart(); });
+  const off = () => { offState(); offPass(); };
+  /** Shows the still of the art `ms` after it started for pause `g`, unless a later pause or a resume came. */
+  const hold = (/** @type {number} */ g, /** @type {number} */ ms) => {
+    unwait();
+    if (doc.hidden) {
+      waiting = () => { if (!doc.hidden) { unwait(); if (live && g == gen && frozen) hold(g, ms); } };
+      return doc.addEventListener("visibilitychange", waiting);
+    }
+    const current = () => live && g == gen && frozen;
+    Promise.resolve().then(() => {
+      // The payload as bytes (one character each), so art in any encoding keeps its other bytes.
+      const text = base64 ? atob(payload.slice(1).replace(/[\t\n\f\r ]/g, "")) : unescape(payload.slice(1));
+      return still(text, ms, doc);
+    }).then((svg) => {
+      if (!current()) return;
+      if (svg) show((n) => "data:" + type + ";r=" + n + ";base64," + btoa(svg), current, true);
+      else frozen = false; // Nothing to show: the art keeps moving, and restarting at passes.
+    }, () => { if (current()) frozen = false; });
+  };
+  const thaw = () => {
+    if (!frozen) return;
+    frozen = false;
+    unwait();
+    if (held) restart(); // From its first frame; a still never shown leaves the art running.
+  };
+  return Object.assign(() => { live = false; off(); unwait(); }, {
+    pause() {
+      if (!live || frozen) return;
+      frozen = true;
+      // A still still shown (a resume's restart not yet decoded) is where the art stopped: keep it.
+      // Otherwise the frame is the one the image showed when the audio stopped: the audio clock's
+      // time since it started, held where the clock stopped (a pause can be noticed late, say on a
+      // hidden page that defers animation frames), plus the suspensions it played through before;
+      // or, without that clock, the page time since.
+      const audio = audioElapsedMs(shownStatus, player.getPlayStatus());
+      if (!held) hold(++gen, audio === null ? performance.now() - shownAt : audio + stalled);
+    },
+    play: thaw,
+    stop: thaw,
   });
-  return () => { live = false; off(); };
+}
+
+/**
+ * Milliseconds the AudioContext ran between two play statuses of one run, `from` and the later
+ * `to`, by their `audioTime`: how long art started on screen at `from` has played by `to`, however
+ * late `to` is read, since the context's clock stops where a suspend stops it. It is the
+ * context's own clock, not `positionSeconds`: that one subtracts the latency estimate, which can
+ * change in between while an image plays on regardless. And the latency itself is not added: the
+ * image runs from when it is shown, not from when the music it was shown with is heard. (An image
+ * shown while the context is suspended counts from when the clock runs again.) Null when either
+ * has no clock time or they belong to different runs.
+ * @param {PlayStatus | null} from
+ * @param {PlayStatus} to
+ * @returns {number | null}
+ */
+export function audioElapsedMs(from, to) {
+  return from && from.runId === to.runId && from.audioTime != null && to.audioTime != null
+    ? Math.round(Math.max(0, to.audioTime - from.audioTime) * 1e6) / 1000 : null; // To the microsecond.
+}
+
+/**
+ * syncSvgToMusic's `img` for controls that come later (restartImgOnPass's, once the art it copies
+ * is showing): each call goes to them once attached, and attaching replays the last call, so a
+ * pause that came first still freezes the art.
+ * @returns {{play(): void, pause(): void, stop(): void, attach(controls: {play(): void, pause(): void, stop(): void}): void}}
+ */
+export function laterImg() {
+  /** @type {{play(): void, pause(): void, stop(): void} | null} */ let to = null;
+  /** @type {"play" | "pause" | "stop" | null} */ let last = null;
+  const call = (/** @type {"play" | "pause" | "stop"} */ name) => () => { last = name; to?.[name](); };
+  return { play: call("play"), pause: call("pause"), stop: call("stop"), attach(controls) { to = controls; if (last) controls[last](); } };
+}
+
+/**
+ * The frames of a GIF from its block structure, without decoding pixels: `head`, the bytes every
+ * frame shares (signature, screen descriptor and global color table), and each frame's bytes
+ * (`start` to `end`: its Graphic Control Extension, descriptor, color table and data), `delay` in
+ * ms as browsers show it (0 or 1 cs as 100 ms), `disposal` and `rect` (x, y, width, height); and
+ * `plays`, how many times browsers show the loop: once without a NETSCAPE2.0 loop extension, its
+ * count plus one (the count is repeats), 0 (forever) for a count of 0. Null when the bytes are not
+ * a GIF this walk follows.
+ * @param {Uint8Array} b
+ * @returns {{head: Uint8Array, width: number, height: number, plays: number,
+ *   frames: {start: number, end: number, delay: number, disposal: number, rect: number[]}[]} | null}
+ */
+export function gifFrames(b) {
+  if (b.length < 13 || String.fromCharCode(...b.subarray(0, 4)) != "GIF8") return null;
+  let p = 13 + (b[10] & 128 ? 3 << ((b[10] & 7) + 1) : 0), gce = -1, plays = 1;
+  const head = b.subarray(0, p), frames = [], skip = () => { while (p < b.length && b[p]) p += b[p] + 1; p++; };
+  while (p < b.length && b[p] != 59) {
+    const at = p++;
+    if (b[at] == 33) {
+      if (b[p] == 249) gce = at;
+      // 21 FF 0B "NETSCAPE2.0" 03 01 <count, little-endian> 00
+      if (b[p] == 255 && b[p + 1] == 11 && String.fromCharCode(...b.subarray(p + 2, p + 13)) == "NETSCAPE2.0" && b[p + 13] == 3 && b[p + 14] == 1) {
+        const count = b[p + 15] | (b[p + 16] << 8);
+        plays = count && count + 1;
+      }
+      p++; skip();
+    }
+    else if (b[at] == 44) {
+      const flags = b[p + 8], cs = gce < 0 ? 0 : b[gce + 4] | (b[gce + 5] << 8);
+      const rect = [0, 2, 4, 6].map((i) => b[p + i] | (b[p + i + 1] << 8));
+      p += 10 + (flags & 128 ? 3 << ((flags & 7) + 1) : 0);
+      skip();
+      frames.push({ start: gce < 0 ? at : gce, end: p, delay: cs > 1 ? cs * 10 : 100, disposal: gce < 0 ? 0 : (b[gce + 3] >> 2) & 7, rect });
+      gce = -1;
+    } else return null;
+  }
+  return p < b.length && frames.length ? { head, width: b[6] | (b[7] << 8), height: b[8] | (b[9] << 8), plays, frames } : null;
+}
+
+/**
+ * The frame a GIF shows `ms` after it started, played `plays` times (0: forever); once done, the
+ * last frame stays.
+ * @param {{delay: number}[]} frames
+ * @param {number} ms
+ * @param {number} [plays]
+ */
+export function gifFrameAt(frames, ms, plays = 0) {
+  const loop = frames.reduce((sum, f) => sum + f.delay, 0);
+  if (plays && ms >= loop * plays) return frames.length - 1;
+  let t = Math.max(0, ms) % loop, k = 0;
+  while (t >= frames[k].delay) t -= frames[k++].delay;
+  return k;
+}
+
+/**
+ * The art `svg` (its bytes, one character each) with its first embedded `data:image/gif;base64,`
+ * GIF replaced by a PNG of the frame it shows `ms` after it started (gifFrameAt). The page has no
+ * GIF decoder: each frame up to that one is cut out of the GIF as a one-frame GIF of its own, which
+ * the browser decodes, and they are drawn in order on a canvas with the GIF's disposal methods.
+ * Null for art without a GIF this can still; it rejects when the browser cannot (no canvas, say).
+ * @param {string} svg
+ * @param {number} ms
+ * @param {Document} doc
+ * @returns {Promise<string | null>}
+ */
+export async function stillSvg(svg, ms, doc) {
+  const m = /data:image\/gif;base64,([A-Za-z0-9+/]+=*)/.exec(svg), bytes = m && Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0));
+  const gif = bytes && gifFrames(bytes);
+  if (!m || !bytes || !gif) return null;
+  const k = gifFrameAt(gif.frames, ms, gif.plays), canvas = doc.createElement("canvas"), g = /** @type {CanvasRenderingContext2D} */ (canvas.getContext("2d"));
+  canvas.width = gif.width; canvas.height = gif.height;
+  /** @type {ImageData | null} */ let saved = null;
+  for (let i = 0; i <= k; i++) {
+    const before = gif.frames[i - 1], f = gif.frames[i], one = new Uint8Array(gif.head.length + f.end - f.start + 1);
+    if (before?.disposal == 2) g.clearRect(before.rect[0], before.rect[1], before.rect[2], before.rect[3]);
+    else if (before?.disposal == 3 && saved) g.putImageData(saved, 0, 0);
+    if (f.disposal == 3) saved = g.getImageData(0, 0, gif.width, gif.height);
+    one.set(gif.head); one.set(bytes.subarray(f.start, f.end), gif.head.length); one[one.length - 1] = 59;
+    let s = ""; for (const byte of one) s += String.fromCharCode(byte);
+    const frame = doc.createElement("img");
+    await new Promise((loaded, failed) => { frame.onload = loaded; frame.onerror = failed; frame.src = "data:image/gif;base64," + btoa(s); });
+    g.drawImage(frame, 0, 0);
+  }
+  return svg.replace(m[0], canvas.toDataURL("image/png"));
 }

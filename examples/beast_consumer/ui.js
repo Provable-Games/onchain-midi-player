@@ -1,6 +1,6 @@
 // @ts-check
 // NFT-owned visual and background-audio helpers.
-import { REFERENCE_DISPLAY_LEAD_SECONDS, artTime, restartImgOnPass, syncSvgToMusic } from "./art_sync.js";
+import { REFERENCE_DISPLAY_LEAD_SECONDS, artTime, laterImg, restartImgOnPass, syncSvgToMusic } from "./art_sync.js";
 export const PLAY_ICON = "M8 5v14l11-7z";
 export const PAUSE_ICON = "M6 5h4v14H6zM14 5h4v14h-4z";
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -396,11 +396,20 @@ export async function startUi() {
       sync = syncSvgToMusic(art, player, { notes });
       Object.defineProperty(window, "OnchainArtMonitor", { configurable: true, get: monitorArtSync(art, player) });
     } else if (art) {
-      // The notes follow the music without art to seek.
-      if (notes) sync = syncSvgToMusic(null, player, { notes });
+      // The notes follow the music without art to seek, and the image freezes where the audio
+      // stops: restartImgOnPass's controls, once they exist, get the transport's last call too.
+      const image = laterImg();
+      sync = syncSvgToMusic(null, player, { notes, img: image });
       // Each restarted <img> replaces the art: the button and the notes follow the new one. A restart
       // copies the URL the art shows, so restarts begin once the cut-out copy is showing, or failed.
-      const restart = () => art && restartImgOnPass(/** @type {HTMLImageElement} */ (art), player, { onSwap: (img) => { art = img; watch(img); } });
+      // Who prefers reduced motion (read once, when the art is set up) gets the art standing still,
+      // as the notes do: a still of its first frame from the start, which play and stop leave as it
+      // is. Art that cannot be stilled moves and restarts at passes as usual.
+      const restart = () => {
+        if (!art) return;
+        const controls = restartImgOnPass(/** @type {HTMLImageElement} */ (art), player, { onSwap: (img) => { art = img; watch(img); } });
+        if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) controls.pause(); else image.attach(controls);
+      };
       if (shown) shown.then(restart); else restart();
     }
     player.onStateChange(status => {
