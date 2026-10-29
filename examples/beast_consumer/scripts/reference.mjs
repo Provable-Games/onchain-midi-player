@@ -64,7 +64,7 @@ export function renderSvg(name, tier) {
     "<animate attributeName='stroke-opacity' values='1;0.4;1' dur='3s' repeatCount='indefinite'/></rect>" +
     `<text x='125' y='42' text-anchor='middle' class='n'>${name}</text>` +
     "<rect data-notes-bg='' x='61' y='65' width='128' height='128' rx='8' fill='#000'/>" +
-    "<foreignObject x='61' y='65' width='128' height='128'>" +
+    "<foreignObject x='85' y='89' width='80' height='80'>" +
     `<xhtml:img xmlns:xhtml='http://www.w3.org/1999/xhtml' src='${PNG_DATA_URI}' ` +
     "style='width:100%;height:100%;image-rendering:pixelated'/></foreignObject>" +
     `<text x='125' y='230' text-anchor='middle' class='t'>TIER ${tier}</text>` +

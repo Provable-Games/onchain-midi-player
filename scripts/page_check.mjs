@@ -103,7 +103,7 @@ try {
   const notesPage=(marked,trustedArt,notes=true)=>composed({...c,svg:card(marked)},{fixture:true,dependent:true,trustedArt,notes});
   // Coloured pixels in the frame around the sprite (the notes; the frame itself is black), the sprite's and the card's colour.
   // Screenshot pixels: the frame and the sprite, each inset 4 px from its edges (the frame) or grown by 4 px (the sprite).
-  const CARD={frame:[34,120,466,400],sprite:[186,196,314,324]};
+  const CARD={frame:[34,120,466,400],sprite:[186,196,314,324]},REFERENCE={frame:[126,134,374,382],sprite:[166,174,334,342]};
   const look=async(o,name,{frame:[x0,y0,x1,y1],sprite:[sx0,sy0,sx1,sy1]}=CARD)=>{const png=await o.page.screenshot();if(shots)writeFileSync(`${shots}/${name}-${run.engine}.png`,png);const img=decodePng(png);let notes=0;
     for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2)if(!(x>=sx0&&x<sx1&&y>=sy0&&y<sy1)&&Math.max(...img.pixel(x,y))>40)notes++;
     return{notes,sprite:img.pixel(250,260),card:img.pixel(20,600)};};
@@ -130,10 +130,12 @@ try {
     assert.ok(!(await frozen(o)),"resumed");
     assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);console.log(`PASS notes behind ${mode} art: canvas behind it over the marked frame, standing still, playing, paused, resumed`);
   }finally{await o.context.close();}}
-  // The reference consumer's own page (trusted art, the 128 x 128 frame behind its opaque sprite).
+  // The reference consumer's own page: trusted art, its 128 x 128 frame (61, 65) around an opaque 80 x 80 sprite (85, 89).
   {const o=await page(animationHtml(1));try{
     assert.deepEqual(await layout(o),{canvases:1,behind:true,box:{x:122,y:130,width:256,height:256},inline:true,src:"",cut:true});
-    await playAndPass(o);assert.ok(!(await frozen(o)));assert.deepEqual(await o.errors(),[]);console.log("PASS reference consumer page: notes behind its art frame");
+    const idle=await look(o,"notes-reference-idle",REFERENCE);assert.ok(idle.notes>100,`notes shown around the sprite: ${idle.notes}`);
+    await playAndPass(o);assert.ok(!(await frozen(o)));assert.ok((await look(o,"notes-reference-playing",REFERENCE)).notes>100);
+    assert.deepEqual(await o.errors(),[]);console.log("PASS reference consumer page: notes shown behind its art, around its sprite");
   }finally{await o.context.close();}}
   // A cut-out copy that fails to decode: the art keeps its own URL (never blank), the mounted notes are removed, playback as usual.
   {const broken=ownedFragment("notes")+"<script>{const N=window.OnchainMidiNotes;window.OnchainMidiNotes={mount:(c,o)=>(window.__notesMounted=1,N.mount(c,o)),cutout:()=>\"<svg xmlns='http://www.w3.org/2000/svg'><unclosed\"}}</script>";
