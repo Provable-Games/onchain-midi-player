@@ -1,6 +1,6 @@
 # Sound settings
 
-The consumer passes a typed `TinySynthSettings` value with every `midi_segment` call. The types are declared in [`types/src/types.cairo`](../types/src/types.cairo), and the checks and their messages are in [`types/src/settings.cairo`](../types/src/settings.cairo): the `onchain_midi_types` package, which depends on nothing but `starknet` ([Depending on the types](sound-provider.md#depending-on-the-types)). `onchain_midi_player` re-exports both at `onchain_midi_player::types` and `onchain_midi_player::settings`.
+The consumer passes a typed `TinySynthSettings` value with every `midi_segment` call. The types are declared in [`types/src/types.cairo`](../types/src/types.cairo), and the checks and their messages are in [`types/src/settings.cairo`](../types/src/settings.cairo): the `tinysynth_interface` package, which depends on nothing but `starknet` ([Depending on the types](sound-provider.md#depending-on-the-types)). `onchain_midi_player` re-exports both at `onchain_midi_player::types` and `onchain_midi_player::settings`.
 
 ## Types
 
@@ -36,7 +36,7 @@ The class writes settings into the page as `SETTINGS`, format version 1.
 1,36,2,…                                                 (Beast reference lead, then kick and snare; line breaks for reading only)
 ```
 
-`onchain_midi_types::settings` exports:
+`tinysynth_interface::settings` exports:
 
 - the pure function `validate`;
 - the helpers `default_settings()` and `default_operator()` (TinySynth's operator defaults in fixed point);

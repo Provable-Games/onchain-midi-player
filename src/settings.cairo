@@ -8,7 +8,7 @@
 //! messages; tooling only) and `player/encode.js` (reference encoder); shared fixtures keep them
 //! byte-for-byte identical.
 //!
-//! The checks, their order and their messages are in `onchain_midi_types::settings`
+//! The checks, their order and their messages are in `tinysynth_interface::settings`
 //! (`types/src/settings.cairo`), with `validate`, `default_settings`, `default_operator` and the
 //! limits. This module re-exports them, so `onchain_midi_player::settings::validate` keeps its
 //! path.
@@ -43,7 +43,7 @@
 //! its `<script type="text/plain">` block. It needs no alignment: the padding of `D` sits
 //! after `b64(midi)`. Example, `default_settings()`: `1,1,30,40,64,0,0`.
 
-pub use onchain_midi_types::settings::*;
+pub use tinysynth_interface::settings::*;
 use crate::types::{Filter, FilterKind, Operator, TinySynthSettings, WaveDef, Waveform};
 
 /// First token of `SETTINGS`.

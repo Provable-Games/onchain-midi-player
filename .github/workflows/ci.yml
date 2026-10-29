@@ -68,7 +68,7 @@ jobs:
       # The sound types, interfaces and settings::validate, with no dependency but starknet: the root
       # workspace's member, so it shares the root Scarb.lock. The root package depends on it and
       # re-exports it; the root's tests cover validate.
-      - name: types (onchain_midi_types)
+      - name: types (tinysynth_interface)
         working-directory: types
         run: |
           scarb fmt --check
