@@ -58,9 +58,10 @@ Art synced to the music is the experience, and it needs no scheduling. Let the a
 const sync = syncSvgToMusic(document.getElementById("art"), OnchainMidiPlayer);
 // Isolated art (community art) in an <img src="data:...">: restarts its own bytes at each pass.
 const dispose = restartImgOnPass(document.getElementById("art-img"), OnchainMidiPlayer);
+// Its pause/play/stop freeze the image with the music: pass them to syncSvgToMusic(null, ..., { img: dispose }).
 ```
 
-Before the music is audible and after stop, the SVG animates freely; a pause freezes it where the audio stops. When the music becomes audible, the art jumps once from wherever it was to the music's position; draw frame 0 as a natural rest pose, and make the art's loop a whole fraction of the pass, so the jump and every pass boundary look intended. `sync.clock()` gives optional notes the same audible clock. An `<img>` restart lands up to one decode late, and the image keeps animating while paused. GIF frames inside any art can't be controlled: use SMIL sprite animation for motion synced to the music.
+Before the music is audible and after stop, the SVG animates freely; a pause freezes it where the audio stops. When the music becomes audible, the art jumps once from wherever it was to the music's position; draw frame 0 as a natural rest pose, and make the art's loop a whole fraction of the pass, so the jump and every pass boundary look intended. `sync.clock()` gives optional notes the same audible clock. An `<img>` restart lands up to one decode late. A pause freezes the image: the page shows a still of the frame its embedded GIF shows (worked out from the GIF's delays, also up to one decode late), and resume restarts it from its first frame; other animation inside the image keeps running. GIF frames inside any art can't otherwise be controlled: use SMIL sprite animation for motion synced to the music.
 
 ## Agent skills
 
