@@ -452,8 +452,8 @@ test('real player: an earlier subscriber pausing again on resume: the art ends f
 const svgUrl=(bytes,type='image/svg+xml')=>`data:${type};base64,`+Buffer.from(bytes).toString('base64');
 const UTF8_ART=svgUrl("<svg xmlns='http://www.w3.org/2000/svg'><title>é</title></svg>");
 function imgHarness(src=UTF8_ART,options={}){
- const status={runId:1,state:'playing'},passes=new Set(),page=[],created=[],swaps=[];
- const player={getPlayStatus:()=>({...status}),onPassStart(fn){passes.add(fn);return()=>passes.delete(fn);},onStateChange(){return()=>{};}};
+ const status={runId:1,state:'playing'},passes=new Set(),states=new Set(),page=[],created=[],swaps=[];
+ const player={getPlayStatus:()=>({...status}),onPassStart(fn){passes.add(fn);return()=>passes.delete(fn);},onStateChange(fn){states.add(fn);return()=>states.delete(fn);}};
  const doc={createElement(tag){assert.equal(tag,'img');const el=image();created.push(el);return el;}};
  function image(attributes=[]){return{attributes,ownerDocument:doc,onload:null,src:'',setAttribute(name,value){this.attributes=[...this.attributes.filter(a=>a.name!==name),{name,value}];},
   replaceWith(other){const i=page.indexOf(this);if(i>=0)page[i]=other;},load(){this.onload?.();},fail(){this.onerror?.();}};}
@@ -461,7 +461,8 @@ function imgHarness(src=UTF8_ART,options={}){
  let art=first;
  // As startUi: the button's placement follows each new image.
  const dispose=restartImgOnPass(first,player,{...options,onSwap:img=>{assert.equal(page[0],img,'shown before onSwap');art=img;swaps.push(img);}});
- return{status,page,created,swaps,first,dispose,get art(){return art;},get subscribers(){return passes.size;},pass(){for(const fn of [...passes])fn({runId:status.runId});}};
+ return{status,page,created,swaps,first,dispose,get art(){return art;},get subscribers(){return passes.size+states.size;},pass(){for(const fn of [...passes])fn({runId:status.runId});},
+  set(next){Object.assign(status,next);for(const fn of [...states])fn({...status});}};
 }
 const restartUrl=(n,src=UTF8_ART)=>src.replace(';base64,',`;r=${n};base64,`);
 test('<img> art: each pass decodes a fresh copy with a distinct data URL and swaps it in once loaded',()=>{
@@ -597,6 +598,29 @@ test('<img> art: a latency change between the restart and the pause does not mov
  // The image plays 950 ms; meanwhile the latency estimate grows by 200 ms, so the position moves only 750 ms.
  Object.assign(h.status,{audioTime:5.95,positionSeconds:10.75,latencySeconds:.2,latencyRevision:1,state:'paused'});
  h.dispose.pause();await tick();assert.equal(h.stills[0].ms,950,'the image played 950 ms, whatever the compensation');
+});
+// Review: the image plays on through a suspension it is not frozen for (a resume that cancelled a pending
+// still, or a pause and resume the transport never reported), which the audio clock does not count.
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+// The audio clock advances with the page clock while it runs (waits of the same length), and stands
+// still while suspended.
+test('<img> art: a second pause after a resume that cancelled a pending still counts the suspension the image played through',async()=>{
+ const pending=[];const h=imgHarness(UTF8_ART,{still:(svg,ms)=>{pending.push(ms);return new Promise(()=>{});}});
+ h.set({audioTime:5,audioState:'running'});h.pass();h.created[0].load(); // Shown at 5 s of the context.
+ await wait(100);h.set({audioTime:5.1,audioState:'suspended',state:'paused'});h.dispose.pause();await tick(); // A still asked for, never shown, ...
+ await wait(120); // ... 120 ms of suspension the image plays through, ...
+ h.set({audioState:'running',state:'playing'});h.dispose.play(); // ... cancelled by the resume.
+ await wait(100);h.set({audioTime:5.2,audioState:'suspended',state:'paused'});h.dispose.pause();await tick();
+ assert.equal(pending[0],100);assert.ok(pending[1]>=310&&pending[1]<380,`200 ms of audio and the 120 ms suspension: ${pending[1]}`);
+});
+test('<img> art: a pause and resume the transport never reported here (frames deferred) still count for the next pause',async()=>{
+ const h=stillHarness();h.set({audioTime:5,audioState:'running'});h.pass();h.created[0].load();
+ await wait(100);h.set({audioTime:5.1,audioState:'suspended',state:'paused'});await wait(120);h.set({audioState:'running',state:'playing'});
+ await wait(100);h.set({audioTime:5.2,audioState:'suspended',state:'paused'});h.dispose.pause();await tick();
+ assert.ok(h.stills[0].ms>=310&&h.stills[0].ms<380,`200 ms of audio and the 120 ms suspension: ${h.stills[0].ms}`);
+ // A restart starts the count again.
+ h.dispose.play();h.set({audioState:'running',state:'playing'});h.pass();h.created.at(-1).load();await wait(50);h.set({audioTime:5.25,audioState:'suspended',state:'paused'});h.dispose.pause();await tick();
+ assert.equal(h.stills[1].ms,50,'the restarted image: 50 ms of audio, no suspension');
 });
 test('<img> art: without the audio clock (or across runs) the freeze falls back to the page time since the image started',async()=>{
  const h=stillHarness();h.pass();h.created[0].load();await new Promise(r=>setTimeout(r,30));h.dispose.pause();await tick();

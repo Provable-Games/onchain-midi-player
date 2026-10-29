@@ -125,8 +125,9 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
  * The returned dispose function also carries `pause`, `play` and `stop` (syncSvgToMusic's `img`).
  * `pause` freezes the art: no page can stop a GIF inside an image, or read the frame it shows
  * (canvas `drawImage` gets the first frame), so the page works out that frame from the audio
- * clock's time since the shown image started (audioElapsedMs; the page time without it) and its
- * GIF's own delays, and shows the art with that GIF replaced by a
+ * clock's time since the shown image started (audioElapsedMs), plus any suspension it played
+ * through unfrozen (seen at each transport change and pass), or the page time without that clock,
+ * and its GIF's own delays, and shows the art with that GIF replaced by a
  * PNG of the frame (`stillSvg`), decoded off screen like a restart. Restarts wait while frozen.
  * `play` and `stop` restart the art from its first frame, if the still was shown; the next pass
  * realigns it. A pause while the still is still shown (the restart after a resume not yet
@@ -134,8 +135,8 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
  * still, or a still that fails to be made or decoded, keeps moving and restarting at passes, and so does any other
  * animation in the art (SVG/SMIL). On a hidden page the still is made once the page is visible
  * again; dispose drops a still still waiting for that.
- * Limits: a restart lands up to one decode late, a freeze also, and no page can control GIF
- * frames inside any art (use SMIL sprite animation for motion synced to the music).
+ * Limits: a restart lands up to one decode late, a freeze also, and no page can pause, seek or
+ * phase-align GIF frames inside any art (use SMIL sprite animation for motion synced to the music).
  * @param {HTMLImageElement} img the shown art
  * @param {OnchainMidiApi} player
  * @param {{onSwap?: (img: HTMLImageElement) => void,
@@ -151,8 +152,9 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
   if (!url) return Object.assign(none, { play: none, pause: none, stop: none });
   const [, type, base64 = "", payload] = url, doc = img.ownerDocument;
   // frozen: a still is wanted (pending or shown); held: a still is shown; gen: the latest pause;
-  // shownAt and shownStatus: when the image now shown started, on the page and the music clocks.
-  let restarts = 0, shown = 0, live = true, frozen = false, held = false, gen = 0, shownAt = performance.now();
+  // shownAt and shownStatus: when the image now shown started, on the page and the audio clocks;
+  // stalled: how long it has played while the audio clock stood still (suspensions it ran through).
+  let restarts = 0, shown = 0, live = true, frozen = false, held = false, gen = 0, shownAt = performance.now(), stalled = 0;
   /** @type {PlayStatus | null} */ let shownStatus = null;
   /** @type {(() => void) | null} */ let waiting = null;
   const unwait = () => { if (waiting) doc.removeEventListener("visibilitychange", waiting); waiting = null; };
@@ -162,7 +164,7 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
     for (const { name, value } of img.attributes) if (name !== "src") next.setAttribute(name, value);
     next.onload = () => {
       if (!live || n < shown || !wanted()) return;
-      shown = n; held = still; shownAt = performance.now(); shownStatus = player.getPlayStatus();
+      shown = n; held = still; shownAt = performance.now(); shownStatus = player.getPlayStatus(); stalled = 0;
       img.replaceWith(next);
       img = next;
       onSwap(next);
@@ -175,7 +177,16 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
     const runId = player.getPlayStatus().runId;
     show((n) => "data:" + type + ";r=" + n + base64 + payload, () => !frozen && player.getPlayStatus().runId === runId);
   };
-  const off = player.onPassStart(() => frozen || restart());
+  // While the audio runs, the page time the shown image has played beyond the audio clock is the
+  // suspensions it ran through (a resume that cancelled a pending still, or a pause and resume the
+  // transport never reported here): look at each transport change and pass, and remember it.
+  const ran = () => {
+    const s = player.getPlayStatus(), audio = audioElapsedMs(shownStatus, s);
+    if (s.audioState === "running" && audio !== null) stalled = Math.max(0, performance.now() - shownAt - audio);
+  };
+  const offState = player.onStateChange(ran);
+  const offPass = player.onPassStart(() => { ran(); if (!frozen) restart(); });
+  const off = () => { offState(); offPass(); };
   /** Shows the still of the art `ms` after it started for pause `g`, unless a later pause or a resume came. */
   const hold = (/** @type {number} */ g, /** @type {number} */ ms) => {
     unwait();
@@ -207,8 +218,10 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
       // A still still shown (a resume's restart not yet decoded) is where the art stopped: keep it.
       // Otherwise the frame is the one the image showed when the audio stopped: the audio clock's
       // time since it started, held where the clock stopped (a pause can be noticed late, say on a
-      // hidden page that defers animation frames), or, without that clock, the page time since.
-      if (!held) hold(++gen, audioElapsedMs(shownStatus, player.getPlayStatus()) ?? performance.now() - shownAt);
+      // hidden page that defers animation frames), plus the suspensions it played through before;
+      // or, without that clock, the page time since.
+      const audio = audioElapsedMs(shownStatus, player.getPlayStatus());
+      if (!held) hold(++gen, audio === null ? performance.now() - shownAt : audio + stalled);
     },
     play: thaw,
     stop: thaw,

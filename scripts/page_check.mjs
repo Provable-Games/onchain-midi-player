@@ -215,6 +215,48 @@ try {
      assert.deepEqual(o.requests,[]);if(!hidden)assert.deepEqual(await o.errors(),[]);
      console.log(`PASS isolated GIF art paused after a latency change while animation frames are deferred (${hidden?"hidden":"visible"} page): a still of the frame the audio stopped on`);
    }finally{await o.context.close();}}}
+  // The image plays on through a suspension the art is not frozen for: here a pause and resume the
+  // transport never reports to the art (its suspend completes unannounced 200 ms in, and animation
+  // frames are deferred 1.6 s, longer than the 1 s suspension). The next pause, noticed at once, freezes what is on screen: the page time since the
+  // shown image started, recorded here, which counts that suspension; the audio clock alone would
+  // miss its 5 GIF frames and pick the other colour. No pass comes in between: the score is the
+  // Warlock reference's, whose pass is 55 s.
+  {const gif=Buffer.from([71,73,70,56,57,97,1,0,1,0,128,0,0,204,0,0,0,0,204,33,255,11,...Buffer.from("NETSCAPE2.0"),3,1,0,0,0,
+     33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,76,1,0,59]).toString("base64");
+   const gifCard=card(true).replace("<rect x='95' y='100' width='60' height='60' fill='#c00'/>",`<image x='95' y='100' width='60' height='60' style='image-rendering:pixelated' href='data:image/gif;base64,${gif}'/>`);
+   const isStill=()=>{const src=document.getElementById("beast-art").src,i=src.indexOf(",");return /;base64,/.test(src.slice(0,i+1))&&atob(src.slice(i+1)).includes("data:image/png;base64,");};
+   const o=await run.page();try{
+     await o.context.addInitScript(()=>{
+       window.__rafDelay=0;const raf=window.requestAnimationFrame.bind(window);window.requestAnimationFrame=f=>raf(t=>setTimeout(()=>f(t),window.__rafDelay));
+       // The suspend completes 200 ms after the pause, unannounced: only an animation frame notices it.
+       const suspend=AudioContext.prototype.suspend;AudioContext.prototype.suspend=function(){return new Promise(r=>setTimeout(r,window.__rafDelay?200:0)).then(()=>suspend.call(this));};
+       window.__swaps=[];new MutationObserver(()=>{const a=document.getElementById("beast-art");if(a&&a!==window.__art){window.__art=a;
+         const i=a.src.indexOf(","),still=/;base64,/.test(a.src.slice(0,i+1))&&atob(a.src.slice(i+1)).includes("data:image/png;base64,");
+         window.__swaps.push({src:a.src.slice(0,40),still,at:performance.now()});}}).observe(document,{subtree:true,childList:true});
+     });
+     await o.page.setViewportSize({width:500,height:700});await o.page.goto(dataUrl(composed({...tokenParts(4),members:tokenParts(4).mem,svg:gifCard},{fixture:true,dependent:true,notes:false})));await waitReady(o.page);
+     await playAndPass(o);await o.page.waitForFunction(()=>window.__swaps.some(s=>/;r=\d+/.test(s.src)&&!s.still),{timeout:10000});
+     const before=await o.page.evaluate(()=>({passes:window.__check.passes.length,swaps:window.__swaps.filter(s=>!s.still).length}));
+     await o.page.waitForTimeout(300);
+     // In the page, on timers: with animation frames deferred, the harness's own waits would be too.
+     const unreported=await o.page.evaluate(async()=>{
+       const sleep=ms=>new Promise(r=>setTimeout(r,ms)),play=document.getElementById("play"),audio=()=>OnchainMidiPlayer.getPlayStatus().audioState;
+       const still=()=>{const src=document.getElementById("beast-art").src,i=src.indexOf(",");return /;base64,/.test(src.slice(0,i+1))&&atob(src.slice(i+1)).includes("data:image/png;base64,");};
+       window.__rafDelay=1600;play.click();while(audio()!=="suspended")await sleep(2);
+       await sleep(1000);const seen=still();play.click();while(audio()!=="running")await sleep(2);return seen;});
+     assert.equal(unreported,false,"the first pause never reached the art");
+     await o.page.waitForTimeout(1800);await o.page.evaluate(()=>{window.__rafDelay=0;});await o.page.waitForTimeout(300);
+     await o.page.click("#play");const stopped=await o.page.evaluate(async()=>{while(OnchainMidiPlayer.getPlayStatus().audioState!=="suspended")await new Promise(r=>setTimeout(r,2));return performance.now();});
+     await o.page.waitForFunction(isStill,{timeout:10000});
+     const after=await o.page.evaluate(()=>({passes:window.__check.passes.length,swaps:window.__swaps.filter(s=>!s.still).length,at:window.__swaps.filter(s=>/;r=\d+/.test(s.src)&&!s.still).at(-1).at}));
+     assert.equal(after.passes,before.passes,"no pass in between");assert.equal(after.swaps,before.swaps,"no restart in between");
+     const ms=(stopped-after.at)%400,frame=Math.floor(ms/200),edge=Math.min(ms%200,200-ms%200)<40;
+     const held=await (async()=>{const seen=new Set(),end=Date.now()+500;while(Date.now()<end){seen.add(decodePng(await o.page.screenshot({clip:{x:240,y:250,width:20,height:20}})).pixel(10,10).join());await o.page.waitForTimeout(30);}return seen;})();
+     assert.equal(held.size,1,`standing still: ${[...held]}`);
+     if(!edge)assert.ok(held.has(frame?"0,0,204":"204,0,0"),`what was on screen when the audio stopped (${Math.round(ms)} ms into the loop): ${[...held]}`);
+     assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
+     console.log("PASS isolated GIF art paused after an unreported pause and resume: a still of what was on screen, the suspension it played through counted");
+   }finally{await o.context.close();}}
   // Reduced motion: the isolated GIF art stands still from the start, on a still, through play,
   // pause and resume, as the notes do.
   {const gif=Buffer.from([71,73,70,56,57,97,1,0,1,0,128,0,0,204,0,0,0,0,204,33,255,11,...Buffer.from("NETSCAPE2.0"),3,1,0,0,0,
