@@ -60,6 +60,8 @@ pub fn naive_token_uri(token_id: u256) -> ByteArray {
         @d_fragment(sound::token_midi(token_id), @sound::token_settings(token_id, tier)),
     );
     align(ref html, ref length);
+    append(ref html, ref length, @golden::notes());
+    align(ref html, ref length);
     append(ref html, ref length, @golden::footer());
     open.append(@bytes_base64_encode(html));
     open.append(@"\"}");
