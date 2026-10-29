@@ -124,9 +124,9 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
  *
  * The returned dispose function also carries `pause`, `play` and `stop` (syncSvgToMusic's `img`).
  * `pause` freezes the art: no page can stop a GIF inside an image, or read the frame it shows
- * (canvas `drawImage` gets the first frame), so the page works out that frame from the music heard
- * since the shown image started (musicElapsedMs; the page time without positions) and its GIF's
- * own delays, and shows the art with that GIF replaced by a
+ * (canvas `drawImage` gets the first frame), so the page works out that frame from the audio
+ * clock's time since the shown image started (audioElapsedMs; the page time without it) and its
+ * GIF's own delays, and shows the art with that GIF replaced by a
  * PNG of the frame (`stillSvg`), decoded off screen like a restart. Restarts wait while frozen.
  * `play` and `stop` restart the art from its first frame, if the still was shown; the next pass
  * realigns it. A pause while the still is still shown (the restart after a resume not yet
@@ -205,10 +205,10 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
       if (!live || frozen) return;
       frozen = true;
       // A still still shown (a resume's restart not yet decoded) is where the art stopped: keep it.
-      // Otherwise the frame is the one the image showed when the audio stopped: the music heard since
-      // it started (a pause can be noticed late, say on a hidden page that defers animation frames),
-      // or, without positions, the page time since.
-      if (!held) hold(++gen, musicElapsedMs(shownStatus, player.getPlayStatus()) ?? performance.now() - shownAt);
+      // Otherwise the frame is the one the image showed when the audio stopped: the audio clock's
+      // time since it started, held where the clock stopped (a pause can be noticed late, say on a
+      // hidden page that defers animation frames), or, without that clock, the page time since.
+      if (!held) hold(++gen, audioElapsedMs(shownStatus, player.getPlayStatus()) ?? performance.now() - shownAt);
     },
     play: thaw,
     stop: thaw,
@@ -216,17 +216,21 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
 }
 
 /**
- * Milliseconds of music heard between two play statuses of one run, `from` and the later `to`, by
- * their audible positions (a paused run's is held where the audio stopped): how far art started at
- * `from` and running with the music has got by `to`, however late `to` is read. Null when either
- * has no position or they belong to different runs.
+ * Milliseconds the AudioContext ran between two play statuses of one run, `from` and the later
+ * `to`, by their `audioTime`: how long art started on screen at `from` has played by `to`, however
+ * late `to` is read, since the context's clock stops where a suspend stops it. It is the
+ * context's own clock, not `positionSeconds`: that one subtracts the latency estimate, which can
+ * change in between while an image plays on regardless. And the latency itself is not added: the
+ * image runs from when it is shown, not from when the music it was shown with is heard. (An image
+ * shown while the context is suspended counts from when the clock runs again.) Null when either
+ * has no clock time or they belong to different runs.
  * @param {PlayStatus | null} from
  * @param {PlayStatus} to
  * @returns {number | null}
  */
-export function musicElapsedMs(from, to) {
-  return from && from.runId === to.runId && from.positionSeconds != null && to.positionSeconds != null
-    ? Math.max(0, to.positionSeconds - from.positionSeconds) * 1000 : null;
+export function audioElapsedMs(from, to) {
+  return from && from.runId === to.runId && from.audioTime != null && to.audioTime != null
+    ? Math.round(Math.max(0, to.audioTime - from.audioTime) * 1e6) / 1000 : null; // To the microsecond.
 }
 
 /**

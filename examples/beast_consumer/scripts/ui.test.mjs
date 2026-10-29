@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {describe,test} from "node:test";
 import {playAnchor,silentWav,monitorArtSync,positionState,MEDIA_END_GUARD_SECONDS} from "../ui.js";
-import {REFERENCE_DISPLAY_LEAD_SECONDS,syncSvgToMusic,restartImgOnPass,gifFrames,gifFrameAt,stillSvg,laterImg,musicElapsedMs} from "../art_sync.js";
+import {REFERENCE_DISPLAY_LEAD_SECONDS,syncSvgToMusic,restartImgOnPass,gifFrames,gifFrameAt,stillSvg,laterImg,audioElapsedMs} from "../art_sync.js";
 import {startPlayer} from "../../../player/player.js";
 import {mount as mountNotes} from "../../../player/notes.js";
 import {riff,smf} from "../../../scripts/data_cases.mjs";
@@ -573,27 +573,35 @@ test('<img> art: the still keeps every byte of art in another encoding, and read
  assert.equal(p.stills[0].svg,Buffer.from(cut).toString('latin1'),'the percent-encoded bytes');assert.match(p.created[0].src,/^data:image\/svg\+xml;r=1;base64,/);
  const other=stillHarness('https://example.com/art.svg');other.dispose.pause();other.dispose.play();await tick();assert.equal(other.stills.length,0);
 });
-// The frame a pause freezes comes from the music clock (review: a pause noticed late, on a hidden page
-// whose animation frames are deferred, must not pick a later frame).
-test('musicElapsedMs: music heard between two statuses of one run, else null',()=>{
- assert.equal(musicElapsedMs({runId:1,positionSeconds:10},{runId:1,positionSeconds:10.75}),750);
- assert.equal(musicElapsedMs({runId:1,positionSeconds:10},{runId:1,positionSeconds:9}),0);
- for(const [from,to] of [[null,{runId:1,positionSeconds:1}],[{runId:1,positionSeconds:null},{runId:1,positionSeconds:1}],[{runId:1,positionSeconds:1},{runId:1,positionSeconds:null}],[{runId:1,positionSeconds:1},{runId:2,positionSeconds:2}]])assert.equal(musicElapsedMs(from,to),null);
+// The frame a pause freezes comes from the audio clock (reviews: a pause noticed late, on a hidden page
+// whose animation frames are deferred, must not pick a later frame; a latency change must not move it).
+test('audioElapsedMs: the AudioContext time between two statuses of one run, else null',()=>{
+ assert.equal(audioElapsedMs({runId:1,audioTime:5},{runId:1,audioTime:5.75}),750);
+ assert.equal(audioElapsedMs({runId:1,audioTime:5},{runId:1,audioTime:4}),0);
+ // Latency compensation in positionSeconds does not count: only the context clock does.
+ assert.equal(audioElapsedMs({runId:1,audioTime:5,positionSeconds:10,latencySeconds:0},{runId:1,audioTime:5.95,positionSeconds:10.75,latencySeconds:.2}),950);
+ for(const [from,to] of [[null,{runId:1,audioTime:1}],[{runId:1,audioTime:null},{runId:1,audioTime:1}],[{runId:1,audioTime:1},{runId:1,audioTime:null}],[{runId:1,audioTime:1},{runId:2,audioTime:2}]])assert.equal(audioElapsedMs(from,to),null);
 });
-for(const hidden of [false,true])test(`<img> art: a pause noticed late freezes the frame the music stopped on, not a later one (${hidden?'hidden':'visible'} page)`,async()=>{
+for(const hidden of [false,true])test(`<img> art: a pause noticed late freezes the frame the audio stopped on, not a later one (${hidden?'hidden':'visible'} page)`,async()=>{
  const h=stillHarness(),listeners=new Set(),doc=h.first.ownerDocument;
  if(hidden){Object.defineProperty(doc,'hidden',{configurable:true,get:()=>true});doc.addEventListener=(t,fn)=>listeners.add(fn);doc.removeEventListener=(t,fn)=>listeners.delete(fn);}
- Object.assign(h.status,{positionSeconds:10});h.pass();h.created[0].load(); // Restarted, shown at 10 s of music.
- Object.assign(h.status,{positionSeconds:10.75,state:'paused'}); // The audio stopped 750 ms in, ...
+ Object.assign(h.status,{audioTime:5,positionSeconds:10});h.pass();h.created[0].load(); // Restarted, shown at 5 s of the context.
+ Object.assign(h.status,{audioTime:5.75,positionSeconds:10.75,state:'paused'}); // The audio stopped 750 ms in, ...
  await new Promise(r=>setTimeout(r,60)); // ... noticed later: the page clock ran on.
  h.dispose.pause();await tick();
  if(hidden){assert.equal(h.stills.length,0);Object.defineProperty(doc,'hidden',{configurable:true,get:()=>false});for(const fn of [...listeners])fn();await tick();}
- assert.equal(h.stills.length,1);assert.equal(h.stills[0].ms,750,'the music heard since the image started');
+ assert.equal(h.stills.length,1);assert.equal(h.stills[0].ms,750,'the audio clock since the image started');
 });
-test('<img> art: without music positions (or across runs) the freeze falls back to the page time since the image started',async()=>{
+test('<img> art: a latency change between the restart and the pause does not move the frozen frame',async()=>{
+ const h=stillHarness();Object.assign(h.status,{audioTime:5,positionSeconds:10,latencySeconds:0});h.pass();h.created[0].load();
+ // The image plays 950 ms; meanwhile the latency estimate grows by 200 ms, so the position moves only 750 ms.
+ Object.assign(h.status,{audioTime:5.95,positionSeconds:10.75,latencySeconds:.2,latencyRevision:1,state:'paused'});
+ h.dispose.pause();await tick();assert.equal(h.stills[0].ms,950,'the image played 950 ms, whatever the compensation');
+});
+test('<img> art: without the audio clock (or across runs) the freeze falls back to the page time since the image started',async()=>{
  const h=stillHarness();h.pass();h.created[0].load();await new Promise(r=>setTimeout(r,30));h.dispose.pause();await tick();
  assert.ok(h.stills[0].ms>=25&&h.stills[0].ms<1000,String(h.stills[0].ms));
- const r=stillHarness();Object.assign(r.status,{positionSeconds:3});r.pass();r.created[0].load();Object.assign(r.status,{runId:2,positionSeconds:40});r.dispose.pause();await tick();
+ const r=stillHarness();Object.assign(r.status,{audioTime:3});r.pass();r.created[0].load();Object.assign(r.status,{runId:2,audioTime:40});r.dispose.pause();await tick();
  assert.ok(r.stills[0].ms<1000,'not 37 s of another run');
 });
 // Review: a still that fails to decode gives up its freeze, but only for the latest pause.

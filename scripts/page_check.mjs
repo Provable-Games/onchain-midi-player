@@ -177,11 +177,13 @@ try {
      assert.equal(await o.page.locator("img#beast-art").count(),1);assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
      console.log(`PASS isolated GIF art ${notes?"with":"without"} notes: ${moves?"animating, ":"(no GIF animation inside SVG images in this engine) "}standing still on a still while paused, ${moves?"animating again":"restarted"} after resume`);
    }finally{await o.context.close();}}}
-  // A pause noticed late still freezes the frame the music stopped on: the music heard since the
-  // shown image started, recorded here when each image is swapped in. The suspend completes 200 ms
-  // after the pause (nothing announces it) and animation frames are deferred 1.2 s, as on a hidden
-  // page, so the page sees it about 1 s, 5 GIF frames, late: the page clock would pick the other
-  // colour. Visible, and hidden (the page pauses itself; the still is made once it is visible).
+  // A pause noticed late still freezes the frame the audio stopped on: the AudioContext time since
+  // the shown image started, recorded here when each image is swapped in. The suspend completes
+  // 200 ms after the pause (nothing announces it) and animation frames are deferred 1.2 s, as on a
+  // hidden page, so the page sees it about 1 s, 5 GIF frames, late: the page clock would pick the
+  // other colour. Before the pause the latency estimate grows by 200 ms, one GIF frame, which moves
+  // positionSeconds but not the image: a position-based frame would be the other colour too.
+  // Visible, and hidden (the page pauses itself; the still is made once it is visible).
   {const gif=Buffer.from([71,73,70,56,57,97,1,0,1,0,128,0,0,204,0,0,0,0,204,33,255,11,...Buffer.from("NETSCAPE2.0"),3,1,0,0,0,
      33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,76,1,0,59]).toString("base64");
    const gifCard=card(true).replace("<rect x='95' y='100' width='60' height='60' fill='#c00'/>",`<image x='95' y='100' width='60' height='60' style='image-rendering:pixelated' href='data:image/gif;base64,${gif}'/>`);
@@ -189,13 +191,15 @@ try {
    for(const hidden of [false,true]){const o=await run.page();try{
      await o.context.addInitScript(hidden=>{
        window.__rafDelay=0;const raf=window.requestAnimationFrame.bind(window);window.requestAnimationFrame=f=>raf(t=>setTimeout(()=>f(t),window.__rafDelay));
+       Object.defineProperty(AudioContext.prototype,"outputLatency",{configurable:true,get:()=>window.__latency||0});
        const suspend=AudioContext.prototype.suspend;AudioContext.prototype.suspend=function(){return new Promise(r=>setTimeout(r,window.__rafDelay?200:0)).then(()=>suspend.call(this));};
        window.__swaps=[];new MutationObserver(()=>{const a=document.getElementById("beast-art");if(a&&a!==window.__art){window.__art=a;const i=a.src.indexOf(","),body=a.src.slice(i+1),still=/;base64,/.test(a.src.slice(0,i+1))&&atob(body).includes("data:image/png;base64,");
-         window.__swaps.push({src:a.src.slice(0,40),still,pos:window.OnchainMidiPlayer?.getPlayStatus().positionSeconds??null});}}).observe(document,{subtree:true,childList:true});
+         window.__swaps.push({src:a.src.slice(0,40),still,pos:window.OnchainMidiPlayer?.getPlayStatus().audioTime??null});}}).observe(document,{subtree:true,childList:true});
        if(hidden)URL.createObjectURL=()=>{throw Error("no background element: a hidden page pauses");};
      },hidden);
      await o.page.setViewportSize({width:500,height:700});await o.page.goto(dataUrl(composed({...c,svg:gifCard},{fixture:true,dependent:true,notes:false})));await waitReady(o.page);
      await playAndPass(o);await o.page.waitForFunction(()=>window.__swaps.some(s=>/;r=\d+/.test(s.src)&&!s.still&&s.pos!==null),{timeout:10000});await o.page.waitForTimeout(450);
+     await o.page.evaluate(()=>{window.__latency=.2;});await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().latencySeconds>=.19,{timeout:5000});
      await o.page.evaluate(()=>{window.__rafDelay=1200;});
      if(hidden)await o.page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,get:()=>true});document.dispatchEvent(new Event("visibilitychange"));});
      else await o.page.click("#play");
@@ -203,13 +207,13 @@ try {
      if(hidden){await o.page.waitForTimeout(1200);assert.equal(await o.page.evaluate(isStill),false,"no still while hidden");
        await o.page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,get:()=>false});document.dispatchEvent(new Event("visibilitychange"));});}
      await o.page.waitForFunction(isStill,{timeout:10000});
-     const at=await o.page.evaluate(()=>({swap:window.__swaps.filter(s=>/;r=\d+/.test(s.src)&&!s.still&&s.pos!==null).at(-1).pos,held:OnchainMidiPlayer.getPlayStatus().positionSeconds}));
+     const at=await o.page.evaluate(()=>({swap:window.__swaps.filter(s=>/;r=\d+/.test(s.src)&&!s.still&&s.pos!==null).at(-1).pos,held:OnchainMidiPlayer.getPlayStatus().audioTime}));
      const ms=(at.held-at.swap)*1000%400,frame=Math.floor(ms/200),edge=Math.min(ms%200,200-ms%200)<25;
      const held=await (async()=>{const seen=new Set(),end=Date.now()+500;while(Date.now()<end){seen.add(decodePng(await o.page.screenshot({clip:{x:240,y:250,width:20,height:20}})).pixel(10,10).join());await o.page.waitForTimeout(30);}return seen;})();
      assert.equal(held.size,1,`standing still: ${[...held]}`);
-     if(!edge)assert.ok(held.has(frame?"0,0,204":"204,0,0"),`the frame the music stopped on (${Math.round(ms)} ms into the loop): ${[...held]}`);
+     if(!edge)assert.ok(held.has(frame?"0,0,204":"204,0,0"),`the frame the audio stopped on (${Math.round(ms)} ms into the loop): ${[...held]}`);
      assert.deepEqual(o.requests,[]);if(!hidden)assert.deepEqual(await o.errors(),[]);
-     console.log(`PASS isolated GIF art paused while animation frames are deferred (${hidden?"hidden":"visible"} page): a still of the frame the music stopped on`);
+     console.log(`PASS isolated GIF art paused after a latency change while animation frames are deferred (${hidden?"hidden":"visible"} page): a still of the frame the audio stopped on`);
    }finally{await o.context.close();}}}
   // Reduced motion: the isolated GIF art stands still from the start, on a still, through play,
   // pause and resume, as the notes do.
