@@ -38,15 +38,16 @@ export function artTime(s, displayLead = REFERENCE_DISPLAY_LEAD_SECONDS) {
  * until the audio clock catches up; the art runs on from the display lead meanwhile, at most that
  * increase ahead, and realigns at the next pass. Optional NFT-owned
  * `notes` are played, paused and stopped with the art and can read `clock()`: audible seconds since
- * tick zero, or null.
- * @param {SVGSVGElement} svgRoot
+ * tick zero, or null. Without a root (null: art the page cannot seek, an isolated `<img>`), nothing
+ * is seeked or paused, and the notes and `clock()` follow the music all the same.
+ * @param {SVGSVGElement | null} svgRoot
  * @param {OnchainMidiApi} player
  * @param {{displayLead?: number, notes?: {play(): void, pause(): void, stop(): void} | null,
  *   host?: {requestAnimationFrame(f: () => void): number, cancelAnimationFrame(id: number): void}}} [options]
  * @returns {{clock(): number | null, dispose(): void}}
  */
 export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLAY_LEAD_SECONDS, notes = null, host = window } = {}) {
-  const timelines = [svgRoot, ...svgRoot.querySelectorAll("svg")];
+  const timelines = svgRoot ? [svgRoot, ...svgRoot.querySelectorAll("svg")] : [];
   /** @type {"free" | "running" | "frozen"} */ let mode = "free";
   let heardRun = -1, revision = -1, frame = 0, live = true;
   const seek = (/** @type {PlayStatus} */ s) => { const t = artTime(s, displayLead); for (const svg of timelines) svg.setCurrentTime(t); };

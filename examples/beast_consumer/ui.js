@@ -3,6 +3,9 @@
 import { REFERENCE_DISPLAY_LEAD_SECONDS, artTime, restartImgOnPass, syncSvgToMusic } from "./art_sync.js";
 export const PLAY_ICON = "M8 5v14l11-7z";
 export const PAUSE_ICON = "M6 5h4v14H6zM14 5h4v14h-4z";
+const SVG_NS = "http://www.w3.org/2000/svg";
+/** A plain decimal number (sign, digits, one point; no exponent, hex, units or blank), else NaN. */
+const decimal = (/** @type {string} */ s) => (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s) ? +s : NaN);
 /**
  * Where the ▶/❚❚ button goes when the art's root `<svg>` carries `data-play-anchor="X Y"` or
  * `"X Y S"`: a point in the SVG's own units (its `viewBox`, else `width` and `height`), such as the
@@ -33,13 +36,12 @@ export function playAnchor(svg, box, vw, vh, sizes) {
     const m = tag && new RegExp("\\s" + name + "\\s*=\\s*([\"'])(.*?)\\1", "i").exec(tag[0]);
     return m ? m[2].trim() : "";
   };
-  const num = (/** @type {string} */ s) => (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s) ? +s : NaN);
-  const list = (/** @type {string} */ s) => (s ? s.split(/[\s,]+/).map(num) : []);
+  const list = (/** @type {string} */ s) => (s ? s.split(/[\s,]+/).map(decimal) : []);
   const view = list(attr("viewBox"));
-  const [x0, y0, w, h] = view.length == 4 ? view : [0, 0, num(attr("width").replace(/px$/i, "")), num(attr("height").replace(/px$/i, ""))];
+  const [x0, y0, w, h] = view.length == 4 ? view : [0, 0, decimal(attr("width").replace(/px$/i, "")), decimal(attr("height").replace(/px$/i, ""))];
   const tokens = attr("data-play-anchor").split(/[\s,]+/).filter(Boolean);
   const down = tokens[tokens.length - 1] == "top-right" && !!tokens.pop(); // the point is the button's top-right corner
-  const anchor = tokens.map(num);
+  const anchor = tokens.map(decimal);
   const [ax, ay, diameter] = anchor;
   if (!(w > 0 && h > 0 && box.width > 0 && box.height > 0) || !(anchor.length == 2 || (anchor.length == 3 && diameter > 0)) || !(ax >= x0 && ax <= x0 + w && ay >= y0 && ay <= y0 + h)) return null;
   const k = Math.min(box.width / w, box.height / h);
@@ -48,6 +50,82 @@ export function playAnchor(svg, box, vw, vh, sizes) {
   const place = (/** @type {number} */ a, /** @type {number} */ a0, /** @type {number} */ len, /** @type {number} */ at, /** @type {number} */ span, /** @type {number} */ view, /** @type {boolean} */ below) =>
     Math.round(Math.max(0, Math.min(view - size, at + (span - len * k) / 2 + (a - a0) * k + (below ? inset : -size - inset))));
   return { left: place(ax, x0, w, box.left, box.width, vw, false), top: place(ay, y0, h, box.top, box.height, vh, down), size: Math.round(size) };
+}
+
+/**
+ * Where optional notes go (startNotes), read from the art itself so that a change of layout cannot
+ * leave them behind: `view`, the root `<svg>`'s `viewBox`, and `box`, the `x`, `y`, `width` and
+ * `height` of the root's first child marked `data-notes-bg` (the element `cutout` masks, in
+ * player/notes.js), in those units. That child must be a `<rect>`; a missing `x` or `y` is 0. Null
+ * when the root is not an SVG `<svg>`, without such a child (a marked element deeper in the art does
+ * not count, as for `cutout`), without a four-number viewBox, or with a number that is not plain
+ * (playAnchor's parser: no blank, hex, exponent or units) or a size that is not positive. A
+ * transform on the marked element is not applied.
+ * @param {string} svg
+ * @returns {{view: number[], box: number[]} | null}
+ */
+export function notesFrame(svg) {
+  const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
+  if (root.localName != "svg" || root.namespaceURI != SVG_NS) return null;
+  let node = root.firstChild;
+  while (node && !(node.nodeType == 1 && /** @type {Element} */ (node).hasAttribute("data-notes-bg"))) node = node.nextSibling;
+  const el = /** @type {Element | null} */ (node);
+  if (!el || el.localName != "rect" || el.namespaceURI != SVG_NS) return null;
+  const view = (root.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(decimal);
+  const box = ["x", "y", "width", "height"].map((a, i) => (i < 2 && !el.hasAttribute(a) ? 0 : decimal((el.getAttribute(a) || "").trim())));
+  const ok = (/** @type {number[]} */ r) => r.length == 4 && r.every(Number.isFinite) && r[2] > 0 && r[3] > 0;
+  return ok(view) && ok(box) ? { view, box } : null;
+}
+
+/**
+ * Optional notes behind the art: the token's MIDI as a piano roll scrolling with the music
+ * (player/notes.js, whose `mount` and `cutout` the page's notes fragment exposes as `notes`). For
+ * art with a notes frame (notesFrame), it mounts the notes standing still on `canvas`, just before
+ * the art element `img()` returns and over the frame, and returns `svg`, the page's copy of the
+ * art to show instead (`cutout`: the frame's background and what is painted before it are cut
+ * out, so the notes show through under the rest), with the notes' `play`, `pause` and `stop` for
+ * syncSvgToMusic, each failing silently, and `remove`, which takes the notes away for good (when
+ * that copy cannot be shown). The metadata's `image` is never touched. Null, with nothing changed
+ * (no canvas, the art as it is), without the module or a notes frame, or when `cutout` or `mount`
+ * throws (a MIDI the notes cannot read, say): the page then plays as it does without notes.
+ * @param {{mount: typeof import("../../player/notes.js").mount, cutout(svg: string): string} | null | undefined} notes
+ * @param {string} svg the art
+ * @param {HTMLCanvasElement} canvas a new canvas
+ * @param {{midi: string, clock(): number | null, img(): Element | null}} options `midi`: the page's
+ *   MIDI (base64); `clock`: syncSvgToMusic's `clock()`; `img`: the art element now
+ * @returns {{svg: string, play(): void, pause(): void, stop(): void, remove(): void} | null}
+ */
+export function startNotes(notes, svg, canvas, { midi, clock, img }) {
+  try {
+    const frame = notes && notesFrame(svg);
+    if (!notes || !frame) return null;
+    const cut = notes.cutout(svg);
+    const ui = notes.mount(canvas, { midi, clock, img: /** @type {() => HTMLImageElement | null} */ (img), ...frame });
+    const quiet = (/** @type {() => void} */ f) => () => { try { f(); } catch (e) {} };
+    return { svg: cut, play: quiet(() => ui.play()), pause: quiet(() => ui.pause()), stop: quiet(() => ui.stop()), remove: quiet(() => ui.remove()) };
+  } catch (e) {
+    canvas.remove(); // mount may have placed it before failing
+    return null;
+  }
+}
+
+/**
+ * Shows `url` in the <img> `img` only once it decodes: an off-screen copy loads it first, so art
+ * that fails to decode never leaves the image blank. On error `img` keeps its own URL and `onError`
+ * runs. Resolves once settled, either way. (The footer shows the page's cut-out copy of the art this
+ * way, and removes the notes, which the uncut art would hide, if it cannot.)
+ * @param {HTMLImageElement} img
+ * @param {string} url
+ * @param {() => void} onError
+ * @returns {Promise<void>}
+ */
+export function showWhenDecoded(img, url, onError) {
+  return new Promise((settled) => {
+    const copy = img.ownerDocument.createElement("img");
+    copy.onload = () => { img.src = url; settled(); };
+    copy.onerror = () => { onError(); settled(); };
+    copy.src = url;
+  });
 }
 
 /** Fallback title of the media session, for art without a <title>. */
@@ -122,9 +200,21 @@ export async function startUi() {
     let svg = "";
     try { svg = new TextDecoder().decode(Uint8Array.from(atob(/** @type {HTMLImageElement} */ (art).src.split(",")[1]), c => c.charCodeAt(0))); } catch (_) {}
     try { document.title = new DOMParser().parseFromString(svg, "image/svg+xml").getElementsByTagName("title")[0]?.textContent || MEDIA_TITLE; } catch (_) {}
+    // Optional notes behind the art (startNotes), when the page has the notes fragment and the art
+    // a notes frame: standing still from now, following the music with the art below.
+    /** @type {ReturnType<typeof syncSvgToMusic> | null} */
+    let sync = null;
+    const lib = /** @type {any} */ (window).OnchainMidiNotes;
+    let notes = lib && art ? startNotes(lib, svg, document.createElement("canvas"), {
+      midi: document.getElementById("onchain-midi-data")?.textContent || "",
+      clock: () => (sync ? sync.clock() : null),
+      img: () => art,
+    }) : null;
     // Only this explicit NFT-owned trust marker enables active inline SVG. Community art stays an image.
     if (document.body.dataset.trustedArt === "inline-svg" && art && svg) {
-      const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
+      // The cut-out copy is serializer output; should it not parse to an <svg>, the art stays an
+      // <img> and goes through the decode-checked swap below.
+      const parsed = new DOMParser().parseFromString(notes ? notes.svg : svg, "image/svg+xml");
       const root = parsed.documentElement;
       if (root.localName === "svg" && root.namespaceURI === "http://www.w3.org/2000/svg") {
         const inline = /** @type {SVGSVGElement} */ (/** @type {unknown} */ (document.importNode(root, true)));
@@ -133,6 +223,11 @@ export async function startUi() {
         art.replaceWith(inline); art = inline;
       }
     }
+    // An <img> shows the page's copy with the notes frame cut out once that decodes; if it cannot, the
+    // art stays as it is and the notes go. Restarts (below) begin once this has settled.
+    const shown = notes && art instanceof HTMLImageElement
+      ? showWhenDecoded(art, "data:image/svg+xml," + encodeURIComponent(notes.svg), () => { notes?.remove(); notes = null; })
+      : null;
 
     /** @param {() => unknown} f best effort: a failure is silent */
     const attempt = (f) => {
@@ -263,11 +358,15 @@ export async function startUi() {
     };
     // Art synced to the music (art_sync.js): trusted inline SVG is seeked, an isolated image restarted.
     if (art instanceof SVGSVGElement) {
-      syncSvgToMusic(art, player);
+      sync = syncSvgToMusic(art, player, { notes });
       Object.defineProperty(window, "OnchainArtMonitor", { configurable: true, get: monitorArtSync(art, player) });
     } else if (art) {
-      // Each restarted <img> replaces the art: the button follows the new one.
-      restartImgOnPass(art, player, { onSwap: (img) => { art = img; watch(img); } });
+      // The notes follow the music without art to seek.
+      if (notes) sync = syncSvgToMusic(null, player, { notes });
+      // Each restarted <img> replaces the art: the button and the notes follow the new one. A restart
+      // copies the URL the art shows, so restarts begin once the cut-out copy is showing, or failed.
+      const restart = () => art && restartImgOnPass(/** @type {HTMLImageElement} */ (art), player, { onSwap: (img) => { art = img; watch(img); } });
+      if (shown) shown.then(restart); else restart();
     }
     player.onStateChange(status => {
       if (status.state === "playing" || status.state === "stopped" || status.state === "failed") resuming = false;

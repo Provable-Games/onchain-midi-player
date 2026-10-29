@@ -2,8 +2,10 @@
 // Offline composed-provider/API/NFT visual smoke and timing checks, in each browser engine.
 import assert from "node:assert/strict";
 import { openBrowser,composed,dataUrl,waitReady,withoutBlock } from "./browser_harness.mjs";
-import { tokenParts } from "../examples/beast_consumer/scripts/reference.mjs";
-import { compositionHtml } from "./composition.mjs";
+import { mkdirSync,writeFileSync } from "node:fs";
+import { tokenParts,animationHtml } from "../examples/beast_consumer/scripts/reference.mjs";
+import { compositionHtml,ownedFragment } from "./composition.mjs";
+import { decodePng } from "./png.mjs";
 import { FIXTURES,fixtureCase } from "./fixture_pages.mjs";
 import { fixedFragment,alignedFragment,b64 } from "./segments.mjs";
 import { gzipFragment,gzipSource } from "./build_segments.mjs";
@@ -11,6 +13,8 @@ import { splitPage } from "../plugins/onchain-midi-player/skills/token-uri-inspe
 import { scriptBlocks } from "./html_blocks.mjs";
 import { verifyLibraries } from "./verify_engine.mjs";
 const run=await openBrowser(),measurements=[];
+// Screenshots of the notes checks go to the directory given, if any (CI uploads it when a check fails).
+const shots=process.argv[2];if(shots)mkdirSync(shots,{recursive:true});
 try {
  for(const c of [...FIXTURES.valid,{...tokenParts(4),name:"full_warlock",members:tokenParts(4).mem}]){const o=await run.page();try{await o.page.goto(dataUrl(composed(c)));await waitReady(o.page);
  const ready=await o.page.evaluate(()=>({created:window.__check.created,fixture:document.getElementById("play").dataset.fixture,dependent:document.getElementById("play").dataset.dependent,state:window.OnchainMidiPlayer.getPlayStatus(),ms:window.__check.uiReadyAt-window.__check.startedAt}));
@@ -22,6 +26,8 @@ try {
  const played=await o.page.evaluate(()=>({passes:window.__check.passes,calls:window.__check.calls,art:document.getElementById("beast-art")?.src,images:document.querySelectorAll("img#beast-art").length,media:window.__check.media?.paused,status:window.OnchainMidiPlayer.getPlayStatus(),firstPlay:window.__check.playingAt-window.__check.gestureAt,anchor:document.getElementById("play").getBoundingClientRect().toJSON(),artwork:navigator.mediaSession?.metadata?.artwork}));
  assert.ok(played.calls.indexOf("prewarm")<played.calls.indexOf("resume"));assert.equal(played.passes[0].initial,true);
  assert.ok(played.passes[0].audioTime >= played.passes[0].audibleTime-.02);assert.ok(/^data:image\/svg\+xml;r=\d+;base64,/.test(played.art));assert.equal(played.images,1);assert.equal(played.media,false);
+ // Without the notes fragment the page has no notes: no canvas, the art restarted as it was.
+ assert.equal(await o.page.locator("canvas").count(),0);
  // No reference art carries a data-play-anchor: the stylesheet's corner button takes the 48 px default between the settings' limits.
  assert.equal(played.anchor.width,48);assert.equal(played.anchor.height,48);
  if(c.name==="full_warlock"){await o.page.waitForFunction(()=>navigator.mediaSession.metadata?.artwork.length===2);}
@@ -83,6 +89,80 @@ try {
    await o.page.goto(dataUrl(composed({...c,svg:svg.replace('data-play-anchor="235 202 32"','data-play-anchor="235 202"')})));await waitReady(o.page);
    assert.deepEqual(await o.page.locator('#play').boundingBox(),{x:470-6-48,y:404-6-48,width:48,height:48});
    assert.deepEqual(await o.errors(),[]);console.log("PASS NFT button anchor, stylesheet size settings and touch target");}finally{await o.context.close();}}
+ // Optional notes behind the art: the NFT-owned notes fragment (player/notes.js) and the footer's
+ // startNotes. The card's marked frame, (15, 58) 220 x 144, is wider than its "sprite" (red, 60 x 60),
+ // so the notes show around it: on a canvas just behind the art, over the frame, which is cut out of
+ // the page's copy of the art only. At 500 x 700 the card is drawn at scale 2.
+ {const c=fixtureCase("beast_140bpm");
+  const card=marked=>"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 250 350'><rect width='250' height='350' fill='#1e1e22'/><rect"+(marked?" data-notes-bg=''":"")+
+    " x='15' y='58' width='220' height='144' rx='8' fill='#000'/><rect x='95' y='100' width='60' height='60' fill='#c00'/></svg>";
+  // Ready, and the notes settled: an <img> shows the cut-out copy once it decodes, or keeps its own URL and loses the canvas.
+  const page=async(html,options={})=>{const o=await run.page();if(options.reducedMotion)await o.page.emulateMedia({reducedMotion:"reduce"});
+    await o.page.setViewportSize({width:500,height:700});await o.page.goto(dataUrl(html));await waitReady(o.page);
+    await o.page.waitForFunction(()=>{const a=document.getElementById("beast-art");return !(a instanceof HTMLImageElement)||!/^data:image\/svg\+xml;base64,/.test(a.src)||!document.querySelector("canvas");});return o;};
+  const notesPage=(marked,trustedArt,notes=true)=>composed({...c,svg:card(marked)},{fixture:true,dependent:true,trustedArt,notes});
+  // Coloured pixels in the frame around the sprite (the notes; the frame itself is black), the sprite's and the card's colour.
+  // Screenshot pixels: the frame and the sprite, each inset 4 px from its edges (the frame) or grown by 4 px (the sprite).
+  const CARD={frame:[34,120,466,400],sprite:[186,196,314,324]},REFERENCE={frame:[126,134,374,382],sprite:[166,174,334,342]};
+  const look=async(o,name,{frame:[x0,y0,x1,y1],sprite:[sx0,sy0,sx1,sy1]}=CARD)=>{const png=await o.page.screenshot();if(shots)writeFileSync(`${shots}/${name}-${run.engine}.png`,png);const img=decodePng(png);let notes=0;
+    for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2)if(!(x>=sx0&&x<sx1&&y>=sy0&&y<sy1)&&Math.max(...img.pixel(x,y))>40)notes++;
+    return{notes,sprite:img.pixel(250,260),card:img.pixel(20,600)};};
+  const near=(rgb,want)=>rgb.every((v,i)=>Math.abs(v-want[i])<=4);
+  const layout=o=>o.page.evaluate(()=>{const art=document.getElementById("beast-art"),canvas=document.querySelector("canvas"),src=art.getAttribute("src")||"";
+    return{canvases:document.querySelectorAll("canvas").length,behind:!!canvas&&canvas.nextElementSibling===art,box:canvas&&(({x,y,width,height})=>({x,y,width,height}))(canvas.getBoundingClientRect()),
+      inline:art instanceof SVGSVGElement,src:src.slice(0,src.indexOf(",")+1),cut:art instanceof SVGSVGElement?!!art.querySelector("mask#onchain-midi-notes"):/<mask[^>]*id="onchain-midi-notes"/.test(decodeURIComponent(src.split(",")[1]||""))};});
+  const drawing=o=>o.page.evaluate(()=>document.querySelector("canvas").toDataURL());
+  const frozen=async o=>{const a=await drawing(o);await o.page.waitForTimeout(300);return a===await drawing(o);};
+  const playAndPass=async o=>{await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==="playing"&&window.__check.passes.length>0,{timeout:10000});};
+  for(const trustedArt of [false,true]){const mode=trustedArt?"inline":"img",o=await page(notesPage(true,trustedArt));try{
+    assert.deepEqual(await layout(o),{canvases:1,behind:true,box:{x:30,y:116,width:440,height:288},inline:trustedArt,src:trustedArt?"":"data:image/svg+xml,",cut:true});
+    const idle=await look(o,`notes-${mode}-idle`);assert.ok(idle.notes>100,`notes drawn around the sprite: ${idle.notes}`);assert.ok(near(idle.sprite,[204,0,0]),"the sprite over them");assert.ok(near(idle.card,[30,30,34]),"the card unchanged");
+    assert.ok(await frozen(o),"standing still before play");
+    await playAndPass(o);
+    if(!trustedArt)await o.page.waitForFunction(()=>/^data:image\/svg\+xml;r=\d+,/.test(document.getElementById("beast-art").src),{timeout:10000});
+    const playing=await layout(o);assert.deepEqual([playing.canvases,playing.behind,playing.cut],[1,true,true],"a restarted <img> is the cut-out copy, still in front of the canvas");
+    assert.ok(!(await frozen(o)),"scrolling with the music");assert.ok((await look(o,`notes-${mode}-playing`)).notes>100);
+    // The notes pause in the first animation frame that sees the suspended audio: wait for two.
+    await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==="suspended");
+    await o.page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+    assert.ok(await frozen(o),"paused with the music");
+    await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==="playing"&&OnchainMidiPlayer.getPlayStatus().audioState==="running");
+    assert.ok(!(await frozen(o)),"resumed");
+    assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);console.log(`PASS notes behind ${mode} art: canvas behind it over the marked frame, standing still, playing, paused, resumed`);
+  }finally{await o.context.close();}}
+  // The reference consumer's own page: trusted art, its 128 x 128 frame (61, 65) around an opaque 80 x 80 sprite (85, 89).
+  {const o=await page(animationHtml(1));try{
+    assert.deepEqual(await layout(o),{canvases:1,behind:true,box:{x:122,y:130,width:256,height:256},inline:true,src:"",cut:true});
+    const idle=await look(o,"notes-reference-idle",REFERENCE);assert.ok(idle.notes>100,`notes shown around the sprite: ${idle.notes}`);
+    await playAndPass(o);assert.ok(!(await frozen(o)));assert.ok((await look(o,"notes-reference-playing",REFERENCE)).notes>100);
+    assert.deepEqual(await o.errors(),[]);console.log("PASS reference consumer page: notes shown behind its art, around its sprite");
+  }finally{await o.context.close();}}
+  // A cut-out copy that fails to decode: the art keeps its own URL (never blank), the mounted notes are removed, playback as usual.
+  {const broken=ownedFragment("notes")+"<script>{const N=window.OnchainMidiNotes;window.OnchainMidiNotes={mount:(c,o)=>(window.__notesMounted=1,N.mount(c,o)),cutout:()=>\"<svg xmlns='http://www.w3.org/2000/svg'><unclosed\"}}</script>";
+   const o=await page(notesPage(true,false).replace(ownedFragment("notes"),broken));try{
+    const at=await layout(o);assert.deepEqual([at.canvases,at.src,at.cut],[0,"data:image/svg+xml;base64,",false]);
+    assert.equal(await o.page.evaluate(()=>window.__notesMounted),1,"mounted, then removed");
+    const shot=await look(o,"notes-undecodable");assert.equal(shot.notes,0,"no notes");assert.ok(near(shot.sprite,[204,0,0]),"the art shown");assert.ok(near(shot.card,[30,30,34]));
+    await playAndPass(o);await o.page.waitForFunction(()=>/^data:image\/svg\+xml;r=\d+;base64,/.test(document.getElementById("beast-art").src),{timeout:10000});
+    assert.equal(await o.page.locator("canvas").count(),0);assert.ok(near((await look(o,"notes-undecodable-playing")).sprite,[204,0,0]),"restarted from the original");
+    assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);console.log("PASS cut-out copy that fails to decode: the art as it was, no canvas, restarts from the original, ordinary playback");
+  }finally{await o.context.close();}}
+  // Reduced motion: the notes stand still while the music plays (notes.js).
+  {const o=await page(notesPage(true,false),{reducedMotion:true});try{
+    await playAndPass(o);assert.equal((await layout(o)).canvases,1);assert.ok(await frozen(o),"standing still");assert.deepEqual(await o.errors(),[]);console.log("PASS notes with prefers-reduced-motion: standing still while playing");
+  }finally{await o.context.close();}}
+  // No notes: the fragment absent, or the art without a marker. No canvas, the art as it is, ordinary playback.
+  for(const [label,html,name] of [["fragment absent",notesPage(true,false,false),"notes-absent"],["marker missing",notesPage(false,false),"notes-unmarked"],
+    ["notes script failing",notesPage(true,false).replace(ownedFragment("notes"),'<script>throw Error("notes fixture failure")</script>'),null],
+    ["mount throwing",notesPage(true,false).replace(ownedFragment("notes"),'<script>window.OnchainMidiNotes={mount(){throw Error("mount failure")},cutout:s=>s.replace("<svg","<svg data-cut=\'\'")}</script>'),null]]){
+    const o=await page(html);try{
+      const at=await layout(o);assert.deepEqual([at.canvases,at.src,at.cut],[0,"data:image/svg+xml;base64,",false],label);
+      if(name){const shot=await look(o,name);assert.equal(shot.notes,0,`${label}: the frame stays black`);}
+      await playAndPass(o);assert.equal(await o.page.locator("canvas").count(),0);
+      const errors=await o.errors();if(label==="notes script failing"){assert.equal(errors.length,1);assert.match(errors[0],/notes fixture failure/);}else assert.deepEqual(errors,[]);
+      console.log(`PASS no notes (${label}): no canvas, the art unchanged, ordinary playback`);
+    }finally{await o.context.close();}}
+ }
  // A changed consumer head and isolated script-like art are accepted by the real HTML parser.
  {const c=fixtureCase("beast_140bpm"),svg=c.svg.replace('</svg>','<script>window.artInjection=true</script><desc><![CDATA[</SCRIPT>]]></desc></svg>');
  const o=await run.page();try{await o.page.goto(dataUrl(composed({...c,svg})));await waitReady(o.page);assert.equal(await o.page.evaluate(()=>window.artInjection),undefined);assert.equal(await o.page.locator('#beast-art').count(),1);assert.deepEqual(await o.errors(),[]);}finally{await o.context.close();}}

@@ -119,7 +119,7 @@ test("NFT media session owns a six-second silent PCM carrier",()=>{
 // directly; the real-player harness further down runs the same rows through startPlayer().
 const LEAD=REFERENCE_DISPLAY_LEAD_SECONDS;
 const near=(actual,expected,message)=>assert.ok(Math.abs(actual-expected)<1e-9,`${message??''} ${actual} != ${expected}`);
-function artHarness(before = () => {}){
+function artHarness(before = () => {}, { svgRoot = true } = {}){
  let status={runId:0,state:'stopped',audioState:null,positionSeconds:null,originTime:null,startTime:null,audioTime:null,passSeconds:2,latencySeconds:.03,latencyRevision:0};
  const states=new Set(),passes=new Set(),frames=new Map(),seeks=[],calls=[],notes=[];let seq=0;const announced=new Set();
  const host={requestAnimationFrame(fn){frames.set(++seq,fn);return seq;},cancelAnimationFrame(id){frames.delete(id);}};
@@ -132,7 +132,7 @@ function artHarness(before = () => {}){
  const queue=[];let notifying=false;
  const set=next=>{Object.assign(status,next);queue.push({snapshot:{...status},listeners:[...states]});if(notifying)return;notifying=true;try{while(queue.length){const event=queue.shift();for(const fn of event.listeners)if(states.has(fn))fn({...event.snapshot});}}finally{notifying=false;}};
  before(player,set);
- const sync=syncSvgToMusic(root,player,{host,notes:note});
+ const sync=syncSvgToMusic(svgRoot?root:null,player,{host,notes:note});
  return{sync,player,host,status,seeks,calls,notes,root,nested,get frameCount(){return frames.size;},set,
   frame(){const fs=[...frames.values()];frames.clear();for(const fn of fs)fn();},
   elapse(t){root.elapse(t);nested.elapse(t);},
@@ -506,6 +506,16 @@ test('real player: a helper mounted while the music is audible follows it at onc
  h.elapse(.6);const late=timeline(),second=syncSvgToMusic(late,h.api,{host});assert.deepEqual(late.log,[],'first look after returning');await Promise.resolve();
  const s=h.api.getPlayStatus();assert.deepEqual(late.log,['seek','run']);near(late.getCurrentTime(),(s.positionSeconds+LEAD)%s.passSeconds,'aligned at mount');
  second.dispose();h.api.stop();
+});
+test('no root (an <img> the page cannot seek): the notes and clock() follow the music all the same, nothing is seeked',()=>{
+ const h=artHarness(()=>{}, { svgRoot: false });
+ h.set({...playing,audioTime:1.01,positionSeconds:0});assert.deepEqual(h.notes,[],'not audible yet');
+ Object.assign(h.status,{audioTime:1.1,positionSeconds:.07});h.pass();assert.deepEqual(h.notes,['play']);near(h.sync.clock(),.07+LEAD);
+ h.set({state:'paused'});assert.equal(h.frameCount,1,'a pending suspend: still playing');assert.deepEqual(h.notes,['play']);
+ h.set({audioState:'suspended',positionSeconds:.3});h.frame();assert.deepEqual(h.notes,['play','pause'],'frozen with the audio');
+ h.set({state:'playing',audioState:'running'});assert.deepEqual(h.notes,['play','pause','play'],'resumed');
+ h.set({runId:2,state:'stopped',originTime:null,positionSeconds:null});assert.equal(h.notes.at(-1),'stop');assert.equal(h.sync.clock(),null);
+ assert.deepEqual([h.calls,h.seeks],[[],[]],'no timeline touched');h.sync.dispose();
 });
 test('notes start when following begins during a pending suspend, even if the music resumes before a frame',()=>{
  const h=artHarness();

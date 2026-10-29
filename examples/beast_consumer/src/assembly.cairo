@@ -73,6 +73,9 @@ pub fn token_uri(
     uri.append(@bytes_base64_encode(inner));
     uri.append(@synth.midi_segment(midi, settings));
     align_to_word(ref uri);
+    // The optional notes UI, before the footer: drawn behind art that marks a notes frame.
+    uri.append(@owned_assets::notes_segment());
+    align_to_word(ref uri);
     uri.append(@owned_assets::footer_segment());
     uri.append(@bytes_base64_encode("\"}"));
     uri
