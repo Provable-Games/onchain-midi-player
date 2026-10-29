@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {describe,test} from "node:test";
 import {playAnchor,silentWav,monitorArtSync,positionState,MEDIA_END_GUARD_SECONDS} from "../ui.js";
-import {REFERENCE_DISPLAY_LEAD_SECONDS,syncSvgToMusic,restartImgOnPass} from "../art_sync.js";
+import {REFERENCE_DISPLAY_LEAD_SECONDS,syncSvgToMusic,restartImgOnPass,gifFrames,gifFrameAt} from "../art_sync.js";
 import {startPlayer} from "../../../player/player.js";
 import {mount as mountNotes} from "../../../player/notes.js";
 import {riff,smf} from "../../../scripts/data_cases.mjs";
@@ -149,12 +149,14 @@ function artHarness(before = () => {}, { svgRoot = true } = {}){
  const nested=svg('nested'),root=svg('outer');root.querySelectorAll=()=>[nested];
  const player={getPlayStatus:()=>({...status}),onStateChange(fn){states.add(fn);return()=>states.delete(fn);},onPassStart(fn){passes.add(fn);return()=>passes.delete(fn);}};
  const note={play(){notes.push('play');},pause(){notes.push('pause');},stop(){notes.push('stop');}};
+ // restartImgOnPass's controls for an isolated image: played, paused and stopped like the notes.
+ const imgs=[],img={play(){imgs.push('play');},pause(){imgs.push('pause');},stop(){imgs.push('stop');}};
  // Match the API: capture both snapshots and listeners, then drain nested notifications in order.
  const queue=[];let notifying=false;
  const set=next=>{Object.assign(status,next);queue.push({snapshot:{...status},listeners:[...states]});if(notifying)return;notifying=true;try{while(queue.length){const event=queue.shift();for(const fn of event.listeners)if(states.has(fn))fn({...event.snapshot});}}finally{notifying=false;}};
  before(player,set);
- const sync=syncSvgToMusic(svgRoot?root:null,player,{host,notes:note});
- return{sync,player,host,status,seeks,calls,notes,root,nested,get frameCount(){return frames.size;},set,
+ const sync=syncSvgToMusic(svgRoot?root:null,player,{host,notes:note,img});
+ return{sync,player,host,status,seeks,calls,notes,imgs,root,nested,get frameCount(){return frames.size;},set,
   frame(){const fs=[...frames.values()];frames.clear();for(const fn of fs)fn();},
   elapse(t){root.elapse(t);nested.elapse(t);},
   // The player announces a pass only while playing and audible; the first of a run is the initial one.
@@ -449,7 +451,7 @@ test('real player: an earlier subscriber pausing again on resume: the art ends f
 // loads and replaces images.
 const svgUrl=(bytes,type='image/svg+xml')=>`data:${type};base64,`+Buffer.from(bytes).toString('base64');
 const UTF8_ART=svgUrl("<svg xmlns='http://www.w3.org/2000/svg'><title>é</title></svg>");
-function imgHarness(src=UTF8_ART){
+function imgHarness(src=UTF8_ART,options={}){
  const status={runId:1,state:'playing'},passes=new Set(),page=[],created=[],swaps=[];
  const player={getPlayStatus:()=>({...status}),onPassStart(fn){passes.add(fn);return()=>passes.delete(fn);},onStateChange(){return()=>{};}};
  const doc={createElement(tag){assert.equal(tag,'img');const el=image();created.push(el);return el;}};
@@ -458,7 +460,7 @@ function imgHarness(src=UTF8_ART){
  const first=Object.assign(image([{name:'id',value:'beast-art'},{name:'alt',value:''},{name:'src',value:src}]),{src});page.push(first);
  let art=first;
  // As startUi: the button's placement follows each new image.
- const dispose=restartImgOnPass(first,player,{onSwap:img=>{assert.equal(page[0],img,'shown before onSwap');art=img;swaps.push(img);}});
+ const dispose=restartImgOnPass(first,player,{...options,onSwap:img=>{assert.equal(page[0],img,'shown before onSwap');art=img;swaps.push(img);}});
  return{status,page,created,swaps,first,dispose,get art(){return art;},get subscribers(){return passes.size;},pass(){for(const fn of [...passes])fn({runId:status.runId});}};
 }
 const restartUrl=(n,src=UTF8_ART)=>src.replace(';base64,',`;r=${n};base64,`);
@@ -506,6 +508,82 @@ test('<img> art: the play button placement follows each swapped image; dispose e
  const h=imgHarness();h.pass();h.created[0].load();assert.equal(h.art,h.created[0]);h.pass();h.created[1].load();assert.equal(h.art,h.created[1]);assert.equal(h.art,h.page[0]);
  h.pass();h.dispose();h.created[2].load();assert.equal(h.page[0],h.created[1],'a decode finishing after dispose');h.pass();assert.equal(h.created.length,3);
 });
+// Freezing an isolated image: a still of the art replaces it on pause; play or stop restarts it.
+const tick=()=>new Promise(r=>setImmediate(r));
+function stillHarness(src=UTF8_ART,result=svg=>svg.replace('</svg>','<g id="still"/></svg>')){
+ const stills=[];const h=imgHarness(src,{still:(svg,ms,doc)=>{stills.push({svg,ms,doc});return typeof result==='function'?result(svg):result;}});
+ return Object.assign(h,{stills});
+}
+const stillUrl=(n,svg)=>`data:image/svg+xml;r=${n};base64,`+Buffer.from(svg,'latin1').toString('base64');
+test('<img> art: pause shows a still of the art, decoded off screen, and holds it through later passes',async()=>{
+ const h=stillHarness();h.dispose.pause();await tick();
+ assert.equal(h.stills.length,1);const {svg,ms}=h.stills[0];
+ assert.equal(svg,Buffer.from(h.first.src.split(',')[1],'base64').toString('latin1'),'the shown art, one character per byte');assert.ok(ms>=0);
+ const [still]=h.created;assert.equal(still.src,stillUrl(1,svg.replace('</svg>','<g id="still"/></svg>')),'the still, at its own URL');
+ assert.equal(h.page[0],h.first,'shown only once decoded');still.load();assert.equal(h.page[0],still);assert.deepEqual(h.swaps,[still]);
+ h.pass();assert.equal(h.created.length,1,'no restart while frozen');
+ h.dispose.pause();await tick();assert.equal(h.stills.length,1,'already frozen');
+});
+test('<img> art: play and stop restart a shown still from the original URL; a still never shown leaves the art running',async()=>{
+ for(const resume of ['play','stop']){
+  const h=stillHarness();h.dispose.pause();await tick();h.created[0].load();
+  h.dispose[resume]();const restart=h.created[1];assert.equal(restart.src,restartUrl(2),'the original art again, restarted');restart.load();assert.equal(h.page[0],restart);
+  h.dispose[resume]();assert.equal(h.created.length,2,'not frozen: nothing to do');
+  h.pass();assert.equal(h.created.length,3,'restarts at passes again');
+ }
+ const h=stillHarness();h.dispose.pause();await tick();h.dispose.play();assert.equal(h.created.length,1,'no restart: the art never stopped');
+ h.created[0].load();assert.equal(h.page[0],h.first,'a still decoding after play is dropped');assert.deepEqual(h.swaps,[]);
+});
+test('<img> art: a still decoding when a later pause comes, and a restart decoding when pause comes, are dropped',async()=>{
+ const h=stillHarness();h.pass();const restart=h.created[0];h.dispose.pause();await tick();restart.load();assert.equal(h.page[0],h.first,'a restart started before the pause');
+ h.created[1].load();assert.equal(h.page[0],h.created[1],'the still');
+});
+test('<img> art: art the still cannot freeze, or a still that fails, leaves the art as it is',async()=>{
+ for(const result of [()=>null,()=>Promise.reject(Error('no canvas'))]){
+  const h=stillHarness(UTF8_ART,result);h.dispose.pause();await tick();assert.equal(h.created.length,0);assert.equal(h.page[0],h.first);
+  h.pass();assert.equal(h.created.length,0,'frozen: no restart');h.dispose.play();assert.equal(h.created.length,0,'nothing was held: the art never stopped');h.pass();assert.equal(h.created.length,1);
+ }
+ const h=stillHarness();h.dispose();h.dispose.pause();await tick();assert.equal(h.stills.length,0,'disposed');
+});
+test('<img> art: the still keeps every byte of art in another encoding, and reads percent-encoded art',async()=>{
+ const latin1=Buffer.from('<?xml version="1.0" encoding="ISO-8859-1"?><svg xmlns="http://www.w3.org/2000/svg"><text>caf\xe9</text></svg>','latin1');
+ const h=stillHarness(svgUrl(latin1));h.dispose.pause();await tick();assert.equal(h.stills[0].svg,latin1.toString('latin1'));
+ const still=Buffer.from(h.created[0].src.split(',')[1],'base64');assert.ok(still.includes(Buffer.from('caf\xe9','latin1')),'byte for byte');
+ const cut="<svg xmlns='http://www.w3.org/2000/svg'><text>a,b é</text></svg>",p=stillHarness('data:image/svg+xml,'+encodeURIComponent(cut));p.dispose.pause();await tick();
+ assert.equal(p.stills[0].svg,Buffer.from(cut).toString('latin1'),'the percent-encoded bytes');assert.match(p.created[0].src,/^data:image\/svg\+xml;r=1;base64,/);
+ const other=stillHarness('https://example.com/art.svg');other.dispose.pause();other.dispose.play();await tick();assert.equal(other.stills.length,0);
+});
+test('<img> art on a hidden page: the still is made once the page is visible',async()=>{
+ const listeners=new Set();let hidden=true;
+ const h=stillHarness();const doc=h.first.ownerDocument;
+ Object.defineProperty(doc,'hidden',{get:()=>hidden});doc.addEventListener=(type,fn)=>{assert.equal(type,'visibilitychange');listeners.add(fn);};doc.removeEventListener=(type,fn)=>listeners.delete(fn);
+ h.dispose.pause();await tick();assert.equal(h.stills.length,0,'nothing while hidden');
+ hidden=false;for(const fn of [...listeners])fn();await tick();assert.equal(h.stills.length,1);assert.equal(listeners.size,0);
+});
+test('syncSvgToMusic plays, pauses and stops isolated image controls with the notes',()=>{
+ const h=artHarness(()=>{},{svgRoot:false});startArt(h);assert.deepEqual(h.imgs,['play']);
+ h.set({state:'paused',audioState:'suspended',positionSeconds:.5});assert.deepEqual(h.imgs,['play','pause'],'frozen where the audio stopped');
+ h.set({state:'playing',audioState:'running'});assert.deepEqual(h.imgs,['play','pause','play']);
+ h.set({state:'stopped',audioState:'suspended',positionSeconds:null});assert.deepEqual(h.imgs,['play','pause','play','stop'],'released');
+ assert.deepEqual(h.notes,h.imgs);
+});
+
+// GIF structure for the image still: frames, delays as browsers show them, disposal and rectangles.
+const gce=(cs,disposal=1)=>[33,249,4,(disposal<<2)|1,cs&255,cs>>8,0,0];
+const frame=(x,y,w,h)=>[44,x,0,y,0,w,0,h,0,0,2,2,68,1,0];
+const gif=(...frames)=>Uint8Array.from([71,73,70,56,57,97,4,0,4,0,128,0,0,0,0,0,255,255,255,33,255,11,...Buffer.from('NETSCAPE2.0'),3,1,0,0,0,...frames.flat(),59]);
+test('gifFrames: each frame\'s bytes, delay, disposal and rectangle, after the shared head',()=>{
+ const bytes=gif(gce(23,2),frame(0,0,4,4),gce(1,3),frame(1,2,2,1),frame(0,0,1,1));
+ const g=gifFrames(bytes);assert.equal(g.head.length,19);assert.deepEqual([g.width,g.height],[4,4]);
+ assert.deepEqual(g.frames.map(f=>[f.start,f.end,f.delay,f.disposal,f.rect]),[[38,61,230,2,[0,0,4,4]],[61,84,100,3,[1,2,2,1]],[84,99,100,0,[0,0,1,1]]]);
+ assert.equal(bytes[g.frames[2].end],59);
+ for(const bad of [bytes.subarray(0,bytes.length-1),bytes.subarray(0,30),Uint8Array.from([1,2,3]),Uint8Array.from([...bytes.subarray(0,38),7,59]),gif()])assert.equal(gifFrames(bad),null);
+});
+test('gifFrameAt: the frame a looping GIF shows at a time',()=>{
+ const frames=[{delay:230},{delay:230},{delay:220}];
+ assert.deepEqual([0,229,230,459,460,679,680,681,-5].map(ms=>gifFrameAt(frames,ms)),[0,0,1,1,2,2,0,0,0]);
+});
+
 // Pass events stop reaching later listeners once an earlier one pauses: the initial one can be lost.
 test('real player: an earlier pass listener pausing on the initial event still lets the art follow the music',async()=>{
  let pausing=null;

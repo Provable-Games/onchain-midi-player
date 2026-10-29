@@ -396,11 +396,14 @@ export async function startUi() {
       sync = syncSvgToMusic(art, player, { notes });
       Object.defineProperty(window, "OnchainArtMonitor", { configurable: true, get: monitorArtSync(art, player) });
     } else if (art) {
-      // The notes follow the music without art to seek.
-      if (notes) sync = syncSvgToMusic(null, player, { notes });
+      // The notes follow the music without art to seek, and the image freezes where the audio
+      // stops (restartImgOnPass's controls, once they exist).
+      /** @type {ReturnType<typeof restartImgOnPass> | null} */
+      let image = null;
+      sync = syncSvgToMusic(null, player, { notes, img: { play: () => image?.play(), pause: () => image?.pause(), stop: () => image?.stop() } });
       // Each restarted <img> replaces the art: the button and the notes follow the new one. A restart
       // copies the URL the art shows, so restarts begin once the cut-out copy is showing, or failed.
-      const restart = () => art && restartImgOnPass(/** @type {HTMLImageElement} */ (art), player, { onSwap: (img) => { art = img; watch(img); } });
+      const restart = () => { if (art) image = restartImgOnPass(/** @type {HTMLImageElement} */ (art), player, { onSwap: (img) => { art = img; watch(img); } }); };
       if (shown) shown.then(restart); else restart();
     }
     player.onStateChange(status => {

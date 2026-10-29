@@ -149,6 +149,34 @@ try {
     assert.equal(await o.page.locator("canvas").count(),0);assert.ok(near((await look(o,"notes-undecodable-playing")).sprite,[204,0,0]),"restarted from the original");
     assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);console.log("PASS cut-out copy that fails to decode: the art as it was, no canvas, restarts from the original, ordinary playback");
   }finally{await o.context.close();}}
+  // An isolated <img> freezes with the music: its GIF (red, then blue, 200 ms each) stands still from
+  // a pause, on a still the page made of the frame it showed, and moves again after resume, from a
+  // restart. With the notes, the still and the restart are of the cut-out copy. Headless Firefox 155
+  // showed only the first frame of a GIF inside an SVG image (its own <img> animated): there the art does not move,
+  // and only the still and the restart are checked.
+  {const gif=Buffer.from([71,73,70,56,57,97,1,0,1,0,128,0,0,204,0,0,0,0,204,33,255,11,...Buffer.from("NETSCAPE2.0"),3,1,0,0,0,
+     33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,76,1,0,59]).toString("base64");
+   const gifCard=card(true).replace("<rect x='95' y='100' width='60' height='60' fill='#c00'/>",`<image x='95' y='100' width='60' height='60' style='image-rendering:pixelated' href='data:image/gif;base64,${gif}'/>`);
+   // The sprite's colours seen over `ms` (screenshots of its centre), as "r,g,b" strings.
+   const colours=async(o,ms)=>{const seen=new Set(),end=Date.now()+ms;while(Date.now()<end){seen.add(decodePng(await o.page.screenshot({clip:{x:240,y:250,width:20,height:20}})).pixel(10,10).join());await o.page.waitForTimeout(30);}return seen;};
+   const art=o=>o.page.evaluate(()=>{const src=document.getElementById("beast-art").src,body=src.slice(src.indexOf(",")+1),svg=/;base64,/.test(src.slice(0,src.indexOf(",")+1))?atob(body):decodeURIComponent(body);
+     return{restarted:/^data:image\/svg\+xml;r=\d+[;,]/.test(src),still:svg.includes("data:image/png;base64,")&&!svg.includes("data:image/gif"),cut:/<mask[^>]*id="onchain-midi-notes"/.test(svg)};});
+   for(const notes of [false,true]){const o=await page(composed({...c,svg:gifCard},{fixture:true,dependent:true,notes}));try{
+     const moves=(await colours(o,700)).size>=2;assert.ok(moves||run.engine==="firefox",`the GIF animates in the image (${run.engine})`);
+     const moving=async message=>{if(moves)assert.ok((await colours(o,700)).size>=2,message);};
+     await playAndPass(o);await o.page.waitForFunction(()=>/;r=\d+[;,]/.test(document.getElementById("beast-art").src),{timeout:10000});
+     assert.deepEqual(await art(o),{restarted:true,still:false,cut:notes});await moving("animating while the music plays");
+     await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==="suspended");
+     await o.page.waitForFunction(()=>{const src=document.getElementById("beast-art").src;const i=src.indexOf(",");return /;base64,/.test(src.slice(0,i+1))&&atob(src.slice(i+1)).includes("data:image/png;base64,");},{timeout:10000});
+     assert.deepEqual(await art(o),{restarted:true,still:true,cut:notes},"the still of the art shown");
+     const held=await colours(o,800);assert.equal(held.size,1,`standing still while paused: ${[...held]}`);assert.ok(["204,0,0","0,0,204"].some(rgb=>held.has(rgb)),`a frame of the GIF: ${[...held]}`);
+     if(notes)assert.ok(await frozen(o),"the notes paused with it");
+     await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==="playing"&&OnchainMidiPlayer.getPlayStatus().audioState==="running");
+     await o.page.waitForFunction(()=>{const src=document.getElementById("beast-art").src;const i=src.indexOf(",");const body=src.slice(i+1);return /;r=\d+/.test(src)&&!(/;base64,/.test(src.slice(0,i+1))?atob(body):decodeURIComponent(body)).includes("data:image/png;base64,");},{timeout:10000});
+     assert.deepEqual(await art(o),{restarted:true,still:false,cut:notes});await moving("animating again after resume");
+     assert.equal(await o.page.locator("img#beast-art").count(),1);assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
+     console.log(`PASS isolated GIF art ${notes?"with":"without"} notes: ${moves?"animating, ":"(no GIF animation inside SVG images in this engine) "}standing still on a still while paused, ${moves?"animating again":"restarted"} after resume`);
+   }finally{await o.context.close();}}}
   // Reduced motion: the notes stand still while the music plays (notes.js).
   {const o=await page(notesPage(true,false),{reducedMotion:true});try{
     await playAndPass(o);assert.equal((await layout(o)).canvases,1);assert.ok(await frozen(o),"standing still");assert.deepEqual(await o.errors(),[]);console.log("PASS notes with prefers-reduced-motion: standing still while playing");
