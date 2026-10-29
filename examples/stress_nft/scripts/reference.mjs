@@ -16,7 +16,7 @@ export const TOKEN_COUNT = 20;
 export const defaultRepetitions = () =>
   JSON.parse(readFileSync(new URL('../repetitions.json', import.meta.url), 'utf8')).repetitions;
 
-/** `TinySynthSettings` of `default_settings()` in src/settings.cairo. */
+/** `TinySynthSettings` of `default_settings()` in types/src/settings.cairo. */
 export const SETTINGS = { quality: 1, reverb: 30, master_vol: 40, voices: 64, waves: [], timbres: [] };
 
 export const DESCRIPTION =

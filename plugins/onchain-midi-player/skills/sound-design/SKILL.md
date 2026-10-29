@@ -7,7 +7,7 @@ compatibility: Needs Node 22 or later and a clone of https://github.com/Provable
 
 # Sound design with `TinySynthSettings`
 
-The contract passes a `TinySynthSettings` value to `midi_segment` on every `token_uri` call. It sets the built-in sound set, reverb, master volume, voices, custom waves and custom timbres, whose outputs can carry a fixed filter. The source of truth is [Sound settings](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md) and [`src/types.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/types.cairo).
+The contract passes a `TinySynthSettings` value to `midi_segment` on every `token_uri` call. It sets the built-in sound set, reverb, master volume, voices, custom waves and custom timbres, whose outputs can carry a fixed filter. The source of truth is [Sound settings](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-settings.md) and [`types/src/types.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/types/src/types.cairo).
 
 Boundary: the [midi-guide](../midi-guide/SKILL.md) skill covers what goes in the `.mid` (notes, program changes, controllers). This skill covers what the contract passes in `TinySynthSettings`, including a composer's contract that serves it with the MIDI ([Settings from a sound provider](#settings-from-a-sound-provider)). Wiring it into `token_uri` is the [integrator-guide](../integrator-guide/SKILL.md) skill.
 
@@ -27,7 +27,7 @@ Get the tools: Node 22 or later, and a clone whose `rg 'pub const VERSION' src/s
 
 ## What the class checks
 
-`midi_segment` reverts on exactly the checks in the table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/settings.cairo), in the checkout whose `VERSION` matches your class. Trust that table and `preview`, which runs the same checks; do not rely on remembered ranges.
+`midi_segment` reverts on exactly the checks in the table at the top of [`types/src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/types/src/settings.cairo) (`src/settings.cairo` in a checkout without `types/`), in the checkout whose `VERSION` matches your class. Trust that table and `preview`, which runs the same checks; do not rely on remembered ranges.
 
 - Validation covers what the format and the engine require: `quality` is 0 or 1, `voices` at least 1, the counts, the slots, the routes, the wave index, and that a filter sits on an audio output with a cutoff and a Q above 0. Every other number takes any value of its integer type, every wave sample and harmonic included.
 - Custom waves and filters are accepted (below).
@@ -126,7 +126,7 @@ let hat = Operator {
 
 ## `'TS: …'` errors
 
-`midi_segment` runs `settings::validate`, which applies the checks in the table at the top of `src/settings.cairo` in a fixed order and reverts on the first failure with a `'TS: …'` short string, followed by the 0-based indices of the wave, the timbre, or the timbre and operator. Example: `('TS: route out of range', 3, 1)`. Through a library call the panic data arrives whole, followed by `'ENTRYPOINT_FAILED'`. An invalid setting reverts the whole `token_uri`. The checks, their order and their messages are the table at the top of [`src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/src/settings.cairo).
+`midi_segment` runs `settings::validate`, which applies the checks in the table at the top of `types/src/settings.cairo` (`src/settings.cairo` in a checkout without `types/`) in a fixed order and reverts on the first failure with a `'TS: …'` short string, followed by the 0-based indices of the wave, the timbre, or the timbre and operator. Example: `('TS: route out of range', 3, 1)`. Through a library call the panic data arrives whole, followed by `'ENTRYPOINT_FAILED'`. An invalid setting reverts the whole `token_uri`. The checks, their order and their messages are the table at the top of [`types/src/settings.cairo`](https://github.com/Provable-Games/onchain-midi-player/blob/main/types/src/settings.cairo).
 
 ## Building settings in Cairo
 
@@ -155,6 +155,8 @@ Fixed or live: for a given class hash, the same settings and MIDI always give th
 ## Settings from a sound provider
 
 A composer's contract that implements the sound provider interface (`onchain_midi_player::interface::ISoundProvider`; see [Sound provider interface](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-provider.md)) returns each token's `TinySynthSettings` with its MIDI, in `get_sound(token_id) -> onchain_midi_player::types::TinySynthSound { midi, settings }`, the interface's only function; a tool that needs only the settings calls it and takes `.settings`. The per-token subset below depends on the programs the token's MIDI uses, so work the settings out from the same score the MIDI returns (and if the contract also exposes either through its own interfaces, they should equal the fields of `get_sound`). A MIDI file can select an instrument but not define one, so the definitions travel in the settings, and they must pass `settings::validate` in the class version the NFT calls.
+
+A provider that needs only these types, `ISoundProvider` and `validate` depends on the package `onchain_midi_types` (`onchain_midi_types::interface::ISoundProvider`, `onchain_midi_types::types::TinySynthSound`, `onchain_midi_types::settings::validate`), which depends on nothing but `starknet`; the `onchain_midi_player` paths above are its re-exports and name the same types. A project that also depends on `onchain_midi_player` pins both with exactly the same git reference, because Scarb rejects one package reached from two sources ([Depending on the types](https://github.com/Provable-Games/onchain-midi-player/blob/main/docs/sound-provider.md#depending-on-the-types)).
 
 - **Return a per-token subset:** only the timbres for the programs and drum notes this token's MIDI plays, and only the waves those timbres select. A Beast's subset is about 0.9–1.4 KB of `SETTINGS`, against about 3.9 KB for a full chip bank. Every byte adds work on each call; measure the current class rather than applying a historical per-KB estimate.
 - **Renumber the waves in a subset.** `Waveform::Custom(index)` points into the `waves` you return, not into your bank: when you drop unused waves, remap each operator's index to the wave's new position.

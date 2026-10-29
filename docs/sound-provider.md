@@ -1,18 +1,18 @@
 # Sound provider interface
 
-The class plays a token's MIDI with its `TinySynthSettings`; it does not know where they come from. [`ISoundProvider`](../src/interface.cairo) (`onchain_midi_player::interface::ISoundProvider`) and [`TinySynthSound`](../src/types.cairo) (`onchain_midi_player::types::TinySynthSound`) fix how a composer's contract serves them, so any NFT can call any composer, and an NFT can change composers without changing its code. **The class does not implement or call `ISoundProvider`**: it is a convention between composers and NFTs, declared in this crate so that both compile against the same types. It changes neither the class hash nor the generated provider fragments. Its ABI, for clients and indexers, is [`abi/ISoundProvider.json`](../abi/ISoundProvider.json).
+The class plays a token's MIDI with its `TinySynthSettings`; it does not know where they come from. [`ISoundProvider`](../types/src/interface.cairo) (`onchain_midi_types::interface::ISoundProvider`) and [`TinySynthSound`](../types/src/types.cairo) (`onchain_midi_types::types::TinySynthSound`) fix how a composer's contract serves them, so any NFT can call any composer, and an NFT can change composers without changing its code. **The class does not implement or call `ISoundProvider`**: it is a convention between composers and NFTs, declared in the `onchain_midi_types` package, which depends on nothing but `starknet`, so that both compile against the same types without the class's dependencies ([Depending on the types](#depending-on-the-types)). `onchain_midi_player` re-exports both at their earlier paths, `onchain_midi_player::interface::ISoundProvider` and `onchain_midi_player::types::TinySynthSound`. It changes neither the class hash nor the generated provider fragments. Its ABI, for clients and indexers, is [`abi/ISoundProvider.json`](../abi/ISoundProvider.json).
 
 A Standard MIDI File can select an instrument, with a program change or a note on channel 10, but it cannot define one. So the composer's contract owns both the score and the instrument definitions it plays, as `TinySynthSettings`. The NFT, or its renderer, calls `get_sound` and passes both straight to `midi_segment`:
 
 ```cairo
-// onchain_midi_player::types
+// onchain_midi_types::types
 #[derive(Drop, Clone, Serde, PartialEq, Debug)]
 pub struct TinySynthSound {
     pub midi: ByteArray, // a raw Standard MIDI File
     pub settings: TinySynthSettings, // the instruments it plays
 }
 
-// onchain_midi_player::interface
+// onchain_midi_types::interface
 #[starknet::interface]
 pub trait ISoundProvider<T> {
     /// The score and the instruments in one call: what NFTs call.
@@ -20,9 +20,9 @@ pub trait ISoundProvider<T> {
 }
 ```
 
-**One function, because the player needs one thing from a provider:** the token's sound, the MIDI and its instruments, in one call that reads the token's state once. Interfaces for the MIDI alone or the settings alone belong to the composer's own project, not to this crate.
+**One function, because the player needs one thing from a provider:** the token's sound, the MIDI and its instruments, in one call that reads the token's state once. Interfaces for the MIDI alone or the settings alone belong to the composer's own project, not to `onchain_midi_types`.
 
-**A provider adds `get_sound` beside the interfaces it already has.** The Beast composer's contract (`midi_fun_contract`) keeps its own `IMidiProvider` (`get_midi`, `get_midi_for`) and `ISynthSettingsProvider` (`get_settings`), and implements only `get_sound` from this crate. Cairo reports a name clash when one contract implements two traits that share a function name; with `get_sound` alone, the provider's own `get_midi` and `get_settings` interfaces keep their names.
+**A provider adds `get_sound` beside the interfaces it already has.** The Beast composer's contract (`midi_fun_contract`) keeps its own `IMidiProvider` (`get_midi`, `get_midi_for`) and `ISynthSettingsProvider` (`get_settings`), and implements only `get_sound` from `onchain_midi_types`. Cairo reports a name clash when one contract implements two traits that share a function name; with `get_sound` alone, the provider's own `get_midi` and `get_settings` interfaces keep their names.
 
 **Data rules.** Each engine has its own typed settings struct, here `TinySynthSettings`: there is no settings enum and no opaque bytes, and the felt layouts of `TinySynthSettings` and `TinySynthSound` are fixed at release. `Serde(TinySynthSound { midi, settings })` is exactly the calldata of `midi_segment(midi, settings)`, and stays so. A later engine's providers implement `get_<engine>_sound`, returning `<Engine>Sound`; `get_sound` belongs to the TinySynth engine permanently.
 
@@ -30,13 +30,31 @@ pub trait ISoundProvider<T> {
 
 A provider is deployed, so unlike the class it can be read with `starknet_call` from any RPC client or explorer.
 
+## Depending on the types
+
+[`onchain_midi_types`](../types/Scarb.toml) holds the sound types ([`types/src/types.cairo`](../types/src/types.cairo)), `ISoundProvider` and `ITinySynth` with their generated dispatchers ([`types/src/interface.cairo`](../types/src/interface.cairo)), and `settings::validate` with `default_settings`, `default_operator` and the limits ([`types/src/settings.cairo`](../types/src/settings.cairo)). It depends on nothing but `starknet` and has no dev-dependencies, so a dependency on it resolves no other package: not the class's `game_components_encoding`, which another project may pin by another reference. A composer's provider, an NFT and its renderer can all compile against it; only what belongs to the class itself, such as `segment_data::VERSION` or building the class for tests, needs `onchain_midi_player`.
+
+It is a member of the repository's root workspace, which is how a Scarb git dependency on the repository finds it by name:
+
+```toml
+[dependencies]
+onchain_midi_types = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "onchain_midi_types-v<version>" }
+```
+
+- **Tags.** A release of the package is tagged `onchain_midi_types-v<version>`, its `version` in [`types/Scarb.toml`](../types/Scarb.toml): `onchain_midi_types-v0.1.0` for the first. Class releases are tagged `v<version>`, so the prefix keeps the two apart. A tag is one commit, and the class built from that commit runs the same `validate`: pick the tag that matches the class version your NFT calls.
+- **One source string for every consumer.** Scarb tells sources apart by URL and reference, so a `tag` and a `rev` of the same commit are two different sources, and so are two tags. When one build reaches `onchain_midi_types` twice by different references (a project and a library it uses, a renderer and a composer's package, or the types directly and the class's re-export), it fails with ``found dependencies on the same package `onchain_midi_types` coming from incompatible sources``. Pin it with exactly the same string everywhere: in a workspace, once in `[workspace.dependencies]`.
+- **With the class too.** A project that also depends on `onchain_midi_player` pins both with the same `tag`: the class then reaches the types through the same source, and the two paths name the same types. Pinning the class by `rev` and the types by `tag` fails as above.
+- **Or the registry.** Publishing the package to [scarbs.xyz](https://scarbs.xyz) as `onchain_midi_types = "<version>"` would let projects that need only the types resolve one registry source with ordinary version requirements, without matching tags. A project that also takes `onchain_midi_player` from git still reaches the types through the git source, so it keeps to the same-tag rule or uses the class's re-exports alone.
+
+`onchain_midi_player` re-exports the package at its earlier paths: `onchain_midi_player::types`, `onchain_midi_player::interface` and, with the class's `SETTINGS` encoder, `onchain_midi_player::settings`. They are the same types and traits, so code can move from one path to the other without conversion. ABIs and class hashes name the declaring path, `onchain_midi_types::...`.
+
 ## The provider contract
 
 A contract that implements `ISoundProvider` must honour all of these:
 
 1. **Token IDs as minted.** `get_sound` takes the NFT's token ID exactly as the NFT minted it, the whole `u256`. Decode only the bits the provider uses and ignore the rest: a provider that rejects unused bits breaks when the NFT's ID layout grows, as Beasts' newer 180-bit token IDs do.
 2. **A raw Standard MIDI File.** `midi` is the file's bytes, not base64 and not a data URI, and it passes the page's MIDI check, `check-midi` ([MIDI contract](midi-contract.md), [Checking MIDI files](midi-contract.md#checking-midi-files)). The class embeds the bytes without parsing them, so a bad file does not revert: player readiness rejects with an error instead of playing.
-3. **Valid settings.** `settings` passes `settings::validate` ([`src/settings.cairo`](../src/settings.cairo)) in the class version the NFT calls; otherwise `midi_segment` reverts.
+3. **Valid settings.** `settings` passes `settings::validate` ([`types/src/settings.cairo`](../types/src/settings.cairo); `src/settings.cairo` before 0.9.0) in the class version the NFT calls; otherwise `midi_segment` reverts.
 4. **Deterministic.** The same token and the same live state always give the same bytes, whoever calls. Derive the sound from the token and contract state, never from the caller or the transaction. When state changes a token's sound, the NFT emits an ERC-4906 metadata update so marketplaces refetch.
 5. **View-only.** No storage writes, no events, no calls that change state.
 6. **Reverts only for an unknown token.** Every token the NFT has minted gets a sound.
@@ -55,7 +73,7 @@ The crate has no helper for the call: copy this one into your NFT or renderer. I
 
 ```cairo
 use core::num::traits::Zero;
-use onchain_midi_player::types::TinySynthSound;
+use onchain_midi_types::types::TinySynthSound;
 use starknet::ContractAddress;
 use starknet::syscalls::call_contract_syscall;
 
@@ -86,7 +104,7 @@ Set `MAX_REPLY_FELTS` from your own gas budget, taking your largest real token's
 - **Why a raw syscall and `Serde::deserialize`, not the generated "safe" dispatcher.** `call_contract_syscall` returns a provider's panic, or a missing `get_sound` entry point, as an `Err` instead of reverting the caller (since Starknet 0.13.4). The safe dispatcher decodes the reply itself, and a malformed reply makes it panic in the caller's frame. Decoding the reply yourself turns that into `None`.
 - **What decoding rejects.** The derived `Serde` rejects a truncated reply, an integer out of its type's range, an unknown enum tag (a `WaveDef`, `Waveform` or `FilterKind` tag, or an `Option` tag), and a `ByteArray` with a full word wider than 31 bytes, a pending length over 30, or a pending word wider than its length. The last check, `reply.is_empty()`, rejects a reply that merely starts like a `TinySynthSound` and carries more felts.
 - **What cannot be caught.** Two failures revert the whole call, uncatchably: calling an undeployed address, and running out of gas. Call `get_sound` once in the setter that changes the provider, so an undeployed address reverts the setter rather than every `token_uri`, and keep a kill switch: the zero address, as in the snippet, turns sound off without a call.
-- **Settings are not validated by the snippet.** `midi_segment` validates them anyway; the class version the NFT calls is the authority on what is valid, and this crate's `settings::validate` may be another version's; and `validate` reverts rather than returning a result. To fall back on invalid settings too, test the provider's output against the class in CI, or call `midi_segment` through `library_call_syscall` and treat an error as no sound.
+- **Settings are not validated by the snippet.** `midi_segment` validates them anyway; the class version the NFT calls is the authority on what is valid, and the `settings::validate` you compile may be another version's; and `validate` reverts rather than returning a result. To fall back on invalid settings too, test the provider's output against the class in CI, or call `midi_segment` through `library_call_syscall` and treat an error as no sound.
 
 The generated `ISoundProviderDispatcher` suits callers that should revert when the provider fails.
 

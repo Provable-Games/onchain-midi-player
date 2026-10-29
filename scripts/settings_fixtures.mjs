@@ -13,7 +13,7 @@ import { REFERENCE_WAVES, lfsr, triangle4 } from "./reference_waves.mjs";
 /** @typedef {import("../player/settings.js").Operator} Operator */
 /** @typedef {import("../player/settings.js").Timbre} Timbre */
 
-/** TinySynth's operator defaults, as `default_operator()` in src/settings.cairo. */
+/** TinySynth's operator defaults, as `default_operator()` in types/src/settings.cairo. */
 export const DEFAULT_OPERATOR = Object.freeze({
   route: 0, wave: "Sine", volume: 5000, ratio: 10000, offset_hz: 0, attack: 0, hold: 100, decay: 100,
   sustain: 0, release: 500, pitch_ratio: 10000, pitch_time: 10000, key_scale: 0, filter: null,

@@ -1,6 +1,6 @@
 # Sound settings
 
-The consumer passes a typed `TinySynthSettings` value with every `midi_segment` call. The types are declared in [`src/types.cairo`](../src/types.cairo), and the checks and their messages are in [`src/settings.cairo`](../src/settings.cairo).
+The consumer passes a typed `TinySynthSettings` value with every `midi_segment` call. The types are declared in [`types/src/types.cairo`](../types/src/types.cairo), and the checks and their messages are in [`types/src/settings.cairo`](../types/src/settings.cairo): the `onchain_midi_types` package, which depends on nothing but `starknet` ([Depending on the types](sound-provider.md#depending-on-the-types)). `onchain_midi_player` re-exports both at `onchain_midi_player::types` and `onchain_midi_player::settings`.
 
 ## Types
 
@@ -14,7 +14,7 @@ The consumer passes a typed `TinySynthSettings` value with every `midi_segment` 
 | `Filter` | `LowPass`, `HighPass` or `BandPass`, with a cutoff (in Hz, or a multiple of the note frequency when `key_track` is set) and a linear Q, on an audio-output operator. Fixed, with no envelope. See [Filters](#filters) |
 
 - **Units.** Fractional fields are fixed-point integers in units of `1 / FIXED_POINT_SCALE` (10,000), because Cairo has no floating point. For example `5_000` = 0.5.
-- **Validation.** `settings::validate` checks only what the format or the engine requires: `quality` is 0 or 1, `voices` at least 1, the counts, the slots and their uniqueness, the routes and their targets, the wave indices, and that a filter is on an audio output with a cutoff and a Q above 0. Every other number takes any value of its integer type. A failed check reverts with a `'TS: ...'` short string followed by the 0-based indices of the offending wave, timbre or operator, for example `('TS: FM target not earlier', 3, 1)`. Invalid settings never reach the page. The checks and messages are listed in [`src/settings.cairo`](../src/settings.cairo).
+- **Validation.** `settings::validate` checks only what the format or the engine requires: `quality` is 0 or 1, `voices` at least 1, the counts, the slots and their uniqueness, the routes and their targets, the wave indices, and that a filter is on an audio output with a cutoff and a Q above 0. Every other number takes any value of its integer type. A failed check reverts with a `'TS: ...'` short string followed by the 0-based indices of the offending wave, timbre or operator, for example `('TS: FM target not earlier', 3, 1)`. Invalid settings never reach the page. The checks and messages are listed in [`types/src/settings.cairo`](../types/src/settings.cairo).
 - **Selecting sounds.** A MIDI file selects a custom sound the ordinary way: a program change to its slot, or the drum note on channel 10. Only programs 0–127 and drum notes 35–81 are reachable from MIDI.
 - **Consistency.** For a given class hash, the same settings and MIDI always produce the same sound. To keep a token's sound fixed, pass constants, or values derived only from permanent traits.
 - **Size.** `SETTINGS` is base64-encoded at call time along with the MIDI.
@@ -28,7 +28,7 @@ The class writes settings into the page as `SETTINGS`, format version 1.
 
 - **Syntax.** A flat list of canonical decimal integers separated by commas (`[0-9,-]` only, so it can never close its `<script>` block).
 - **Structure.** Fields in declaration order, a length before every list, enums as their variant index, `bool` as 0/1, and `Option` as 0 (`None`) or 1 followed by the value.
-- **Spec.** The grammar, the checks and their messages are in [`src/settings.cairo`](../src/settings.cairo).
+- **Spec.** The grammar is in [`src/settings.cairo`](../src/settings.cairo), and the checks and their messages are in [`types/src/settings.cairo`](../types/src/settings.cairo).
 
 ```text
 1,1,0,40,64,0,3,                                         version, quality, reverb, master_vol, voices, 0 waves, 3 timbres
@@ -36,11 +36,13 @@ The class writes settings into the page as `SETTINGS`, format version 1.
 1,36,2,…                                                 (Beast reference lead, then kick and snare; line breaks for reading only)
 ```
 
-The crate exports:
+`onchain_midi_types::settings` exports:
 
-- the pure functions `onchain_midi_player::settings::{validate, encode, validate_and_encode}`;
+- the pure function `validate`;
 - the helpers `default_settings()` and `default_operator()` (TinySynth's operator defaults in fixed point);
 - the limits as constants (`MAX_TIMBRES`, `MAX_OPERATORS`, `MAX_WAVES`, `MIN_HARMONICS`, `MIN_SAMPLES`, `MIN_VOICES`, …).
+
+`onchain_midi_player::settings` re-exports all of them and adds the encoder: the pure functions `encode` and `validate_and_encode`, and `SETTINGS_FORMAT_VERSION`.
 
 ## Custom waves
 
