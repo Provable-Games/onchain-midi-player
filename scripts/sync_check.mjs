@@ -35,9 +35,13 @@ try {
  // Small values only: copying the growing sends/passes/calls arrays out of the page blocks its main
  // thread (about 220 ms by minute 10) and corrupts the monitor's next frame sample. Counts are taken
  // in the page; the full arrays are fetched once, after the final monitor read.
+ // getPlayStatus() reads the audio clock twice (audioTime, and again for positionSeconds), and Chromium's clock can
+ // advance a render quantum between two reads in one task: take a status across which the clock stood still.
  const info = () => o.page.evaluate(() => {
    const root = document.getElementById('beast-art'), svgs = [root,...root.querySelectorAll('svg')], check = window.__check;
-   return {status:OnchainMidiPlayer.getPlayStatus(),timelines:svgs.map(s=>({time:s.getCurrentTime(),paused:s.animationsPaused()})),monitor:window.OnchainArtMonitor,seeks:window.__seeks.length,callCount:check.calls.length,prewarmCount:check.calls.filter(s=>s==='prewarm').length,passCount:check.passes.length,sendCount:check.sends.length,media:check.media?.paused};
+   const ctx = check.synth?.getAudioContext();let status, clock;
+   do { clock = ctx?.currentTime; status = OnchainMidiPlayer.getPlayStatus(); } while (ctx && ctx.currentTime !== clock);
+   return {status,timelines:svgs.map(s=>({time:s.getCurrentTime(),paused:s.animationsPaused()})),monitor:window.OnchainArtMonitor,seeks:window.__seeks.length,callCount:check.calls.length,prewarmCount:check.calls.filter(s=>s==='prewarm').length,passCount:check.passes.length,sendCount:check.sends.length,media:check.media?.paused};
  });
  // Paused art shows the audio's held position, where the suspend actually stopped it, plus the display lead.
  const heldAt = (sample, label) => {
