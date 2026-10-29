@@ -63,8 +63,8 @@ export function renderSvg(name, tier) {
     "<rect x='4.5' y='4.5' width='241' height='341' rx='9' fill='none' stroke='#b79a5e' stroke-width='4'>" +
     "<animate attributeName='stroke-opacity' values='1;0.4;1' dur='3s' repeatCount='indefinite'/></rect>" +
     `<text x='125' y='42' text-anchor='middle' class='n'>${name}</text>` +
-    "<rect x='61' y='65' width='128' height='128' rx='8' fill='#000'/>" +
-    "<foreignObject x='61' y='65' width='128' height='128'>" +
+    "<rect data-notes-bg='' x='61' y='65' width='128' height='128' rx='8' fill='#000'/>" +
+    "<foreignObject x='85' y='89' width='80' height='80'>" +
     `<xhtml:img xmlns:xhtml='http://www.w3.org/1999/xhtml' src='${PNG_DATA_URI}' ` +
     "style='width:100%;height:100%;image-rendering:pixelated'/></foreignObject>" +
     `<text x='125' y='230' text-anchor='middle' class='t'>TIER ${tier}</text>` +
@@ -183,8 +183,8 @@ export function tokenParts(tokenId, beast = TOKENS[tokenId]) {
   return { ...t, tokenId, svg, mem, midi, settings, d, dPad, svgB64: b64(svg) };
 }
 
-/** The example's consumer word-aligns its two largest appends (see consumerPieces). */
-export const ALIGN = { align: true, trustedArt: true };
+/** The example's consumer word-aligns its two largest appends (see consumerPieces), and draws notes behind marked art. */
+export const ALIGN = { align: true, trustedArt: true, notes: true };
 
 /** What the contract assembles, piece by piece. */
 export const tokenUriSpliced = (tokenId, beast) => spliceTokenUri(tokenParts(tokenId, beast), ALIGN);

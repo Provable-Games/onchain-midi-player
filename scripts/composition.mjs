@@ -16,8 +16,11 @@ export function imageParts(svg) {
 }
 export const artFragment = svg => imageParts(svg).raw;
 export const HTML_SPACE_SEGMENT = segmentFor("         ");
-/** JS mirrors direct ByteArray splicing, including actual returned-stream word boundaries. */
-export function consumerPieces(mem, svg, { midi, settings, d, fixture = false, dependent = false, align = true, artFirst = true, trustedArt = false, libraries } = {}) {
+/**
+ * JS mirrors direct ByteArray splicing, including actual returned-stream word boundaries. `notes`:
+ * the NFT-owned notes fragment (player/notes.js) between the data and the footer, word-aligned.
+ */
+export function consumerPieces(mem, svg, { midi, settings, d, fixture = false, dependent = false, align = true, artFirst = true, trustedArt = false, notes = false, libraries } = {}) {
   const image = imageParts(svg);
   let head = "{" + mem + ',';
   const key = '"image":"' + SVG_PREFIX;
@@ -45,6 +48,7 @@ export function consumerPieces(mem, svg, { midi, settings, d, fixture = false, d
     uri += image.returned; html += art;
   };
   if (artFirst) { appendArt(); append("data",data); } else { append("data",data); appendArt(); }
+  if (notes) { word(); append("notes",ownedFragment("notes")); }
   word(); append("footer",ownedFragment("footer"));
   uri += b64('"}');
   return { uri, html, open, boundaries, d:data, art };

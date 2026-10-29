@@ -19,16 +19,17 @@ export function gzipSource(source) {
 function flatten(path) {
   return readFileSync(new URL(path, import.meta.url), "utf8").replace(/^import .*?;\n/gm, "").replace(/^export (?=(?:const|function|class|async function) )/gm, "");
 }
-async function compile(paths, call) {
-  const { code } = await minify(`(function(){"use strict";\n${paths.map(flatten).join("\n")}\n${call}();})();`, OPTIONS);
+/** `paths` flattened into one strict function, ending with the statement `run`, then minified. */
+async function compile(paths, run) {
+  const { code } = await minify(`(function(){"use strict";\n${paths.map(flatten).join("\n")}\n${run}})();`, OPTIONS);
   if (!code || /<\/script|<script|<!--/i.test(code)) throw new Error("unsafe inline source");
   return code;
 }
 export function gzipFragment(id, gzip) { return `<script type="text/javascript+gzip" id="${id}" src="data:application/gzip;base64,${b64(gzip)}"></script>`; }
 export async function build(alignment = FIXED_ALIGNMENT) {
   const engine = engineSource();
-  const loader = await compile(["../player/gunzip.js"], "gunzipScripts");
-  const wrapper = await compile(["../player/settings.js", "../player/player.js"], "startPlayer");
+  const loader = await compile(["../player/gunzip.js"], "gunzipScripts();");
+  const wrapper = await compile(["../player/settings.js", "../player/player.js"], "startPlayer();");
   const player = engine + "\n;\n" + wrapper;
   const embedded_engine = { offset: 0, length: bytes(engine).length, sha256: sha256(engine) };
   const definitions = {
@@ -72,7 +73,7 @@ export async function generatedFiles() {
     if (name === "fixture") files.set("tests/fixture_provider.cairo",`//! Independent test-only provider. Never part of TinySynth.\n#[starknet::interface]\npub trait IFixtureProvider<T> { fn library_segment(self: @T) -> ByteArray; }\n#[starknet::contract]\npub mod FixtureProvider {\n    #[storage]\n    struct Storage {}\n    #[abi(embed_v0)]\n    impl Provider of super::IFixtureProvider<ContractState> {\n        fn library_segment(self: @ContractState) -> ByteArray { "${returned}" }\n    }\n}\n`);
   }
   files.set("tests/fixtures/libraries/manifest.json",JSON.stringify({format:SEGMENT_FORMAT,toolchain:built.record.toolchain,libraries:fixtures},null,2)+"\n");
-  const ui = await compile(["../examples/beast_consumer/art_sync.js", "../examples/beast_consumer/ui.js"], "startUi");
+  const ui = await compile(["../examples/beast_consumer/art_sync.js", "../examples/beast_consumer/ui.js"], "startUi();");
   // The play button's settings: its diameter's limits and the touch target. The diameter is the art's
   // data-play-anchor S times the art's scale (proportional to the card), else a 48 px default (an
   // anchor without S, or the corner button), clamped to the limits; equal limits fix it. The touch
@@ -86,6 +87,13 @@ export async function generatedFiles() {
   };
   // From the unpadded body: re-aligning the padded one would add a whole block of spaces.
   owned.trusted_body = alignedFragment(body.replace("<body>", '<body data-trusted-art="inline-svg">'));
+  // The optional notes UI (player/notes.js), a plain script the page places before the footer: it
+  // exposes mount and cutout as window.OnchainMidiNotes, and the footer draws the notes only when
+  // they are there. Plain rather than gzip: a library the shared loader fails to run rejects
+  // OnchainLibraries.ready, which the footer treats as a failed page; this one failing only
+  // leaves the global undefined.
+  const notes = await compile(["../player/notes.js"], "window.OnchainMidiNotes={mount,cutout};");
+  owned.notes = alignedFragment(`<!-- notes: onchain-midi-player player/notes.js, Copyright 2026 Provable Games, Apache-2.0 --><script id="beast-notes">${notes}</script>`);
   for (const [n,raw] of Object.entries(owned)) files.set(`examples/beast_consumer/fixtures/${n}.html`,raw);
   const ownedCairo = "//! NFT-owned pre-encoded document/UI assets. Generated; independent of the MIDI class.\n"+Object.entries(owned).map(([n,raw])=>cairoBase64Literal(`${n}_segment`,segmentFor(raw),["NFT-owned HTML fragment."])).join("\n\n")+"\n";
   // One package, examples/owned_assets, that the examples and the root's tests depend on.

@@ -82,7 +82,9 @@ pub fn assert_valid_name(name: @ByteArray) {
 
 /// The token's raw SVG, structurally modelled on `beasts/src/beast_svg.cairo`: `<svg>` root, the
 /// same SMIL opacity `<animate>` keep-alive, card styling, the name, and the pixel art embedded via
-/// `foreignObject` + `xhtml:img`.
+/// `foreignObject` + `xhtml:img`. The art frame's background rect, a child of the root, carries
+/// `data-notes-bg`: the page's notes, when it has them, are drawn behind the art over that rect,
+/// and show around the opaque 80 x 80 sprite centred in its 128 x 128.
 ///
 /// Original SVG bytes are preserved inside encoded image data URIs. Supplied script-like text
 /// cannot terminate any parent script/data block; bootstrap and closing HTML follow the image.
@@ -109,8 +111,11 @@ pub fn render_svg(name: @ByteArray, tier: u8, image: @ByteArray) -> ByteArray {
     svg.append(@"<text x='125' y='42' text-anchor='middle' class='n'>");
     svg.append(name);
     svg.append(@"</text>");
-    svg.append(@"<rect x='61' y='65' width='128' height='128' rx='8' fill='#000'/>");
-    svg.append(@"<foreignObject x='61' y='65' width='128' height='128'>");
+    svg
+        .append(
+            @"<rect data-notes-bg='' x='61' y='65' width='128' height='128' rx='8' fill='#000'/>",
+        );
+    svg.append(@"<foreignObject x='85' y='89' width='80' height='80'>");
     svg.append(@"<xhtml:img xmlns:xhtml='http://www.w3.org/1999/xhtml' src='");
     svg.append(image);
     svg.append(@"' style='width:100%;height:100%;image-rendering:pixelated'/></foreignObject>");

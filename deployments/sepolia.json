@@ -4,24 +4,24 @@
   "class": {
     "package": "onchain_midi_player",
     "contract": "TinySynth",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "release_tag": null,
-    "class_hash": "0x0375f8a992d6016b1950808efa864000feadcb61b99dfc35169b554e2f50946b",
-    "declare_tx": "0x0642b01e49c673f6a1f10402435248ff9ef9c21ef77b09766266a9edea392b40",
-    "built_from": "63aa7390f1c1a20a61ed1bffde288ced2cb07d33",
+    "class_hash": "0x02b222a88a4aa5c710c82c971902f4265b08fdd7cf0cd8e04f068d9decfbd2a0",
+    "declare_tx": "0x00c87f7fa94ee835abe79718db032150b5cf94cee4129663741f229a00905b7d",
+    "built_from": "16dc6f655d8616b2eef313abda1636cea79a342e",
     "inspection_instance": {
-      "address": "0x02125637f656b9ee6e518363f25bd1cbef2212838c9f0bd8c19ff1689b2739c1",
-      "deploy_tx": "0x055103edc3476c0807942bce31270f680b29d61b641486cd2ecf6cba418ed745"
+      "address": "0x02be4cbd146a6f70509932be25440f9ffd99a3d3d2a7825cb7e84d2f6851740d",
+      "deploy_tx": "0x064b870b4cfda54c7bf686670463a56e5c02bb1d433000e108501fd9f9372694"
     }
   },
   "example": {
     "package": "beast_consumer",
     "contract": "BeastLikeNft",
-    "class_hash": "0x069d8c268b74125f2e0b1e55f808ed78f11821a52328f4cc62303bbb28835907",
-    "declare_tx": "0x05d25666c7fcbc53ebc028ec77094ff91ca2759d9aa9de3e59c6a95dd903881e",
-    "address": "0x029d8c65f0120cbd5c2161b32256a5a235d14575a9ddf31faec0d336980b9c1f",
-    "deploy_tx": "0x00dcc77d135b37494bfd9c3131446e18c00fa48a5014ba88cd5165f02c9bda81",
-    "player_class_hash": "0x0375f8a992d6016b1950808efa864000feadcb61b99dfc35169b554e2f50946b",
-    "built_from": "66be35e97b94b0c7ab2199f1770628cbd17521e8"
+    "class_hash": "0x0342272dfe17aaa0fb34b043b7e55ee67bc4df083c8c0b6c2641d1c2a67428d2",
+    "declare_tx": "0x060d19f98adb4c101197ae68dbbe7a04168d448cee70344b8f057195df836d84",
+    "address": "0x040f4b090004b17f6cd7aced37c1171614401e879b23b030286f4886be3febf4",
+    "deploy_tx": "0x0361d4902ec1fa2ff1425d405530186b61c474437a6e08cac0a22051afa3886c",
+    "player_class_hash": "0x02b222a88a4aa5c710c82c971902f4265b08fdd7cf0cd8e04f068d9decfbd2a0",
+    "built_from": "16dc6f655d8616b2eef313abda1636cea79a342e"
   }
 }
