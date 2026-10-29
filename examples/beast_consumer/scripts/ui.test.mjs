@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {describe,test} from "node:test";
 import {playAnchor,silentWav,monitorArtSync,positionState,MEDIA_END_GUARD_SECONDS} from "../ui.js";
-import {REFERENCE_DISPLAY_LEAD_SECONDS,syncSvgToMusic,restartImgOnPass,gifFrames,gifFrameAt} from "../art_sync.js";
+import {REFERENCE_DISPLAY_LEAD_SECONDS,syncSvgToMusic,restartImgOnPass,gifFrames,gifFrameAt,stillSvg,laterImg} from "../art_sync.js";
 import {startPlayer} from "../../../player/player.js";
 import {mount as mountNotes} from "../../../player/notes.js";
 import {riff,smf} from "../../../scripts/data_cases.mjs";
@@ -538,13 +538,33 @@ test('<img> art: a still decoding when a later pause comes, and a restart decodi
  const h=stillHarness();h.pass();const restart=h.created[0];h.dispose.pause();await tick();restart.load();assert.equal(h.page[0],h.first,'a restart started before the pause');
  h.created[1].load();assert.equal(h.page[0],h.created[1],'the still');
 });
-test('<img> art: art the still cannot freeze, or a still that fails, leaves the art as it is',async()=>{
+test('<img> art: art the still cannot freeze, or a still that fails, keeps moving and restarting at passes',async()=>{
  for(const result of [()=>null,()=>Promise.reject(Error('no canvas'))]){
   const h=stillHarness(UTF8_ART,result);h.dispose.pause();await tick();assert.equal(h.created.length,0);assert.equal(h.page[0],h.first);
-  h.pass();assert.equal(h.created.length,0,'frozen: no restart');h.dispose.play();assert.equal(h.created.length,0,'nothing was held: the art never stopped');h.pass();assert.equal(h.created.length,1);
+  h.pass();assert.equal(h.created.length,1,'given up: restarts at passes');h.created[0].load();assert.equal(h.page[0],h.created[0]);
+  h.dispose.play();assert.equal(h.created.length,1,'nothing was held: the art never stopped');
+  h.dispose.pause();await tick();assert.equal(h.stills.length,2,'a later pause tries again');
  }
  const h=stillHarness();h.dispose();h.dispose.pause();await tick();assert.equal(h.stills.length,0,'disposed');
 });
+// Races (review findings 1 and 2): a pause while a resume's restart decodes, and stills resolving out of order.
+test('<img> art: a pause before a resume\'s restart has decoded keeps the still shown, with no new still',async()=>{
+ const h=stillHarness();h.dispose.pause();await tick();h.created[0].load();
+ h.dispose.play();const restart=h.created[1];h.dispose.pause();await tick();
+ assert.equal(h.stills.length,1,'the still on screen is where the art stopped: no still from a stale start time');
+ restart.load();assert.equal(h.page[0],h.created[0],'the restart is dropped');
+ h.dispose.play();h.created[2].load();assert.equal(h.page[0],h.created[2],'resume restarts it');
+});
+test('<img> art: only the latest pause\'s still is shown, whatever order the stills resolve in',async()=>{
+ const pending=[];const h=imgHarness(UTF8_ART,{still:(svg)=>{const i=pending.length;return new Promise(r=>pending.push(()=>r(svg.replace('</svg>',`<g id="s${i}"/></svg>`))));}});
+ h.dispose.pause();await tick();h.dispose.play();h.dispose.pause();await tick();assert.equal(pending.length,2);
+ pending[1]();await tick();pending[0]();await tick();assert.equal(h.created.length,1,'the first pause\'s still is never even decoded');
+ assert.match(Buffer.from(h.created[0].src.split(',')[1],'base64').toString(),/id="s1"/);h.created[0].load();assert.equal(h.page[0],h.created[0]);
+ // The first still decoding late after the second was asked for: dropped at load as well.
+ const late=[];const g=imgHarness(UTF8_ART,{still:(svg)=>{late.push(1);return svg;}});g.dispose.pause();await tick();g.dispose.play();g.dispose.pause();await tick();
+ assert.equal(g.created.length,2);g.created[0].load();assert.equal(g.page[0],g.first,'stale still');g.created[1].load();assert.equal(g.page[0],g.created[1]);
+});
+
 test('<img> art: the still keeps every byte of art in another encoding, and reads percent-encoded art',async()=>{
  const latin1=Buffer.from('<?xml version="1.0" encoding="ISO-8859-1"?><svg xmlns="http://www.w3.org/2000/svg"><text>caf\xe9</text></svg>','latin1');
  const h=stillHarness(svgUrl(latin1));h.dispose.pause();await tick();assert.equal(h.stills[0].svg,latin1.toString('latin1'));
@@ -553,12 +573,27 @@ test('<img> art: the still keeps every byte of art in another encoding, and read
  assert.equal(p.stills[0].svg,Buffer.from(cut).toString('latin1'),'the percent-encoded bytes');assert.match(p.created[0].src,/^data:image\/svg\+xml;r=1;base64,/);
  const other=stillHarness('https://example.com/art.svg');other.dispose.pause();other.dispose.play();await tick();assert.equal(other.stills.length,0);
 });
-test('<img> art on a hidden page: the still is made once the page is visible',async()=>{
- const listeners=new Set();let hidden=true;
+function hiddenHarness(){
+ const listeners=new Set(),state={hidden:true};
  const h=stillHarness();const doc=h.first.ownerDocument;
- Object.defineProperty(doc,'hidden',{get:()=>hidden});doc.addEventListener=(type,fn)=>{assert.equal(type,'visibilitychange');listeners.add(fn);};doc.removeEventListener=(type,fn)=>listeners.delete(fn);
- h.dispose.pause();await tick();assert.equal(h.stills.length,0,'nothing while hidden');
- hidden=false;for(const fn of [...listeners])fn();await tick();assert.equal(h.stills.length,1);assert.equal(listeners.size,0);
+ Object.defineProperty(doc,'hidden',{get:()=>state.hidden});doc.addEventListener=(type,fn)=>{assert.equal(type,'visibilitychange');listeners.add(fn);};doc.removeEventListener=(type,fn)=>listeners.delete(fn);
+ return Object.assign(h,{listeners,state,show(){state.hidden=false;for(const fn of [...listeners])fn();}});
+}
+test('<img> art on a hidden page: the still is made once the page is visible',async()=>{
+ const h=hiddenHarness();h.dispose.pause();await tick();assert.equal(h.stills.length,0,'nothing while hidden');
+ h.show();await tick();assert.equal(h.stills.length,1);assert.equal(h.listeners.size,0);
+});
+test('<img> art on a hidden page: one listener at a time, dropped by resume and by dispose',async()=>{
+ const h=hiddenHarness();h.dispose.pause();h.dispose.play();assert.equal(h.listeners.size,0,'resume drops it');
+ h.dispose.pause();h.dispose.play();h.dispose.pause();assert.equal(h.listeners.size,1,'only the latest pause waits');
+ h.show();await tick();assert.equal(h.stills.length,1,'one still, for the latest pause');
+ const d=hiddenHarness();d.dispose.pause();assert.equal(d.listeners.size,1);d.dispose();assert.equal(d.listeners.size,0,'dispose drops it');d.show();await tick();assert.equal(d.stills.length,0);
+});
+test('laterImg: calls reach controls attached later, and attaching replays the last call (review finding 5)',()=>{
+ const log=[],controls={play(){log.push('play');},pause(){log.push('pause');},stop(){log.push('stop');}};
+ const a=laterImg();a.play();a.pause();a.attach(controls);assert.deepEqual(log,['pause'],'paused before the controls existed: frozen once attached');
+ a.play();a.stop();assert.deepEqual(log,['pause','play','stop']);
+ const b=laterImg();b.attach(controls);assert.deepEqual(log,['pause','play','stop'],'nothing to replay');
 });
 test('syncSvgToMusic plays, pauses and stops isolated image controls with the notes',()=>{
  const h=artHarness(()=>{},{svgRoot:false});startArt(h);assert.deepEqual(h.imgs,['play']);
@@ -578,6 +613,57 @@ test('gifFrames: each frame\'s bytes, delay, disposal and rectangle, after the s
  assert.deepEqual(g.frames.map(f=>[f.start,f.end,f.delay,f.disposal,f.rect]),[[38,61,230,2,[0,0,4,4]],[61,84,100,3,[1,2,2,1]],[84,99,100,0,[0,0,1,1]]]);
  assert.equal(bytes[g.frames[2].end],59);
  for(const bad of [bytes.subarray(0,bytes.length-1),bytes.subarray(0,30),Uint8Array.from([1,2,3]),Uint8Array.from([...bytes.subarray(0,38),7,59]),gif()])assert.equal(gifFrames(bad),null);
+});
+test('gifFrames: local color tables, interlace, extensions between GCE and image, frames without a GCE, GIF87a, delays 0 and 1',()=>{
+ // A 4-entry local color table (flags 0x81) and the interlace flag (0x40) on the first image.
+ const lct=[44,0,0,0,0,1,0,1,0,0x81|0x40,1,2,3,4,5,6,7,8,9,10,11,12,2,2,68,1,0];
+ const comment=[33,254,2,104,105,0];
+ const bytes=gif(gce(0,2),comment,lct,frame(0,0,1,1),gce(1,1),frame(0,0,2,2));
+ const g=gifFrames(bytes);
+ assert.deepEqual(g.frames.map(f=>[f.start,f.end,f.delay,f.disposal]),[[38,79,100,2],[79,94,100,0],[94,117,100,1]],'the comment stays with its frame; no GCE: 100 ms, disposal 0');
+ assert.deepEqual(bytes.subarray(g.frames[0].start,g.frames[0].start+8),Uint8Array.from(gce(0,2)));
+ const old=Uint8Array.from(bytes);old[4]=55;assert.equal(gifFrames(old).frames.length,3,'GIF87a');
+ for(let cut=13;cut<bytes.length;cut+=7)assert.equal(gifFrames(bytes.subarray(0,cut)),null,`truncated at ${cut}`);
+});
+test('gifFrames: the loop extension\'s count, as plays (review finding 4)',()=>{
+ const noLoop=Uint8Array.from([71,73,70,56,57,97,4,0,4,0,0,0,0,...gce(10),...frame(0,0,1,1),...gce(10),...frame(0,0,1,1),59]);
+ assert.equal(gifFrames(noLoop).plays,1,'no extension: once');
+ const counted=n=>{const b=gif(gce(10),frame(0,0,1,1),gce(10),frame(0,0,1,1));b[35]=n&255;b[36]=n>>8;return gifFrames(b).plays;};
+ assert.deepEqual([counted(0),counted(1),counted(2),counted(300)],[0,2,3,301],'0 forever; otherwise the count repeats the first play');
+});
+test('gifFrameAt: a GIF played a finite number of times ends on its last frame',()=>{
+ const frames=[{delay:100},{delay:100},{delay:100}];
+ assert.deepEqual([0,250,299,300,450,599,600,10000].map(ms=>gifFrameAt(frames,ms,2)),[0,2,2,0,1,2,2,2]);
+ assert.equal(gifFrameAt(frames,9900),0,'forever by default');
+});
+// stillSvg with a fake canvas and images: the frames up to the shown one, in order, with the GIF's disposals.
+function fakeDocument({failAt=-1}={}){
+ const calls=[],images=[];
+ const ctx={clearRect:(...a)=>calls.push(['clear',...a]),getImageData:()=>{calls.push(['save']);return 'saved';},putImageData:(d)=>calls.push(['restore',d]),drawImage:(img,x,y)=>calls.push(['draw',images.indexOf(img),x,y])};
+ const doc={createElement(tag){
+  if(tag==='canvas')return{width:0,height:0,getContext:()=>ctx,toDataURL:(type)=>(calls.push(['png',type]),'data:image/png;base64,UE5H')};
+  const img={onload:null,onerror:null};let src='';images.push(img);
+  Object.defineProperty(img,'src',{get:()=>src,set(v){src=v;queueMicrotask(()=>images.indexOf(img)===failAt?img.onerror(Error('decode')):img.onload());}});return img;}};
+ return{doc,calls,images};
+}
+test('stillSvg: draws each frame up to the shown one as a one-frame GIF, with disposals 2 and 3, and swaps in the PNG',async()=>{
+ const bytes=gif(gce(10,2),frame(0,0,4,4),gce(10,3),frame(1,2,2,1),gce(10,1),frame(0,0,1,1),gce(10,1),frame(0,0,2,2));
+ const uri='data:image/gif;base64,'+Buffer.from(bytes).toString('base64'),svg=`<svg><image href='${uri}'/><image href='${uri}'/></svg>`;
+ const {doc,calls,images}=fakeDocument();
+ const out=await stillSvg(svg,250,doc);
+ assert.deepEqual(calls,[['draw',0,0,0],['clear',0,0,4,4],['save'],['draw',1,0,0],['restore','saved'],['draw',2,0,0],['png','image/png']],'frame 2 at 250 ms: dispose 2 clears, 3 saves then restores');
+ const g=gifFrames(bytes);
+ images.forEach((img,i)=>{const one=Buffer.from(img.src.split(',')[1],'base64');assert.deepEqual(one,Buffer.concat([Buffer.from(g.head),Buffer.from(bytes.subarray(g.frames[i].start,g.frames[i].end)),Buffer.from([59])]),`one-frame GIF ${i}`);
+  assert.deepEqual(gifFrames(one).frames.length,1);});
+ assert.equal(out,`<svg><image href='data:image/png;base64,UE5H'/><image href='${uri}'/></svg>`,'the first GIF only');
+ const at0=fakeDocument();await stillSvg(svg,0,at0.doc);assert.deepEqual(at0.calls,[['draw',0,0,0],['png','image/png']]);
+});
+test('stillSvg: null without a GIF it can read; rejects when a frame cannot be decoded',async()=>{
+ const {doc,calls}=fakeDocument();
+ for(const svg of ['<svg/>',"<svg><image href='data:image/png;base64,iVBORw0KGgo='/></svg>","<svg><image href='data:image/gif;base64,R0lGODlhAAA1'/></svg>","<svg><image href='data:image/gif;base64,'/></svg>"])assert.equal(await stillSvg(svg,0,doc),null,svg);
+ assert.deepEqual(calls,[]);
+ const bytes=gif(gce(10),frame(0,0,1,1),gce(10),frame(0,0,1,1)),broken=fakeDocument({failAt:1});
+ await assert.rejects(stillSvg(`<svg><image href='data:image/gif;base64,${Buffer.from(bytes).toString('base64')}'/></svg>`,150,broken.doc));
 });
 test('gifFrameAt: the frame a looping GIF shows at a time',()=>{
  const frames=[{delay:230},{delay:230},{delay:220}];

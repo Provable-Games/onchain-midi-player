@@ -128,8 +128,11 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
  * the shown image started and its GIF's own delays, and shows the art with that GIF replaced by a
  * PNG of the frame (`stillSvg`), decoded off screen like a restart. Restarts wait while frozen.
  * `play` and `stop` restart the art from its first frame, if the still was shown; the next pass
- * realigns it. Art without a GIF it can still keeps moving, and so does any other animation in
- * the art (SVG/SMIL). On a hidden page the still is made once the page is visible again.
+ * realigns it. A pause while the still is still shown (the restart after a resume not yet
+ * decoded) keeps that still. Only the latest pause's still is ever shown. Art without a GIF it can
+ * still, or a still that fails, keeps moving and restarting at passes, and so does any other
+ * animation in the art (SVG/SMIL). On a hidden page the still is made once the page is visible
+ * again; dispose drops a still still waiting for that.
  * Limits: a restart lands up to one decode late, a freeze also, and no page can control GIF
  * frames inside any art (use SMIL sprite animation for motion synced to the music).
  * @param {HTMLImageElement} img the shown art
@@ -146,7 +149,10 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
   const none = () => {};
   if (!url) return Object.assign(none, { play: none, pause: none, stop: none });
   const [, type, base64 = "", payload] = url, doc = img.ownerDocument;
-  let restarts = 0, shown = 0, live = true, frozen = false, held = false, shownAt = performance.now();
+  // frozen: a still is wanted (pending or shown); held: a still is shown; gen: the latest pause.
+  let restarts = 0, shown = 0, live = true, frozen = false, held = false, gen = 0, shownAt = performance.now();
+  /** @type {(() => void) | null} */ let waiting = null;
+  const unwait = () => { if (waiting) doc.removeEventListener("visibilitychange", waiting); waiting = null; };
   /** Decodes `src(n)` off screen and shows it, unless disposed, a newer image is shown or `wanted()` fails. */
   const show = (/** @type {(n: number) => string} */ src, /** @type {() => boolean} */ wanted, still = false) => {
     const n = ++restarts, next = doc.createElement("img");
@@ -165,46 +171,82 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
     show((n) => "data:" + type + ";r=" + n + base64 + payload, () => !frozen && player.getPlayStatus().runId === runId);
   };
   const off = player.onPassStart(() => frozen || restart());
-  /** The still of the art `ms` after it started, as a base64 URL of the same media type. */
-  const hold = (/** @type {number} */ ms) => {
-    if (doc.hidden) return doc.addEventListener("visibilitychange", function wait() {
-      if (!doc.hidden) { doc.removeEventListener("visibilitychange", wait); if (frozen) hold(ms); }
-    });
+  /** Shows the still of the art `ms` after it started for pause `g`, unless a later pause or a resume came. */
+  const hold = (/** @type {number} */ g, /** @type {number} */ ms) => {
+    unwait();
+    if (doc.hidden) {
+      waiting = () => { if (!doc.hidden) { unwait(); if (live && g == gen && frozen) hold(g, ms); } };
+      return doc.addEventListener("visibilitychange", waiting);
+    }
+    const current = () => live && g == gen && frozen;
     Promise.resolve().then(() => {
       // The payload as bytes (one character each), so art in any encoding keeps its other bytes.
       const text = base64 ? atob(payload.slice(1).replace(/[\t\n\f\r ]/g, "")) : unescape(payload.slice(1));
       return still(text, ms, doc);
-    }).then((svg) => { if (svg && frozen) show((n) => "data:" + type + ";r=" + n + ";base64," + btoa(svg), () => frozen, true); }, none);
+    }).then((svg) => {
+      if (!current()) return;
+      if (svg) show((n) => "data:" + type + ";r=" + n + ";base64," + btoa(svg), current, true);
+      else frozen = false; // Nothing to show: the art keeps moving, and restarting at passes.
+    }, () => { if (current()) frozen = false; });
   };
   const thaw = () => {
     if (!frozen) return;
     frozen = false;
+    unwait();
     if (held) restart(); // From its first frame; a still never shown leaves the art running.
   };
-  return Object.assign(() => { live = false; off(); }, {
-    pause() { if (live && !frozen) { frozen = true; hold(performance.now() - shownAt); } },
+  return Object.assign(() => { live = false; off(); unwait(); }, {
+    pause() {
+      if (!live || frozen) return;
+      frozen = true;
+      // A still still shown (a resume's restart not yet decoded) is where the art stopped: keep it.
+      if (!held) hold(++gen, performance.now() - shownAt);
+    },
     play: thaw,
     stop: thaw,
   });
 }
 
 /**
+ * syncSvgToMusic's `img` for controls that come later (restartImgOnPass's, once the art it copies
+ * is showing): each call goes to them once attached, and attaching replays the last call, so a
+ * pause that came first still freezes the art.
+ * @returns {{play(): void, pause(): void, stop(): void, attach(controls: {play(): void, pause(): void, stop(): void}): void}}
+ */
+export function laterImg() {
+  /** @type {{play(): void, pause(): void, stop(): void} | null} */ let to = null;
+  /** @type {"play" | "pause" | "stop" | null} */ let last = null;
+  const call = (/** @type {"play" | "pause" | "stop"} */ name) => () => { last = name; to?.[name](); };
+  return { play: call("play"), pause: call("pause"), stop: call("stop"), attach(controls) { to = controls; if (last) controls[last](); } };
+}
+
+/**
  * The frames of a GIF from its block structure, without decoding pixels: `head`, the bytes every
  * frame shares (signature, screen descriptor and global color table), and each frame's bytes
  * (`start` to `end`: its Graphic Control Extension, descriptor, color table and data), `delay` in
- * ms as browsers show it (0 or 1 cs as 100 ms), `disposal` and `rect` (x, y, width, height). Null
- * when the bytes are not a GIF this walk follows.
+ * ms as browsers show it (0 or 1 cs as 100 ms), `disposal` and `rect` (x, y, width, height); and
+ * `plays`, how many times browsers show the loop: once without a NETSCAPE2.0 loop extension, its
+ * count plus one (the count is repeats), 0 (forever) for a count of 0. Null when the bytes are not
+ * a GIF this walk follows.
  * @param {Uint8Array} b
- * @returns {{head: Uint8Array, width: number, height: number,
+ * @returns {{head: Uint8Array, width: number, height: number, plays: number,
  *   frames: {start: number, end: number, delay: number, disposal: number, rect: number[]}[]} | null}
  */
 export function gifFrames(b) {
   if (b.length < 13 || String.fromCharCode(...b.subarray(0, 4)) != "GIF8") return null;
-  let p = 13 + (b[10] & 128 ? 3 << ((b[10] & 7) + 1) : 0), gce = -1;
+  let p = 13 + (b[10] & 128 ? 3 << ((b[10] & 7) + 1) : 0), gce = -1, plays = 1;
   const head = b.subarray(0, p), frames = [], skip = () => { while (p < b.length && b[p]) p += b[p] + 1; p++; };
   while (p < b.length && b[p] != 59) {
     const at = p++;
-    if (b[at] == 33) { if (b[p] == 249) gce = at; p++; skip(); }
+    if (b[at] == 33) {
+      if (b[p] == 249) gce = at;
+      // 21 FF 0B "NETSCAPE2.0" 03 01 <count, little-endian> 00
+      if (b[p] == 255 && b[p + 1] == 11 && String.fromCharCode(...b.subarray(p + 2, p + 13)) == "NETSCAPE2.0" && b[p + 13] == 3 && b[p + 14] == 1) {
+        const count = b[p + 15] | (b[p + 16] << 8);
+        plays = count && count + 1;
+      }
+      p++; skip();
+    }
     else if (b[at] == 44) {
       const flags = b[p + 8], cs = gce < 0 ? 0 : b[gce + 4] | (b[gce + 5] << 8);
       const rect = [0, 2, 4, 6].map((i) => b[p + i] | (b[p + i + 1] << 8));
@@ -214,16 +256,20 @@ export function gifFrames(b) {
       gce = -1;
     } else return null;
   }
-  return p < b.length && frames.length ? { head, width: b[6] | (b[7] << 8), height: b[8] | (b[9] << 8), frames } : null;
+  return p < b.length && frames.length ? { head, width: b[6] | (b[7] << 8), height: b[8] | (b[9] << 8), plays, frames } : null;
 }
 
 /**
- * The frame a looping GIF shows `ms` after it started.
+ * The frame a GIF shows `ms` after it started, played `plays` times (0: forever); once done, the
+ * last frame stays.
  * @param {{delay: number}[]} frames
  * @param {number} ms
+ * @param {number} [plays]
  */
-export function gifFrameAt(frames, ms) {
-  let t = Math.max(0, ms) % frames.reduce((sum, f) => sum + f.delay, 0), k = 0;
+export function gifFrameAt(frames, ms, plays = 0) {
+  const loop = frames.reduce((sum, f) => sum + f.delay, 0);
+  if (plays && ms >= loop * plays) return frames.length - 1;
+  let t = Math.max(0, ms) % loop, k = 0;
   while (t >= frames[k].delay) t -= frames[k++].delay;
   return k;
 }
@@ -243,7 +289,7 @@ export async function stillSvg(svg, ms, doc) {
   const m = /data:image\/gif;base64,([A-Za-z0-9+/]+=*)/.exec(svg), bytes = m && Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0));
   const gif = bytes && gifFrames(bytes);
   if (!m || !bytes || !gif) return null;
-  const k = gifFrameAt(gif.frames, ms), canvas = doc.createElement("canvas"), g = /** @type {CanvasRenderingContext2D} */ (canvas.getContext("2d"));
+  const k = gifFrameAt(gif.frames, ms, gif.plays), canvas = doc.createElement("canvas"), g = /** @type {CanvasRenderingContext2D} */ (canvas.getContext("2d"));
   canvas.width = gif.width; canvas.height = gif.height;
   /** @type {ImageData | null} */ let saved = null;
   for (let i = 0; i <= k; i++) {
