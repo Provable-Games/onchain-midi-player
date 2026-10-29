@@ -1,9 +1,12 @@
 // @ts-check
 /**
  * The notes UI: the token's MIDI drawn as a piano roll on a <canvas>, scrolling with the music. An
- * optional UI utility, separate from the player: a page that wants it injects this script beside the
- * player and calls `mount(canvas, options)`. No segment or build includes it yet; how a page gets it
- * (the prototype built it as `OnchainMidiNotes`) is onchain-midi-player #59's decision. It reads only
+ * optional UI utility, separate from the player and never part of the TinySynth class: a page that
+ * wants it includes this script as its own fragment and calls `mount(canvas, options)`. The Beast
+ * reference's notes fragment (examples/beast_consumer/fixtures/notes.html, built by
+ * scripts/build_segments.mjs) is this file minified into a plain script that exposes `mount` and
+ * `cutout` as `window.OnchainMidiNotes`; its footer (`startNotes` in examples/beast_consumer/ui.js)
+ * mounts the notes only when that is present and the art marks a notes frame. It reads only
  * the MIDI, a canvas and a clock, never the engine. An NFT drives it like its art: `syncSvgToMusic`'s
  * (examples/beast_consumer/art_sync.js) `notes` option takes the returned `play`, `pause` and `stop`,
  * and its returned `clock()` is the notes' `clock`.
@@ -13,10 +16,12 @@
  * band at the bottom; pitch maps to height over the song's own range. Before ▶, and for a reader
  * who prefers reduced motion, the opening bars stand still, muted (`idleAlpha`); while playing they
  * scroll with the clock (`playAlpha`), only while the page is visible (the browser pauses animation
- * frames for a hidden page); paused, they hold where they are. The defaults suit the Beasts card (250x350, its art
- * frame at (15, 58), 220x150), so a Beasts page's call is short:
+ * frames for a hidden page); paused, they hold where they are. The default `view` and `box` are the
+ * Card Animation Lab's card (250x350, its art frame at (15, 58), 220x150), which no shipped card
+ * matches: a page passes the art's own, as the Beast reference's footer does, reading `view` from
+ * the root `viewBox` and `box` from the `data-notes-bg` element that `cutout` masks:
  *
- *   mount(canvas, { midi, clock, img })
+ *   mount(canvas, { midi, clock, img, view, box })
  *
  * Plain browser JavaScript, no dependencies, no network, no storage. Failing silently is the caller's
  * choice: `mount` throws on a MIDI it cannot read; drawing errors stop the animation.
