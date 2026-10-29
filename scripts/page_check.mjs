@@ -118,7 +118,9 @@ try {
     if(!trustedArt)await o.page.waitForFunction(()=>/^data:image\/svg\+xml;r=\d+,/.test(document.getElementById("beast-art").src),{timeout:10000});
     const playing=await layout(o);assert.deepEqual([playing.canvases,playing.behind,playing.cut],[1,true,true],"a restarted <img> is the cut-out copy, still in front of the canvas");
     assert.ok(!(await frozen(o)),"scrolling with the music");assert.ok((await look(o,`notes-${mode}-playing`)).notes>100);
-    await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==="suspended");await o.page.waitForTimeout(100);
+    // The notes pause in the first animation frame that sees the suspended audio: wait for two.
+    await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==="suspended");
+    await o.page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
     assert.ok(await frozen(o),"paused with the music");
     await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==="playing"&&OnchainMidiPlayer.getPlayStatus().audioState==="running");
     assert.ok(!(await frozen(o)),"resumed");
