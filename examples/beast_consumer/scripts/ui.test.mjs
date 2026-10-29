@@ -1,7 +1,7 @@
 // @ts-nocheck
 import assert from "node:assert/strict";
 import {describe,test} from "node:test";
-import {playAnchor,silentWav,monitorArtSync} from "../ui.js";
+import {playAnchor,silentWav,monitorArtSync,positionState,MEDIA_END_GUARD_SECONDS} from "../ui.js";
 import {REFERENCE_DISPLAY_LEAD_SECONDS,syncSvgToMusic,restartImgOnPass} from "../art_sync.js";
 import {startPlayer} from "../../../player/player.js";
 import {mount as mountNotes} from "../../../player/notes.js";
@@ -114,6 +114,27 @@ describe("the play button's anchor on the art (playAnchor)", () => {
 });
 test("NFT media session owns a six-second silent PCM carrier",()=>{
  const b=Buffer.from(silentWav());assert.equal(b.toString('ascii',0,4),'RIFF');assert.equal(b.readUInt32LE(4),b.length-8);assert.equal(b.readUInt32LE(24),8000);assert.equal(b.readUInt32LE(40),48000);assert.ok(b.subarray(44).every(x=>x===128));
+});
+// The media session's position state: one pass as the track, not the carrier's 6 s.
+describe("the media session's position (positionState)",()=>{
+ const at=(positionSeconds,more={})=>positionState({passSeconds:2,positionSeconds,...more});
+ test("null without a pass length or a position",()=>{
+  assert.equal(at(null),null);assert.equal(at(.5,{passSeconds:null}),null);assert.equal(at(.5,{passSeconds:0}),null);
+ });
+ test("the pass is the duration; the position wraps at each loop, with no display lead",()=>{
+  assert.deepEqual(at(0),{duration:2,playbackRate:1,position:0});
+  assert.deepEqual(at(.07),{duration:2,playbackRate:1,position:.07},"not the art's 17 ms lead");
+  near(at(4.5).position,.5);near(at(2).position,0);
+ });
+ test("a pass event before its pass is heard: within the guard of the end is the next pass's start",()=>{
+  assert.equal(MEDIA_END_GUARD_SECONDS,.05);
+  assert.equal(at(3.98).position,0);assert.equal(at(1.99).position,0);
+  near(at(3.94).position,1.94);
+ });
+ test("paused, the held position is published as it is, at rate 1",()=>{
+  const paused={state:'paused',audioState:'suspended'};
+  assert.deepEqual(at(5.25,paused),at(5.25,paused));near(at(5.25,paused).position,1.25);assert.equal(at(5.25,paused).playbackRate,1);
+ });
 });
 // Art synced to the music (art_sync.js). The fake player below drives each moment of the method
 // directly; the real-player harness further down runs the same rows through startPlayer().

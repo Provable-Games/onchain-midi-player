@@ -131,12 +131,36 @@ export function showWhenDecoded(img, url, onError) {
 /** Fallback title of the media session, for art without a <title>. */
 export const MEDIA_TITLE = "Onchain music";
 
-/** A silent 6 s WAV (8 kHz, 8-bit mono): long enough for Chrome Android to show media controls (5 s). */
+/**
+ * A silent 6 s WAV (8 kHz, 8-bit mono): long enough for Chrome Android to show media controls (5 s).
+ * Its length is not the track's: the page publishes the musical pass as the media session's
+ * position (positionState), which the notification shows instead.
+ */
 export function silentWav() {
   const b = new Uint8Array(48044).fill(128);
   // RIFF, size 48036, WAVE, "fmt ", 16, PCM, 1 channel, 8000 Hz, 8000 B/s, 1 B/frame, 8 bits, "data", 48000
   b.set([82, 73, 70, 70, 164, 187, 0, 0, 87, 65, 86, 69, 102, 109, 116, 32, 16, 0, 0, 0, 1, 0, 1, 0, 64, 31, 0, 0, 64, 31, 0, 0, 1, 0, 8, 0, 100, 97, 116, 97, 128, 187, 0, 0]);
   return b;
+}
+
+/** Within this much of a pass's end, a position counts as the next pass's start (positionState). */
+export const MEDIA_END_GUARD_SECONDS = 0.05;
+
+/**
+ * The media session's position state (`navigator.mediaSession.setPositionState`): one pass of the
+ * music as the track, so the notification shows the pass's length, not the silent element's 6 s.
+ * The position is the music's audible position wrapped to the pass, with no display lead (that is
+ * the art's). A pass event can come up to ~20 ms before its pass is heard, which puts the position
+ * just before the end; the browser would hold it there for a whole pass, so a position within
+ * MEDIA_END_GUARD_SECONDS of the end is 0. The rate stays 1 while paused (0 throws): the session's
+ * `playbackState` holds the bar. Null without a pass length or a position.
+ * @param {import("../../player/api.d.ts").PlayStatus} s
+ * @returns {{duration: number, playbackRate: number, position: number} | null}
+ */
+export function positionState(s) {
+  if (!s.passSeconds || s.positionSeconds === null) return null;
+  const position = s.positionSeconds % s.passSeconds;
+  return { duration: s.passSeconds, playbackRate: 1, position: s.passSeconds - position < MEDIA_END_GUARD_SECONDS ? 0 : position };
 }
 
 
@@ -282,6 +306,13 @@ export async function startUi() {
       attempt(() => (navigator.mediaSession.playbackState = on ? "playing" : "paused"));
     };
     const pause = () => { resuming = false; const promise = player.pause(); setPlaying(false); promise.catch(fail); return promise; };
+    // The pass as the media session's position (positionState), at each pass and state change; the
+    // browser advances it in between. `fromZero`: before a run has a position, the pass from 0.
+    const publish = (fromZero = false) => attempt(() => {
+      const s = player.getPlayStatus();
+      const p = positionState(fromZero && s.positionSeconds === null ? { ...s, positionSeconds: 0 } : s);
+      if (p) navigator.mediaSession.setPositionState(p);
+    });
     /** The media session, once: the title and art, and the handlers that resume or pause. Media stop also pauses, preserving #60's policy. */
     const arm = () => {
       armed = true;
@@ -349,6 +380,10 @@ export async function startUi() {
     const start = () => {
       resuming = true; setPlaying(true);
       session();
+      // A new run shows the pass from 0 at once, rather than the silent element's 6 s: its bar runs up
+      // to a few hundred ms early (start-up, tick 0 sounding 0.1 s after the engine starts, and the
+      // output latency) until the initial pass resets it. A resume shows the held position.
+      publish(true);
       const promise = player.play();
       promise.then(() => {
         resuming = false;
@@ -374,7 +409,9 @@ export async function startUi() {
       // element just started in this gesture while waiting for that explicit transport command.
       if (!(resuming && status.state === "paused")) setPlaying(status.state === "starting" || status.state === "playing");
       if (status.error) fail(status.error);
+      publish();
     });
+    player.onPassStart(() => publish());
     button.onclick = () => playing ? pause() : start();
     if ((/** @type {any} */ (window)).CompositionFixture) button.dataset.fixture = (/** @type {any} */ (window)).CompositionFixture.label("ready");
     if ((/** @type {any} */ (window)).DependentFixture) button.dataset.dependent = (/** @type {any} */ (window)).DependentFixture;
