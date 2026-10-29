@@ -1,6 +1,6 @@
 # Sound provider interface
 
-The class plays a token's MIDI with its `TinySynthSettings`; it does not know where they come from. [`ISoundProvider`](../types/src/interface.cairo) (`tinysynth_interface::interface::ISoundProvider`) and [`TinySynthSound`](../types/src/types.cairo) (`tinysynth_interface::types::TinySynthSound`) fix how a composer's contract serves them, so any NFT can call any composer, and an NFT can change composers without changing its code. **The class does not implement or call `ISoundProvider`**: it is a convention between composers and NFTs, declared in the `tinysynth_interface` package, which depends on nothing but `starknet`, so that both compile against the same types without the class's dependencies ([Depending on the types](#depending-on-the-types)). `onchain_midi_player` re-exports both at their earlier paths, `onchain_midi_player::interface::ISoundProvider` and `onchain_midi_player::types::TinySynthSound`. It changes neither the class hash nor the generated provider fragments. Its ABI, for clients and indexers, is [`abi/ISoundProvider.json`](../abi/ISoundProvider.json).
+The class plays a token's MIDI with its `TinySynthSettings`; it does not know where they come from. [`ISoundProvider`](../types/src/interface.cairo) (`tinysynth_interface::ISoundProvider`) and [`TinySynthSound`](../types/src/types.cairo) (`tinysynth_interface::TinySynthSound`) fix how a composer's contract serves them, so any NFT can call any composer, and an NFT can change composers without changing its code. **The class does not implement or call `ISoundProvider`**: it is a convention between composers and NFTs, declared in the `tinysynth_interface` package, which depends on nothing but `starknet`, so that both compile against the same types without the class's dependencies ([Depending on the types](#depending-on-the-types)). `onchain_midi_player` re-exports both at their earlier paths, `onchain_midi_player::interface::ISoundProvider` and `onchain_midi_player::types::TinySynthSound`. It changes neither the class hash nor the generated provider fragments. Its ABI, for clients and indexers, is [`abi/ISoundProvider.json`](../abi/ISoundProvider.json).
 
 A Standard MIDI File can select an instrument, with a program change or a note on channel 10, but it cannot define one. So the composer's contract owns both the score and the instrument definitions it plays, as `TinySynthSettings`. The NFT, or its renderer, calls `get_sound` and passes both straight to `midi_segment`:
 
@@ -41,12 +41,23 @@ It is a member of the repository's root workspace, which is how a Scarb git depe
 tinysynth_interface = { git = "https://github.com/Provable-Games/onchain-midi-player", tag = "tinysynth_interface-v<version>" }
 ```
 
+Import from the package root, where every public item of its three modules is re-exported:
+
+```cairo
+use tinysynth_interface::{
+    ISoundProviderDispatcher, ISoundProviderDispatcherTrait, ITinySynthLibraryDispatcher,
+    ITinySynthDispatcherTrait, TinySynthSettings, TinySynthSound, default_settings, validate,
+};
+```
+
+The module paths, `tinysynth_interface::types::TinySynthSound`, `tinysynth_interface::interface::ISoundProvider` and `tinysynth_interface::settings::validate`, name the same items and keep working. The root re-exports start at version 0.1.1; `tinysynth_interface-v0.1.0` has the module paths only.
+
 - **Tags.** A release of the package is tagged `tinysynth_interface-v<version>`, its `version` in [`types/Scarb.toml`](../types/Scarb.toml): `tinysynth_interface-v0.1.0` for the first. Class releases are tagged `v<version>`, so the prefix keeps the two apart. A tag is one commit, and the class built from that commit runs the same `validate`: pick the tag that matches the class version your NFT calls.
 - **One source string for every consumer.** Scarb tells sources apart by URL and reference, so a `tag` and a `rev` of the same commit are two different sources, and so are two tags. When one build reaches `tinysynth_interface` twice by different references (a project and a library it uses, a renderer and a composer's package, or the types directly and the class's re-export), it fails with ``found dependencies on the same package `tinysynth_interface` coming from incompatible sources``. Pin it with exactly the same string everywhere: in a workspace, once in `[workspace.dependencies]`.
 - **With the class too.** A project that also depends on `onchain_midi_player` pins both with the same `tag`: the class then reaches the types through the same source, and the two paths name the same types. Pinning the class by `rev` and the types by `tag` fails as above.
 - **Or the registry.** Publishing the package to [scarbs.xyz](https://scarbs.xyz) as `tinysynth_interface = "<version>"` would let projects that need only the types resolve one registry source with ordinary version requirements, without matching tags. A project that also takes `onchain_midi_player` from git still reaches the types through the git source, so it keeps to the same-tag rule or uses the class's re-exports alone.
 
-`onchain_midi_player` re-exports the package at its earlier paths: `onchain_midi_player::types`, `onchain_midi_player::interface` and, with the class's `SETTINGS` encoder, `onchain_midi_player::settings`. They are the same types and traits, so code can move from one path to the other without conversion. ABIs and class hashes name the declaring path, `tinysynth_interface::...`.
+`onchain_midi_player` re-exports the package at its earlier paths: `onchain_midi_player::types`, `onchain_midi_player::interface` and, with the class's `SETTINGS` encoder, `onchain_midi_player::settings`. They are the same types and traits, so code can move from one path to the other without conversion. ABIs and class hashes name the declaring module path, `tinysynth_interface::types::...` or `tinysynth_interface::interface::...`, whatever path the code imports them from.
 
 ## The provider contract
 
@@ -73,7 +84,7 @@ The crate has no helper for the call: copy this one into your NFT or renderer. I
 
 ```cairo
 use core::num::traits::Zero;
-use tinysynth_interface::types::TinySynthSound;
+use tinysynth_interface::TinySynthSound;
 use starknet::ContractAddress;
 use starknet::syscalls::call_contract_syscall;
 
