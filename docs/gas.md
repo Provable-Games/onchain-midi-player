@@ -2,9 +2,13 @@
 
 The unreleased 0.5.0 build combines the unchanged TinySynth engine and headless API in one gzip fragment. The original packaging capture compares combined head `f1ee9c5df6cb73a84fcb42f627b9503e26678dab` with the recoverable split-fragment head `4a76614193d87f045230693fe972bbd5ac457386`. [Results and bindings](measurements/issue59.json) record the tool binaries, source/input/artifact hashes, complete case inventory and repeated captures from 2026-10-07. Those captures used #57’s then-pending head `32f776185370ed519e1f14f94a0975a843069702`. It is now merged on main as `d92159283dc71e76000d6338f53f0f79f9ea1522`; the original and merged baseline file trees are identical. Merged-baseline revalidation is recorded separately, preserving the historical capture identities. No declaration, deployment or release occurred.
 
+## 0.10.0 build
+
+The 0.10.0 build has the 0.9.0 engine, player and loader byte for byte, so every size below applies to it. Its manifest entry differs from 0.9.0's only in the license segment, one byte longer (9,937 bytes) because the license text names the class version. Its types package is renamed from `onchain_midi_types` to [`tinysynth_interface`](../types), which renames the types and interfaces in the Sierra program and the ABI and changes the class hash. A build with the rename alone has 0.9.0's CASM exactly; 0.10.0's CASM differs from it only in the version constant and the felts of the license text. 0.10.0 is not declared. No 0.10.0 constructor, token URI or class gas capture is claimed.
+
 ## 0.9.0 test class
 
-The 0.9.0 build has the 0.8.0 engine, player and loader byte for byte, so every size below applies to it. Its manifest entry differs from 0.8.0's only in the license segment's SHA-256, because the license text names the class version. The class moved its sound types and interfaces into the [`onchain_midi_types`](../types) package, which renames them in the Sierra program and the ABI; its CASM differs from 0.8.0's in two felts, the version constant and the license felt that holds the version. The class is declared on Sepolia as a test class ([deployment record](../deployments/sepolia.json)); it is not a release. No 0.9.0 constructor, token URI or class gas capture is claimed.
+The 0.9.0 build has the 0.8.0 engine, player and loader byte for byte, so every size below applies to it. Its manifest entry differs from 0.8.0's only in the license segment's SHA-256, because the license text names the class version. The class moved its sound types and interfaces into a package of their own, then named `onchain_midi_types`, which renames them in the Sierra program and the ABI; its CASM differs from 0.8.0's in two felts, the version constant and the license felt that holds the version. The class is declared on Sepolia as a test class ([deployment record](../deployments/sepolia.json)); it is not a release. No 0.9.0 constructor, token URI or class gas capture is claimed.
 
 ## 0.8.0 test class
 
