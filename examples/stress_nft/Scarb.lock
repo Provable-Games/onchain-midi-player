@@ -11,12 +11,8 @@ name = "onchain_midi_player"
 version = "0.1.0"
 dependencies = [
  "game_components_encoding",
- "onchain_midi_types",
+ "tinysynth_interface",
 ]
-
-[[package]]
-name = "onchain_midi_types"
-version = "0.1.0"
 
 [[package]]
 name = "owned_assets"
@@ -45,3 +41,7 @@ dependencies = [
  "owned_assets",
  "snforge_std",
 ]
+
+[[package]]
+name = "tinysynth_interface"
+version = "0.1.0"

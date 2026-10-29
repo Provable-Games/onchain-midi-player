@@ -1,5 +1,5 @@
 [package]
-name = "onchain_midi_types"
+name = "tinysynth_interface"
 version = "0.1.0"
 edition = "2025_12"
 description = "The TinySynth sound types and interfaces of onchain-midi-player (TinySynthSound, TinySynthSettings, ISoundProvider, ITinySynth, settings::validate), with no dependency but starknet."

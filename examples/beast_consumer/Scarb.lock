@@ -23,12 +23,8 @@ name = "onchain_midi_player"
 version = "0.1.0"
 dependencies = [
  "game_components_encoding",
- "onchain_midi_types",
+ "tinysynth_interface",
 ]
-
-[[package]]
-name = "onchain_midi_types"
-version = "0.1.0"
 
 [[package]]
 name = "openzeppelin_access"
@@ -94,3 +90,7 @@ checksum = "sha256:ea9ca83895fd0ae4b99c5cf93b384b8045dc0dca80a075ecef1ee9fdf5ffa
 dependencies = [
  "snforge_scarb_plugin",
 ]
+
+[[package]]
+name = "tinysynth_interface"
+version = "0.1.0"

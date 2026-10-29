@@ -431,5 +431,94 @@
     },
     "license_sha256": "a7c3222b2090e8079d968711a2de1c13aee7b8556feaebeb4e25e7ef18fe3f73",
     "license_len": 9936
+  },
+  "0.10.0": {
+    "format": 1,
+    "fixed_alignment": 279,
+    "dynamic_alignment": 9,
+    "toolchain": {
+      "fflate": "0.8.3",
+      "terser": "5.51.2",
+      "minify": {
+        "ecma": 2020,
+        "compress": {
+          "passes": 2,
+          "ecma": 2020
+        },
+        "mangle": true,
+        "format": {
+          "ascii_only": true,
+          "ecma": 2020
+        }
+      },
+      "gzip": {
+        "level": 9,
+        "mtime": 0
+      }
+    },
+    "inputs": {
+      "player/gunzip.js": {
+        "sha256": "17945521b35cd5cf1e454518ac8d849e47ea8bcfd9d796eb7cfc685ab9bb43f1",
+        "bytes": 13156
+      },
+      "player/settings.js": {
+        "sha256": "95541554ff0340347776696dd641d8b911a7acf28ed42770352922dc970b77fb",
+        "bytes": 12892
+      },
+      "player/player.js": {
+        "sha256": "b45fa8c27a62386554bb6545ec729119e7d341b79761b7510a9897461fc591ff",
+        "bytes": 22644
+      }
+    },
+    "engine_build": {
+      "provisional": false,
+      "sourceCommit": "a5b5c98716d390542738d87b29d1cc5664316081",
+      "distributionCommit": "a5b5c98716d390542738d87b29d1cc5664316081",
+      "ciRun": "https://github.com/Provable-Games/pocket-synth/actions/runs/40908453483",
+      "sourceMapSha256": "e740c2f5284bf6c769e25299c33ae7b5040c82e0da54ba4c0ccd5990662a5d14",
+      "sourceSha256": "da9bd2ea7391ab83159514c518ae9bc9968bc233de5a621d103b492e4c836f28",
+      "recipe": "node scripts/build.js <output-dir>",
+      "recipeSha256": "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
+      "packageLockSha256": "e804530bd5702682ec68a33763ec3677999ea2d8b5f31121d26698aced7bf525",
+      "terser": "5.51.2"
+    },
+    "engine_ref": "v2.1.0",
+    "engine_commit": "92e3bef0eac09a5ccbdaca2b07f6ba348c2f1cd2",
+    "script_sha256": "9be3f30479321274aff644a0a5d1ab8aa0e431f9f8e9a2548cdd89f72c4281b4",
+    "artifacts": {
+      "gunzip": {
+        "source_sha256": "9077d45fe8ad01be4379f4e4a7eaabcc0318aa429ef256160be2e194ae888052",
+        "source_len": 4524,
+        "raw_sha256": "02ca288c9fed3f8cdb2226e3756d948b73ac6043822ff24e008ba70193144988",
+        "raw_len": 4743,
+        "returned_sha256": "869be0afd09b9b8416b1f306a166a518e48ce4397d4d01b82ef004e934f6e7d7",
+        "returned_len": 8432,
+        "returned_felts": 275
+      },
+      "player": {
+        "source_sha256": "da5d272ffa2ef466bbb425a6dd411f361f297e44430b9c31d8f4d6d6261cf6b3",
+        "source_len": 59730,
+        "raw_sha256": "56fadfb21f238bb486d670525a58c8cff034aae04e318bc175f0e4f14f6f5924",
+        "raw_len": 26226,
+        "returned_sha256": "442edb3876236adeb5740d17e00633baef3b66cee1b05f3aa4a02b8cebcedf52",
+        "returned_len": 46624,
+        "returned_felts": 1507,
+        "embedded_engine": {
+          "offset": 0,
+          "length": 48746,
+          "sha256": "9be3f30479321274aff644a0a5d1ab8aa0e431f9f8e9a2548cdd89f72c4281b4"
+        },
+        "wrapper": {
+          "offset": 48749,
+          "length": 10981,
+          "sha256": "e5939e20e0fb6fab96480e03c9add2ce7dea0f998affc234a6ec580e07294a86"
+        },
+        "gzip_sha256": "8ae5a624436abbbeb669839a41d4785a2e30db455eb56b24decd2d7177be11f4",
+        "gzip_len": 19306,
+        "gzip_base64_len": 25744
+      }
+    },
+    "license_sha256": "a7bfb5fa8e06ee9a2f8c9cb4c257ad87f40ee510329721435de5b479ddcd1ca6",
+    "license_len": 9937
   }
 }
