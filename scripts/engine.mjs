@@ -16,22 +16,21 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Signed fork release v2.0.1 of pocket-synth (tag commit 4b82969 on main). The fork's release PR #111 built
-// and committed the minified script and map on release/v2.0.1 (c17c742), and that PR's CI run checked them
-// against a fresh build; the tag carries the identical source, NOTICE, script and map. The lock below is
-// c17c742's, which that CI build used; the tag's differs only in test-only playwright-core, and a fresh
-// `npm ci` build of the tag reproduces both files.
-export const ENGINE_PIN = { ref: "v2.0.1", commit: "4b829693d112d27e4dfaeb126d1912ff89216324", sha256: "8ffa2519cdd0ac9c4876101681014e39cbfd07e71d45ea1fa5dc15d53233f94b", noticeSha256: "0e4f6ad003a1cf9e2ea2620b57a8a7eec4b396064e222316782b70cb6693652b" };
+// Signed fork release v2.1.0 of pocket-synth (tag commit 92e3bef on main, the merge of release PR #124). That
+// PR built and committed the minified script and map on release/v2.1.0 (a5b5c98), and its CI run checked them
+// against a fresh build; the tag commit has the identical tree, so the same source, NOTICE, lock, script and
+// map. A fresh `npm ci` build of the tag reproduces both files.
+export const ENGINE_PIN = { ref: "v2.1.0", commit: "92e3bef0eac09a5ccbdaca2b07f6ba348c2f1cd2", sha256: "9be3f30479321274aff644a0a5d1ab8aa0e431f9f8e9a2548cdd89f72c4281b4", noticeSha256: "57e35bc6d5e34f54efccfdfe4c50a695679810ac586fb24d7d1242bfb07067df" };
 export const ENGINE_BUILD = {
   provisional: false,
-  sourceCommit: "c17c7427031f489f27d11d83d5502c1d4746fa77",
-  distributionCommit: "c17c7427031f489f27d11d83d5502c1d4746fa77",
-  ciRun: "https://github.com/Provable-Games/pocket-synth/actions/runs/38368777784",
-  sourceMapSha256: "0afc9143aff436bdb165619f8f8229ca3ac9d87529f00ff1dbbd420e6c762f6a",
-  sourceSha256: "a741647d1b6e4c94a7630da5b0b457377879f37f17971f4b42f704f1244839e0",
+  sourceCommit: "a5b5c98716d390542738d87b29d1cc5664316081",
+  distributionCommit: "a5b5c98716d390542738d87b29d1cc5664316081",
+  ciRun: "https://github.com/Provable-Games/pocket-synth/actions/runs/40908453483",
+  sourceMapSha256: "e740c2f5284bf6c769e25299c33ae7b5040c82e0da54ba4c0ccd5990662a5d14",
+  sourceSha256: "da9bd2ea7391ab83159514c518ae9bc9968bc233de5a621d103b492e4c836f28",
   recipe: "node scripts/build.js <output-dir>",
   recipeSha256: "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
-  packageLockSha256: "8e929f89b90456fcc607b9396d80d465deffd8f915a6a2c963901883175ae5b0",
+  packageLockSha256: "e804530bd5702682ec68a33763ec3677999ea2d8b5f31121d26698aced7bf525",
   terser: "5.51.2"
 };
 
