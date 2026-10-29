@@ -150,17 +150,19 @@ describe("the pinned engine behaves as the MIDI contract says", () => {
     assert.deepEqual(e.offs, []);
   });
 
-  test("the voice limit cuts a note when the new note is scheduled, before it sounds", () => {
+  test("the voice limit cuts a note at the new note's start, not before", () => {
     // voices 1: a held note at tick 0, and a second note at tick 192 (1 s later).
     const midi = smf({ ppq: PPQ, tracks: [[[0, 0x90, 60, 100], [192, 0x90, 64, 100], [96, 0x80, 60, 0], [0, 0x80, 64, 0], [96, ...EOT]]] });
     const e = engine({ voices: 1 });
     e.play(midi);
     e.run(0); // schedules the first note
     const [held] = e.notes;
-    const cut = e.run(1.2, held.oscs);
+    const stopped = e.run(1.5, held.oscs);
     const second = e.notes[1];
-    assert.ok(cut !== null && near(second.t, 1.1), "the held note is cut");
-    assert.ok(cut < second.t && second.t - cut <= 0.2, `cut at ${cut} s, ${second.t - /** @type {number} */ (cut)} s before the new note at ${second.t} s`);
+    assert.ok(near(second.t, 1.1), "the second note plays");
+    for (const g of held.gains)
+      assert.ok(e.log.some((c) => c[0] === `${g}.gain` && c[1] === "set" && c[2] === 0 && near(c[3], second.t)), `${g} drops to 0 at the new note's start`);
+    assert.ok(stopped !== null && stopped > second.t, `the cut note's oscillators stop after it is silent, at ${stopped} s`);
   });
 
   test("a drum hit takes no voice but applies the voice limit", () => {
@@ -198,23 +200,33 @@ describe("the pinned engine behaves as the MIDI contract says", () => {
     assert.ok(near(second.freq, 440 * 2 ** (-9 / 12)), `second start: ${second.freq} Hz, C back in tune`);
   });
 
-  test("CC123 cuts the channel's notes when scheduled; CC121 leaves sustained notes held", () => {
-    const e = engine();
-    e.synth.send([0x90, 60, 100], 1);
-    const [n] = e.notes;
-    const from = e.log.length;
-    e.synth.send([0xb0, 123, 0], 5); // due at 5 s, the audio clock at 0
-    assert.ok(n.oscs.every((o) => e.log.slice(from).some((c) => c[0] === o && c[1] === "stop" && c[2] === undefined)), "stopped at once");
+  test("CC120, CC123 and CC121 act at their own time: CC120 cuts, CC123 releases as a note-off, CC121 lifts the pedal", () => {
+    const e = engine(); // every message below is due later than the audio clock, at 0
+    const at = (/** @type {string[]} */ gains, /** @type {string} */ op, /** @type {number} */ t) => gains.every((g) => e.log.some((c) => c[0] === `${g}.gain` && c[1] === op && c[2] === 0 && near(c[3], t)));
+    const stoppedNow = (/** @type {string[]} */ oscs, /** @type {number} */ from) => e.log.slice(from).some((c) => oscs.includes(c[0]) && c[1] === "stop");
 
-    e.synth.send([0xb0, 64, 127], 1);
-    e.synth.send([0x90, 62, 100], 1);
-    e.synth.send([0x80, 62, 0], 1.5);
-    e.synth.send([0xb0, 121, 0], 2);
-    const held = e.synth.notetab.find((/** @type {any} */ x) => x.n === 62);
-    assert.equal(e.synth.sustain[0], 0);
-    assert.equal(held.e, 99999, "CC121 turns sustain off without releasing the note");
-    e.synth.send([0xb0, 64, 0], 3);
-    assert.ok(held.e < 99999, "the next CC64 below 64 releases it");
+    e.synth.send([0x90, 60, 100], 1); // channel 1: CC123 at 5 s
+    const [a] = e.notes;
+    let from = e.log.length;
+    e.synth.send([0xb0, 123, 0], 5);
+    assert.ok(!stoppedNow(a.oscs, from) && at(a.gains, "target", 5), "released at 5 s, not stopped when scheduled");
+
+    e.synth.send([0x91, 62, 100], 1); // channel 2: CC120 at 5 s, then a note at 6 s
+    const b = e.notes.at(-1);
+    from = e.log.length;
+    e.synth.send([0xb1, 120, 0], 5);
+    assert.ok(!stoppedNow(b.oscs, from) && at(b.gains, "set", 5), "cut to 0 at 5 s, not stopped when scheduled");
+    e.synth.send([0x91, 64, 100], 6);
+    assert.ok(e.synth.notetab.some((/** @type {any} */ x) => x.n === 64 && x.x === undefined), "a later note on the channel is not cut");
+
+    e.synth.send([0xb2, 64, 127], 1); // channel 3: pedal down, a note, CC123 at 2 s, CC121 at 3 s
+    e.synth.send([0x92, 67, 100], 1);
+    const held = e.synth.notetab.find((/** @type {any} */ x) => x.n === 67);
+    e.synth.send([0xb2, 123, 0], 2);
+    assert.equal(held.e, 99999, "CC123 leaves the note to the pedal, as a note-off does");
+    e.synth.send([0xb2, 121, 0], 3);
+    assert.equal(e.synth.sustain[2], 0);
+    assert.ok(held.e < 99999 && at(e.notes.at(-1).gains, "target", 3), "CC121 lifts the pedal at 3 s, releasing the note");
   });
 
   test("bend range: full scale is (MSB x 128 + LSB) x 100 / 127 cents", () => {

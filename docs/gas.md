@@ -2,6 +2,10 @@
 
 The unreleased 0.5.0 build combines the unchanged TinySynth engine and headless API in one gzip fragment. The original packaging capture compares combined head `f1ee9c5df6cb73a84fcb42f627b9503e26678dab` with the recoverable split-fragment head `4a76614193d87f045230693fe972bbd5ac457386`. [Results and bindings](measurements/issue59.json) record the tool binaries, source/input/artifact hashes, complete case inventory and repeated captures from 2026-10-07. Those captures used #57’s then-pending head `32f776185370ed519e1f14f94a0975a843069702`. It is now merged on main as `d92159283dc71e76000d6338f53f0f79f9ea1522`; the original and merged baseline file trees are identical. Merged-baseline revalidation is recorded separately, preserving the historical capture identities. No declaration, deployment or release occurred.
 
+## 0.8.0 build
+
+The 0.8.0 build uses the signed pocket-synth release `v2.1.0` described in [vendor provenance](../tests/vendor/README.md). Its manifest records a 48,746-byte exact engine and the unchanged 10,981-byte public API wrapper, combined 59,730 bytes and 19,306 gzipped bytes. The player HTML fragment is 26,226 bytes and its returned segment 46,624 bytes /1,507 serialized felts; the shared loader remains 8,432 returned bytes /275 felts. Total fixed returns are 55,056 bytes. 0.8.0 has not been declared, and no 0.8.0 constructor, token URI or class gas capture is claimed.
+
 ## 0.7.0 test class
 
 The 0.7.0 build uses the signed pocket-synth release `v2.0.1` described in [vendor provenance](../tests/vendor/README.md). Its current manifest records a 47,804-byte exact engine and 10,981-byte public API wrapper, combined 58,788 bytes and 18,932 gzipped bytes. The player HTML fragment is 25,668 bytes and its returned segment 45,632 bytes /1,475 serialized felts; the shared loader remains 8,432 returned bytes /275 felts. Total fixed returns are 54,064 bytes. The class with these sizes is declared on Sepolia as a test class ([deployment record](../deployments/sepolia.json)); it is not a release.
