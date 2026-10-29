@@ -96,12 +96,16 @@ try {
  {const c=fixtureCase("beast_140bpm");
   const card=marked=>"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 250 350'><rect width='250' height='350' fill='#1e1e22'/><rect"+(marked?" data-notes-bg=''":"")+
     " x='15' y='58' width='220' height='144' rx='8' fill='#000'/><rect x='95' y='100' width='60' height='60' fill='#c00'/></svg>";
+  // Ready, and the notes settled: an <img> shows the cut-out copy once it decodes, or keeps its own URL and loses the canvas.
   const page=async(html,options={})=>{const o=await run.page();if(options.reducedMotion)await o.page.emulateMedia({reducedMotion:"reduce"});
-    await o.page.setViewportSize({width:500,height:700});await o.page.goto(dataUrl(html));await waitReady(o.page);return o;};
+    await o.page.setViewportSize({width:500,height:700});await o.page.goto(dataUrl(html));await waitReady(o.page);
+    await o.page.waitForFunction(()=>{const a=document.getElementById("beast-art");return !(a instanceof HTMLImageElement)||!/^data:image\/svg\+xml;base64,/.test(a.src)||!document.querySelector("canvas");});return o;};
   const notesPage=(marked,trustedArt,notes=true)=>composed({...c,svg:card(marked)},{fixture:true,dependent:true,trustedArt,notes});
   // Coloured pixels in the frame around the sprite (the notes; the frame itself is black), the sprite's and the card's colour.
-  const look=async(o,name)=>{const png=await o.page.screenshot();if(shots)writeFileSync(`${shots}/${name}-${run.engine}.png`,png);const img=decodePng(png);let notes=0;
-    for(let y=120;y<400;y+=2)for(let x=34;x<466;x+=2)if(!(x>=186&&x<314&&y>=196&&y<324)&&Math.max(...img.pixel(x,y))>40)notes++;
+  // Screenshot pixels: the frame and the sprite, each inset 4 px from its edges (the frame) or grown by 4 px (the sprite).
+  const CARD={frame:[34,120,466,400],sprite:[186,196,314,324]};
+  const look=async(o,name,{frame:[x0,y0,x1,y1],sprite:[sx0,sy0,sx1,sy1]}=CARD)=>{const png=await o.page.screenshot();if(shots)writeFileSync(`${shots}/${name}-${run.engine}.png`,png);const img=decodePng(png);let notes=0;
+    for(let y=y0;y<y1;y+=2)for(let x=x0;x<x1;x+=2)if(!(x>=sx0&&x<sx1&&y>=sy0&&y<sy1)&&Math.max(...img.pixel(x,y))>40)notes++;
     return{notes,sprite:img.pixel(250,260),card:img.pixel(20,600)};};
   const near=(rgb,want)=>rgb.every((v,i)=>Math.abs(v-want[i])<=4);
   const layout=o=>o.page.evaluate(()=>{const art=document.getElementById("beast-art"),canvas=document.querySelector("canvas"),src=art.getAttribute("src")||"";
@@ -130,6 +134,16 @@ try {
   {const o=await page(animationHtml(1));try{
     assert.deepEqual(await layout(o),{canvases:1,behind:true,box:{x:122,y:130,width:256,height:256},inline:true,src:"",cut:true});
     await playAndPass(o);assert.ok(!(await frozen(o)));assert.deepEqual(await o.errors(),[]);console.log("PASS reference consumer page: notes behind its art frame");
+  }finally{await o.context.close();}}
+  // A cut-out copy that fails to decode: the art keeps its own URL (never blank), the mounted notes are removed, playback as usual.
+  {const broken=ownedFragment("notes")+"<script>{const N=window.OnchainMidiNotes;window.OnchainMidiNotes={mount:(c,o)=>(window.__notesMounted=1,N.mount(c,o)),cutout:()=>\"<svg xmlns='http://www.w3.org/2000/svg'><unclosed\"}}</script>";
+   const o=await page(notesPage(true,false).replace(ownedFragment("notes"),broken));try{
+    const at=await layout(o);assert.deepEqual([at.canvases,at.src,at.cut],[0,"data:image/svg+xml;base64,",false]);
+    assert.equal(await o.page.evaluate(()=>window.__notesMounted),1,"mounted, then removed");
+    const shot=await look(o,"notes-undecodable");assert.equal(shot.notes,0,"no notes");assert.ok(near(shot.sprite,[204,0,0]),"the art shown");assert.ok(near(shot.card,[30,30,34]));
+    await playAndPass(o);await o.page.waitForFunction(()=>/^data:image\/svg\+xml;r=\d+;base64,/.test(document.getElementById("beast-art").src),{timeout:10000});
+    assert.equal(await o.page.locator("canvas").count(),0);assert.ok(near((await look(o,"notes-undecodable-playing")).sprite,[204,0,0]),"restarted from the original");
+    assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);console.log("PASS cut-out copy that fails to decode: the art as it was, no canvas, restarts from the original, ordinary playback");
   }finally{await o.context.close();}}
   // Reduced motion: the notes stand still while the music plays (notes.js).
   {const o=await page(notesPage(true,false),{reducedMotion:true});try{

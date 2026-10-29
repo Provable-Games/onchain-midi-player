@@ -175,13 +175,19 @@ describe("mount: defaults, layout and animation", () => {
   function browser({ reduced = false } = {}) {
     /** @type {Array<() => void>} */
     const frames = [];
-    const saved = Object.fromEntries(["requestAnimationFrame", "cancelAnimationFrame", "matchMedia", "devicePixelRatio", "addEventListener", "getComputedStyle"].map((n) => [n, Object.getOwnPropertyDescriptor(globalThis, n)]));
+    const saved = Object.fromEntries(["requestAnimationFrame", "cancelAnimationFrame", "matchMedia", "devicePixelRatio", "addEventListener", "removeEventListener", "getComputedStyle"].map((n) => [n, Object.getOwnPropertyDescriptor(globalThis, n)]));
+    /** @type {Array<[string, () => void]>} the window's listeners */
+    const listeners = [];
     Object.assign(globalThis, {
       requestAnimationFrame: (/** @type {() => void} */ f) => frames.push(f),
       cancelAnimationFrame: (/** @type {number} */ id) => { frames[id - 1] = () => {}; },
       matchMedia: () => ({ matches: reduced }),
       devicePixelRatio: 2,
-      addEventListener: () => {},
+      addEventListener: (/** @type {string} */ type, /** @type {() => void} */ f) => listeners.push([type, f]),
+      removeEventListener: (/** @type {string} */ type, /** @type {() => void} */ f) => {
+        const i = listeners.findIndex(([t, g]) => t == type && g == f);
+        if (i >= 0) listeners.splice(i, 1);
+      },
       getComputedStyle: (/** @type {any} */ e) => ({ position: e.isConnected === false ? "" : e.style.position || "static" }), // inline style only; none detached
     });
     const restore = () => {
@@ -190,7 +196,7 @@ describe("mount: defaults, layout and animation", () => {
         else delete (/** @type {any} */ (globalThis))[n];
       }
     };
-    return { frames, restore };
+    return { frames, listeners, restore };
   }
   function canvas() {
     const { g, ops } = recorder();
@@ -375,6 +381,43 @@ describe("mount: defaults, layout and animation", () => {
       m.pause();
       assert.equal(frames.length, 0);
       assert.deepEqual(fills(ops.slice(ops.map((op) => op[0]).lastIndexOf("clear"))), still, "pause leaves it at the opening bars, the clock unread");
+    } finally {
+      restore();
+    }
+  });
+  test("resize: followed once the canvas is first drawn; a mount that throws leaves no listener", () => {
+    const { listeners, restore } = browser();
+    try {
+      mount(canvas().c, { midi: SONG });
+      assert.deepEqual(listeners.map(([t]) => t), ["resize"]);
+      const broken = /** @type {any} */ ({ ...canvas().c, getContext: () => null });
+      assert.throws(() => mount(broken, { midi: SONG }), TypeError, "its first draw fails");
+      assert.equal(listeners.length, 1, "the failed mount added none");
+      assert.throws(() => mount(canvas().c, { midi: new Uint8Array([1, 2, 3]) }), /^Error: notes: /);
+      assert.equal(listeners.length, 1, "nor does a MIDI it cannot read");
+    } finally {
+      restore();
+    }
+  });
+  test("remove: the canvas out of the document, no animation frames, no redraw on resize, nothing drawn after it", () => {
+    const { frames, listeners, restore } = browser();
+    try {
+      const { c, ops } = canvas();
+      let removed = 0;
+      c.remove = () => removed++;
+      const m = mount(c, { midi: SONG, clock: () => 1 });
+      m.play();
+      assert.equal(frames.length, 1);
+      m.remove();
+      assert.deepEqual([removed, listeners], [1, []], "out, and no longer following resizes");
+      const drawn = ops.length;
+      frames[0](); // cancelled
+      m.play();
+      m.pause();
+      m.stop();
+      m.draw();
+      assert.equal(frames.length, 1, "no frame requested");
+      assert.equal(ops.length, drawn, "nothing drawn");
     } finally {
       restore();
     }

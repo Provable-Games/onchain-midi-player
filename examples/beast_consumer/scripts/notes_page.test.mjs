@@ -9,7 +9,8 @@ import { readFileSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 import { describe, test } from "node:test";
 import { DOMParser, XMLSerializer } from "@xmldom/xmldom";
-import { notesFrame, startNotes } from "../ui.js";
+import { notesFrame, showWhenDecoded, startNotes } from "../ui.js";
+import { restartImgOnPass } from "../art_sync.js";
 import * as notesSource from "../../../player/notes.js";
 import { renderSvg } from "./reference.mjs";
 import { riff } from "../../../scripts/data_cases.mjs";
@@ -59,6 +60,7 @@ describe("notesFrame: the notes' box and units, from the art", () => {
     assert.deepEqual(frame(card("<rect data-notes-bg='' x='15' y='54' width='220' height='170'/>", "viewBox=' -10,-20 250,350 '")), { view: [-10, -20, 250, 350], box: [15, 54, 220, 170] });
     assert.deepEqual(frame(card("<rect data-notes-bg='' width='250' height='350'/>")), { view: [0, 0, 250, 350], box: [0, 0, 250, 350] }, "x and y default to 0");
     assert.deepEqual(frame(card(FRAME + "<rect data-notes-bg='' x='1' y='1' width='1' height='1'/>")).box, [15, 58, 220, 144], "the first marked child");
+    assert.deepEqual(frame(card("<rect data-notes-bg='' x=' -1.5 ' y='+.5' width='220.' height='144'/>")).box, [-1.5, 0.5, 220, 144], "plain decimals, spaces around them");
   });
   test("the reference card: its art frame (61, 65, 128 x 128)", () => {
     assert.deepEqual(frame(renderSvg("Warlock", 1)), { view: [0, 0, 250, 350], box: [61, 65, 128, 128] });
@@ -73,7 +75,19 @@ describe("notesFrame: the notes' box and units, from the art", () => {
     ["a zero height", card("<rect data-notes-bg='' x='15' y='58' width='220' height='0'/>")],
     ["a percentage", card("<rect data-notes-bg='' x='15' y='58' width='100%' height='144'/>")],
     ["units", card("<rect data-notes-bg='' x='15px' y='58' width='220' height='144'/>")],
-    ["a document that is not SVG", "<html><body data-notes-bg=''/></html>"],
+    // Numbers as playAnchor reads them: no hex, exponent or blank.
+    ["a hex number", card("<rect data-notes-bg='' x='0x10' y='58' width='220' height='144'/>")],
+    ["an exponent", card("<rect data-notes-bg='' x='15' y='58' width='2.2e2' height='144'/>")],
+    ["a blank x", card("<rect data-notes-bg='' x='' y='58' width='220' height='144'/>")],
+    ["a blank width", card("<rect data-notes-bg='' x='15' y='58' width=' ' height='144'/>")],
+    ["a hex viewBox", card(FRAME, "viewBox='0 0 0xfa 350'")],
+    // The marked element is the one cutout masks, the first marked child: it must be a <rect>.
+    ["a marked <title> first", card("<title data-notes-bg='' x='15' y='58' width='220' height='144'>t</title>" + FRAME)],
+    ["a marked <g>", card("<g data-notes-bg='' x='15' y='58' width='220' height='144'/>")],
+    // The root must be an SVG <svg>, as for inline art.
+    ["an HTML root with a viewBox and a sized marked rect", "<html xmlns='http://www.w3.org/1999/xhtml' viewBox='0 0 250 350'>" + FRAME + "</html>"],
+    // (xmldom puts an <svg> without xmlns in the SVG namespace; browsers leave it in none.)
+    ["an <svg> root in another namespace", "<svg xmlns='urn:not-svg' viewBox='0 0 250 350'>" + FRAME + "</svg>"],
   ]) {
     test(`null: ${label}`, () => assert.equal(frame(svg), null));
   }
@@ -89,7 +103,7 @@ describe("startNotes: the footer's notes, or nothing", () => {
       mount(canvas, options) {
         calls.push(["mount", canvas, options]);
         if (mountThrows) { canvas.isConnected = true; throw Error("notes: not a MIDI file"); }
-        return { play() { calls.push(["play"]); if (playThrows) throw Error("draw"); }, pause() { calls.push(["pause"]); }, stop() { calls.push(["stop"]); } };
+        return { play() { calls.push(["play"]); if (playThrows) throw Error("draw"); }, pause() { calls.push(["pause"]); }, stop() { calls.push(["stop"]); }, remove() { calls.push(["remove"]); } };
       },
     };
   }
@@ -104,8 +118,8 @@ describe("startNotes: the footer's notes, or nothing", () => {
     const [, onCanvas, o] = lib.calls[1];
     assert.equal(onCanvas, canvas);
     assert.deepEqual([o.midi, o.view, o.box, o.clock(), o.img()], [MIDI, [0, 0, 250, 350], [15, 58, 220, 144], 1.5, img]);
-    notes.play(); notes.pause(); notes.stop();
-    assert.deepEqual(lib.calls.slice(2), [["play"], ["pause"], ["stop"]], "the transport syncSvgToMusic drives");
+    notes.play(); notes.pause(); notes.stop(); notes.remove();
+    assert.deepEqual(lib.calls.slice(2), [["play"], ["pause"], ["stop"], ["remove"]], "the transport syncSvgToMusic drives, and remove");
   });
   test("absent: no module, nothing happens", () => {
     const { canvas, img } = page();
@@ -140,11 +154,80 @@ describe("startNotes: the footer's notes, or nothing", () => {
     assert.ok(ops.some((op) => op[0] === "fillRect"), "drawn standing still");
     const root = withBrowser(() => new DOMParser().parseFromString(notes.svg, "image/svg+xml").documentElement);
     assert.deepEqual(Array.from(root.childNodes).map((e) => e.localName + (e.getAttribute("id") ? "#" + e.getAttribute("id") : "")), ["mask#onchain-midi-notes", "g", "g#beast"]);
+    notes.remove();
+    assert.deepEqual([canvas.removed, canvas.isConnected], [1, false], "remove takes the canvas out");
   });
   test("with player/notes.js and a MIDI it cannot read: nothing", () => {
     const { canvas, img } = page();
     assert.equal(withBrowser(() => startNotes(notesSource, svg, canvas, { ...options(img), midi: "AAAA" })), null);
     assert.equal(img.placed, undefined);
+  });
+});
+
+describe("showWhenDecoded: the <img> shows the cut-out copy only once it decodes, and restarts follow what it shows", () => {
+  /** A page of fake images (as in ui.test.mjs): created off screen, loaded or failed by hand, swapped in place. */
+  function imgPage(src) {
+    const page = [], created = [], passes = new Set();
+    const doc = { createElement(tag) { assert.equal(tag, "img"); const el = image(); created.push(el); return el; } };
+    function image(attributes = []) {
+      return { attributes, ownerDocument: doc, onload: null, onerror: null, src: "",
+        setAttribute(name, value) { this.attributes = [...this.attributes.filter((a) => a.name !== name), { name, value }]; },
+        replaceWith(other) { const i = page.indexOf(this); if (i >= 0) page[i] = other; },
+        load() { this.onload?.(); }, fail() { this.onerror?.(); } };
+    }
+    const art = Object.assign(image([{ name: "id", value: "beast-art" }]), { src });
+    page.push(art);
+    const player = { getPlayStatus: () => ({ runId: 1 }), onPassStart(fn) { passes.add(fn); return () => passes.delete(fn); }, onStateChange() { return () => {}; } };
+    return { page, created, art, player, pass() { for (const fn of [...passes]) fn({ runId: 1 }); } };
+  }
+  const ORIGINAL = "data:image/svg+xml;base64," + Buffer.from(card(FRAME)).toString("base64");
+  const CUT = "data:image/svg+xml," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg'><mask/></svg>");
+  /** As startUi: the swap first, restarts (each copying the URL the art shows) once it has settled. */
+  function follow(h, onError) {
+    const shown = showWhenDecoded(h.art, CUT, onError);
+    return { shown, restarting: shown.then(() => restartImgOnPass(h.art, h.player)) };
+  }
+
+  test("decoded: the art switches only once its off-screen copy loads, and restarts copy the cut-out copy", async () => {
+    const h = imgPage(ORIGINAL), errors = [];
+    const { restarting } = follow(h, () => errors.push("error"));
+    assert.equal(h.created[0].src, CUT, "decoded off screen first");
+    assert.equal(h.art.src, ORIGINAL, "the art unchanged meanwhile");
+    h.pass(); // a pass before the swap settles: no restart from a URL about to change
+    assert.equal(h.created.length, 1);
+    h.created[0].load();
+    assert.equal(h.art.src, CUT);
+    await restarting;
+    h.pass();
+    assert.equal(h.created[1].src, CUT.replace("data:image/svg+xml,", "data:image/svg+xml;r=1,"), "the restart copies the cut-out copy");
+    h.created[1].load();
+    assert.equal(h.page[0], h.created[1]);
+    assert.deepEqual(errors, []);
+  });
+  test("fails to decode: the art keeps its own URL, the notes go, and restarts copy the original", async () => {
+    const h = imgPage(ORIGINAL), errors = [];
+    const { restarting } = follow(h, () => errors.push("error"));
+    h.pass();
+    h.created[0].fail();
+    assert.equal(h.art.src, ORIGINAL, "never blank: the original stays");
+    assert.deepEqual(errors, ["error"], "onError once (the footer removes the notes)");
+    await restarting;
+    h.pass();
+    assert.equal(h.created[1].src, ORIGINAL.replace(";base64,", ";r=1;base64,"));
+    h.created[1].load();
+    assert.equal(h.page[0], h.created[1]);
+  });
+  test("the footer's onError: the notes removed, their canvas out, nothing drawn after", async () => {
+    const { canvas, img, ops } = page();
+    const notes = withBrowser(() => startNotes(notesSource, card("<rect width='250' height='350'/>" + FRAME), canvas, { midi: MIDI, clock: () => 1, img: () => img }));
+    const h = imgPage(ORIGINAL);
+    const { shown } = (() => { const shown = showWhenDecoded(h.art, CUT, () => notes.remove()); return { shown }; })();
+    h.created[0].fail();
+    await shown;
+    assert.equal(canvas.isConnected, false);
+    const drawn = ops.length;
+    withBrowser(() => { notes.play(); notes.pause(); notes.stop(); });
+    assert.equal(ops.length, drawn, "removed notes draw nothing");
   });
 });
 

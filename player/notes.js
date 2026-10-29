@@ -244,7 +244,10 @@ export function drawNotes(g, roll, o, at, live) {
  * Mounts the notes UI on `canvas` (see DEFAULTS for the options) and draws it standing still.
  * Returns `play()` (scroll with the clock, from wherever it is: also resumes), `pause()` (hold the
  * frame at the clock's reading then, if scrolling; no animation frames until `play()`), `stop()`
- * (back to the still opening bars), `draw()` (lay out and redraw), and the resolved `options`.
+ * (back to the still opening bars), `draw()` (lay out and redraw), `remove()` (take the canvas out
+ * of the document and draw nothing more: no animation frames, no redraw on resize, whatever is
+ * called after it), and the resolved `options`. The canvas follows resizes once it is first drawn:
+ * a mount that throws leaves no listener.
  * @param {HTMLCanvasElement} canvas
  * @param {Partial<NotesOptions>} options
  */
@@ -267,6 +270,7 @@ export function mount(canvas, options) {
     return i;
   };
   let frame = 0;
+  let gone = false; // removed: nothing more is drawn
   let live = false; // playing or paused: the scrolling view, at the clock's last reading
   let at = 0;
   canvas.style.position = "fixed";
@@ -275,6 +279,7 @@ export function mount(canvas, options) {
   if (first && !canvas.isConnected) first.before(canvas);
   /** Lays the canvas over the box, then draws the frame heard at `at`. */
   const paint = (/** @type {number} */ at) => {
+    if (gone) return;
     const i = img();
     const [x, y, w, h] = o.box;
     const r = i ? screenBox(o.box, o.view, i.getBoundingClientRect()) : { left: x, top: y, width: w, height: h };
@@ -307,11 +312,12 @@ export function mount(canvas, options) {
     live = false;
     paint((at = 0));
   };
-  globalThis.addEventListener?.("resize", draw);
   draw();
+  globalThis.addEventListener?.("resize", draw);
   return {
     play() {
       halt();
+      if (gone) return;
       if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return stop();
       live = true;
       tick();
@@ -324,6 +330,12 @@ export function mount(canvas, options) {
     },
     stop,
     draw,
+    remove() {
+      gone = true;
+      halt();
+      globalThis.removeEventListener?.("resize", draw);
+      canvas.remove();
+    },
     options: o,
   };
 }
