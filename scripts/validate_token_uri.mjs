@@ -275,7 +275,7 @@ const kind = (/** @type {unknown} */ v) => (v === null ? "null" : Array.isArray(
 const RPC_ERRORS = /** @type {Record<number, string>} */ ({ 20: "Contract not found", 21: "Invalid message selector", 24: "Block not found", 28: "Class hash not found", 40: "Contract error", [-32602]: "Invalid params", [-32603]: "Internal error" });
 /** Revert reasons that are printed: an explicit list of fixed strings. Any other string could carry the URL. */
 const SAFE_REASONS = new Set(["Out of gas", "ENTRYPOINT_NOT_FOUND", "ENTRYPOINT_FAILED", "CONTRACT_NOT_FOUND", "CLASS_HASH_NOT_FOUND", "Input too long for arguments", "Failed to deserialize param #1", "Failed to deserialize param #2",
-  // The class's own settings errors, from src/settings.cairo: add new ones here when it gains them.
+  // The class's own settings errors, from types/src/settings.cairo: add new ones here when it gains them.
   "TS: AM target not earlier", "TS: FM target not earlier", "TS: custom wave unsupported", "TS: drum slot out of range", "TS: duplicate timbre slot", "TS: filter cutoff out of range", "TS: filter on modulator", "TS: filter q out of range", "TS: filter unsupported", "TS: harmonics length", "TS: no operators", "TS: program slot out of range", "TS: quality out of range", "TS: route out of range", "TS: samples length", "TS: too many operators", "TS: too many timbres", "TS: too many waves", "TS: voices out of range", "TS: wave index out of range"]);
 
 /**

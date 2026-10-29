@@ -8,8 +8,20 @@ license = "Apache-2.0"
 
 # See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
 
+# The root package plus types/, the onchain_midi_types package. A Scarb git dependency on this
+# repository finds only the root package and the workspace members, so the membership is what lets
+# other projects depend on onchain_midi_types alone. Commands run here act on the root package (add
+# --workspace for both), commands run in types/ on onchain_midi_types, and both share this
+# directory's Scarb.lock and target/. The examples are separate packages with their own lockfiles.
+[workspace]
+members = ["types"]
+
 [dependencies]
 starknet = "2.20.1"
+# The sound types, the interfaces and `settings::validate`: the workspace member in types/, which
+# depends on nothing but starknet. src/types.cairo, src/interface.cairo and src/settings.cairo
+# re-export it at this crate's old paths.
+onchain_midi_types = { path = "types" }
 # The base64 encoder (src/base64.cairo re-exports it): `packages/encoding` of game-components, at
 # the release tag v3.1.0. Scarb.lock records the commit it resolves to,
 # 66ce934e750f8162de4f6a377357b2b8f8e5c4c0, and CI fails if a build changes the lockfile.

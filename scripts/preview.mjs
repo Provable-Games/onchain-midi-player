@@ -13,7 +13,7 @@
 //   --settings  a TinySynthSettings value as JSON, in the shape of player/settings.js and the "settings"
 //               objects of tests/fixtures/settings.json (a whole fixture entry also works), or the
 //               SETTINGS text of a page (to rebuild a token's page from its blocks). Default: the
-//               class's default settings, as default_settings() in src/settings.cairo
+//               class's default settings, as default_settings() in types/src/settings.cairo
 //   --svg       the token's SVG art. Default: a small neutral placeholder
 //   --out       where to write the page. Default: preview.html
 //   --serve     also serve the page on http://127.0.0.1:<port>/ (default 8000; 0 picks a free port)

@@ -1,8 +1,8 @@
 # Onchain MIDI Player
 
-`TinySynth` is a storage-free Starknet class, declared and called with `library_call`. The 0.8.0 class supplies independently composable, offline browser libraries. NFTs own their JSON, complete HTML document, art and UI.
+`TinySynth` is a storage-free Starknet class, declared and called with `library_call`. The 0.9.0 class supplies independently composable, offline browser libraries. NFTs own their JSON, complete HTML document, art and UI.
 
-The engine is the signed release `v2.1.0` of [pocket-synth](https://github.com/Provable-Games/pocket-synth), Provable Games' fork of g200kg's webaudio-tinysynth, a reproducibly verified build; its exact source/build/NOTICE identities are recorded in the [vendor provenance](tests/vendor/README.md) and library manifest. Release readiness still requires device validation. 0.8.0 has not been declared. The previous class, 0.7.0 (engine `v2.0.1`), is declared on Sepolia as a test class without a release tag, with the Beast reference example deployed against it ([deployment record](deployments/sepolia.json)); neither has been released or declared on mainnet.
+The engine is the signed release `v2.1.0` of [pocket-synth](https://github.com/Provable-Games/pocket-synth), Provable Games' fork of g200kg's webaudio-tinysynth, a reproducibly verified build; its exact source/build/NOTICE identities are recorded in the [vendor provenance](tests/vendor/README.md) and library manifest. Release readiness still requires device validation. 0.9.0 has not been declared. The previous class, 0.8.0, has the same engine and segments; 0.9.0 differs only in declaring its sound types in the [`onchain_midi_types`](types) package. 0.8.0 is declared on Sepolia as a test class without a release tag, with the Beast reference example deployed against it ([deployment record](deployments/sepolia.json)). The class before it, 0.7.0 (engine `v2.0.1`), remains declared on Sepolia as a test class. None has been released or declared on mainnet.
 
 | `ITinySynth` entry point | Result |
 | --- | --- |
@@ -13,6 +13,8 @@ The engine is the signed release `v2.1.0` of [pocket-synth](https://github.com/P
 | `version()` | Class SemVer |
 | `script_sha256()` | Exact decompressed engine SHA-256 |
 | `license()` | Library/dependency notices and licenses |
+
+The sound types (`TinySynthSound`, `TinySynthSettings`), `ISoundProvider`, `ITinySynth` and `settings::validate` are also a package of their own, `onchain_midi_types` ([`types/`](types)), which depends on nothing but `starknet`: composers, NFTs and renderers can share them without the class's dependencies, and the class re-exports them at its earlier paths ([Depending on the types](docs/sound-provider.md#depending-on-the-types)).
 
 Every segment is `B64(B64(F))`, where `F` is a complete HTML fragment with external whitespace bringing its UTF-8 byte length to a multiple of nine. Fixed library fragments additionally use 279-byte alignment. Both returned encoding layers are canonical and unpadded. NFT-owned JSON framing and HTML fragments can be directly spliced around these constants. Decoding, reconstructing and re-encoding a valid page also works, with additional encoding gas.
 
@@ -34,7 +36,7 @@ Readiness creates no synth, audio context or UI. Play from stopped resumes audio
 
 The independent composition fixture is a 78-byte named-export library from a separate Cairo provider. A second dependent test library demonstrates execution order. A future independent p5.js provider can use the same format and shared loader; real p5.js packaging, integration and benchmarking are outside this implementation.
 
-Useful references: [composition/encoding](docs/token-uri-layout.md), [headless API](player/api.d.ts), [settings](docs/sound-settings.md), [MIDI contract](docs/midi-contract.md), [sound providers](docs/sound-provider.md), [verification](docs/verifying.md), [gas measurements](docs/gas.md), [development/release process](docs/development.md), and the [stress consumer](examples/stress_nft/README.md).
+Useful references: [composition/encoding](docs/token-uri-layout.md), [headless API](player/api.d.ts), [settings](docs/sound-settings.md), [MIDI contract](docs/midi-contract.md), [sound providers and the types package](docs/sound-provider.md), [verification](docs/verifying.md), [gas measurements](docs/gas.md), [development/release process](docs/development.md), and the [stress consumer](examples/stress_nft/README.md).
 
 ```sh
 npm ci

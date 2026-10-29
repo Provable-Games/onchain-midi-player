@@ -5,9 +5,12 @@
 //   - abi/TinySynth.json: the `abi` array of the class's contract_class.json, the class that
 //     is declared and that consumers library-call.
 //   - abi/ISoundProvider.json: the interface a composer's contract implements, with the types it
-//     uses. The crate declares it but no contract of the crate implements it, so it comes from the
-//     test crate's MockSoundProvider (tests/test_provider.cairo), which implements only
-//     ISoundProvider: its ABI less the mock's own `impl` and `event` entries.
+//     uses. The onchain_midi_types package (types/) declares it but no contract implements it, so
+//     it comes from the test crate's MockSoundProvider (tests/test_provider.cairo), which
+//     implements only ISoundProvider: its ABI less the mock's own `impl` and `event` entries.
+//
+// The ABIs name each type and interface by the path where it is declared: onchain_midi_types::
+// for the sound types and both interfaces, onchain_midi_player:: for the class's own entries.
 //
 // Both are the compiler's output, pretty-printed (2 spaces) in the compiler's order.
 //
@@ -38,8 +41,8 @@ export function abiFiles() {
   const player = abiOf("onchain_midi_player_TinySynth.contract_class.json");
   const provider = abiOf("onchain_midi_player_tests_MockSoundProvider.test.contract_class.json")
     .filter((/** @type {{type: string}} */ entry) => entry.type !== "impl" && entry.type !== "event");
-  if (!provider.some((/** @type {{type: string, name: string}} */ e) => e.type === "interface" && e.name === "onchain_midi_player::interface::ISoundProvider")) {
-    throw new Error("MockSoundProvider's ABI has no onchain_midi_player::interface::ISoundProvider");
+  if (!provider.some((/** @type {{type: string, name: string}} */ e) => e.type === "interface" && e.name === "onchain_midi_types::interface::ISoundProvider")) {
+    throw new Error("MockSoundProvider's ABI has no onchain_midi_types::interface::ISoundProvider");
   }
   const text = (/** @type {unknown} */ abi) => JSON.stringify(abi, null, 2) + "\n";
   return [

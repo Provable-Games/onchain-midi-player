@@ -23,7 +23,12 @@ name = "onchain_midi_player"
 version = "0.1.0"
 dependencies = [
  "game_components_encoding",
+ "onchain_midi_types",
 ]
+
+[[package]]
+name = "onchain_midi_types"
+version = "0.1.0"
 
 [[package]]
 name = "openzeppelin_access"
