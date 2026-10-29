@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {describe,test} from "node:test";
 import {playAnchor,silentWav,monitorArtSync,positionState,MEDIA_END_GUARD_SECONDS} from "../ui.js";
-import {REFERENCE_DISPLAY_LEAD_SECONDS,syncSvgToMusic,restartImgOnPass,gifFrames,gifFrameAt,stillSvg,laterImg} from "../art_sync.js";
+import {REFERENCE_DISPLAY_LEAD_SECONDS,syncSvgToMusic,restartImgOnPass,gifFrames,gifFrameAt,stillSvg,laterImg,musicElapsedMs} from "../art_sync.js";
 import {startPlayer} from "../../../player/player.js";
 import {mount as mountNotes} from "../../../player/notes.js";
 import {riff,smf} from "../../../scripts/data_cases.mjs";
@@ -456,7 +456,7 @@ function imgHarness(src=UTF8_ART,options={}){
  const player={getPlayStatus:()=>({...status}),onPassStart(fn){passes.add(fn);return()=>passes.delete(fn);},onStateChange(){return()=>{};}};
  const doc={createElement(tag){assert.equal(tag,'img');const el=image();created.push(el);return el;}};
  function image(attributes=[]){return{attributes,ownerDocument:doc,onload:null,src:'',setAttribute(name,value){this.attributes=[...this.attributes.filter(a=>a.name!==name),{name,value}];},
-  replaceWith(other){const i=page.indexOf(this);if(i>=0)page[i]=other;},load(){this.onload?.();}};}
+  replaceWith(other){const i=page.indexOf(this);if(i>=0)page[i]=other;},load(){this.onload?.();},fail(){this.onerror?.();}};}
  const first=Object.assign(image([{name:'id',value:'beast-art'},{name:'alt',value:''},{name:'src',value:src}]),{src});page.push(first);
  let art=first;
  // As startUi: the button's placement follows each new image.
@@ -572,6 +572,39 @@ test('<img> art: the still keeps every byte of art in another encoding, and read
  const cut="<svg xmlns='http://www.w3.org/2000/svg'><text>a,b é</text></svg>",p=stillHarness('data:image/svg+xml,'+encodeURIComponent(cut));p.dispose.pause();await tick();
  assert.equal(p.stills[0].svg,Buffer.from(cut).toString('latin1'),'the percent-encoded bytes');assert.match(p.created[0].src,/^data:image\/svg\+xml;r=1;base64,/);
  const other=stillHarness('https://example.com/art.svg');other.dispose.pause();other.dispose.play();await tick();assert.equal(other.stills.length,0);
+});
+// The frame a pause freezes comes from the music clock (review: a pause noticed late, on a hidden page
+// whose animation frames are deferred, must not pick a later frame).
+test('musicElapsedMs: music heard between two statuses of one run, else null',()=>{
+ assert.equal(musicElapsedMs({runId:1,positionSeconds:10},{runId:1,positionSeconds:10.75}),750);
+ assert.equal(musicElapsedMs({runId:1,positionSeconds:10},{runId:1,positionSeconds:9}),0);
+ for(const [from,to] of [[null,{runId:1,positionSeconds:1}],[{runId:1,positionSeconds:null},{runId:1,positionSeconds:1}],[{runId:1,positionSeconds:1},{runId:1,positionSeconds:null}],[{runId:1,positionSeconds:1},{runId:2,positionSeconds:2}]])assert.equal(musicElapsedMs(from,to),null);
+});
+for(const hidden of [false,true])test(`<img> art: a pause noticed late freezes the frame the music stopped on, not a later one (${hidden?'hidden':'visible'} page)`,async()=>{
+ const h=stillHarness(),listeners=new Set(),doc=h.first.ownerDocument;
+ if(hidden){Object.defineProperty(doc,'hidden',{configurable:true,get:()=>true});doc.addEventListener=(t,fn)=>listeners.add(fn);doc.removeEventListener=(t,fn)=>listeners.delete(fn);}
+ Object.assign(h.status,{positionSeconds:10});h.pass();h.created[0].load(); // Restarted, shown at 10 s of music.
+ Object.assign(h.status,{positionSeconds:10.75,state:'paused'}); // The audio stopped 750 ms in, ...
+ await new Promise(r=>setTimeout(r,60)); // ... noticed later: the page clock ran on.
+ h.dispose.pause();await tick();
+ if(hidden){assert.equal(h.stills.length,0);Object.defineProperty(doc,'hidden',{configurable:true,get:()=>false});for(const fn of [...listeners])fn();await tick();}
+ assert.equal(h.stills.length,1);assert.equal(h.stills[0].ms,750,'the music heard since the image started');
+});
+test('<img> art: without music positions (or across runs) the freeze falls back to the page time since the image started',async()=>{
+ const h=stillHarness();h.pass();h.created[0].load();await new Promise(r=>setTimeout(r,30));h.dispose.pause();await tick();
+ assert.ok(h.stills[0].ms>=25&&h.stills[0].ms<1000,String(h.stills[0].ms));
+ const r=stillHarness();Object.assign(r.status,{positionSeconds:3});r.pass();r.created[0].load();Object.assign(r.status,{runId:2,positionSeconds:40});r.dispose.pause();await tick();
+ assert.ok(r.stills[0].ms<1000,'not 37 s of another run');
+});
+// Review: a still that fails to decode gives up its freeze, but only for the latest pause.
+test('<img> art: a still that fails to decode brings pass restarts back, also when only ever paused (reduced motion)',async()=>{
+ const h=stillHarness();h.dispose.pause();await tick();h.created[0].fail();assert.equal(h.page[0],h.first);
+ h.pass();assert.equal(h.created.length,2,'restarting at passes again');h.created[1].load();assert.equal(h.page[0],h.created[1]);
+ h.dispose.play();assert.equal(h.created.length,2,'nothing was held');
+});
+test('<img> art: a stale still failing after another pause changes nothing',async()=>{
+ const h=stillHarness();h.dispose.pause();await tick();const first=h.created[0];h.dispose.play();h.dispose.pause();await tick();const second=h.created[1];
+ first.fail();h.pass();assert.equal(h.created.length,2,'still frozen: no restart');second.load();assert.equal(h.page[0],second);
 });
 function hiddenHarness(){
  const listeners=new Set(),state={hidden:true};

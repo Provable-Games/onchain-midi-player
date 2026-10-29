@@ -124,13 +124,14 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
  *
  * The returned dispose function also carries `pause`, `play` and `stop` (syncSvgToMusic's `img`).
  * `pause` freezes the art: no page can stop a GIF inside an image, or read the frame it shows
- * (canvas `drawImage` gets the first frame), so the page works out that frame from the time since
- * the shown image started and its GIF's own delays, and shows the art with that GIF replaced by a
+ * (canvas `drawImage` gets the first frame), so the page works out that frame from the music heard
+ * since the shown image started (musicElapsedMs; the page time without positions) and its GIF's
+ * own delays, and shows the art with that GIF replaced by a
  * PNG of the frame (`stillSvg`), decoded off screen like a restart. Restarts wait while frozen.
  * `play` and `stop` restart the art from its first frame, if the still was shown; the next pass
  * realigns it. A pause while the still is still shown (the restart after a resume not yet
  * decoded) keeps that still. Only the latest pause's still is ever shown. Art without a GIF it can
- * still, or a still that fails, keeps moving and restarting at passes, and so does any other
+ * still, or a still that fails to be made or decoded, keeps moving and restarting at passes, and so does any other
  * animation in the art (SVG/SMIL). On a hidden page the still is made once the page is visible
  * again; dispose drops a still still waiting for that.
  * Limits: a restart lands up to one decode late, a freeze also, and no page can control GIF
@@ -149,8 +150,10 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
   const none = () => {};
   if (!url) return Object.assign(none, { play: none, pause: none, stop: none });
   const [, type, base64 = "", payload] = url, doc = img.ownerDocument;
-  // frozen: a still is wanted (pending or shown); held: a still is shown; gen: the latest pause.
+  // frozen: a still is wanted (pending or shown); held: a still is shown; gen: the latest pause;
+  // shownAt and shownStatus: when the image now shown started, on the page and the music clocks.
   let restarts = 0, shown = 0, live = true, frozen = false, held = false, gen = 0, shownAt = performance.now();
+  /** @type {PlayStatus | null} */ let shownStatus = null;
   /** @type {(() => void) | null} */ let waiting = null;
   const unwait = () => { if (waiting) doc.removeEventListener("visibilitychange", waiting); waiting = null; };
   /** Decodes `src(n)` off screen and shows it, unless disposed, a newer image is shown or `wanted()` fails. */
@@ -159,11 +162,13 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
     for (const { name, value } of img.attributes) if (name !== "src") next.setAttribute(name, value);
     next.onload = () => {
       if (!live || n < shown || !wanted()) return;
-      shown = n; held = still; shownAt = performance.now();
+      shown = n; held = still; shownAt = performance.now(); shownStatus = player.getPlayStatus();
       img.replaceWith(next);
       img = next;
       onSwap(next);
     };
+    // A still that fails to decode gives up the freeze it was for: the art moves and restarts at passes.
+    next.onerror = () => { if (live && still && wanted()) frozen = false; };
     next.src = src(n); // The same bytes at a distinct URL.
   };
   const restart = () => {
@@ -200,11 +205,28 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
       if (!live || frozen) return;
       frozen = true;
       // A still still shown (a resume's restart not yet decoded) is where the art stopped: keep it.
-      if (!held) hold(++gen, performance.now() - shownAt);
+      // Otherwise the frame is the one the image showed when the audio stopped: the music heard since
+      // it started (a pause can be noticed late, say on a hidden page that defers animation frames),
+      // or, without positions, the page time since.
+      if (!held) hold(++gen, musicElapsedMs(shownStatus, player.getPlayStatus()) ?? performance.now() - shownAt);
     },
     play: thaw,
     stop: thaw,
   });
+}
+
+/**
+ * Milliseconds of music heard between two play statuses of one run, `from` and the later `to`, by
+ * their audible positions (a paused run's is held where the audio stopped): how far art started at
+ * `from` and running with the music has got by `to`, however late `to` is read. Null when either
+ * has no position or they belong to different runs.
+ * @param {PlayStatus | null} from
+ * @param {PlayStatus} to
+ * @returns {number | null}
+ */
+export function musicElapsedMs(from, to) {
+  return from && from.runId === to.runId && from.positionSeconds != null && to.positionSeconds != null
+    ? Math.max(0, to.positionSeconds - from.positionSeconds) * 1000 : null;
 }
 
 /**
