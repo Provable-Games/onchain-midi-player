@@ -14,7 +14,7 @@ The engine is the signed release `v2.1.0` of [pocket-synth](https://github.com/P
 | `script_sha256()` | Exact decompressed engine SHA-256 |
 | `license()` | Library/dependency notices and licenses |
 
-The sound types (`TinySynthSound`, `TinySynthSettings`), `ISoundProvider`, `ITinySynth` and `settings::validate` are also a package of their own, `tinysynth_interface` ([`types/`](types)), which depends on nothing but `starknet`: composers, NFTs and renderers can share them without the class's dependencies, and the class re-exports them at its earlier paths ([Depending on the types](docs/sound-provider.md#depending-on-the-types)).
+The sound types (`TinySynthSound`, `TinySynthSettings`), `ISoundProvider`, `ITinySynth` and `settings::validate` are also a package of their own, `tinysynth_interface` ([`types/`](types)), which depends on nothing but `starknet`: composers, NFTs and renderers can share them without the class's dependencies, importing them from the package root (`use tinysynth_interface::{ISoundProvider, TinySynthSound, validate};`), and the class re-exports them at its earlier paths ([Depending on the types](docs/sound-provider.md#depending-on-the-types)).
 
 Every segment is `B64(B64(F))`, where `F` is a complete HTML fragment with external whitespace bringing its UTF-8 byte length to a multiple of nine. Fixed library fragments additionally use 279-byte alignment. Both returned encoding layers are canonical and unpadded. NFT-owned JSON framing and HTML fragments can be directly spliced around these constants. Decoding, reconstructing and re-encoding a valid page also works, with additional encoding gas.
 

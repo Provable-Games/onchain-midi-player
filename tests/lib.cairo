@@ -16,5 +16,6 @@ mod test_class_gas;
 mod test_composition_gas;
 mod test_library_call;
 mod test_provider;
+mod test_root_exports;
 mod test_segment_gas;
 mod test_settings_gas;

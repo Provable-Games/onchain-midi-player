@@ -36,7 +36,7 @@ The class writes settings into the page as `SETTINGS`, format version 1.
 1,36,2,…                                                 (Beast reference lead, then kick and snare; line breaks for reading only)
 ```
 
-`tinysynth_interface::settings` exports:
+`tinysynth_interface::settings` exports, each also re-exported at the package root (`tinysynth_interface::validate`, …):
 
 - the pure function `validate`;
 - the helpers `default_settings()` and `default_operator()` (TinySynth's operator defaults in fixed point);
