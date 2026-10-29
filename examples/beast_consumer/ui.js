@@ -403,7 +403,13 @@ export async function startUi() {
       sync = syncSvgToMusic(null, player, { notes, img: { play: () => image?.play(), pause: () => image?.pause(), stop: () => image?.stop() } });
       // Each restarted <img> replaces the art: the button and the notes follow the new one. A restart
       // copies the URL the art shows, so restarts begin once the cut-out copy is showing, or failed.
-      const restart = () => { if (art) image = restartImgOnPass(/** @type {HTMLImageElement} */ (art), player, { onSwap: (img) => { art = img; watch(img); } }); };
+      // Who prefers reduced motion gets the art standing still, as the notes do: a still of its first
+      // frame from the start, which play and stop leave as it is.
+      const restart = () => {
+        if (!art) return;
+        const controls = restartImgOnPass(/** @type {HTMLImageElement} */ (art), player, { onSwap: (img) => { art = img; watch(img); } });
+        if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) controls.pause(); else image = controls;
+      };
       if (shown) shown.then(restart); else restart();
     }
     player.onStateChange(status => {
