@@ -54,7 +54,7 @@ A contract that implements `ISoundProvider` must honour all of these:
 
 1. **Token IDs as minted.** `get_sound` takes the NFT's token ID exactly as the NFT minted it, the whole `u256`. Decode only the bits the provider uses and ignore the rest: a provider that rejects unused bits breaks when the NFT's ID layout grows, as Beasts' newer 180-bit token IDs do.
 2. **A raw Standard MIDI File.** `midi` is the file's bytes, not base64 and not a data URI, and it passes the page's MIDI check, `check-midi` ([MIDI contract](midi-contract.md), [Checking MIDI files](midi-contract.md#checking-midi-files)). The class embeds the bytes without parsing them, so a bad file does not revert: player readiness rejects with an error instead of playing.
-3. **Valid settings.** `settings` passes `settings::validate` ([`types/src/settings.cairo`](../types/src/settings.cairo)) in the class version the NFT calls; otherwise `midi_segment` reverts.
+3. **Valid settings.** `settings` passes `settings::validate` ([`types/src/settings.cairo`](../types/src/settings.cairo); `src/settings.cairo` before 0.9.0) in the class version the NFT calls; otherwise `midi_segment` reverts.
 4. **Deterministic.** The same token and the same live state always give the same bytes, whoever calls. Derive the sound from the token and contract state, never from the caller or the transaction. When state changes a token's sound, the NFT emits an ERC-4906 metadata update so marketplaces refetch.
 5. **View-only.** No storage writes, no events, no calls that change state.
 6. **Reverts only for an unknown token.** Every token the NFT has minted gets a sound.
