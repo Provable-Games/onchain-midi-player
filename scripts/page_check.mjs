@@ -23,17 +23,19 @@ try {
  await o.page.waitForFunction(()=>window.__check.passes.length>0,{timeout:10000});
  // Isolated art restarts at each pass: a fresh copy with a distinct data URL replaces the image once decoded.
  await o.page.waitForFunction(()=>/^data:image\/svg\+xml;r=\d+;base64,/.test(document.getElementById("beast-art")?.src),{timeout:10000});
- const played=await o.page.evaluate(()=>({passes:window.__check.passes,calls:window.__check.calls,art:document.getElementById("beast-art")?.src,images:document.querySelectorAll("img#beast-art").length,media:window.__check.media?.paused,status:window.OnchainMidiPlayer.getPlayStatus(),firstPlay:window.__check.playingAt-window.__check.gestureAt,anchor:document.getElementById("play").getBoundingClientRect().toJSON(),artwork:navigator.mediaSession?.metadata?.artwork}));
+ const played=await o.page.evaluate(()=>({passes:window.__check.passes,calls:window.__check.calls,art:document.getElementById("beast-art")?.src,images:document.querySelectorAll("img#beast-art").length,media:window.__check.media?.paused,status:window.OnchainMidiPlayer.getPlayStatus(),firstPlay:window.__check.playingAt-window.__check.gestureAt,position:window.__check.positions.at(-1),anchor:document.getElementById("play").getBoundingClientRect().toJSON(),artwork:navigator.mediaSession?.metadata?.artwork}));
  assert.ok(played.calls.indexOf("prewarm")<played.calls.indexOf("resume"));assert.equal(played.passes[0].initial,true);
  assert.ok(played.passes[0].audioTime >= played.passes[0].audibleTime-.02);assert.ok(/^data:image\/svg\+xml;r=\d+;base64,/.test(played.art));assert.equal(played.images,1);assert.equal(played.media,false);
+ // The media session's position is the pass (the notification's track length), not the silent carrier's 6 s.
+ assert.equal(played.position.duration,played.status.passSeconds);assert.ok(played.position.position>=0&&played.position.position<played.position.duration,JSON.stringify(played.position));
  // Without the notes fragment the page has no notes: no canvas, the art restarted as it was.
  assert.equal(await o.page.locator("canvas").count(),0);
  // No reference art carries a data-play-anchor: the stylesheet's corner button takes the 48 px default between the settings' limits.
  assert.equal(played.anchor.width,48);assert.equal(played.anchor.height,48);
  if(c.name==="full_warlock"){await o.page.waitForFunction(()=>navigator.mediaSession.metadata?.artwork.length===2);}
  await o.page.click("#play");await o.page.waitForFunction(()=>window.OnchainMidiPlayer.getPlayStatus().state==="paused");
- const stopped=await o.page.evaluate(()=>({count:window.__check.passes.length,media:window.__check.media.paused,states:window.__check.states.map(s=>s.state).filter((state,i,list)=>i===0||state!==list[i-1]),violations:window.__check.violations}));
- assert.equal(stopped.media,true);assert.deepEqual(stopped.states,["starting","playing","paused"]);assert.deepEqual(stopped.violations,[]);
+ const stopped=await o.page.evaluate(()=>({position:window.__check.positions.at(-1),count:window.__check.passes.length,media:window.__check.media.paused,states:window.__check.states.map(s=>s.state).filter((state,i,list)=>i===0||state!==list[i-1]),violations:window.__check.violations}));
+ assert.equal(stopped.media,true);assert.equal(stopped.position?.duration,played.status.passSeconds,"pause keeps the position state");assert.deepEqual(stopped.states,["starting","playing","paused"]);assert.deepEqual(stopped.violations,[]);
  assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);measurements.push({case:c.name,startup_ms:ready.ms,first_play_ms:played.firstPlay});
  console.log(`PASS ${c.name}: independent/dependent providers, lazy audio, pass event and NFT controls`);
  }finally{await o.context.close();}}

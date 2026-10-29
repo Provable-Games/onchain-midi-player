@@ -4,7 +4,7 @@ import { tokenPage,fixtureCase } from "./fixture_pages.mjs";
 import { compositionHtml } from "./composition.mjs";
 import { HTML_PREFIX,b64,fixedFragment } from "./segments.mjs";
 export function instrument() {
- const s={synth:null,created:0,passes:[],states:[],media:null,handlers:{},violations:[],readyAt:null,uiReadyAt:null,gestureAt:null,playingAt:null,startedAt:performance.now(),calls:[],sends:[]};window.__check=s;
+ const s={synth:null,created:0,passes:[],states:[],media:null,handlers:{},positions:[],violations:[],readyAt:null,uiReadyAt:null,gestureAt:null,playingAt:null,startedAt:performance.now(),calls:[],sends:[]};window.__check=s;
  let Real;
  function Wrapped(options){s.created++;const synth=new Real(options);s.synth=synth;
  for(const name of ["prewarm","resume","playMIDI","stopMIDI","loadMIDI"]){const fn=synth[name];synth[name]=(...args)=>{s.calls.push(name);if(name==="playMIDI")s.engineStartedAt=performance.now();return fn.apply(synth,args);};}
@@ -14,7 +14,9 @@ export function instrument() {
  const resume=ctx.resume.bind(ctx);ctx.resume=()=>{s.calls.push("context.resume");return resume();};return synth;}
  Object.defineProperty(window,"WebAudioTinySynth",{configurable:true,get:()=>Real&&Wrapped,set:value=>{Real=value;}});
  const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(){s.media=this;return play.call(this);};
- if(window.MediaSession){const action=MediaSession.prototype.setActionHandler;MediaSession.prototype.setActionHandler=function(a,h){s.handlers[a]=h;return action.call(this,a,h);};}
+ if(window.MediaSession){const action=MediaSession.prototype.setActionHandler;MediaSession.prototype.setActionHandler=function(a,h){s.handlers[a]=h;return action.call(this,a,h);};
+ // Each position state the page publishes, copied; null for a call that clears it.
+ const position=MediaSession.prototype.setPositionState;if(position)MediaSession.prototype.setPositionState=function(state){s.positions.push(state?{...state}:null);return position.call(this,state);};}
  new MutationObserver(()=>{if(document.getElementById("play")?.disabled===false)s.uiReadyAt??=performance.now();}).observe(document,{subtree:true,attributes:true,attributeFilter:["disabled"]});
  document.addEventListener("click",()=>{s.gestureAt??=performance.now();},{capture:true});
  document.addEventListener("securitypolicyviolation",e=>s.violations.push({directive:e.violatedDirective,uri:e.blockedURI}));
