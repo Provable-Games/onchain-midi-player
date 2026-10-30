@@ -302,16 +302,16 @@ try {
    const shown=o=>o.page.evaluate(()=>{const src=document.getElementById("beast-art").src,i=src.indexOf(","),body=src.slice(i+1),svg=/;base64,/.test(src.slice(0,i+1))?atob(body):decodeURIComponent(body);
      return{src,restarted:/;r=\d+[;,]/.test(src),still:svg.includes("data:image/png;base64,")};});
    const status=o=>o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus());
-   // Colours of the sprite's centre, each with the audible music position read after its screenshot
-   // (and so before the next one's).
-   const sample=async(o,ms)=>{const out=[{p:(await status(o)).positionSeconds,colour:null}],end=Date.now()+ms;while(Date.now()<end){
-     const colour=decodePng(await o.page.screenshot({clip:{x:240,y:250,width:20,height:20}})).pixel(10,10).join();out.push({p:(await status(o)).positionSeconds,colour});}return out;};
-   // Each change of colour between two screenshots happened between the reads before the first and
-   // after the second (`window`), so at that window's middle give or take half of it; one over
-   // WINDOW s (a stalled screenshot) is left out. When, and how far from the beat grid (art time: + the display lead).
-   const WINDOW=.06;
-   const changes=(samples,step)=>samples.slice(2).flatMap((s,i)=>{const a=samples[i+1];if(s.colour===a.colour)return[];const window=s.p-samples[i].p,t=(s.p+samples[i].p)/2,art=t+.017;
-     return window>WINDOW?[]:[{t,off:art-Math.round(art/step)*step,window}];});
+   // Colours of the sprite's centre, each with the audible music position just before and after its screenshot.
+   const sample=async(o,ms)=>{const out=[],end=Date.now()+ms;while(Date.now()<end){const p0=(await status(o)).positionSeconds;
+     const colour=decodePng(await o.page.screenshot({clip:{x:240,y:250,width:20,height:20}})).pixel(10,10).join();out.push({p0,p1:(await status(o)).positionSeconds,colour});}return out;};
+   // Each change of colour happened between the screenshots around it, so within the window from the
+   // read before the first to the read after the second: at its middle, give or take half of it. A
+   // change whose window is over 60 ms and over 1.5 times the usual one (a stalled screenshot) is left
+   // out; Chromium's usual window is 60-70 ms. When, and how far from the beat grid (art time: + the display lead).
+   const changes=(samples,step)=>{const all=samples.slice(1).flatMap((s,i)=>{const a=samples[i];if(s.colour===a.colour)return[];const t=(a.p0+a.p1+s.p0+s.p1)/4,art=t+.017;
+     return[{t,off:art-Math.round(art/step)*step,window:s.p1-a.p0}];}),usual=all.map(c=>c.window).sort((x,y)=>x-y)[all.length>>1];
+     return all.filter(c=>c.window<=Math.max(.06,1.5*usual));};
    // The period: the least-squares slope of the changes' times against the grid change each is nearest.
    const periodOf=(list,step)=>{const k=list.map(c=>Math.round((c.t+.017)/step)),mk=k.reduce((a,b)=>a+b)/k.length,mt=list.reduce((a,c)=>a+c.t,0)/list.length;
      return k.reduce((a,x,i)=>a+(x-mk)*(list[i].t-mt),0)/k.reduce((a,x)=>a+(x-mk)**2,0);};
@@ -325,7 +325,7 @@ try {
      let report="";
      const moves=run.engine!=="firefox";
      if(moves){const before=changes(await sample(o,4000),step),period=periodOf(before,step),offs=before.map(c=>c.off*1000),mean=offs.reduce((a,b)=>a+b)/offs.length;
-       assert.ok(before.length>=10,`${before.length} colour changes timed in 4 s`);
+       assert.ok(before.length>=12,`${before.length} colour changes timed in 4 s`);
        assert.ok(Math.abs(period-step)<.004,`frame period ${(period*1000).toFixed(1)} ms, the beat's ${step*1000} ms (the GIF's own: 200 ms)`);
        assert.ok(offs.every(x=>Math.abs(x-mean)<60),`every change near one phase: ${offs.map(x=>x.toFixed(0))}`);
        report+=`, frame period ${(period*1000).toFixed(1)} ms (beat grid ${step*1000} ms, from ${before.length} changes), changes ${mean.toFixed(1)} ms from the grid on average (${Math.min(...offs).toFixed(0)}..${Math.max(...offs).toFixed(0)})`;
@@ -336,7 +336,7 @@ try {
      await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==="suspended");
      await o.page.waitForFunction(()=>{const src=document.getElementById("beast-art").src,i=src.indexOf(","),body=src.slice(i+1);return(/;base64,/.test(src.slice(0,i+1))?atob(body):decodeURIComponent(body)).includes("data:image/png;base64,");},{timeout:10000});
      const held=await status(o),grid=((held.positionSeconds+.017)%held.passSeconds)/step,frame=Math.floor(grid)%2?"0,0,204":"204,0,0",edge=Math.min(grid%1,1-grid%1)*step<.035;
-     const still=new Set((await sample(o,500)).slice(1).map(x=>x.colour));assert.equal(still.size,1,`standing still: ${[...still]}`);
+     const still=new Set((await sample(o,500)).map(x=>x.colour));assert.equal(still.size,1,`standing still: ${[...still]}`);
      if(!edge)assert.ok(still.has(frame),`paused on the frame of the music's position: ${[...still]}, grid ${frame}`);
      // Resume: the GIF starts on the frame the music is on, shortened to fit, and keeps to the grid.
      await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==="playing"&&OnchainMidiPlayer.getPlayStatus().audioState==="running");

@@ -180,14 +180,15 @@ async function gifArtSession(run) {
     const s = await o.page.evaluate(() => OnchainMidiPlayer.getPlayStatus()), beat = beatSeconds(s, new Uint8Array(parts.midi)), step = frameUs(Math.round(beat * 1e6)) / 1e6;
     const src = await o.page.evaluate(() => document.getElementById('beast-art').src), shown = Buffer.from(/data:image\/gif;base64,([A-Za-z0-9+/]+=*)/.exec(Buffer.from(src.split(',')[1], 'base64').toString('latin1'))[1], 'base64');
     const delays = gifFrames(new Uint8Array(shown)).frames.map((f) => f.delay);
-    const position = () => o.page.evaluate(() => OnchainMidiPlayer.getPlayStatus().positionSeconds), end = Date.now() + seconds * 1000;
-    // Each screenshot with the audible position read after it (and so before the next one).
-    const samples = [{ p: await position(), colour: null }];
-    while (Date.now() < end) { const colour = decodePng(await o.page.screenshot({ clip: { x: 240, y: 250, width: 20, height: 20 } })).pixel(10, 10).join(); samples.push({ p: await position(), colour }); }
+    const position = () => o.page.evaluate(() => OnchainMidiPlayer.getPlayStatus().positionSeconds), samples = [], end = Date.now() + seconds * 1000;
+    while (Date.now() < end) { const p0 = await position(); const colour = decodePng(await o.page.screenshot({ clip: { x: 240, y: 250, width: 20, height: 20 } })).pixel(10, 10).join(); samples.push({ p0, p1: await position(), colour }); }
     const restarts = (await o.page.evaluate(() => window.__restarts)).filter((p) => p !== null);
-    // A change between two screenshots happened between the reads before the first and after the
-    // second: at that window's middle, give or take half of it; one over 60 ms (a stalled screenshot) is left out.
-    const changes = samples.slice(2).flatMap((x, i) => { const a = samples[i + 1]; if (x.colour === a.colour || x.p - samples[i].p > 0.06) return []; const t = (x.p + samples[i].p) / 2, art = t + REFERENCE_DISPLAY_LEAD_SECONDS; return [{ t, off: (art - Math.round(art / step) * step) * 1000 }]; });
+    // A change happened between the screenshots around it, within the window from the read before
+    // the first to the read after the second: at its middle, give or take half of it. One whose
+    // window is over 60 ms and over 1.5 times the usual one (a stalled screenshot) is left out;
+    // Chromium's usual window is 60-70 ms.
+    const all = samples.slice(1).flatMap((x, i) => { const a = samples[i]; if (x.colour === a.colour) return []; const t = (a.p0 + a.p1 + x.p0 + x.p1) / 4, art = t + REFERENCE_DISPLAY_LEAD_SECONDS; return [{ t, window: x.p1 - a.p0, off: (art - Math.round(art / step) * step) * 1000 }]; });
+    const usual = all.map((c) => c.window).sort((x, y) => x - y)[all.length >> 1], changes = all.filter((c) => c.window <= Math.max(0.06, 1.5 * usual));
     // Runs of the GIF between restarts (the first starts at the first restart shown).
     const runs = [];
     // A run counts with at least MIN_RUN_CHANGES changes, or half the changes the session can hold if
@@ -196,7 +197,7 @@ async function gifArtSession(run) {
     for (let i = 0; i < restarts.length; i++) { const from = restarts[i], to = restarts[i + 1] ?? Infinity, list = changes.filter((c) => c.t > from + 0.1 && c.t < to); if (list.length >= least) runs.push(list); }
     const fit = (list) => { const mt = list.reduce((a, c) => a + c.t, 0) / list.length, mo = list.reduce((a, c) => a + c.off, 0) / list.length, slope = list.reduce((a, c) => a + (c.t - mt) * (c.off - mo), 0) / list.reduce((a, c) => a + (c.t - mt) ** 2, 0);
       return { changes: list.length, seconds: +(list.at(-1).t - list[0].t).toFixed(3), mean_offset_ms: +mo.toFixed(2), drift_ms: +(slope * (list.at(-1).t - list[0].t)).toFixed(2), spread_ms: +Math.max(...list.map((c) => Math.abs(c.off - mo - slope * (c.t - mt)))).toFixed(2) }; };
-    const result = { engine: run.engine, seconds, beat_seconds: beat, step_ms: step * 1000, retimed_delays_ms: delays, samples: samples.length, restarts: restarts.length, runs: runs.map(fit) };
+    const result = { engine: run.engine, seconds, usual_window_ms: +(usual * 1000).toFixed(1), changes_left_out: all.length - changes.length, beat_seconds: beat, step_ms: step * 1000, retimed_delays_ms: delays, samples: samples.length, restarts: restarts.length, runs: runs.map(fit) };
     result.max_drift_ms = Math.max(...result.runs.map((r) => Math.abs(r.drift_ms)));
     assert.deepEqual(o.requests, []); assert.deepEqual(await o.errors(), []);
     return result;
