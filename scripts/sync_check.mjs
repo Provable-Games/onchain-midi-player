@@ -18,7 +18,7 @@ const HELD_TOLERANCE_SECONDS = 0.005;
 // (research/drift-spikes) peaked at 26.0 ms (Chromium), 35.0-41.8 ms (Firefox) and 4.7-6.7 ms
 // (WebKit), with no frame over 40 ms.
 const MAX_DRIFT_LIMIT_MS = Object.freeze({ chromium: 40, firefox: 50, webkit: 15 });
-const seconds = Number(process.env.SYNC_SECONDS || 60);
+const seconds = Number(process.env.SYNC_SECONDS || 60), SESSION_SECONDS = seconds;
 const sampleSeconds = Number(process.env.SYNC_SAMPLE_SECONDS || 10);
 assert.ok(sampleSeconds > 0 && Number.isFinite(sampleSeconds));
 assert.ok(seconds >= 5 && seconds <= 3600);
@@ -147,7 +147,11 @@ try {
 // pass), the drift is the change of that distance from start to end (a least-squares line), and
 // the spread is its distance from that line. Headless Firefox shows no GIF animation inside an
 // SVG image: there the session is skipped. Screenshot timing limits each change to about +/- 25 ms.
+// The session lasts as long as the SVG one, up to GIF_SECONDS: two of the score's passes, since each
+// run is measured on its own, so a long Drift workflow session stays within its job's time.
+const GIF_SECONDS = 120;
 async function gifArtSession(run) {
+  const seconds = Math.min(SESSION_SECONDS, GIF_SECONDS);
   if (run.engine === 'firefox') return { engine: run.engine, skipped: 'no GIF animation inside an SVG image in headless Firefox' };
   const gif = Buffer.from([71,73,70,56,57,97,1,0,1,0,128,0,0,204,0,0,0,0,204,33,255,11,...Buffer.from('NETSCAPE2.0'),3,1,0,0,0,
     33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,76,1,0,59]).toString('base64');
