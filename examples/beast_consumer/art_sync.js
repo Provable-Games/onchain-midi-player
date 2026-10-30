@@ -172,8 +172,11 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
   /** @type {string | null} */ let retimed = null;
   /** @type {(() => void) | null} */ let waiting = null;
   const unwait = () => { if (waiting) doc.removeEventListener("visibilitychange", waiting); waiting = null; };
-  /** Decodes `src(n)` off screen and shows it, unless disposed, a newer image is shown or `wanted()` fails. */
-  const show = (/** @type {(n: number) => string} */ src, /** @type {() => boolean} */ wanted, still = false, /** @type {string | null} */ svg = null) => {
+  /**
+   * Decodes `src(n)` off screen and shows it, unless disposed, a newer image is shown or `wanted()`
+   * fails; `svg`: the retimed art it shows, and `failed`, what to show instead if it cannot decode.
+   */
+  const show = (/** @type {(n: number) => string} */ src, /** @type {() => boolean} */ wanted, still = false, /** @type {string | null} */ svg = null, /** @type {(() => void) | null} */ failed = null) => {
     const n = ++restarts, next = doc.createElement("img");
     for (const { name, value } of img.attributes) if (name !== "src") next.setAttribute(name, value);
     next.onload = () => {
@@ -184,7 +187,8 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
       onSwap(next);
     };
     // A still that fails to decode gives up the freeze it was for: the art moves and restarts at passes.
-    next.onerror = () => { if (live && still && wanted()) frozen = false; };
+    // A retimed copy that fails gives way to the plain copy.
+    next.onerror = () => { if (live && n > shown && wanted()) { if (still) frozen = false; else failed?.(); } };
     next.src = src(n); // The same bytes at a distinct URL.
   };
   /** Restarts the art from its first frame, or with `at` from where the music is (retimeGif's `at`). */
@@ -193,11 +197,14 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
     /** @type {string | null} */ let svg = null;
     try {
       // The art with its first GIF timed to the music (null: no beat, or no GIF retimeGif can time).
-      const text = art(), m = GIF_URI.exec(text), b = beat(s);
-      const gif = m && b && retimeGif(Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0)), b, s.passSeconds || 0, at && s.positionSeconds !== null ? artTime(s) : null);
+      // The new image starts once decoded: up to one decode after the position it was built for.
+      const b = beat(s), text = b ? art() : "", m = GIF_URI.exec(text);
+      const gif = m && retimeGif(Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0)), /** @type {number} */ (b), s.passSeconds || 0, at && s.positionSeconds !== null ? artTime(s) : null);
       if (gif) { let bin = ""; for (const x of gif) bin += String.fromCharCode(x); svg = text.replace(m[0], () => "data:image/gif;base64," + btoa(bin)); }
     } catch (e) {}
-    show((n) => "data:" + type + ";r=" + n + (svg === null ? base64 + payload : ";base64," + btoa(svg)), () => !frozen && player.getPlayStatus().runId === runId, false, svg);
+    const wanted = () => !frozen && player.getPlayStatus().runId === runId, plain = (/** @type {number} */ n) => "data:" + type + ";r=" + n + base64 + payload;
+    if (svg === null) show(plain, wanted);
+    else show((n) => "data:" + type + ";r=" + n + ";base64," + btoa(/** @type {string} */ (svg)), wanted, false, svg, () => show(plain, wanted));
   };
   // While the audio runs, the page time the shown image has played beyond the audio clock is the
   // suspensions it ran through (a resume that cancelled a pending still, or a pause and resume the

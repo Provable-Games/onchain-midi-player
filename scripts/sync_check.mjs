@@ -19,7 +19,7 @@ const HELD_TOLERANCE_SECONDS = 0.005;
 // (WebKit), with no frame over 40 ms.
 const MAX_DRIFT_LIMIT_MS = Object.freeze({ chromium: 40, firefox: 50, webkit: 15 });
 const seconds = Number(process.env.SYNC_SECONDS || 60), SESSION_SECONDS = seconds;
-// The retimed GIF's drift (gifArtSession, assertGif): within every run of at least 20 changes, the
+// The retimed GIF's drift (gifArtSession, assertGif): within every run of at least MIN_RUN_CHANGES changes, the
 // fitted line moves under GIF_DRIFT_LIMIT_MS, and no change is over 60 ms from it (screenshot
 // timing). This GIF's loop (4 frames, 91 cs) holds the grid exactly, so what the line measures is
 // the browser's image clock (the page's) against the audio clock and the fit's noise. Local
@@ -27,7 +27,9 @@ const seconds = Number(process.env.SYNC_SECONDS || 60), SESSION_SECONDS = second
 // audio clock was measured 0.04% slower than its page clock, up to 22 ms over this 55 s pass,
 // which the GIF cannot follow (each pass restart realigns it). The limit is a coarse ceiling, as
 // for the SVG drift above, well under one 227.5 ms frame.
-const GIF_DRIFT_LIMIT_MS = 30;
+// A defect in the retiming itself would show far beyond it: one centisecond of loop error in this
+// 0.91 s loop is about 600 ms over the pass, and a frame's worth of phase is 227.5 ms.
+const GIF_DRIFT_LIMIT_MS = 30, MIN_RUN_CHANGES = 20, GIF_MIN_SECONDS = 15;
 // The session lasts as long as the SVG one, up to GIF_SECONDS: two of the score's passes, since each
 // run is measured on its own, so a long Drift workflow session stays within its job's time.
 const GIF_SECONDS = 120;
@@ -161,6 +163,8 @@ try {
 // SVG image: there the session is skipped. Screenshot timing limits each change to about +/- 25 ms.
 async function gifArtSession(run) {
   const seconds = Math.min(SESSION_SECONDS, GIF_SECONDS); // as long as the SVG session, up to two passes
+  // A session under GIF_MIN_SECONDS is too short to fit a line to.
+  if (seconds < GIF_MIN_SECONDS) return { engine: run.engine, skipped: `a ${seconds} s session is too short to measure the GIF's drift (${GIF_MIN_SECONDS} s at least)` };
   if (run.engine === 'firefox') return { engine: run.engine, skipped: 'no GIF animation inside an SVG image in headless Firefox' };
   const gif = Buffer.from([71,73,70,56,57,97,1,0,1,0,128,0,0,204,0,0,0,0,204,33,255,11,...Buffer.from('NETSCAPE2.0'),3,1,0,0,0,
     33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,76,1,0,59]).toString('base64');
@@ -176,13 +180,20 @@ async function gifArtSession(run) {
     const s = await o.page.evaluate(() => OnchainMidiPlayer.getPlayStatus()), beat = beatSeconds(s, new Uint8Array(parts.midi)), step = frameUs(Math.round(beat * 1e6)) / 1e6;
     const src = await o.page.evaluate(() => document.getElementById('beast-art').src), shown = Buffer.from(/data:image\/gif;base64,([A-Za-z0-9+/]+=*)/.exec(Buffer.from(src.split(',')[1], 'base64').toString('latin1'))[1], 'base64');
     const delays = gifFrames(new Uint8Array(shown)).frames.map((f) => f.delay);
-    const position = () => o.page.evaluate(() => OnchainMidiPlayer.getPlayStatus().positionSeconds), samples = [], end = Date.now() + seconds * 1000;
-    while (Date.now() < end) { const p0 = await position(); const colour = decodePng(await o.page.screenshot({ clip: { x: 240, y: 250, width: 20, height: 20 } })).pixel(10, 10).join(); samples.push({ p0, p1: await position(), colour }); }
+    const position = () => o.page.evaluate(() => OnchainMidiPlayer.getPlayStatus().positionSeconds), end = Date.now() + seconds * 1000;
+    // Each screenshot with the audible position read after it (and so before the next one).
+    const samples = [{ p: await position(), colour: null }];
+    while (Date.now() < end) { const colour = decodePng(await o.page.screenshot({ clip: { x: 240, y: 250, width: 20, height: 20 } })).pixel(10, 10).join(); samples.push({ p: await position(), colour }); }
     const restarts = (await o.page.evaluate(() => window.__restarts)).filter((p) => p !== null);
-    const changes = samples.slice(1).flatMap((x, i) => { const a = samples[i]; if (x.colour === a.colour) return []; const t = (a.p0 + a.p1 + x.p0 + x.p1) / 4, art = t + REFERENCE_DISPLAY_LEAD_SECONDS; return [{ t, off: (art - Math.round(art / step) * step) * 1000 }]; });
+    // A change between two screenshots happened between the reads before the first and after the
+    // second: at that window's middle, give or take half of it; one over 60 ms (a stalled screenshot) is left out.
+    const changes = samples.slice(2).flatMap((x, i) => { const a = samples[i + 1]; if (x.colour === a.colour || x.p - samples[i].p > 0.06) return []; const t = (x.p + samples[i].p) / 2, art = t + REFERENCE_DISPLAY_LEAD_SECONDS; return [{ t, off: (art - Math.round(art / step) * step) * 1000 }]; });
     // Runs of the GIF between restarts (the first starts at the first restart shown).
     const runs = [];
-    for (let i = 0; i < restarts.length; i++) { const from = restarts[i], to = restarts[i + 1] ?? Infinity, list = changes.filter((c) => c.t > from + 0.1 && c.t < to); if (list.length >= 20) runs.push(list); }
+    // A run counts with at least MIN_RUN_CHANGES changes, or half the changes the session can hold if
+    // that is fewer (a short SYNC_SECONDS).
+    const least = Math.max(8, Math.min(MIN_RUN_CHANGES, Math.floor(seconds / step / 2)));
+    for (let i = 0; i < restarts.length; i++) { const from = restarts[i], to = restarts[i + 1] ?? Infinity, list = changes.filter((c) => c.t > from + 0.1 && c.t < to); if (list.length >= least) runs.push(list); }
     const fit = (list) => { const mt = list.reduce((a, c) => a + c.t, 0) / list.length, mo = list.reduce((a, c) => a + c.off, 0) / list.length, slope = list.reduce((a, c) => a + (c.t - mt) * (c.off - mo), 0) / list.reduce((a, c) => a + (c.t - mt) ** 2, 0);
       return { changes: list.length, seconds: +(list.at(-1).t - list[0].t).toFixed(3), mean_offset_ms: +mo.toFixed(2), drift_ms: +(slope * (list.at(-1).t - list[0].t)).toFixed(2), spread_ms: +Math.max(...list.map((c) => Math.abs(c.off - mo - slope * (c.t - mt)))).toFixed(2) }; };
     const result = { engine: run.engine, seconds, beat_seconds: beat, step_ms: step * 1000, retimed_delays_ms: delays, samples: samples.length, restarts: restarts.length, runs: runs.map(fit) };

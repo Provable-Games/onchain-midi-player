@@ -263,7 +263,7 @@ function harness(src, { beat: bt = () => 0.455, still } = {}) {
   const status = { runId: 1, state: "playing", audioState: "running", passSeconds: 58.24, positionSeconds: 0, audioTime: 1 }, passes = new Set(), states = new Set(), page = [], created = [], visibility = new Set();
   const player = { getPlayStatus: () => ({ ...status }), onPassStart(fn) { passes.add(fn); return () => passes.delete(fn); }, onStateChange(fn) { states.add(fn); return () => states.delete(fn); } };
   const doc = { hidden: false, createElement() { const el = image_(); created.push(el); return el; }, addEventListener(type, fn) { visibility.add(fn); }, removeEventListener(type, fn) { visibility.delete(fn); } };
-  function image_(attributes = []) { return { attributes, ownerDocument: doc, src: "", setAttribute() {}, replaceWith(o) { page[0] = o; }, load() { this.onload?.(); } }; }
+  function image_(attributes = []) { return { attributes, ownerDocument: doc, src: "", setAttribute() {}, replaceWith(o) { page[0] = o; }, load() { this.onload?.(); }, fail() { this.onerror?.(); } }; }
   const first = Object.assign(image_(), { src }); page.push(first);
   const stills = [];
   const dispose = restartImgOnPass(first, player, { beat: bt, still: still ?? ((svg, ms) => (stills.push({ svg, ms }), Promise.resolve(svg.replace("</svg>", "<g/></svg>")))) });
@@ -323,4 +323,96 @@ test("restartImgOnPass with a beat: a page made visible while the music plays re
   h.created[1].load(); h.status.audioState = "suspended"; for (const fn of h.visibility) fn(); assert.equal(h.created.length, 2);
   h.status.audioState = "running"; h.dispose.pause(); for (const fn of h.visibility) fn(); assert.equal(h.created.length, 2, "frozen");
   h.dispose(); assert.equal(h.visibility.size, 0, "dispose removes the listener");
+});
+test("restartImgOnPass with a beat: a retimed copy that fails to decode gives way to the plain copy, once", async () => {
+  const even = gifOf([20, 20, 20, 20]), h = harness(ART(even));
+  h.pass(); const [retimed] = h.created; assert.ok(gifIn(retimed.src) && cs(gifIn(retimed.src))[0] === 23);
+  retimed.fail(); assert.equal(h.created.length, 2, "the plain copy"); const plain = h.created[1];
+  assert.equal(plain.src, ART(even).replace(";base64,", ";r=2;base64,"));
+  plain.fail(); assert.equal(h.created.length, 2, "no further fallback"); h.pass(); h.created[2].load(); assert.equal(h.page[0], h.created[2], "later passes retime again");
+  // Resumed from a still: the retimed restart fails, and the plain copy replaces the still.
+  h.dispose.pause(); await tick(); h.created[3].load(); assert.ok(h.page[0] === h.created[3]);
+  h.status.positionSeconds = 0.3; h.dispose.play(); h.created[4].fail();
+  assert.equal(h.created.length, 6); h.created[5].load(); assert.equal(h.page[0], h.created[5], "the still gives way");
+  // A failure after a newer image is shown, or after a stop or replay, changes nothing.
+  h.pass(); h.pass(); h.created[7].load(); h.created[6].fail(); assert.equal(h.created.length, 8, "an older restart failing");
+  h.pass(); h.status.runId = 2; h.created[8].fail(); assert.equal(h.created.length, 9, "another run");
+});
+test("restartImgOnPass with a beat: percent-encoded art (the notes' cut-out copy) is retimed, and stilled from the retimed text", async () => {
+  const even = gifOf([20, 20, 20, 20]), svg = `<svg xmlns='http://www.w3.org/2000/svg'><text>caf\u00e9 a,b</text><image href='data:image/gif;base64,${Buffer.from(even).toString("base64")}'/></svg>`;
+  const src = "data:image/svg+xml," + encodeURIComponent(svg), h = harness(src);
+  h.pass(); const [a] = h.created;
+  assert.match(a.src, /^data:image\/svg\+xml;r=1;base64,/);
+  assert.deepEqual(cs(gifIn(a.src)), [23, 23, 22, 23]);
+  const text = Buffer.from(a.src.slice(a.src.indexOf(",") + 1), "base64");
+  assert.deepEqual(text.toString("utf8").replace(/data:image\/gif;base64,[A-Za-z0-9+/=]+/, ""), svg.replace(/data:image\/gif;base64,[A-Za-z0-9+/=]+/, ""), "the rest of the art, its UTF-8 bytes kept");
+  a.load(); h.dispose.pause(); await tick();
+  assert.equal(h.stills[0].svg, text.toString("latin1"), "the still is made from the retimed art, one character per byte");
+  // Without a beat, the plain percent-encoded copy, as before.
+  const p = harness(src, { beat: () => null }); p.pass(); assert.equal(p.created[0].src, src.replace("data:image/svg+xml,", "data:image/svg+xml;r=1,"));
+});
+test("restartImgOnPass: a null beat decodes nothing at a restart", () => {
+  const even = gifOf([20, 20, 20, 20]), h = harness(ART(even), { beat: () => null }), atob0 = globalThis.atob;
+  let calls = 0; globalThis.atob = (x) => (calls++, atob0(x));
+  try { h.pass(); } finally { globalThis.atob = atob0; }
+  assert.equal(calls, 0);
+});
+
+// Seeded fuzz: random small GIFs (1-4 px a side, 2-5 frames; partial rectangles, disposals 0-3,
+// transparency, interlace, local colour tables) retimed with repetition and rotation: every output
+// frame shows its source frame's pixels (as the original's loop shows them), and stillSvg's way of
+// drawing (from the last start, gifStarts) gives every frame's pixels, of the original and the retimed GIF.
+test("retimeGif and gifStarts: seeded fuzz against the decoder", () => {
+  let seed = 12345;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff, ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+  // Uncompressed LZW: a clear code before the table would grow.
+  const lzw = (indices) => {
+    const bits = [], put = (c) => { for (let i = 0; i < 3; i++) bits.push((c >> i) & 1); };
+    put(4); indices.forEach((v, i) => { put(v); if (i % 2 == 1) put(4); }); put(5);
+    const bytes = []; for (let i = 0; i < bits.length; i += 8) { let b = 0; for (let j = 0; j < 8 && i + j < bits.length; j++) b |= bits[i + j] << j; bytes.push(b); }
+    const out = []; for (let i = 0; i < bytes.length; i += 255) { const c = bytes.slice(i, i + 255); out.push(c.length, ...c); } return [...out, 0];
+  };
+  const make = (W, H, frames) => Uint8Array.from([71, 73, 70, 56, 57, 97, W, 0, H, 0, 0xf1, 0, 0, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255,
+    33, 255, 11, ...Buffer.from("NETSCAPE2.0"), 3, 1, 0, 0, 0,
+    ...frames.flatMap((f) => [33, 249, 4, (f.disposal << 2) | (f.transparent ? 1 : 0), f.cs, 0, f.index, 0,
+      44, f.x, 0, f.y, 0, f.w, 0, f.h, 0, (f.interlace ? 64 : 0) | (f.local ? 0x81 : 0), ...(f.local ? [9, 9, 9, 200, 100, 0, 0, 200, 100, 50, 50, 50] : []), 2, ...lzw(f.px)]), 59]);
+  const hex = (a) => Buffer.from(a).toString("hex");
+  /** Every frame drawn as stillSvg draws it: from the last start, each frame decoded on its own. */
+  const stills = (b) => {
+    const g = gifFrames(b), W = g.width, H = g.height, st = gifStarts(g);
+    return g.frames.map((_, k) => {
+      let canvas = new Uint8Array(W * H * 4), saved = null;
+      for (let i = st.lastIndexOf(true, k), from = i; i <= k; i++) {
+        const before = i > from ? g.frames[i - 1] : null, f = g.frames[i];
+        if (before?.disposal == 2) for (let y = before.rect[1]; y < Math.min(H, before.rect[1] + before.rect[3]); y++) canvas.fill(0, (y * W + before.rect[0]) * 4, (y * W + Math.min(W, before.rect[0] + before.rect[2])) * 4);
+        else if (before?.disposal == 3 && saved) canvas = saved.slice();
+        if (f.disposal == 3) saved = canvas.slice();
+        const one = decodeGif(Uint8Array.from([...g.head, ...b.subarray(f.start, f.end), 59])).frames[0].rgba;
+        for (let p = 0; p < W * H; p++) if (one[p * 4 + 3]) canvas.set(one.subarray(p * 4, p * 4 + 4), p * 4);
+      }
+      return hex(canvas);
+    });
+  };
+  let retimed = 0, rotated = 0, repeated = 0;
+  for (let it = 0; it < 600; it++) {
+    const W = ri(1, 4), H = ri(1, 4), frames = Array.from({ length: ri(2, 5) }, (_, i) => {
+      const full = rnd() < 0.4, x = full ? 0 : ri(0, W - 1), y = full ? 0 : ri(0, H - 1), w = full ? W : ri(1, W - x), h = full ? H : ri(1, H - y);
+      return { x, y, w, h, disposal: ri(0, 3), transparent: rnd() < 0.5, index: ri(0, 3), cs: ri(2, 40), interlace: rnd() < 0.3, local: rnd() < 0.3, px: Array.from({ length: w * h }, () => ri(0, 3)), i };
+    });
+    const gif = make(W, H, frames), beatS = 0.3 + rnd() * 0.7, pass = 30 + rnd() * 60, at = rnd() < 0.5 ? null : rnd() * pass;
+    const out = retimeGif(gif, beatS, pass, at);
+    assert.ok(out, `iteration ${it}: retimed`);
+    retimed++;
+    const g = gifFrames(gif), o = gifFrames(out), key = (x, f) => hex(x.subarray(f.start + 6, f.end)) + (x[f.start + 3] & 1), own = g.frames.map((f) => key(gif, f));
+    // The frames, in the order they come: a rotation of the original's, repeated.
+    let src = null;
+    for (let s0 = 0; s0 < g.frames.length && !src; s0++) { const c = o.frames.map((_, j) => (s0 + j) % g.frames.length); if (c.every((i, j) => key(out, o.frames[j]) === own[i])) src = c; }
+    assert.ok(src, `iteration ${it}: the original's frames in order`);
+    if (src[0]) rotated++;
+    if (o.frames.length > g.frames.length + 1) repeated++;
+    const before = decodeGif(gif).frames.map((f) => hex(f.rgba));
+    assert.deepEqual(decodeGif(out).frames.map((f) => hex(f.rgba)), src.map((i) => before[i]), `iteration ${it}: pixels`);
+    if (it % 3 == 0) for (const b of [gif, out]) assert.deepEqual(stills(b), decodeGif(b).frames.map((f) => hex(f.rgba)), `iteration ${it}: stills`);
+  }
+  assert.ok(rotated > 50 && repeated > 300, `rotated ${rotated}, repeated ${repeated} of ${retimed}`);
 });
