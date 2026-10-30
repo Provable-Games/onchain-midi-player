@@ -182,11 +182,15 @@ async function gifArtSession(run) {
     return result;
   } finally { await o.context.close(); }
 }
-// No drift: within every run of at least 20 changes, the fitted line moves under 10 ms, and no change
-// is over 60 ms from it (screenshot timing).
+// No drift: within every run of at least 20 changes, the fitted line moves under GIF_DRIFT_LIMIT_MS,
+// and no change is over 60 ms from it (screenshot timing). This GIF's loop (4 frames, 91 cs) holds
+// the grid exactly, so what the line measures is the browser's image clock against the audio clock
+// and the fit's noise: 0.2-9 ms in local one-minute runs (Chromium 5.4 and 9.0, WebKit 0.2). The
+// limit is a coarse ceiling, as for the SVG drift above, well under one frame.
+const GIF_DRIFT_LIMIT_MS = 20;
 function assertGif(gif) {
   if (gif.skipped) return console.log(`${gif.engine}: tempo-timed GIF art skipped (${gif.skipped})`);
   assert.ok(gif.runs.length >= 1, 'a run of the GIF long enough to measure');
-  for (const r of gif.runs) { assert.ok(Math.abs(r.drift_ms) < 10, `GIF drift ${r.drift_ms} ms over ${r.seconds} s`); assert.ok(r.spread_ms < 60, `GIF changes spread ${r.spread_ms} ms`); }
+  for (const r of gif.runs) { assert.ok(Math.abs(r.drift_ms) < GIF_DRIFT_LIMIT_MS, `GIF drift ${r.drift_ms} ms over ${r.seconds} s`); assert.ok(r.spread_ms < 60, `GIF changes spread ${r.spread_ms} ms`); }
   console.log(`${gif.engine}: tempo-timed GIF art (${gif.step_ms} ms frames, delays ${gif.retimed_delays_ms.join('/')} ms): ${gif.runs.map((r) => `${r.changes} changes over ${r.seconds} s, drift ${r.drift_ms} ms, ${r.mean_offset_ms} ms from the grid, spread ${r.spread_ms} ms`).join('; ')}`);
 }
