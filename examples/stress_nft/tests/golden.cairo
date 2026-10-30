@@ -2,10 +2,10 @@
 
 /// token_uri of token 1 (6 bars): (length, SHA-256).
 pub fn token_uri_1_digest() -> (u32, u256) {
-    (89173, 0x45a52c0613cac463101cc0146ac469e2925f5e86d88493065b4a1ded976cb7ea)
+    (89173, 0x0d2776e191f9a87b6d98ab7aa72186d5cd3451ca21b5e0df2677e17234d3cac6)
 }
 
 /// token_uri of token 12 (1965 bars): (length, SHA-256).
 pub fn token_uri_12_digest() -> (u32, u256) {
-    (386649, 0x17d49802c3795810ab868e41c6564ff85c26b79f8c6f1fb2718cb3cd7caa0946)
+    (386649, 0xcfbe2c88a913d0ac67dbfe8b54d12dd714ac73c04e17ed7fdd8da355474a4dd7)
 }

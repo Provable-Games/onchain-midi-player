@@ -16,21 +16,21 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Signed fork release v2.1.1 of pocket-synth (tag commit e0b1a89 on main, the merge of release PR #126). That
-// PR built and committed the minified script and map on release/v2.1.1 (fbe394e), and its CI run checked them
+// Signed fork release v2.1.2 of pocket-synth (tag commit 4a2dc1c on main, the merge of release PR #128). That
+// PR built and committed the minified script and map on release/v2.1.2 (f1276f0), and its CI run checked them
 // against a fresh build; the tag commit has the identical tree, so the same source, NOTICE, lock, script and
 // map. A fresh `npm ci` build of the tag reproduces both files.
-export const ENGINE_PIN = { ref: "v2.1.1", commit: "e0b1a897f34968ba3ecfad3fddfbac815499c9c0", sha256: "b0be448e3c0959862e1f83f3b22c0550dc27d13094757430bf2ed4a28a28ceed", noticeSha256: "ff3f337c324f6522c6831fe096076d6eba672ef03e40608a5fcf1bf59dd3fca0" };
+export const ENGINE_PIN = { ref: "v2.1.2", commit: "4a2dc1cd7e43e9a8df26dd3e96f41eed62e2c9b9", sha256: "1cc2fe98bdd9c8ae0d030d00f5b5350f139a4062a314176f07ca4b820debe4f4", noticeSha256: "6ff04a5bc4e832ce90f2e3c033eacb68777d58bfc66708f2347a2e059d614595" };
 export const ENGINE_BUILD = {
   provisional: false,
-  sourceCommit: "fbe394e86fa7ba2e2581aad018e94b10eadc52e1",
-  distributionCommit: "fbe394e86fa7ba2e2581aad018e94b10eadc52e1",
-  ciRun: "https://github.com/Provable-Games/pocket-synth/actions/runs/41007922128",
-  sourceMapSha256: "ad9b593c7479daa1f084df860b67158484255287c8a0dc1726b3da6ba5896d9e",
-  sourceSha256: "b45380199b6f1703aff12e5dd37ca74f2f35f265c23841145bd4a9bdae20ff2b",
+  sourceCommit: "f1276f041271d392f7043e47c0a1b12438a6e572",
+  distributionCommit: "f1276f041271d392f7043e47c0a1b12438a6e572",
+  ciRun: "https://github.com/Provable-Games/pocket-synth/actions/runs/41020790486",
+  sourceMapSha256: "15a3a957614d8c29445692d2b8ad3524ccf9eb4748200697e62019233913752e",
+  sourceSha256: "b53678d784d85f16b1bb6fbcb7cd50277df6192ec011e79940e8a8d5bb7d06d0",
   recipe: "node scripts/build.js <output-dir>",
   recipeSha256: "ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728",
-  packageLockSha256: "f99801c211f576100176af502b415eabe393bcaaa95765809b823392b0caa375",
+  packageLockSha256: "dd87c94ac3137b2d0ca8187868066da31f193fe8c3432bf20013bda6e51537e8",
   terser: "5.51.2"
 };
 
