@@ -338,6 +338,16 @@ test("restartImgOnPass with a beat: a retimed copy that fails to decode gives wa
   h.pass(); h.pass(); h.created[7].load(); h.created[6].fail(); assert.equal(h.created.length, 8, "an older restart failing");
   h.pass(); h.status.runId = 2; h.created[8].fail(); assert.equal(h.created.length, 9, "another run");
 });
+test("restartImgOnPass with a beat: an older retimed copy failing while a newer one decodes gives no fallback (PR #93 review)", () => {
+  const even = gifOf([20, 20, 20, 20]), h = harness(ART(even));
+  h.pass(); h.pass(); const [a, b] = h.created;
+  a.fail(); assert.equal(h.created.length, 2, "no plain copy over the newer restart");
+  b.load(); assert.equal(h.page[0], b, "the newer retimed copy is shown");
+  assert.deepEqual(cs(gifIn(h.page[0].src)), [23, 23, 22, 23]);
+  // The latest failing still falls back.
+  h.pass(); h.created[2].fail(); assert.equal(h.created.length, 4); h.created[3].load(); assert.equal(h.page[0], h.created[3]);
+  assert.equal(h.created[3].src, ART(even).replace(";base64,", ";r=4;base64,"));
+});
 test("restartImgOnPass with a beat: percent-encoded art (the notes' cut-out copy) is retimed, and stilled from the retimed text", async () => {
   const even = gifOf([20, 20, 20, 20]), svg = `<svg xmlns='http://www.w3.org/2000/svg'><text>caf\u00e9 a,b</text><image href='data:image/gif;base64,${Buffer.from(even).toString("base64")}'/></svg>`;
   const src = "data:image/svg+xml," + encodeURIComponent(svg), h = harness(src);

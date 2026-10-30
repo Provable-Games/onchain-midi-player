@@ -187,8 +187,9 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
       onSwap(next);
     };
     // A still that fails to decode gives up the freeze it was for: the art moves and restarts at passes.
-    // A retimed copy that fails gives way to the plain copy.
-    next.onerror = () => { if (live && n > shown && wanted()) { if (still) frozen = false; else failed?.(); } };
+    // A retimed copy that fails gives way to the plain copy, if it is still the latest image asked
+    // for: an older one failing must not supersede a newer restart still decoding.
+    next.onerror = () => { if (live && wanted()) { if (still) frozen = false; else if (n == restarts) failed?.(); } };
     next.src = src(n); // The same bytes at a distinct URL.
   };
   /** Restarts the art from its first frame, or with `at` from where the music is (retimeGif's `at`). */
