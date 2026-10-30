@@ -19,6 +19,18 @@ const HELD_TOLERANCE_SECONDS = 0.005;
 // (WebKit), with no frame over 40 ms.
 const MAX_DRIFT_LIMIT_MS = Object.freeze({ chromium: 40, firefox: 50, webkit: 15 });
 const seconds = Number(process.env.SYNC_SECONDS || 60), SESSION_SECONDS = seconds;
+// The retimed GIF's drift (gifArtSession, assertGif): within every run of at least 20 changes, the
+// fitted line moves under GIF_DRIFT_LIMIT_MS, and no change is over 60 ms from it (screenshot
+// timing). This GIF's loop (4 frames, 91 cs) holds the grid exactly, so what the line measures is
+// the browser's image clock (the page's) against the audio clock and the fit's noise. Local
+// one-minute runs: Chromium 5.4, 9.0 and 13.4 ms, WebKit 0.2 and -0.1 ms; headless Chromium's
+// audio clock was measured 0.04% slower than its page clock, up to 22 ms over this 55 s pass,
+// which the GIF cannot follow (each pass restart realigns it). The limit is a coarse ceiling, as
+// for the SVG drift above, well under one 227.5 ms frame.
+const GIF_DRIFT_LIMIT_MS = 30;
+// The session lasts as long as the SVG one, up to GIF_SECONDS: two of the score's passes, since each
+// run is measured on its own, so a long Drift workflow session stays within its job's time.
+const GIF_SECONDS = 120;
 const sampleSeconds = Number(process.env.SYNC_SAMPLE_SECONDS || 10);
 assert.ok(sampleSeconds > 0 && Number.isFinite(sampleSeconds));
 assert.ok(seconds >= 5 && seconds <= 3600);
@@ -147,11 +159,8 @@ try {
 // pass), the drift is the change of that distance from start to end (a least-squares line), and
 // the spread is its distance from that line. Headless Firefox shows no GIF animation inside an
 // SVG image: there the session is skipped. Screenshot timing limits each change to about +/- 25 ms.
-// The session lasts as long as the SVG one, up to GIF_SECONDS: two of the score's passes, since each
-// run is measured on its own, so a long Drift workflow session stays within its job's time.
-const GIF_SECONDS = 120;
 async function gifArtSession(run) {
-  const seconds = Math.min(SESSION_SECONDS, GIF_SECONDS);
+  const seconds = Math.min(SESSION_SECONDS, GIF_SECONDS); // as long as the SVG session, up to two passes
   if (run.engine === 'firefox') return { engine: run.engine, skipped: 'no GIF animation inside an SVG image in headless Firefox' };
   const gif = Buffer.from([71,73,70,56,57,97,1,0,1,0,128,0,0,204,0,0,0,0,204,33,255,11,...Buffer.from('NETSCAPE2.0'),3,1,0,0,0,
     33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,76,1,0,59]).toString('base64');
@@ -182,12 +191,6 @@ async function gifArtSession(run) {
     return result;
   } finally { await o.context.close(); }
 }
-// No drift: within every run of at least 20 changes, the fitted line moves under GIF_DRIFT_LIMIT_MS,
-// and no change is over 60 ms from it (screenshot timing). This GIF's loop (4 frames, 91 cs) holds
-// the grid exactly, so what the line measures is the browser's image clock against the audio clock
-// and the fit's noise: 0.2-9 ms in local one-minute runs (Chromium 5.4 and 9.0, WebKit 0.2). The
-// limit is a coarse ceiling, as for the SVG drift above, well under one frame.
-const GIF_DRIFT_LIMIT_MS = 20;
 function assertGif(gif) {
   if (gif.skipped) return console.log(`${gif.engine}: tempo-timed GIF art skipped (${gif.skipped})`);
   assert.ok(gif.runs.length >= 1, 'a run of the GIF long enough to measure');
