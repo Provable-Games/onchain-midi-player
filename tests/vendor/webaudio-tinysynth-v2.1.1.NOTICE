@@ -1,0 +1,89 @@
+pocket-synth
+https://github.com/Provable-Games/pocket-synth
+
+This product is a modified version of webaudio-tinysynth by
+Tatsuya Shinyagaito (g200kg), https://github.com/g200kg/webaudio-tinysynth,
+licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Modifications by Provable Games, based on upstream commit
+3d75aee4b3f43cbd932265e7d60201fd5b770397:
+
+  - Removed the GUI panel and <webaudio-tinysynth> custom element;
+    retained the JavaScript API and CommonJS/AMD/global exports.
+  - Preserved fractional BPM from MIDI tempo events instead of rounding
+    down; added loopEnd/setLoopEnd() for loop boundaries and
+    getPlayStatus().startTime for visual synchronization.
+    Explicit loop boundaries preserve the rest before the first event.
+  - Added bounded, validated SMF parsing with coded errors that preserve
+    the previous song. Bounded sequencer callbacks, stopped non-advancing
+    loops and empty songs, and rebuilt tempo/channel state on seek/replay.
+  - Added context/destination/lazy constructor options and
+    resume()/dispose(). Released voices, nodes and timers; closed only
+    synth-owned contexts. Stop, seek and song replacement cancel drums and queued controllers.
+    Rejected realtime sequencing on OfflineAudioContext and handled
+    resume promise failures.
+  - On coarse-pointer (touch) devices, the realtime lookahead (preroll)
+    is 1 s.
+    The realtime voice limit applies to the sequencer's queued voices
+    at their start times, and channel mode messages sent with a future
+    time act at that time (CC120 cuts, CC123-127 act as note-offs).
+    CC121 also lifts the sustain pedal, releasing the voices it held.
+  - Added autoResume (default true) for application-controlled audio
+    startup: with false, send() does not resume suspended/interrupted
+    contexts and the sequencer waits until its context runs. Explicit
+    resume() remains available; suspension retains the song, voices
+    and scheduled events.
+  - Added argument validation to volume, quality, voice-limit, loop-end
+    and channel-message functions, and installed validated timbre copies.
+    Legacy setLoop()/setTsMode() assignments remain unchecked. Malformed
+    MIDI byte messages are ignored; invalid send() argument types or
+    timestamps can throw TypeError/RangeError. Notes with computed
+    AudioParam values outside float32 range are skipped; timbre time
+    fields are bounded and converted mode-1 timestamps are clamped to
+    the current context time.
+  - Added cancellable loadMIDIUrl() promises with coded errors and
+    protection against stale responses.
+  - Corrected note releases during attack to use each operator's reached
+    level; retained no-attack operator releases for zero-length notes.
+  - Added setSampleWave()/setHarmonicWave() waveform registries and
+    optional fixed output-operator filters (fl, ff, fq, fk).
+  - Replaced Math.random() reverb/noise generation with independent
+    seeded mulberry32 streams; added read-only seed (default 0) and
+    bufferVersion. The noise/reverb texture differs from upstream;
+    buffer data is repeatable for the same seed, bufferVersion and
+    sample rate. Metallic noise is generated once per context
+    installation on first use or prewarm(); disabled reverb does not
+    generate its impulse. Installed built-in timbres once.
+  - Updated demos to use the JavaScript API, user-gesture audio startup,
+    error reporting and validated timbre editing. Corrected note/sustain
+    cleanup, MIDI input hot-plug handling and competing file/URL loads.
+  - Replaced remotely loaded demo controls with a pinned local JavaScript
+    copy; removed external custom-element polyfill and Google Fonts
+    loads, and unused Polymer controls, sample pages and images.
+  - Added locked Node/npm development tooling, ESLint, unit/native Node,
+    upstream-regression and Chromium/Firefox/WebKit browser tests,
+    deadline-bounded runners, benchmarks and evidence-analysis tools.
+  - Added CI, browser-matrix, Codex/Claude review and distribution-rebuild
+    workflows and Dependabot configuration. Integration CI regenerates
+    distributions after merges; releases on main remain manual.
+  - Added pinned, reproducible Terser builds, distribution/inline-safety
+    verification, size/checksum reporting and package-install checks;
+    regenerated webaudio-tinysynth.min.js and its source map.
+  - Renamed the package to pocket-synth; updated its version and
+    repository/support metadata;
+    replaced .npmignore with an explicit package file allowlist for synth
+    source/builds, LICENSE, NOTICE and README (npm also adds package.json).
+  - Consolidated maintained documentation into README, NOTICE and AGENTS;
+    CLAUDE points to AGENTS.
+
+Vendored demo controls (not part of the synthesizer or npm package):
+
+  bower_components/webaudio-controls/webaudio-controls.js is an
+  unmodified copy of g200kg/webaudio-controls:
+  Original controls by Eiji Kitamura, Ryoya KAWAI and Keisuke Ai;
+  integrated and enhanced by g200kg (Tatsuya Shinyagaito).
+  https://github.com/g200kg/webaudio-controls
+  Upstream commit: 282610abc14e0ab3c6273a0b977ae5d6677f426c
+  SHA-256: 2f780008a1895c3d1b583d99f4f50c35fc2870bf47e117574361465dc5784f65
+  Licensed under Apache-2.0; see bower_components/webaudio-controls/LICENSE.
+  The upstream copyright header is preserved.
