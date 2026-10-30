@@ -121,6 +121,9 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
  * with a distinct `r=<n>` parameter added to its media type, so the browser decodes it afresh: the
  * media type, its other parameters and the payload stay byte for byte, whatever the art's encoding.
  * An image from any other URL is never restarted: changing that URL could fetch something else.
+ * With `beat`, each copy has the art's first GIF timed to the music instead (retimeGif: each frame
+ * on the beat, the loop repeated until it keeps to the beat over the pass), base64-encoded, and
+ * the rest of the art byte for byte; a GIF it cannot time, or none, gives the plain copy.
  *
  * The returned dispose function also carries `pause`, `play` and `stop` (syncSvgToMusic's `img`).
  * `pause` freezes the art: no page can stop a GIF inside an image, or read the frame it shows
@@ -129,53 +132,84 @@ export function syncSvgToMusic(svgRoot, player, { displayLead = REFERENCE_DISPLA
  * through unfrozen (seen at each transport change and pass), or the page time without that clock,
  * and its GIF's own delays, and shows the art with that GIF replaced by a
  * PNG of the frame (`stillSvg`), decoded off screen like a restart. Restarts wait while frozen.
- * `play` and `stop` restart the art from its first frame, if the still was shown; the next pass
- * realigns it. A pause while the still is still shown (the restart after a resume not yet
- * decoded) keeps that still. Only the latest pause's still is ever shown. Art without a GIF it can
+ * `play` restarts the art, if the still was shown: a retimed GIF from the frame the music is on,
+ * shortened to fit (retimeGif's `at`, where artTime says), so it carries on in time; otherwise
+ * from its first frame, and the next pass realigns it. A retimed image that played on through the
+ * pause (its still never shown) restarts there too. `stop` restarts a shown still from its first
+ * frame. A page made visible while the music plays restarts a retimed image where the music is.
+ * The still of a retimed image is worked out from that image's own GIF. A pause while the still
+ * is still shown (the restart after a resume not yet decoded) keeps that still. Only the latest pause's still is ever shown. Art without a GIF it can
  * still, or a still that fails to be made or decoded, keeps moving and restarting at passes, and so does any other
  * animation in the art (SVG/SMIL). On a hidden page the still is made once the page is visible
  * again; dispose drops a still still waiting for that.
- * Limits: a restart lands up to one decode late, a freeze also, and no page can pause, seek or
- * phase-align GIF frames inside any art (use SMIL sprite animation for motion synced to the music).
+ * Limits: a restart lands up to one decode late, a freeze also; a browser shows a GIF frame up to
+ * one screen refresh late; and no page can pause or seek GIF frames inside any art (use SMIL sprite
+ * animation for motion seeked with the music).
  * @param {HTMLImageElement} img the shown art
  * @param {OnchainMidiApi} player
  * @param {{onSwap?: (img: HTMLImageElement) => void,
- *   still?: (svg: string, ms: number, doc: Document) => Promise<string | null>}} [options] onSwap:
+ *   still?: (svg: string, ms: number, doc: Document) => Promise<string | null>,
+ *   beat?: (s: PlayStatus) => number | null}} [options] onSwap:
  *   each new image once shown (re-attach observers of the art, such as the play button's
- *   placement); still: the art's text frozen `ms` after its image started (stillSvg)
+ *   placement); still: the art's text frozen `ms` after its image started (stillSvg); beat: the
+ *   music's seconds per beat (beatSeconds), null to keep the art's own timing (the default)
  * @returns {(() => void) & {play(): void, pause(): void, stop(): void}} dispose, with the freeze controls
  */
-export function restartImgOnPass(img, player, { onSwap = () => {}, still = stillSvg } = {}) {
+export function restartImgOnPass(img, player, { onSwap = () => {}, still = stillSvg, beat = () => null } = {}) {
   // data:<media type>[;base64],<payload>, split where the browser splits it (the first comma).
   const url = /^data:([^,]*?)(;\x20*base64[\t\n\f\r ]*)?(,[\s\S]*)$/i.exec(img.src);
   const none = () => {};
   if (!url) return Object.assign(none, { play: none, pause: none, stop: none });
   const [, type, base64 = "", payload] = url, doc = img.ownerDocument;
+  // The art's payload as bytes (one character each), so art in any encoding keeps its other bytes.
+  const art = () => (base64 ? atob(payload.slice(1).replace(/[\t\n\f\r ]/g, "")) : unescape(payload.slice(1)));
   // frozen: a still is wanted (pending or shown); held: a still is shown; gen: the latest pause;
   // shownAt and shownStatus: when the image now shown started, on the page and the audio clocks;
-  // stalled: how long it has played while the audio clock stood still (suspensions it ran through).
+  // stalled: how long it has played while the audio clock stood still (suspensions it ran through);
+  // retimed: the art shown with its GIF timed to the music (retimeGif), or null for the art itself.
   let restarts = 0, shown = 0, live = true, frozen = false, held = false, gen = 0, shownAt = performance.now(), stalled = 0;
   /** @type {PlayStatus | null} */ let shownStatus = null;
+  /** @type {string | null} */ let retimed = null;
   /** @type {(() => void) | null} */ let waiting = null;
   const unwait = () => { if (waiting) doc.removeEventListener("visibilitychange", waiting); waiting = null; };
-  /** Decodes `src(n)` off screen and shows it, unless disposed, a newer image is shown or `wanted()` fails. */
-  const show = (/** @type {(n: number) => string} */ src, /** @type {() => boolean} */ wanted, still = false) => {
+  /**
+   * Decodes `src(n)` off screen and shows it, unless disposed, a newer image is shown or `wanted()`
+   * fails; `svg`: the retimed art it shows, and `failed`, what to show instead if it cannot decode.
+   */
+  const show = (/** @type {(n: number) => string} */ src, /** @type {() => boolean} */ wanted, still = false, /** @type {string | null} */ svg = null, /** @type {(() => void) | null} */ failed = null) => {
     const n = ++restarts, next = doc.createElement("img");
     for (const { name, value } of img.attributes) if (name !== "src") next.setAttribute(name, value);
     next.onload = () => {
       if (!live || n < shown || !wanted()) return;
-      shown = n; held = still; shownAt = performance.now(); shownStatus = player.getPlayStatus(); stalled = 0;
+      shown = n; held = still; retimed = svg; shownAt = performance.now(); shownStatus = player.getPlayStatus(); stalled = 0;
       img.replaceWith(next);
       img = next;
       onSwap(next);
     };
     // A still that fails to decode gives up the freeze it was for: the art moves and restarts at passes.
-    next.onerror = () => { if (live && still && wanted()) frozen = false; };
+    // A retimed copy that fails gives way to the plain copy, if it is still the latest image asked
+    // for: an older one failing must not supersede a newer restart still decoding.
+    next.onerror = () => { if (live && wanted()) { if (still) frozen = false; else if (n == restarts) failed?.(); } };
     next.src = src(n); // The same bytes at a distinct URL.
   };
-  const restart = () => {
-    const runId = player.getPlayStatus().runId;
-    show((n) => "data:" + type + ";r=" + n + base64 + payload, () => !frozen && player.getPlayStatus().runId === runId);
+  /**
+   * Restarts the art from its first frame, or with `at` from where the music is (retimeGif's `at`);
+   * with `aligned`, only if the retimed copy can start there (else the image shown stays).
+   */
+  const restart = (at = false, aligned = false) => {
+    const s = player.getPlayStatus(), runId = s.runId;
+    /** @type {string | null} */ let svg = null;
+    try {
+      // The art with its first GIF timed to the music (null: no beat, or no GIF retimeGif can time).
+      // The new image starts once decoded: up to one decode after the position it was built for.
+      const b = beat(s), text = b ? art() : "", m = GIF_URI.exec(text);
+      const gif = m && retimeGif(Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0)), /** @type {number} */ (b), s.passSeconds || 0, at && s.positionSeconds !== null ? artTime(s) : null);
+      if (aligned && !gif?.aligned) return;
+      if (gif) { let bin = ""; for (const x of gif) bin += String.fromCharCode(x); svg = text.replace(m[0], () => "data:image/gif;base64," + btoa(bin)); }
+    } catch (e) { if (aligned) return; }
+    const wanted = () => !frozen && player.getPlayStatus().runId === runId, plain = (/** @type {number} */ n) => "data:" + type + ";r=" + n + base64 + payload;
+    if (svg === null) show(plain, wanted);
+    else show((n) => "data:" + type + ";r=" + n + ";base64," + btoa(/** @type {string} */ (svg)), wanted, false, svg, () => show(plain, wanted));
   };
   // While the audio runs, the page time the shown image has played beyond the audio clock is the
   // suspensions it ran through (a resume that cancelled a pending still, or a pause and resume the
@@ -184,9 +218,17 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
     const s = player.getPlayStatus(), audio = audioElapsedMs(shownStatus, s);
     if (s.audioState === "running" && audio !== null) stalled = Math.max(0, performance.now() - shownAt - audio);
   };
+  // A page made visible while the music plays shows the retimed art from where the music is (a
+  // hidden page's images may not have moved meanwhile), if its GIF can start there: one that plays a
+  // set number of times, or whose frames after the first all paint over earlier ones, stays as it is.
+  const visible = () => {
+    const s = player.getPlayStatus();
+    if (!doc.hidden && !frozen && retimed !== null && s.state === "playing" && s.audioState === "running") restart(true, true);
+  };
+  doc.addEventListener("visibilitychange", visible);
   const offState = player.onStateChange(ran);
   const offPass = player.onPassStart(() => { ran(); if (!frozen) restart(); });
-  const off = () => { offState(); offPass(); };
+  const off = () => { offState(); offPass(); doc.removeEventListener("visibilitychange", visible); };
   /** Shows the still of the art `ms` after it started for pause `g`, unless a later pause or a resume came. */
   const hold = (/** @type {number} */ g, /** @type {number} */ ms) => {
     unwait();
@@ -195,21 +237,24 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
       return doc.addEventListener("visibilitychange", waiting);
     }
     const current = () => live && g == gen && frozen;
-    Promise.resolve().then(() => {
-      // The payload as bytes (one character each), so art in any encoding keeps its other bytes.
-      const text = base64 ? atob(payload.slice(1).replace(/[\t\n\f\r ]/g, "")) : unescape(payload.slice(1));
-      return still(text, ms, doc);
-    }).then((svg) => {
+    // The art as shown: its GIF retimed, or the art itself.
+    const shownArt = retimed;
+    Promise.resolve().then(() => still(shownArt ?? art(), ms, doc)).then((svg) => {
       if (!current()) return;
       if (svg) show((n) => "data:" + type + ";r=" + n + ";base64," + btoa(svg), current, true);
       else frozen = false; // Nothing to show: the art keeps moving, and restarting at passes.
     }, () => { if (current()) frozen = false; });
   };
-  const thaw = () => {
+  // Play restarts a still from where the music is (from frame 0 where its GIF cannot start there),
+  // and so a retimed image that played on through a pause whose still never showed, if its GIF can
+  // start there; stop restarts a still from its first frame. A still never shown otherwise leaves
+  // the art running.
+  const thaw = (/** @type {boolean} */ resume) => {
     if (!frozen) return;
     frozen = false;
     unwait();
-    if (held) restart(); // From its first frame; a still never shown leaves the art running.
+    if (held) restart(resume);
+    else if (resume && retimed !== null) restart(true, true);
   };
   return Object.assign(() => { live = false; off(); unwait(); }, {
     pause() {
@@ -223,10 +268,13 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
       const audio = audioElapsedMs(shownStatus, player.getPlayStatus());
       if (!held) hold(++gen, audio === null ? performance.now() - shownAt : audio + stalled);
     },
-    play: thaw,
-    stop: thaw,
+    play: () => thaw(true),
+    stop: () => thaw(false),
   });
 }
+
+/** The first embedded GIF of art (its base64 payload in group 1): what stillSvg freezes and restartImgOnPass retimes. */
+const GIF_URI = /data:image\/gif;base64,([A-Za-z0-9+/]+=*)/;
 
 /**
  * Milliseconds the AudioContext ran between two play statuses of one run, `from` and the later
@@ -263,13 +311,14 @@ export function laterImg() {
  * The frames of a GIF from its block structure, without decoding pixels: `head`, the bytes every
  * frame shares (signature, screen descriptor and global color table), and each frame's bytes
  * (`start` to `end`: its Graphic Control Extension, descriptor, color table and data), `delay` in
- * ms as browsers show it (0 or 1 cs as 100 ms), `disposal` and `rect` (x, y, width, height); and
+ * ms as browsers show it (0 or 1 cs as 100 ms), `disposal`, `rect` (x, y, width, height) and
+ * `transparent` (its Graphic Control Extension's transparency flag); and
  * `plays`, how many times browsers show the loop: once without a NETSCAPE2.0 loop extension, its
  * count plus one (the count is repeats), 0 (forever) for a count of 0. Null when the bytes are not
  * a GIF this walk follows.
  * @param {Uint8Array} b
  * @returns {{head: Uint8Array, width: number, height: number, plays: number,
- *   frames: {start: number, end: number, delay: number, disposal: number, rect: number[]}[]} | null}
+ *   frames: {start: number, end: number, delay: number, disposal: number, rect: number[], transparent: boolean}[]} | null}
  */
 export function gifFrames(b) {
   if (b.length < 13 || String.fromCharCode(...b.subarray(0, 4)) != "GIF8") return null;
@@ -291,7 +340,7 @@ export function gifFrames(b) {
       const rect = [0, 2, 4, 6].map((i) => b[p + i] | (b[p + i + 1] << 8));
       p += 10 + (flags & 128 ? 3 << ((flags & 7) + 1) : 0);
       skip();
-      frames.push({ start: gce < 0 ? at : gce, end: p, delay: cs > 1 ? cs * 10 : 100, disposal: gce < 0 ? 0 : (b[gce + 3] >> 2) & 7, rect });
+      frames.push({ start: gce < 0 ? at : gce, end: p, delay: cs > 1 ? cs * 10 : 100, disposal: gce < 0 ? 0 : (b[gce + 3] >> 2) & 7, rect, transparent: gce >= 0 && !!(b[gce + 3] & 1) });
       gce = -1;
     } else return null;
   }
@@ -314,10 +363,141 @@ export function gifFrameAt(frames, ms, plays = 0) {
 }
 
 /**
+ * Which frames of a GIF a loop can start from: true for frame i when what it shows, and so what
+ * the frames after it show, does not depend on the frames before it, since the canvas is clear
+ * before it (`clear`: the loop starts clear, as browsers start each loop, or the frames before
+ * left nothing behind) or it covers the screen with opaque pixels and restores nothing under it
+ * (disposal 3). The extra last entry: whether the loop ends with the canvas clear.
+ * @param {{width: number, height: number, frames: {disposal: number, rect: number[], transparent: boolean}[]}} gif
+ * @param {boolean} [clear] whether the canvas is clear before the first frame
+ * @returns {boolean[]}
+ */
+export function gifStarts(gif, clear = true) {
+  const starts = [];
+  for (const f of gif.frames) {
+    const full = !f.rect[0] && !f.rect[1] && f.rect[2] == gif.width && f.rect[3] == gif.height;
+    starts.push(clear || (full && !f.transparent && f.disposal != 3));
+    clear = f.disposal == 2 ? clear || full : f.disposal == 3 && clear;
+  }
+  return [...starts, clear];
+}
+
+/**
+ * The art's frame step, in µs, for a beat of `beatUs` µs: an eighth note, or the beat itself when
+ * the eighth would be under 0.2 s (above 150 BPM). The Beast Sound Check's policy (its `frameUs`);
+ * change it here to retune every page.
+ * @param {number} beatUs
+ */
+export const frameUs = (beatUs) => (beatUs / 2 < 200000 ? beatUs : Math.round(beatUs / 2));
+
+/**
+ * Seconds per beat of the music playing: one pass (`passSeconds`, from the player's own tempo map)
+ * times the MIDI's ticks per beat (its header's bytes 12-13) over the pass's ticks (`maxTick`), as
+ * the notes work out their beat. A song with tempo changes gets its average beat. Null without a
+ * status, a pass or ticks, for a header that is not `MThd`, SMPTE time (bit 15) and a result that
+ * is not a positive number: the art then keeps its own timing.
+ * @param {PlayStatus | null | undefined} s
+ * @param {Uint8Array | null | undefined} midi the page's MIDI file (its first 14 bytes are enough)
+ * @returns {number | null}
+ */
+export function beatSeconds(s, midi) {
+  if (!s || !s.passSeconds || !s.maxTick || !midi || midi.length < 14 || String.fromCharCode(...midi.subarray(0, 4)) != "MThd") return null;
+  const division = (midi[12] << 8) | midi[13], beat = (s.passSeconds * division) / s.maxTick;
+  return division & 0x8000 || !(beat > 0 && beat < Infinity) ? null : beat;
+}
+
+/** A retimed GIF's frame changes may be this far from the beat over a whole pass before more copies are tried (µs). */
+export const RETIME_TARGET_US = 6000;
+/** The most copies of its frames one retimed GIF holds, and of pixels all its frames hold (about 4 bytes each, decoded). */
+export const RETIME_COPIES = 64, RETIME_PIXELS = 1 << 20;
+
+/**
+ * The GIF `b` timed to the music: each frame lasts whole frame steps (frameUs of the beat, `beat`
+ * seconds), one each for frames of equal delays and, for uneven ones, in proportion to its delay,
+ * `max(1, round(n * delay / total))` (20, 40, 20, 20, 20 cs make 1, 2, 1, 1, 1). Delays are whole
+ * centiseconds, so frame i ends at the centisecond nearest its place on the step grid (the error
+ * carries, never adding up), never under 2 cs (browsers show 0 and 1 cs as 10). A loop the
+ * centiseconds cannot hold exactly would drift a little every time round: the frames are repeated
+ * (up to RETIME_COPIES times, and RETIME_PIXELS) until every frame change stays within
+ * RETIME_TARGET_US of the grid over a `pass` seconds long, or as near as that allows. With `at`
+ * (seconds into the pass), the loop starts there: on the frame the grid shows then, that frame
+ * shortened to fit, and the rest of the loop in order, ending with the rest of that frame.
+ * Only the delays change, and the frames are copied byte for byte. A repeated or rotated loop puts
+ * the first frame after the last, where browsers start each loop on a clear canvas: when the last
+ * frame leaves something that the first frame would not cover, it restores its area to the
+ * background (disposal 2), which only clears what the next loop clears anyway. Where that or a
+ * rotation would change what a frame shows (gifStarts), or the GIF plays a set number of times, the
+ * loop is neither repeated nor rotated. Null when the GIF is not one gifFrames reads, has fewer than
+ * two frames or a frame without its own Graphic Control Extension, or for a beat that is not a
+ * positive number.
+ * @param {Uint8Array} b
+ * @param {number} beat seconds per beat (beatSeconds)
+ * @param {number} [pass] seconds per pass of the music
+ * @param {number | null} [at] seconds into the pass to start at
+ * @returns {(Uint8Array & {aligned: boolean}) | null} the GIF; `aligned`: it starts where `at`
+ *   says (false when it could not be rotated there, and so starts from frame 0)
+ */
+export function retimeGif(b, beat, pass = 0, at = null) {
+  const gif = gifFrames(b), frames = gif ? gif.frames : [], n = frames.length, step = frameUs(Math.round(beat * 1e6));
+  if (!gif || n < 2 || !(step > 0) || frames.some((f) => b[f.start] != 33 || b[f.start + 1] != 249 || b[f.start + 2] != 4)) return null;
+  const starts = gifStarts(gif), [x, y, w, h] = frames[n - 1].rect, total = frames.reduce((t, f) => t + f.delay, 0);
+  // The first frame after the last: right as it is, or made right by disposal 2.
+  const seam = starts[n] || gifStarts(gif, false)[0], loops = !gif.plays && (seam || starts[n - 1] || (!x && !y && w == gif.width && h == gif.height));
+  const steps = frames.map((f) => Math.max(1, Math.round((n * f.delay) / total)));
+  /** The frames of `copies` copies, each with where it ends on the grid (µs). */
+  const grid = (/** @type {number} */ copies) => {
+    let t = 0;
+    return Array.from({ length: copies * n }, (_, i) => [i % n, (t += steps[i % n]) * step]);
+  };
+  let copies = 1, best = Infinity;
+  for (let c = 1; c == 1 || (loops && c <= RETIME_COPIES && c * n * gif.width * gif.height <= RETIME_PIXELS); c++) {
+    const ends = grid(c), loop = ends[ends.length - 1][1], off = (/** @type {number} */ us) => Math.abs(Math.round(us / 1e4) * 1e4 - us);
+    // Each loop adds its own error to every frame change after it.
+    const worst = Math.max(...ends.map(([, us]) => off(us))) + Math.max(0, Math.ceil((pass * 1e6) / loop) - 1) * off(loop);
+    if (worst < best) (best = worst), (copies = c);
+    if (worst <= RETIME_TARGET_US) break;
+  }
+  // aligned: the loop starts where `at` says (from frame 0 without it).
+  let list = grid(copies), rotated = false, aligned = at === null;
+  const loop = list[list.length - 1][1];
+  if (at !== null && loops) {
+    const q = (((at * 1e6) % loop) + loop) % loop, k = list.findIndex(([, us]) => us > q);
+    aligned = !q;
+    const turned = [...list.slice(k), ...list.slice(0, k).map(([i, us]) => [i, us + loop]), [list[k][0], loop + q]].map(([i, us]) => [i, us - q]);
+    if (turned[0][1] < 1e4) turned.shift(); // Under 1 cs of the first frame left: the next one, that much early.
+    if (q && starts[turned[0][0]]) {
+      list = turned; rotated = aligned = true;
+      // The rest of the first frame, under 1 cs: the frame before it lasts to the loop's end instead;
+      // under 2 cs: 2 cs, the frame before it ending that much early.
+      const rest = loop - list[list.length - 2][1];
+      if (rest < 1e4) list.pop(), (list[list.length - 1][1] = loop);
+      else if (rest < 2e4) list[list.length - 2][1] = loop - 2e4;
+    }
+  }
+  const patch = !seam && (rotated || copies > 1), pre = b.subarray(0, frames[0].start), end = b.subarray(frames[n - 1].end);
+  // Each frame with the bytes before it (the first one's are the loop's own, kept once in `pre`).
+  const parts = list.map(([i]) => b.subarray(i ? frames[i - 1].end : frames[0].start, frames[i].end));
+  const out = new Uint8Array(pre.length + parts.reduce((t, p) => t + p.length, 0) + end.length);
+  let o = pre.length, cs = 0;
+  out.set(pre);
+  list.forEach(([i, us], k) => {
+    // Ends at the centisecond nearest the grid, measured from where the frames before actually end.
+    const g = o + parts[k].length - (frames[i].end - frames[i].start), delay = Math.min(65535, Math.max(2, Math.round(us / 1e4) - cs));
+    out.set(parts[k], o);
+    out[g + 4] = delay & 255; out[g + 5] = delay >> 8;
+    if (patch && i == n - 1) out[g + 3] = (out[g + 3] & ~28) | 8;
+    o += parts[k].length; cs += delay;
+  });
+  out.set(end, o);
+  return Object.assign(out, { aligned });
+}
+
+/**
  * The art `svg` (its bytes, one character each) with its first embedded `data:image/gif;base64,`
  * GIF replaced by a PNG of the frame it shows `ms` after it started (gifFrameAt). The page has no
- * GIF decoder: each frame up to that one is cut out of the GIF as a one-frame GIF of its own, which
- * the browser decodes, and they are drawn in order on a canvas with the GIF's disposal methods.
+ * GIF decoder: each frame up to that one, from the last that draws regardless of the frames before
+ * it (gifStarts), is cut out of the GIF as a one-frame GIF of its own, which the browser decodes,
+ * and they are drawn in order on a canvas with the GIF's disposal methods.
  * Null for art without a GIF this can still; it rejects when the browser cannot (no canvas, say).
  * @param {string} svg
  * @param {number} ms
@@ -325,14 +505,15 @@ export function gifFrameAt(frames, ms, plays = 0) {
  * @returns {Promise<string | null>}
  */
 export async function stillSvg(svg, ms, doc) {
-  const m = /data:image\/gif;base64,([A-Za-z0-9+/]+=*)/.exec(svg), bytes = m && Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0));
+  const m = GIF_URI.exec(svg), bytes = m && Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0));
   const gif = bytes && gifFrames(bytes);
   if (!m || !bytes || !gif) return null;
   const k = gifFrameAt(gif.frames, ms, gif.plays), canvas = doc.createElement("canvas"), g = /** @type {CanvasRenderingContext2D} */ (canvas.getContext("2d"));
   canvas.width = gif.width; canvas.height = gif.height;
   /** @type {ImageData | null} */ let saved = null;
-  for (let i = 0; i <= k; i++) {
-    const before = gif.frames[i - 1], f = gif.frames[i], one = new Uint8Array(gif.head.length + f.end - f.start + 1);
+  // From the last frame up to it that draws regardless of the frames before (gifStarts).
+  for (let i = gifStarts(gif).lastIndexOf(true, k), from = i; i <= k; i++) {
+    const before = i > from ? gif.frames[i - 1] : null, f = gif.frames[i], one = new Uint8Array(gif.head.length + f.end - f.start + 1);
     if (before?.disposal == 2) g.clearRect(before.rect[0], before.rect[1], before.rect[2], before.rect[3]);
     else if (before?.disposal == 3 && saved) g.putImageData(saved, 0, 0);
     if (f.disposal == 3) saved = g.getImageData(0, 0, gif.width, gif.height);

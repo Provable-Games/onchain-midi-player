@@ -7,7 +7,9 @@ import { openBrowser, composed, dataUrl, waitReady } from './browser_harness.mjs
 import { fixtureCase } from './fixture_pages.mjs';
 import { checkSchedule } from './schedule_observations.mjs';
 import { verifyLibraries } from './verify_engine.mjs';
-import { REFERENCE_DISPLAY_LEAD_SECONDS } from '../examples/beast_consumer/art_sync.js';
+import { REFERENCE_DISPLAY_LEAD_SECONDS, beatSeconds, frameUs, gifFrames } from '../examples/beast_consumer/art_sync.js';
+import { tokenParts } from '../examples/beast_consumer/scripts/reference.mjs';
+import { decodePng } from './png.mjs';
 // A suspended timeline is seeked to exactly this value. 5 ms covers each engine's SMIL time
 // representation (Firefox keeps whole milliseconds) and stays well under one 60 Hz frame (16.7 ms).
 const HELD_TOLERANCE_SECONDS = 0.005;
@@ -16,7 +18,21 @@ const HELD_TOLERANCE_SECONDS = 0.005;
 // (research/drift-spikes) peaked at 26.0 ms (Chromium), 35.0-41.8 ms (Firefox) and 4.7-6.7 ms
 // (WebKit), with no frame over 40 ms.
 const MAX_DRIFT_LIMIT_MS = Object.freeze({ chromium: 40, firefox: 50, webkit: 15 });
-const seconds = Number(process.env.SYNC_SECONDS || 60);
+const seconds = Number(process.env.SYNC_SECONDS || 60), SESSION_SECONDS = seconds;
+// The retimed GIF's drift (gifArtSession, assertGif): within every run of at least MIN_RUN_CHANGES changes, the
+// fitted line moves under GIF_DRIFT_LIMIT_MS, and no change is over 60 ms from it (screenshot
+// timing). This GIF's loop (4 frames, 91 cs) holds the grid exactly, so what the line measures is
+// the browser's image clock (the page's) against the audio clock and the fit's noise. Local
+// one-minute runs: Chromium 5.4, 9.0 and 13.4 ms, WebKit 0.2 and -0.1 ms; headless Chromium's
+// audio clock was measured 0.04% slower than its page clock, up to 22 ms over this 55 s pass,
+// which the GIF cannot follow (each pass restart realigns it). The limit is a coarse ceiling, as
+// for the SVG drift above, well under one 227.5 ms frame.
+// A defect in the retiming itself would show far beyond it: one centisecond of loop error in this
+// 0.91 s loop is about 600 ms over the pass, and a frame's worth of phase is 227.5 ms.
+const GIF_DRIFT_LIMIT_MS = 30, MIN_RUN_CHANGES = 20, GIF_MIN_SECONDS = 15;
+// The session lasts as long as the SVG one, up to GIF_SECONDS: two of the score's passes, since each
+// run is measured on its own, so a long Drift workflow session stays within its job's time.
+const GIF_SECONDS = 120;
 const sampleSeconds = Number(process.env.SYNC_SAMPLE_SECONDS || 10);
 assert.ok(sampleSeconds > 0 && Number.isFinite(sampleSeconds));
 assert.ok(seconds >= 5 && seconds <= 3600);
@@ -129,6 +145,67 @@ try {
  if(process.env.SYNC_RESULTS){mkdirSync(process.env.SYNC_RESULTS,{recursive:true});writeFileSync(`${process.env.SYNC_RESULTS}/sync-${run.engine}.json`,JSON.stringify(result,null,2)+'\n');}
  console.log(JSON.stringify(result,null,2));
  console.log(`${run.engine}: audio clock / SVG estimated max drift ${(result.max_drift_ms).toFixed(3)} ms (limit ${driftLimitMs} ms, ${withinDriftLimit?'within':'EXCEEDED'}); ${passCount} passes, ${end.seeks-start.seeks} boundary SVG seeks; ${result.latency_events.length} latency records; engine grid error ${schedule.max_grid_error_seconds} s, late ${schedule.late}; pause request to completed suspend ${suspends.map(s=>s.audio_ms.toFixed(3)).join(', ')} ms on the audio clock; checks ${withinDriftLimit?'passed':'failed'}`);
- // Asserted last, after the result is written, so a failing run keeps its measurements.
+ const gif = await gifArtSession(run);
+ if(process.env.SYNC_RESULTS)writeFileSync(`${process.env.SYNC_RESULTS}/sync-gif-${run.engine}.json`,JSON.stringify(gif,null,2)+'\n');
+ console.log(JSON.stringify(gif,null,2));
+ // Asserted last, after the results are written, so a failing run keeps its measurements.
+ assertGif(gif);
  assert.ok(withinDriftLimit,`${run.engine}: audio clock / SVG max drift ${maxDriftMs.toFixed(3)} ms is not below the ${driftLimitMs} ms ${run.engine} limit`);
 } catch(error) {console.error(JSON.stringify(await o.page.evaluate(()=>({state:OnchainMidiPlayer.getPlayStatus(),states:window.__check.states,calls:window.__check.calls,media:window.__check.media?.paused})),null,2));throw error;} finally { await o.context.close(); await run.browser.close(); }
+
+// Tempo-timed isolated GIF art over the session's length: a 2-frame GIF (red, blue; 200 ms each)
+// in an <img>, on the Warlock reference's music (131.87 BPM, a 55.51 s pass), retimed by the
+// footer to 227.5 ms a frame. Screenshots of the sprite, each between two reads of the audible
+// position, find every colour change; each is compared with the beat grid (art time: the
+// position plus the display lead). Within each run of the GIF (from one restart to the next: a
+// pass), the drift is the change of that distance from start to end (a least-squares line), and
+// the spread is its distance from that line. Headless Firefox shows no GIF animation inside an
+// SVG image: there the session is skipped. Screenshot timing limits each change to about +/- 25 ms.
+async function gifArtSession(run) {
+  const seconds = Math.min(SESSION_SECONDS, GIF_SECONDS); // as long as the SVG session, up to two passes
+  // A session under GIF_MIN_SECONDS is too short to fit a line to.
+  if (seconds < GIF_MIN_SECONDS) return { engine: run.engine, skipped: `a ${seconds} s session is too short to measure the GIF's drift (${GIF_MIN_SECONDS} s at least)` };
+  if (run.engine === 'firefox') return { engine: run.engine, skipped: 'no GIF animation inside an SVG image in headless Firefox' };
+  const gif = Buffer.from([71,73,70,56,57,97,1,0,1,0,128,0,0,204,0,0,0,0,204,33,255,11,...Buffer.from('NETSCAPE2.0'),3,1,0,0,0,
+    33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,76,1,0,59]).toString('base64');
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 250 350'><rect width='250' height='350' fill='#1e1e22'/><image x='95' y='100' width='60' height='60' style='image-rendering:pixelated' href='data:image/gif;base64,${gif}'/></svg>`;
+  const parts = tokenParts(4), o = await run.page();
+  try {
+    await o.page.setViewportSize({ width: 500, height: 700 });
+    await o.context.addInitScript(() => { window.__restarts = []; new MutationObserver(() => { const a = document.getElementById('beast-art'); if (a && a !== window.__art) { window.__art = a; window.__restarts.push(window.OnchainMidiPlayer?.getPlayStatus().positionSeconds ?? null); } }).observe(document, { subtree: true, childList: true }); });
+    await o.page.goto(dataUrl(composed({ ...parts, members: parts.mem, svg }, { fixture: true, dependent: true })));
+    await waitReady(o.page);
+    await o.page.click('#play');
+    await o.page.waitForFunction(() => /;r=\d+;/.test(document.getElementById('beast-art').src), null, { timeout: 15000 });
+    const s = await o.page.evaluate(() => OnchainMidiPlayer.getPlayStatus()), beat = beatSeconds(s, new Uint8Array(parts.midi)), step = frameUs(Math.round(beat * 1e6)) / 1e6;
+    const src = await o.page.evaluate(() => document.getElementById('beast-art').src), shown = Buffer.from(/data:image\/gif;base64,([A-Za-z0-9+/]+=*)/.exec(Buffer.from(src.split(',')[1], 'base64').toString('latin1'))[1], 'base64');
+    const delays = gifFrames(new Uint8Array(shown)).frames.map((f) => f.delay);
+    const position = () => o.page.evaluate(() => OnchainMidiPlayer.getPlayStatus().positionSeconds), samples = [], end = Date.now() + seconds * 1000;
+    while (Date.now() < end) { const p0 = await position(); const colour = decodePng(await o.page.screenshot({ clip: { x: 240, y: 250, width: 20, height: 20 } })).pixel(10, 10).join(); samples.push({ p0, p1: await position(), colour }); }
+    const restarts = (await o.page.evaluate(() => window.__restarts)).filter((p) => p !== null);
+    // A change happened between the screenshots around it, within the window from the read before
+    // the first to the read after the second: at its middle, give or take half of it. One whose
+    // window is over 60 ms and over 1.5 times the usual one (a stalled screenshot) is left out;
+    // Chromium's usual window is 60-70 ms.
+    const all = samples.slice(1).flatMap((x, i) => { const a = samples[i]; if (x.colour === a.colour) return []; const t = (a.p0 + a.p1 + x.p0 + x.p1) / 4, art = t + REFERENCE_DISPLAY_LEAD_SECONDS; return [{ t, window: x.p1 - a.p0, off: (art - Math.round(art / step) * step) * 1000 }]; });
+    const usual = all.map((c) => c.window).sort((x, y) => x - y)[all.length >> 1], changes = all.filter((c) => c.window <= Math.max(0.06, 1.5 * usual));
+    // Runs of the GIF between restarts (the first starts at the first restart shown).
+    const runs = [];
+    // A run counts with at least MIN_RUN_CHANGES changes, or half the changes the session can hold if
+    // that is fewer (a short SYNC_SECONDS).
+    const least = Math.max(8, Math.min(MIN_RUN_CHANGES, Math.floor(seconds / step / 2)));
+    for (let i = 0; i < restarts.length; i++) { const from = restarts[i], to = restarts[i + 1] ?? Infinity, list = changes.filter((c) => c.t > from + 0.1 && c.t < to); if (list.length >= least) runs.push(list); }
+    const fit = (list) => { const mt = list.reduce((a, c) => a + c.t, 0) / list.length, mo = list.reduce((a, c) => a + c.off, 0) / list.length, slope = list.reduce((a, c) => a + (c.t - mt) * (c.off - mo), 0) / list.reduce((a, c) => a + (c.t - mt) ** 2, 0);
+      return { changes: list.length, seconds: +(list.at(-1).t - list[0].t).toFixed(3), mean_offset_ms: +mo.toFixed(2), drift_ms: +(slope * (list.at(-1).t - list[0].t)).toFixed(2), spread_ms: +Math.max(...list.map((c) => Math.abs(c.off - mo - slope * (c.t - mt)))).toFixed(2) }; };
+    const result = { engine: run.engine, seconds, usual_window_ms: +(usual * 1000).toFixed(1), changes_left_out: all.length - changes.length, beat_seconds: beat, step_ms: step * 1000, retimed_delays_ms: delays, samples: samples.length, restarts: restarts.length, runs: runs.map(fit) };
+    result.max_drift_ms = Math.max(...result.runs.map((r) => Math.abs(r.drift_ms)));
+    assert.deepEqual(o.requests, []); assert.deepEqual(await o.errors(), []);
+    return result;
+  } finally { await o.context.close(); }
+}
+function assertGif(gif) {
+  if (gif.skipped) return console.log(`${gif.engine}: tempo-timed GIF art skipped (${gif.skipped})`);
+  assert.ok(gif.runs.length >= 1, 'a run of the GIF long enough to measure');
+  for (const r of gif.runs) { assert.ok(Math.abs(r.drift_ms) < GIF_DRIFT_LIMIT_MS, `GIF drift ${r.drift_ms} ms over ${r.seconds} s`); assert.ok(r.spread_ms < 60, `GIF changes spread ${r.spread_ms} ms`); }
+  console.log(`${gif.engine}: tempo-timed GIF art (${gif.step_ms} ms frames, delays ${gif.retimed_delays_ms.join('/')} ms): ${gif.runs.map((r) => `${r.changes} changes over ${r.seconds} s, drift ${r.drift_ms} ms, ${r.mean_offset_ms} ms from the grid, spread ${r.spread_ms} ms`).join('; ')}`);
+}

@@ -12,6 +12,7 @@ import { gzipFragment,gzipSource } from "./build_segments.mjs";
 import { splitPage } from "../plugins/onchain-midi-player/skills/token-uri-inspector/scripts/split_page.mjs";
 import { scriptBlocks } from "./html_blocks.mjs";
 import { verifyLibraries } from "./verify_engine.mjs";
+import { gifFrames,frameUs,beatSeconds,retimeGif } from "../examples/beast_consumer/art_sync.js";
 const run=await openBrowser(),measurements=[];
 // Screenshots of the notes checks go to the directory given, if any (CI uploads it when a check fails).
 const shots=process.argv[2];if(shots)mkdirSync(shots,{recursive:true});
@@ -149,6 +150,15 @@ try {
     assert.equal(await o.page.locator("canvas").count(),0);assert.ok(near((await look(o,"notes-undecodable-playing")).sprite,[204,0,0]),"restarted from the original");
     assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);console.log("PASS cut-out copy that fails to decode: the art as it was, no canvas, restarts from the original, ordinary playback");
   }finally{await o.context.close();}}
+  // The GIF in art shown at `src` (the art's data URL), and the colour it shows `ms` after it started:
+  // red (index 0) or blue (1), and how far that is from the nearest change of colour (ms).
+  const gifOfArt=src=>{const i=src.indexOf(","),body=src.slice(i+1),svg=/;base64,/.test(src.slice(0,i+1))?Buffer.from(body,"base64").toString("latin1"):decodeURIComponent(body);
+    const m=/data:image\/gif;base64,([A-Za-z0-9+/]+=*)/.exec(svg);return m&&new Uint8Array(Buffer.from(m[1],"base64"));};
+  const gifColourAt=(src,ms)=>{const b=gifOfArt(src),f=gifFrames(b).frames,colour=k=>b[f[k].end-3]===68?"204,0,0":"0,0,204",loop=f.reduce((t,x)=>t+x.delay,0);
+    let t=((ms%loop)+loop)%loop,k=0;while(t>=f[k].delay)t-=f[k++].delay;
+    let before=t,after=f[k].delay-t;for(let j=k-1;colour((j+f.length)%f.length)===colour(k)&&before<loop;j--)before+=f[(j+f.length)%f.length].delay;
+    for(let j=k+1;colour(j%f.length)===colour(k)&&after<loop;j++)after+=f[j%f.length].delay;
+    return{colour:colour(k),edge:Math.min(before,after)};};
   // An isolated <img> freezes with the music: its GIF (red, then blue, 200 ms each) stands still from
   // a pause, on a still the page made of the frame it showed, and moves again after resume, from a
   // restart. With the notes, the still and the restart are of the cut-out copy. Headless Firefox 155
@@ -194,7 +204,7 @@ try {
        Object.defineProperty(AudioContext.prototype,"outputLatency",{configurable:true,get:()=>window.__latency||0});
        const suspend=AudioContext.prototype.suspend;AudioContext.prototype.suspend=function(){return new Promise(r=>setTimeout(r,window.__rafDelay?200:0)).then(()=>suspend.call(this));};
        window.__swaps=[];new MutationObserver(()=>{const a=document.getElementById("beast-art");if(a&&a!==window.__art){window.__art=a;const i=a.src.indexOf(","),body=a.src.slice(i+1),still=/;base64,/.test(a.src.slice(0,i+1))&&atob(body).includes("data:image/png;base64,");
-         window.__swaps.push({src:a.src.slice(0,40),still,pos:window.OnchainMidiPlayer?.getPlayStatus().audioTime??null});}}).observe(document,{subtree:true,childList:true});
+         window.__swaps.push({src:a.src.slice(0,40),full:a.src,still,pos:window.OnchainMidiPlayer?.getPlayStatus().audioTime??null});}}).observe(document,{subtree:true,childList:true});
        if(hidden)URL.createObjectURL=()=>{throw Error("no background element: a hidden page pauses");};
      },hidden);
      await o.page.setViewportSize({width:500,height:700});await o.page.goto(dataUrl(composed({...c,svg:gifCard},{fixture:true,dependent:true,notes:false})));await waitReady(o.page);
@@ -207,11 +217,12 @@ try {
      if(hidden){await o.page.waitForTimeout(1200);assert.equal(await o.page.evaluate(isStill),false,"no still while hidden");
        await o.page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,get:()=>false});document.dispatchEvent(new Event("visibilitychange"));});}
      await o.page.waitForFunction(isStill,{timeout:10000});
-     const at=await o.page.evaluate(()=>({swap:window.__swaps.filter(s=>/;r=\d+/.test(s.src)&&!s.still&&s.pos!==null).at(-1).pos,held:OnchainMidiPlayer.getPlayStatus().audioTime}));
-     const ms=(at.held-at.swap)*1000%400,frame=Math.floor(ms/200),edge=Math.min(ms%200,200-ms%200)<25;
+     const at=await o.page.evaluate(()=>{const swap=window.__swaps.filter(s=>/;r=\d+/.test(s.src)&&!s.still&&s.pos!==null).at(-1);return{swap:swap.pos,full:swap.full,held:OnchainMidiPlayer.getPlayStatus().audioTime};});
+     // The frame of the GIF shown (retimed to the music) when the audio stopped.
+     const ms=(at.held-at.swap)*1000,shown=gifColourAt(at.full,ms),edge=shown.edge<25;
      const held=await (async()=>{const seen=new Set(),end=Date.now()+500;while(Date.now()<end){seen.add(decodePng(await o.page.screenshot({clip:{x:240,y:250,width:20,height:20}})).pixel(10,10).join());await o.page.waitForTimeout(30);}return seen;})();
      assert.equal(held.size,1,`standing still: ${[...held]}`);
-     if(!edge)assert.ok(held.has(frame?"0,0,204":"204,0,0"),`the frame the audio stopped on (${Math.round(ms)} ms into the loop): ${[...held]}`);
+     if(!edge)assert.ok(held.has(shown.colour),`the frame the audio stopped on (${Math.round(ms)} ms after the GIF started): ${[...held]}`);
      assert.deepEqual(o.requests,[]);if(!hidden)assert.deepEqual(await o.errors(),[]);
      console.log(`PASS isolated GIF art paused after a latency change while animation frames are deferred (${hidden?"hidden":"visible"} page): a still of the frame the audio stopped on`);
    }finally{await o.context.close();}}}
@@ -232,7 +243,7 @@ try {
        const suspend=AudioContext.prototype.suspend;AudioContext.prototype.suspend=function(){return new Promise(r=>setTimeout(r,window.__rafDelay?200:0)).then(()=>suspend.call(this));};
        window.__swaps=[];new MutationObserver(()=>{const a=document.getElementById("beast-art");if(a&&a!==window.__art){window.__art=a;
          const i=a.src.indexOf(","),still=/;base64,/.test(a.src.slice(0,i+1))&&atob(a.src.slice(i+1)).includes("data:image/png;base64,");
-         window.__swaps.push({src:a.src.slice(0,40),still,at:performance.now()});}}).observe(document,{subtree:true,childList:true});
+         window.__swaps.push({src:a.src.slice(0,40),full:a.src,still,at:performance.now()});}}).observe(document,{subtree:true,childList:true});
      });
      await o.page.setViewportSize({width:500,height:700});await o.page.goto(dataUrl(composed({...tokenParts(4),members:tokenParts(4).mem,svg:gifCard},{fixture:true,dependent:true,notes:false})));await waitReady(o.page);
      await playAndPass(o);await o.page.waitForFunction(()=>window.__swaps.some(s=>/;r=\d+/.test(s.src)&&!s.still),{timeout:10000});
@@ -248,12 +259,12 @@ try {
      await o.page.waitForTimeout(1800);await o.page.evaluate(()=>{window.__rafDelay=0;});await o.page.waitForTimeout(300);
      await o.page.click("#play");const stopped=await o.page.evaluate(async()=>{while(OnchainMidiPlayer.getPlayStatus().audioState!=="suspended")await new Promise(r=>setTimeout(r,2));return performance.now();});
      await o.page.waitForFunction(isStill,{timeout:10000});
-     const after=await o.page.evaluate(()=>({passes:window.__check.passes.length,swaps:window.__swaps.filter(s=>!s.still).length,at:window.__swaps.filter(s=>/;r=\d+/.test(s.src)&&!s.still).at(-1).at}));
+     const after=await o.page.evaluate(()=>{const swap=window.__swaps.filter(s=>/;r=\d+/.test(s.src)&&!s.still).at(-1);return{passes:window.__check.passes.length,swaps:window.__swaps.filter(s=>!s.still).length,at:swap.at,full:swap.full};});
      assert.equal(after.passes,before.passes,"no pass in between");assert.equal(after.swaps,before.swaps,"no restart in between");
-     const ms=(stopped-after.at)%400,frame=Math.floor(ms/200),edge=Math.min(ms%200,200-ms%200)<40;
+     const ms=stopped-after.at,shown=gifColourAt(after.full,ms),edge=shown.edge<40;
      const held=await (async()=>{const seen=new Set(),end=Date.now()+500;while(Date.now()<end){seen.add(decodePng(await o.page.screenshot({clip:{x:240,y:250,width:20,height:20}})).pixel(10,10).join());await o.page.waitForTimeout(30);}return seen;})();
      assert.equal(held.size,1,`standing still: ${[...held]}`);
-     if(!edge)assert.ok(held.has(frame?"0,0,204":"204,0,0"),`what was on screen when the audio stopped (${Math.round(ms)} ms into the loop): ${[...held]}`);
+     if(!edge)assert.ok(held.has(shown.colour),`what was on screen when the audio stopped (${Math.round(ms)} ms after the GIF started): ${[...held]}`);
      assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
      console.log("PASS isolated GIF art paused after an unreported pause and resume: a still of what was on screen, the suspension it played through counted");
    }finally{await o.context.close();}}
@@ -274,6 +285,96 @@ try {
      assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
      console.log(`PASS isolated GIF art ${notes?"with":"without"} notes and prefers-reduced-motion: a still of its first frame through play, pause and resume`);
    }finally{await o.context.close();}}}
+  // Tempo-timed isolated GIF art (retimeGif): on the Warlock reference's music (131.87 BPM, a 55.51 s
+  // pass), each restart shows the GIF timed to the beat, 227.5 ms a frame (an eighth note) where the
+  // GIF's own is 200 ms. Measured from screenshots against the audio clock: the frame period, and
+  // each colour change's distance from the beat grid. Pause shows a still of the frame the retimed
+  // GIF showed; resume starts the GIF on the frame the music is on (start-at-position), as does a
+  // hidden page made visible while the music plays. Headless Firefox shows no GIF animation inside
+  // an SVG image: there only the GIF's bytes, the still and the resumed first frame are checked.
+  // Headless WebKit (WPE 26.6) shows extra changes in a GIF of more than two frames inside an SVG
+  // image, its own timing included (4 frames of 20 cs: a change every 181 ms on average; a plain
+  // <img>, 200 ms), so the period is the slope of the changes against the beat grid's.
+  {const gif=Buffer.from([71,73,70,56,57,97,1,0,1,0,128,0,0,204,0,0,0,0,204,33,255,11,...Buffer.from("NETSCAPE2.0"),3,1,0,0,0,
+     33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,33,249,4,4,20,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,76,1,0,59]);
+   const gifCard=card(true).replace("<rect x='95' y='100' width='60' height='60' fill='#c00'/>",`<image x='95' y='100' width='60' height='60' style='image-rendering:pixelated' href='data:image/gif;base64,${gif.toString("base64")}'/>`);
+   const warlock={...tokenParts(4),members:tokenParts(4).mem},midi=new Uint8Array(warlock.midi);
+   const shown=o=>o.page.evaluate(()=>{const src=document.getElementById("beast-art").src,i=src.indexOf(","),body=src.slice(i+1),svg=/;base64,/.test(src.slice(0,i+1))?atob(body):decodeURIComponent(body);
+     return{src,restarted:/;r=\d+[;,]/.test(src),still:svg.includes("data:image/png;base64,")};});
+   const status=o=>o.page.evaluate(()=>OnchainMidiPlayer.getPlayStatus());
+   // Colours of the sprite's centre, each with the audible music position just before and after its screenshot.
+   const sample=async(o,ms)=>{const out=[],end=Date.now()+ms;while(Date.now()<end){const p0=(await status(o)).positionSeconds;
+     const colour=decodePng(await o.page.screenshot({clip:{x:240,y:250,width:20,height:20}})).pixel(10,10).join();out.push({p0,p1:(await status(o)).positionSeconds,colour});}return out;};
+   // Each change of colour happened between the screenshots around it, so within the window from the
+   // read before the first to the read after the second: at its middle, give or take half of it. A
+   // change whose window is over 60 ms and over 1.5 times the usual one (a stalled screenshot) is left
+   // out; Chromium's usual window is 60-70 ms. When, and how far from the beat grid (art time: + the display lead).
+   const changes=(samples,step)=>{const all=samples.slice(1).flatMap((s,i)=>{const a=samples[i];if(s.colour===a.colour)return[];const t=(a.p0+a.p1+s.p0+s.p1)/4,art=t+.017;
+     return[{t,off:art-Math.round(art/step)*step,window:s.p1-a.p0}];}),usual=all.map(c=>c.window).sort((x,y)=>x-y)[all.length>>1];
+     return all.filter(c=>c.window<=Math.max(.06,1.5*usual));};
+   // The period: the least-squares slope of the changes' times against the grid change each is nearest.
+   const periodOf=(list,step)=>{const k=list.map(c=>Math.round((c.t+.017)/step)),mk=k.reduce((a,b)=>a+b)/k.length,mt=list.reduce((a,c)=>a+c.t,0)/list.length;
+     return k.reduce((a,x,i)=>a+(x-mk)*(list[i].t-mt),0)/k.reduce((a,x)=>a+(x-mk)**2,0);};
+   for(const notes of [false,true]){const o=await page(composed({...warlock,svg:gifCard},{fixture:true,dependent:true,notes}));try{
+     await playAndPass(o);await o.page.waitForFunction(()=>/;r=\d+[;,]/.test(document.getElementById("beast-art").src),{timeout:10000});
+     const s=await status(o),beat=beatSeconds(s,midi),step=frameUs(Math.round(beat*1e6))/1e6;
+     assert.ok(Math.abs(60/beat-131.868)<.01,`the reference's tempo: ${60/beat} BPM`);assert.equal(step,.2275);
+     // The GIF shown is the original retimed from frame 0, its frames and colours unchanged.
+     const first=await shown(o);assert.deepEqual(Buffer.from(gifOfArt(first.src)),Buffer.from(retimeGif(gif,beat,s.passSeconds)),"the retimed GIF");
+     assert.deepEqual(gifFrames(gifOfArt(first.src)).frames.map(f=>f.delay),[230,230,220,230],"2 copies: 91 cs, a whole loop");
+     let report="";
+     const moves=run.engine!=="firefox";
+     if(moves){const before=changes(await sample(o,4000),step),period=periodOf(before,step),offs=before.map(c=>c.off*1000),mean=offs.reduce((a,b)=>a+b)/offs.length;
+       assert.ok(before.length>=12,`${before.length} colour changes timed in 4 s`);
+       assert.ok(Math.abs(period-step)<.004,`frame period ${(period*1000).toFixed(1)} ms, the beat's ${step*1000} ms (the GIF's own: 200 ms)`);
+       assert.ok(offs.every(x=>Math.abs(x-mean)<60),`every change near one phase: ${offs.map(x=>x.toFixed(0))}`);
+       report+=`, frame period ${(period*1000).toFixed(1)} ms (beat grid ${step*1000} ms, from ${before.length} changes), changes ${mean.toFixed(1)} ms from the grid on average (${Math.min(...offs).toFixed(0)}..${Math.max(...offs).toFixed(0)})`;
+       await o.page.evaluate(m=>window.__phase=m,mean);}
+     // Pause: a still of the frame the retimed GIF showed. Paused mid-frame, so the comparisons
+     // below are not at a frame change.
+     await o.page.waitForFunction(step=>{const s=OnchainMidiPlayer.getPlayStatus(),g=(s.positionSeconds+.017)/step%1;return g>.4&&g<.5;},step,{polling:5,timeout:5000});
+     await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==="suspended");
+     await o.page.waitForFunction(()=>{const src=document.getElementById("beast-art").src,i=src.indexOf(","),body=src.slice(i+1);return(/;base64,/.test(src.slice(0,i+1))?atob(body):decodeURIComponent(body)).includes("data:image/png;base64,");},{timeout:10000});
+     const held=await status(o),grid=((held.positionSeconds+.017)%held.passSeconds)/step,frame=Math.floor(grid)%2?"0,0,204":"204,0,0",edge=Math.min(grid%1,1-grid%1)*step<.035;
+     const still=new Set((await sample(o,500)).map(x=>x.colour));assert.equal(still.size,1,`standing still: ${[...still]}`);
+     if(!edge)assert.ok(still.has(frame),`paused on the frame of the music's position: ${[...still]}, grid ${frame}`);
+     // Resume: the GIF starts on the frame the music is on, shortened to fit, and keeps to the grid.
+     await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==="playing"&&OnchainMidiPlayer.getPlayStatus().audioState==="running");
+     await o.page.waitForFunction(()=>{const src=document.getElementById("beast-art").src,i=src.indexOf(","),body=src.slice(i+1);return /;r=\d+[;,]/.test(src)&&!(/;base64,/.test(src.slice(0,i+1))?atob(body):decodeURIComponent(body)).includes("data:image/png;base64,");},{timeout:10000});
+     const resumed=gifOfArt((await shown(o)).src),f=gifFrames(resumed).frames;
+     assert.equal(f.reduce((t,x)=>t+x.delay,0),910,"the loop's length");
+     if(!edge){assert.equal(resumed[f[0].end-3]===68?"204,0,0":"0,0,204",[...still][0],"the resumed GIF starts on the paused frame");
+       assert.ok(f[0].delay<=Math.round((1-grid%1)*step*100)*10+10,`shortened to the rest of it: ${f[0].delay} ms`);}
+     if(moves){const after=changes(await sample(o,2500),step),offs=after.map(c=>c.off*1000),mean=offs.reduce((a,b)=>a+b)/offs.length,phase=await o.page.evaluate(()=>window.__phase);
+       assert.ok(after.length>=8&&Math.abs(mean-phase)<60,`after resume the changes keep the phase: ${mean.toFixed(1)} ms vs ${phase.toFixed(1)} ms before`);
+       report+=`; after resume ${mean.toFixed(1)} ms`;}
+     // A hidden page made visible while the music plays: a restart from where the music is.
+     const before=(await shown(o)).src;
+     await o.page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,get:()=>true});document.dispatchEvent(new Event("visibilitychange"));});
+     await o.page.waitForTimeout(400);assert.equal((await status(o)).state,"playing","the background element keeps it playing");assert.equal((await shown(o)).src,before,"nothing while hidden");
+     await o.page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,get:()=>false});document.dispatchEvent(new Event("visibilitychange"));});
+     const at=await status(o);await o.page.waitForFunction(b=>document.getElementById("beast-art").src!==b,before,{timeout:10000});
+     const visible=gifOfArt((await shown(o)).src),vf=gifFrames(visible).frames,vg=((at.positionSeconds+.017)%at.passSeconds)/step;
+     assert.equal(vf.reduce((t,x)=>t+x.delay,0),910);
+     if(Math.min(vg%1,1-vg%1)*step>.035)assert.equal(visible[vf[0].end-3]===68?0:1,Math.floor(vg)%2,"visible again: from the frame the music is on");
+     assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
+     console.log(`PASS tempo-timed isolated GIF art ${notes?"with":"without"} notes: the GIF retimed to the beat${report}; paused on a still of its frame; resumed from that frame${edge?" (near a frame change: not compared)":""}; restarted where the music is when the page is visible again`);
+   }finally{await o.context.close();}}
+   // The fallback: a GIF retimeGif cannot time (frames without their own Graphic Control Extension)
+   // restarts as it is, at its own speed, and still freezes; playback is unaffected.
+   {const plain=Buffer.from([71,73,70,56,57,97,1,0,1,0,128,0,0,204,0,0,0,0,204,33,255,11,...Buffer.from("NETSCAPE2.0"),3,1,0,0,0,
+      44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,44,0,0,0,0,1,0,1,0,0,2,2,76,1,0,59]).toString("base64");
+    const svg=card(true).replace("<rect x='95' y='100' width='60' height='60' fill='#c00'/>",`<image x='95' y='100' width='60' height='60' style='image-rendering:pixelated' href='data:image/gif;base64,${plain}'/>`);
+    const o=await page(composed({...warlock,svg},{fixture:true,dependent:true,notes:false}));try{
+      const original=await o.page.evaluate(()=>document.getElementById("beast-art").src);
+      await playAndPass(o);await o.page.waitForFunction(()=>/;r=\d+[;,]/.test(document.getElementById("beast-art").src),{timeout:10000});
+      assert.equal((await shown(o)).src,original.replace(";base64,",/;r=\d+;base64,/.exec((await shown(o)).src)[0]),"the plain copy, byte for byte");
+      await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().audioState==="suspended");
+      await o.page.waitForFunction(()=>atob(document.getElementById("beast-art").src.split(",")[1]).includes("data:image/png;base64,"),{timeout:10000});
+      await o.page.click("#play");await o.page.waitForFunction(()=>OnchainMidiPlayer.getPlayStatus().state==="playing"&&OnchainMidiPlayer.getPlayStatus().audioState==="running");
+      assert.deepEqual(o.requests,[]);assert.deepEqual(await o.errors(),[]);
+      console.log("PASS isolated GIF art that cannot be retimed: restarts as it is, freezes, resumes, ordinary playback");
+    }finally{await o.context.close();}}}
   // Reduced motion: the notes stand still while the music plays (notes.js).
   {const o=await page(notesPage(true,false),{reducedMotion:true});try{
     await playAndPass(o);assert.equal((await layout(o)).canvases,1);assert.ok(await frozen(o),"standing still");assert.deepEqual(await o.errors(),[]);console.log("PASS notes with prefers-reduced-motion: standing still while playing");

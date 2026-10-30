@@ -58,12 +58,14 @@ Art synced to the music is the experience, and it needs no scheduling. Let the a
 // After OnchainLibraries.ready and OnchainMidiPlayer.ready.
 // Inline SVG your renderer controls: seeks the root and every nested <svg> timeline.
 const sync = syncSvgToMusic(document.getElementById("art"), OnchainMidiPlayer);
-// Isolated art (community art) in an <img src="data:...">: restarts its own bytes at each pass.
-const dispose = restartImgOnPass(document.getElementById("art-img"), OnchainMidiPlayer);
+// Isolated art (community art) in an <img src="data:...">: restarts it at each pass, with its GIF timed
+// to the beat (the MIDI header's ticks per beat; null keeps the GIF's own timing).
+const header = Uint8Array.from(atob(document.getElementById("onchain-midi-data").textContent.trim().slice(0, 20)), (c) => c.charCodeAt(0));
+const dispose = restartImgOnPass(document.getElementById("art-img"), OnchainMidiPlayer, { beat: (s) => beatSeconds(s, header) });
 // Its pause/play/stop freeze the image with the music: pass them to syncSvgToMusic(null, ..., { img: dispose }).
 ```
 
-Before the music is audible and after stop, the SVG animates freely; a pause freezes it where the audio stops. When the music becomes audible, the art jumps once from wherever it was to the music's position; draw frame 0 as a natural rest pose, and make the art's loop a whole fraction of the pass, so the jump and every pass boundary look intended. `sync.clock()` gives optional notes the same audible clock. An `<img>` restart lands up to one decode late. A pause freezes the image: the page shows a still of the frame its embedded GIF shows (worked out from the GIF's delays, also up to one decode late), and resume restarts it from its first frame; other animation inside the image keeps running. GIF frames inside any art can't otherwise be controlled: use SMIL sprite animation for motion synced to the music.
+Before the music is audible and after stop, the SVG animates freely; a pause freezes it where the audio stops. When the music becomes audible, the art jumps once from wherever it was to the music's position; draw frame 0 as a natural rest pose, and make the art's loop a whole fraction of the pass, so the jump and every pass boundary look intended. `sync.clock()` gives optional notes the same audible clock. An `<img>` restart lands up to one decode late. With `beat`, each restart shows the art with its first embedded GIF retimed in the browser (`retimeGif`): one frame per eighth note, or per beat above 150 BPM (`frameUs`), uneven frames in whole steps in proportion; for a GIF that loops forever, every frame change within 10 ms of the beat over a pass of up to a few minutes (the frames repeated inside the GIF, up to 64 times, where whole centiseconds would drift; on longer passes, or where a GIF cannot be repeated, as close as that allows: up to 11.7 ms measured on 200-300 s passes). Only the delays change; the pixels and the rest of the art stay byte for byte. A pause freezes the image: the page shows a still of the frame the GIF it shows is on (worked out from that GIF's delays, also up to one decode late), and resume restarts the retimed GIF on the frame the music is on, shortened to fit (one frame change per loop of that GIF can then be up to about 14 ms off the beat), up to one decode late; so does a hidden page made visible while the music plays. Other animation inside the image keeps running. GIF frames inside inline SVG art can't be controlled: use SMIL sprite animation there.
 
 ## Agent skills
 

@@ -1,6 +1,6 @@
 // @ts-check
 // NFT-owned visual and background-audio helpers.
-import { REFERENCE_DISPLAY_LEAD_SECONDS, artTime, laterImg, restartImgOnPass, syncSvgToMusic } from "./art_sync.js";
+import { REFERENCE_DISPLAY_LEAD_SECONDS, artTime, beatSeconds, laterImg, restartImgOnPass, syncSvgToMusic } from "./art_sync.js";
 export const PLAY_ICON = "M8 5v14l11-7z";
 export const PAUSE_ICON = "M6 5h4v14H6zM14 5h4v14h-4z";
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -228,9 +228,9 @@ export async function startUi() {
     // a notes frame: standing still from now, following the music with the art below.
     /** @type {ReturnType<typeof syncSvgToMusic> | null} */
     let sync = null;
-    const lib = /** @type {any} */ (window).OnchainMidiNotes;
+    const lib = /** @type {any} */ (window).OnchainMidiNotes, midi = document.getElementById("onchain-midi-data")?.textContent || "";
     let notes = lib && art ? startNotes(lib, svg, document.createElement("canvas"), {
-      midi: document.getElementById("onchain-midi-data")?.textContent || "",
+      midi,
       clock: () => (sync ? sync.clock() : null),
       img: () => art,
     }) : null;
@@ -404,10 +404,13 @@ export async function startUi() {
       // copies the URL the art shows, so restarts begin once the cut-out copy is showing, or failed.
       // Who prefers reduced motion (read once, when the art is set up) gets the art standing still,
       // as the notes do: a still of its first frame from the start, which play and stop leave as it
-      // is. Art that cannot be stilled moves and restarts at passes as usual.
+      // is. Art that cannot be stilled moves and restarts at passes as usual. Each restart times the
+      // art's GIF to the music's beat: the player's pass and ticks, and the MIDI header's ticks per beat.
+      /** @type {Uint8Array | null} */ let header = null;
+      try { header = Uint8Array.from(atob(midi.replace(/\s/g, "").slice(0, 20)), (c) => c.charCodeAt(0)); } catch (e) {}
       const restart = () => {
         if (!art) return;
-        const controls = restartImgOnPass(/** @type {HTMLImageElement} */ (art), player, { onSwap: (img) => { art = img; watch(img); } });
+        const controls = restartImgOnPass(/** @type {HTMLImageElement} */ (art), player, { onSwap: (img) => { art = img; watch(img); }, beat: (s) => beatSeconds(s, header) });
         if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) controls.pause(); else image.attach(controls);
       };
       if (shown) shown.then(restart); else restart();
