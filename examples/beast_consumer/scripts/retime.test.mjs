@@ -348,6 +348,29 @@ test("restartImgOnPass with a beat: an older retimed copy failing while a newer 
   h.pass(); h.created[2].fail(); assert.equal(h.created.length, 4); h.created[3].load(); assert.equal(h.page[0], h.created[3]);
   assert.equal(h.created[3].src, ART(even).replace(";base64,", ";r=4;base64,"));
 });
+test("restartImgOnPass with a beat: a GIF that cannot start where the music is stays as it is when the page is visible again, or on resume (PR #93 review)", async () => {
+  const counted = gifOf([20, 20, 20]); counted[35] = 2; // the loop extension's count: 3 plays
+  for (const [label, gif] of [["no loop extension (plays once)", gifOf([20, 20, 20], { loop: false })], ["a loop count", counted]]) {
+    const t = 60 / 129.32;
+    assert.equal(retimeGif(gif, t, 128 * t, 0.3).aligned, false, `${label}: not aligned`);
+    assert.equal(retimeGif(gif, t, 128 * t).aligned, true, `${label}: from frame 0, as asked`);
+    const h = harness(ART(gif));
+    h.pass(); h.created[0].load(); assert.ok(gifIn(h.page[0].src), `${label}: the retimed copy shown`);
+    h.status.positionSeconds = 0.3;
+    h.doc.hidden = true; for (const fn of h.visibility) fn(); h.doc.hidden = false; for (const fn of h.visibility) fn();
+    assert.equal(h.created.length, 1, `${label}: visible again, no restart`);
+    // Resume after a pause whose still never showed: the image keeps playing.
+    h.dispose.pause(); await tick(); h.dispose.play(); assert.equal(h.created.length, 2, `${label}: only the still that was asked for`);
+    // Resume from a still that was shown still swaps in a moving image, from frame 0.
+    h.dispose.pause(); await tick(); h.created[2].load(); h.dispose.play();
+    assert.equal(h.created.length, 4); assert.deepEqual(sources(gif, gifIn(h.created[3].src)), [0, 1, 2]);
+  }
+  // A GIF whose frames after the first paint over it: not aligned away from its first frame.
+  const b = Uint8Array.from([71, 73, 70, 56, 57, 97, 2, 0, 2, 0, 128, 0, 0, 204, 0, 0, 0, 0, 204, 33, 255, 11, ...Buffer.from("NETSCAPE2.0"), 3, 1, 0, 0, 0,
+    ...gce(20, 1, 0), ...image(0, [0, 0, 2, 2]), ...gce(20, 2, 1), ...image(1, [0, 0, 1, 1]), ...gce(20, 2, 2), ...image(2, [0, 0, 2, 2]), 59]);
+  const t = beat(500000);
+  assert.deepEqual([0.1, 0.3, 0.6, 0].map((at) => retimeGif(b, t, 64 * t, at).aligned), [true, false, false, true]);
+});
 test("restartImgOnPass with a beat: percent-encoded art (the notes' cut-out copy) is retimed, and stilled from the retimed text", async () => {
   const even = gifOf([20, 20, 20, 20]), svg = `<svg xmlns='http://www.w3.org/2000/svg'><text>caf\u00e9 a,b</text><image href='data:image/gif;base64,${Buffer.from(even).toString("base64")}'/></svg>`;
   const src = "data:image/svg+xml," + encodeURIComponent(svg), h = harness(src);

@@ -320,7 +320,7 @@ try {
      const s=await status(o),beat=beatSeconds(s,midi),step=frameUs(Math.round(beat*1e6))/1e6;
      assert.ok(Math.abs(60/beat-131.868)<.01,`the reference's tempo: ${60/beat} BPM`);assert.equal(step,.2275);
      // The GIF shown is the original retimed from frame 0, its frames and colours unchanged.
-     const first=await shown(o);assert.deepEqual(gifOfArt(first.src),retimeGif(gif,beat,s.passSeconds),"the retimed GIF");
+     const first=await shown(o);assert.deepEqual(Buffer.from(gifOfArt(first.src)),Buffer.from(retimeGif(gif,beat,s.passSeconds)),"the retimed GIF");
      assert.deepEqual(gifFrames(gifOfArt(first.src)).frames.map(f=>f.delay),[230,230,220,230],"2 copies: 91 cs, a whole loop");
      let report="";
      const moves=run.engine!=="firefox";

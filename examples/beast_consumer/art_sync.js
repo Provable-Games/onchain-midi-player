@@ -192,8 +192,11 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
     next.onerror = () => { if (live && wanted()) { if (still) frozen = false; else if (n == restarts) failed?.(); } };
     next.src = src(n); // The same bytes at a distinct URL.
   };
-  /** Restarts the art from its first frame, or with `at` from where the music is (retimeGif's `at`). */
-  const restart = (at = false) => {
+  /**
+   * Restarts the art from its first frame, or with `at` from where the music is (retimeGif's `at`);
+   * with `aligned`, only if the retimed copy can start there (else the image shown stays).
+   */
+  const restart = (at = false, aligned = false) => {
     const s = player.getPlayStatus(), runId = s.runId;
     /** @type {string | null} */ let svg = null;
     try {
@@ -201,8 +204,9 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
       // The new image starts once decoded: up to one decode after the position it was built for.
       const b = beat(s), text = b ? art() : "", m = GIF_URI.exec(text);
       const gif = m && retimeGif(Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0)), /** @type {number} */ (b), s.passSeconds || 0, at && s.positionSeconds !== null ? artTime(s) : null);
+      if (aligned && !gif?.aligned) return;
       if (gif) { let bin = ""; for (const x of gif) bin += String.fromCharCode(x); svg = text.replace(m[0], () => "data:image/gif;base64," + btoa(bin)); }
-    } catch (e) {}
+    } catch (e) { if (aligned) return; }
     const wanted = () => !frozen && player.getPlayStatus().runId === runId, plain = (/** @type {number} */ n) => "data:" + type + ";r=" + n + base64 + payload;
     if (svg === null) show(plain, wanted);
     else show((n) => "data:" + type + ";r=" + n + ";base64," + btoa(/** @type {string} */ (svg)), wanted, false, svg, () => show(plain, wanted));
@@ -214,11 +218,12 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
     const s = player.getPlayStatus(), audio = audioElapsedMs(shownStatus, s);
     if (s.audioState === "running" && audio !== null) stalled = Math.max(0, performance.now() - shownAt - audio);
   };
-  // A page made visible while the music plays shows the retimed art from where the music is: a
-  // hidden page's images may not have moved meanwhile.
+  // A page made visible while the music plays shows the retimed art from where the music is (a
+  // hidden page's images may not have moved meanwhile), if its GIF can start there: one that plays a
+  // set number of times, or whose frames after the first all paint over earlier ones, stays as it is.
   const visible = () => {
     const s = player.getPlayStatus();
-    if (!doc.hidden && !frozen && retimed !== null && s.state === "playing" && s.audioState === "running") restart(true);
+    if (!doc.hidden && !frozen && retimed !== null && s.state === "playing" && s.audioState === "running") restart(true, true);
   };
   doc.addEventListener("visibilitychange", visible);
   const offState = player.onStateChange(ran);
@@ -240,14 +245,16 @@ export function restartImgOnPass(img, player, { onSwap = () => {}, still = still
       else frozen = false; // Nothing to show: the art keeps moving, and restarting at passes.
     }, () => { if (current()) frozen = false; });
   };
-  // Play restarts a still from where the music is, and so a retimed image that played on through a
-  // pause whose still never showed; stop restarts a still from its first frame. A still never shown
-  // otherwise leaves the art running.
+  // Play restarts a still from where the music is (from frame 0 where its GIF cannot start there),
+  // and so a retimed image that played on through a pause whose still never showed, if its GIF can
+  // start there; stop restarts a still from its first frame. A still never shown otherwise leaves
+  // the art running.
   const thaw = (/** @type {boolean} */ resume) => {
     if (!frozen) return;
     frozen = false;
     unwait();
-    if (held || (resume && retimed !== null)) restart(resume);
+    if (held) restart(resume);
+    else if (resume && retimed !== null) restart(true, true);
   };
   return Object.assign(() => { live = false; off(); unwait(); }, {
     pause() {
@@ -427,7 +434,8 @@ export const RETIME_COPIES = 64, RETIME_PIXELS = 1 << 20;
  * @param {number} beat seconds per beat (beatSeconds)
  * @param {number} [pass] seconds per pass of the music
  * @param {number | null} [at] seconds into the pass to start at
- * @returns {Uint8Array | null}
+ * @returns {(Uint8Array & {aligned: boolean}) | null} the GIF; `aligned`: it starts where `at`
+ *   says (false when it could not be rotated there, and so starts from frame 0)
  */
 export function retimeGif(b, beat, pass = 0, at = null) {
   const gif = gifFrames(b), frames = gif ? gif.frames : [], n = frames.length, step = frameUs(Math.round(beat * 1e6));
@@ -449,14 +457,16 @@ export function retimeGif(b, beat, pass = 0, at = null) {
     if (worst < best) (best = worst), (copies = c);
     if (worst <= RETIME_TARGET_US) break;
   }
-  let list = grid(copies), rotated = false;
+  // aligned: the loop starts where `at` says (from frame 0 without it).
+  let list = grid(copies), rotated = false, aligned = at === null;
   const loop = list[list.length - 1][1];
   if (at !== null && loops) {
     const q = (((at * 1e6) % loop) + loop) % loop, k = list.findIndex(([, us]) => us > q);
+    aligned = !q;
     const turned = [...list.slice(k), ...list.slice(0, k).map(([i, us]) => [i, us + loop]), [list[k][0], loop + q]].map(([i, us]) => [i, us - q]);
     if (turned[0][1] < 1e4) turned.shift(); // Under 1 cs of the first frame left: the next one, that much early.
     if (q && starts[turned[0][0]]) {
-      list = turned; rotated = true;
+      list = turned; rotated = aligned = true;
       // The rest of the first frame, under 1 cs: the frame before it lasts to the loop's end instead;
       // under 2 cs: 2 cs, the frame before it ending that much early.
       const rest = loop - list[list.length - 2][1];
@@ -479,7 +489,7 @@ export function retimeGif(b, beat, pass = 0, at = null) {
     o += parts[k].length; cs += delay;
   });
   out.set(end, o);
-  return out;
+  return Object.assign(out, { aligned });
 }
 
 /**
