@@ -454,7 +454,8 @@ const UTF8_ART=svgUrl("<svg xmlns='http://www.w3.org/2000/svg'><title>é</title>
 function imgHarness(src=UTF8_ART,options={}){
  const status={runId:1,state:'playing'},passes=new Set(),states=new Set(),page=[],created=[],swaps=[];
  const player={getPlayStatus:()=>({...status}),onPassStart(fn){passes.add(fn);return()=>passes.delete(fn);},onStateChange(fn){states.add(fn);return()=>states.delete(fn);}};
- const doc={createElement(tag){assert.equal(tag,'img');const el=image();created.push(el);return el;}};
+ const doc={createElement(tag){assert.equal(tag,'img');const el=image();created.push(el);return el;},hidden:false,listeners:new Set(),
+  addEventListener(type,fn){assert.equal(type,'visibilitychange');this.listeners.add(fn);},removeEventListener(type,fn){this.listeners.delete(fn);}};
  function image(attributes=[]){return{attributes,ownerDocument:doc,onload:null,src:'',setAttribute(name,value){this.attributes=[...this.attributes.filter(a=>a.name!==name),{name,value}];},
   replaceWith(other){const i=page.indexOf(this);if(i>=0)page[i]=other;},load(){this.onload?.();},fail(){this.onerror?.();}};}
  const first=Object.assign(image([{name:'id',value:'beast-art'},{name:'alt',value:''},{name:'src',value:src}]),{src});page.push(first);
@@ -712,16 +713,21 @@ function fakeDocument({failAt=-1}={}){
  return{doc,calls,images};
 }
 test('stillSvg: draws each frame up to the shown one as a one-frame GIF, with disposals 2 and 3, and swaps in the PNG',async()=>{
- const bytes=gif(gce(10,2),frame(0,0,4,4),gce(10,3),frame(1,2,2,1),gce(10,1),frame(0,0,1,1),gce(10,1),frame(0,0,2,2));
+ const bytes=gif(gce(10,1),frame(0,0,4,4),gce(10,2),frame(1,2,2,1),gce(10,3),frame(0,0,1,1),gce(10,1),frame(0,0,2,2));
  const uri='data:image/gif;base64,'+Buffer.from(bytes).toString('base64'),svg=`<svg><image href='${uri}'/><image href='${uri}'/></svg>`;
  const {doc,calls,images}=fakeDocument();
- const out=await stillSvg(svg,250,doc);
- assert.deepEqual(calls,[['draw',0,0,0],['clear',0,0,4,4],['save'],['draw',1,0,0],['restore','saved'],['draw',2,0,0],['png','image/png']],'frame 2 at 250 ms: dispose 2 clears, 3 saves then restores');
+ const out=await stillSvg(svg,350,doc);
+ assert.deepEqual(calls,[['draw',0,0,0],['draw',1,0,0],['clear',1,2,2,1],['save'],['draw',2,0,0],['restore','saved'],['draw',3,0,0],['png','image/png']],'frame 3 at 350 ms: dispose 2 clears, 3 saves then restores');
  const g=gifFrames(bytes);
  images.forEach((img,i)=>{const one=Buffer.from(img.src.split(',')[1],'base64');assert.deepEqual(one,Buffer.concat([Buffer.from(g.head),Buffer.from(bytes.subarray(g.frames[i].start,g.frames[i].end)),Buffer.from([59])]),`one-frame GIF ${i}`);
   assert.deepEqual(gifFrames(one).frames.length,1);});
  assert.equal(out,`<svg><image href='data:image/png;base64,UE5H'/><image href='${uri}'/></svg>`,'the first GIF only');
  const at0=fakeDocument();await stillSvg(svg,0,at0.doc);assert.deepEqual(at0.calls,[['draw',0,0,0],['png','image/png']]);
+ // A canvas the frames before leave clear (disposal 2 over the screen, 3 restoring that): drawing starts at the frame shown.
+ const clear=gif(gce(10,2),frame(0,0,4,4),gce(10,3),frame(1,2,2,1),gce(10,1),frame(0,0,1,1)),skip=fakeDocument();
+ await stillSvg(`<svg><image href='data:image/gif;base64,${Buffer.from(clear).toString('base64')}'/></svg>`,250,skip.doc);
+ assert.deepEqual(skip.calls,[['draw',0,0,0],['png','image/png']],'only frame 2');const g2=gifFrames(clear);
+ assert.deepEqual(Buffer.from(skip.images[0].src.split(',')[1],'base64'),Buffer.concat([Buffer.from(g2.head),Buffer.from(clear.subarray(g2.frames[2].start,g2.frames[2].end)),Buffer.from([59])]));
 });
 test('stillSvg: null without a GIF it can read; rejects when a frame cannot be decoded',async()=>{
  const {doc,calls}=fakeDocument();

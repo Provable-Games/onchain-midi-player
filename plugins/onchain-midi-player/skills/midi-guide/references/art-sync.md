@@ -71,9 +71,9 @@ The example's token 4 is a full-size Beast on Sepolia (the example in [`deployme
 The GIF and beat therefore have different periods. On each path the reference treats an embedded GIF differently:
 
 - **Trusted inline SVG:** seeks and pauses move the SVG/SMIL timelines only; an embedded GIF runs on its own image clock through them.
-- **Isolated image:** `restartImgOnPass` restarts the image at each pass, up to one decode late; while paused it shows a computed still of the frame the audio stopped on, and resume restarts it from frame 0.
+- **Isolated image:** `restartImgOnPass` restarts the image at each pass, up to one decode late. With `beat` (the Beast reference passes `beatSeconds`), each restart retimes the GIF in the browser (`retimeGif`): a frame per eighth note, or per beat above 150 BPM (`frameUs`), uneven frames in whole steps in proportion, every frame change within 10 ms of the beat over the pass (the frames repeat inside the GIF where whole centiseconds would drift). While paused it shows a computed still of the frame the audio stopped on, and resume restarts the retimed GIF on the frame the music is on.
 
-Neither aligns the GIF's phase to the beat within a pass. The following arithmetic applies to a transport-controlled SVG/SMIL sprite with the same frame durations, or custom NFT code that actively aligns/restarts the image:
+So on the isolated path the GIF keeps the beat whatever its own delays; the metadata `image` keeps them. On the inline path, and in the metadata image, the following arithmetic applies (and to a transport-controlled SVG/SMIL sprite with the same frame durations):
 
 - At 100 BPM, a pass of whole bars keeps the controlled sprite in phase (3 sprite loops per 2.4 s bar). Retune the wrapper's 3 s and 6 s animations to 2.4 s and 4.8 s, or keep them and make the pass a multiple of 12 s (5 bars), the lcm of 2.4, 3 and 6 s.
 - At 120 BPM (500,000 µs, the other production tempo), make the pass a multiple of 4 s for the controlled sprite; 3 s and 6 s then need a multiple of 12 s (6 bars).

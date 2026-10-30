@@ -168,7 +168,7 @@ describe("showWhenDecoded: the <img> shows the cut-out copy only once it decodes
   /** A page of fake images (as in ui.test.mjs): created off screen, loaded or failed by hand, swapped in place. */
   function imgPage(src) {
     const page = [], created = [], passes = new Set();
-    const doc = { createElement(tag) { assert.equal(tag, "img"); const el = image(); created.push(el); return el; } };
+    const doc = { createElement(tag) { assert.equal(tag, "img"); const el = image(); created.push(el); return el; }, addEventListener() {}, removeEventListener() {} };
     function image(attributes = []) {
       return { attributes, ownerDocument: doc, onload: null, onerror: null, src: "",
         setAttribute(name, value) { this.attributes = [...this.attributes.filter((a) => a.name !== name), { name, value }]; },
