@@ -1,19 +1,26 @@
 # Current engine provenance
 
-The engine is [pocket-synth](https://github.com/Provable-Games/pocket-synth), Provable Games' fork of g200kg's [webaudio-tinysynth](https://github.com/g200kg/webaudio-tinysynth); its distribution files keep the `webaudio-tinysynth.*` names. The 0.11.0 class embeds `webaudio-tinysynth-v2.1.1.min.js` from the signed fork release tag `v2.1.1` (GPG-signed by loothero), commit `e0b1a897f34968ba3ecfad3fddfbac815499c9c0` on the fork's main. The release pull request #126 built and committed the minified script and source map on `release/v2.1.1` at `fbe394e86fa7ba2e2581aad018e94b10eadc52e1`; [its CI run](https://github.com/Provable-Games/pocket-synth/actions/runs/41007922128) verified that the committed files equal a fresh build. The tag commit is that pull request's merge and has the identical tree: the same source, NOTICE, lock, script and map. The established `scripts/vendor_engine.mjs` helper copies the tag's exact minified script and NOTICE; neither file is patched locally.
+The engine is [pocket-synth](https://github.com/Provable-Games/pocket-synth), Provable Games' fork of g200kg's [webaudio-tinysynth](https://github.com/g200kg/webaudio-tinysynth); its distribution files keep the `webaudio-tinysynth.*` names. The 0.12.0 class embeds `webaudio-tinysynth-v2.1.2.min.js` from the signed fork release tag `v2.1.2` (GPG-signed by loothero), commit `4a2dc1cd7e43e9a8df26dd3e96f41eed62e2c9b9` on the fork's main. The release pull request #128 built and committed the minified script and source map on `release/v2.1.2` at `f1276f041271d392f7043e47c0a1b12438a6e572`; [its CI run](https://github.com/Provable-Games/pocket-synth/actions/runs/41020790486) verified that the committed files equal a fresh build. The tag commit is that pull request's merge and has the identical tree: the same source, NOTICE, lock, script and map. The established `scripts/vendor_engine.mjs` helper copies the tag's exact minified script and NOTICE; neither file is patched locally.
 
-`ENGINE_PIN` names the tag commit. `ENGINE_BUILD` and the manifest are non-provisional and record the release build commit (`sourceCommit` and `distributionCommit`), its CI run, the source SHA-256, build recipe, that commit's lockfile and the source map. To reproduce, check out `v2.1.1` in an isolated fork clone, run `npm ci`, then `node scripts/build.js <output-dir>` and compare both outputs against the committed files. The pinned compiler is Terser 5.51.2. The release's published assets have the same SHA-256 as the script and map.
+`ENGINE_PIN` names the tag commit. `ENGINE_BUILD` and the manifest are non-provisional and record the release build commit (`sourceCommit` and `distributionCommit`), its CI run, the source SHA-256, build recipe, that commit's lockfile and the source map. To reproduce, check out `v2.1.2` in an isolated fork clone, run `npm ci`, then `node scripts/build.js <output-dir>` and compare both outputs against the committed files. The pinned compiler is Terser 5.51.2. The release's published assets have the same SHA-256 as the script and map.
 
-- Engine: 48,645 bytes, SHA-256 `b0be448e3c0959862e1f83f3b22c0550dc27d13094757430bf2ed4a28a28ceed`.
-- Source: SHA-256 `b45380199b6f1703aff12e5dd37ca74f2f35f265c23841145bd4a9bdae20ff2b`.
-- Source map: 77,483 bytes, SHA-256 `ad9b593c7479daa1f084df860b67158484255287c8a0dc1726b3da6ba5896d9e`.
-- NOTICE: SHA-256 `ff3f337c324f6522c6831fe096076d6eba672ef03e40608a5fcf1bf59dd3fca0`.
+- Engine: 48,696 bytes, SHA-256 `1cc2fe98bdd9c8ae0d030d00f5b5350f139a4062a314176f07ca4b820debe4f4`.
+- Source: SHA-256 `b53678d784d85f16b1bb6fbcb7cd50277df6192ec011e79940e8a8d5bb7d06d0`.
+- Source map: 77,578 bytes, SHA-256 `15a3a957614d8c29445692d2b8ad3524ccf9eb4748200697e62019233913752e`.
+- NOTICE: SHA-256 `6ff04a5bc4e832ce90f2e3c033eacb68777d58bfc66708f2347a2e059d614595`.
 - `scripts/build.js`: SHA-256 `ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728`.
-- `package-lock.json` (`fbe394e` and the tag): SHA-256 `f99801c211f576100176af502b415eabe393bcaaa95765809b823392b0caa375`.
+- `package-lock.json` (`f1276f0` and the tag): SHA-256 `dd87c94ac3137b2d0ca8187868066da31f193fe8c3432bf20013bda6e51537e8`.
 
-This pin is a tagged fork release. Applicable device/provider evidence remains a release prerequisite; the 0.8.0, 0.9.0, 0.10.0 and 0.11.0 classes are declared on Sepolia only as test classes without a release tag, not mainnet-qualified releases.
+This pin is a tagged fork release. Applicable device/provider evidence remains a release prerequisite; the 0.12.0 class has not been declared, and no class is a mainnet-qualified release.
 
 ## Historical engine and licenses
+
+The retained 0.11.0 engine, `webaudio-tinysynth-v2.1.1.min.js` (48,645 bytes, SHA-256
+`b0be448e3c0959862e1f83f3b22c0550dc27d13094757430bf2ed4a28a28ceed`) and `webaudio-tinysynth-v2.1.1.NOTICE` (SHA-256
+`ff3f337c324f6522c6831fe096076d6eba672ef03e40608a5fcf1bf59dd3fca0`), is the signed fork release tag `v2.1.1`, commit
+`e0b1a897f34968ba3ecfad3fddfbac815499c9c0`, built by release pull request #126 at `fbe394e86fa7ba2e2581aad018e94b10eadc52e1`
+([its CI run](https://github.com/Provable-Games/pocket-synth/actions/runs/41007922128)). The 0.11.0 class declared on Sepolia
+as a test class embeds it. Its provenance is recorded in the 0.11.0 manifest entry.
 
 The retained 0.8.0, 0.9.0 and 0.10.0 engine, `webaudio-tinysynth-v2.1.0.min.js` (48,746 bytes, SHA-256
 `9be3f30479321274aff644a0a5d1ab8aa0e431f9f8e9a2548cdd89f72c4281b4`) and `webaudio-tinysynth-v2.1.0.NOTICE` (SHA-256
