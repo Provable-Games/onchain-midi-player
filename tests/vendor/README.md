@@ -11,7 +11,7 @@ The engine is [pocket-synth](https://github.com/Provable-Games/pocket-synth), Pr
 - `scripts/build.js`: SHA-256 `ec9bbbf2adc1da286af30698fa1889d71142e95b88a83b2d94c2b9fc82f51728`.
 - `package-lock.json` (`fbe394e` and the tag): SHA-256 `f99801c211f576100176af502b415eabe393bcaaa95765809b823392b0caa375`.
 
-This pin is a tagged fork release. Applicable device/provider evidence remains a release prerequisite; the 0.11.0 class has not been declared, and no class is a mainnet-qualified release.
+This pin is a tagged fork release. Applicable device/provider evidence remains a release prerequisite; the 0.8.0, 0.9.0, 0.10.0 and 0.11.0 classes are declared on Sepolia only as test classes without a release tag, not mainnet-qualified releases.
 
 ## Historical engine and licenses
 
