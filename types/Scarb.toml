@@ -12,6 +12,6 @@ license = "Apache-2.0"
 # `onchain_midi_player` (the TinySynth class) depends on it by path and re-exports it at its old
 # paths; its tests cover `settings::validate`.
 [dependencies]
-starknet = "2.20.1"
+starknet = "2.21.0"
 
 [lib]
