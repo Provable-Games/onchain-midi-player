@@ -22,6 +22,7 @@
     "preview": "node scripts/preview.mjs",
     "gen:segments": "node scripts/build_segments.mjs",
     "check:segments": "node scripts/build_segments.mjs --check",
+    "check:engine-pin": "node scripts/check_engine_pin.mjs",
     "gen:data": "node scripts/gen_data_fixtures.mjs",
     "check:data": "node scripts/gen_data_fixtures.mjs --check",
     "gen:measurements": "node scripts/gen_measurement_fixtures.mjs",

@@ -50,6 +50,8 @@ npm run check:abi
 node scripts/validate_token_uri.mjs examples/beast_consumer/fixtures/token_uri.txt
 ```
 
+To audit the embedded engine against a full-history pocket-synth checkout, fetch that fork's tags and `origin/main`, then run `npm run check:engine-pin -- --fork <checkout> --latest`. It verifies the signed tag, full commit, source/build hashes and decompressed player bytes offline. See [engine provenance and re-pinning](tests/vendor/README.md#re-pinning) for signature trust and reproducible-build steps.
+
 ## Sync your art
 
 Art synced to the music is the experience, and it needs no scheduling. Let the art animate on the page clock, and seek it to the music's position at moments the player already announces: the first pass event (the music is audible), each later pass, and transport or latency changes. Each seek reads `getPlayStatus()` at that moment, so a late event can't misalign the art. [`art_sync.js`](examples/beast_consumer/art_sync.js) is a small reference to copy into your NFT-owned bootstrap; the Beast reference uses it.

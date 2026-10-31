@@ -69,6 +69,17 @@ To verify a historical file: `git -C <fork> show 31fb18d:webaudio-tinysynth.min.
 
 ## Re-pinning
 
+Audit the current pin without changing generated files or making network calls:
+
+```sh
+git -C <pocket-synth-checkout> fetch origin --tags
+npm run check:engine-pin -- --fork <pocket-synth-checkout> --latest
+```
+
+The audit verifies the annotated GPG-signed tag resolves to the full pinned commit; checks source, build recipe, lockfile, map, engine and NOTICE hashes against the source/distribution commits; and checks the actual decompressed player fragment. `--latest` additionally compares the engine inputs with the **locally fetched** `origin/main`; it does not fetch automatically or claim the remote has not changed since the fetch. GPG must have the release signer's public key; compare the reported fingerprint with the maintainer's signing identity. The current `v2.1.2` signer fingerprint is `B3B5E2A6C50C29F90A868653CD7025F6005367A5`.
+
+Reproducibility is a separate check: in an isolated checkout of the pinned tag, use its `.nvmrc`, `npm ci` and `npm run verify`. The fork's `release:prepare` helper also produces a machine-readable manifest and checksummed upload directory for signed release tags. Newly published fork releases use immutable GitHub releases; upload all assets to a draft before publishing. Historical releases remain auditable by their signed tags and published hashes. Neither audit qualifies a player class for mainnet or authorizes publishing a release.
+
 To a later tagged fork release (or, for a test class, a CI commit):
 
 1. Pick the ref. Prefer a signed fork release tag (`git tag -v <tag>`) of
