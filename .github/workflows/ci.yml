@@ -49,7 +49,7 @@ jobs:
           key: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-${{ hashFiles('Scarb.lock', 'examples/owned_assets/Scarb.lock', 'examples/beast_consumer/Scarb.lock', 'examples/stress_nft/Scarb.lock') }}
           restore-keys: scarb-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.tool-versions') }}-
 
-      # Versions come from .tool-versions: scarb 2.20.1, starknet-foundry 0.64.0.
+      # Versions come from .tool-versions.
       - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
         with:
           tool-versions: .tool-versions
@@ -101,7 +101,7 @@ jobs:
           scarb build
           snforge test
 
-      # Scarb 2.20.1 has no --locked flag; fail if a build rewrote a lockfile.
+      # Fail if a build rewrote a lockfile.
       - name: Lockfiles unchanged
         run: git diff --exit-code -- Scarb.lock examples/owned_assets/Scarb.lock examples/beast_consumer/Scarb.lock examples/stress_nft/Scarb.lock
 
