@@ -5,11 +5,11 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { ENGINE_PIN, ENGINE_BUILD, engineSource, engineNotice, sha256Hex } from "./engine.mjs";
+import { ENGINE_PIN, ENGINE_BUILD, ENGINE_RELEASE_SIGNER, engineSource, engineNotice, sha256Hex } from "./engine.mjs";
 import { VERSION, fixedFragment } from "./segments.mjs";
 import { verifyEngine } from "./verify_engine.mjs";
 
-export function checkEnginePin({ fork, latest = false, pin = ENGINE_PIN, build = ENGINE_BUILD, env = process.env, embedded = true }) {
+export function checkEnginePin({ fork, latest = false, pin = ENGINE_PIN, build = ENGINE_BUILD, signer = ENGINE_RELEASE_SIGNER, env = process.env, embedded = true }) {
   if (!fork) throw new Error("--fork <pocket-synth checkout> is required");
   if (!/^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(pin.ref) || build.provisional) throw new Error("audit requires a non-provisional release tag");
   const git = (...args) => execFileSync("git", ["-C", fork, ...args], { env, maxBuffer: 1 << 26 });
@@ -21,6 +21,7 @@ export function checkEnginePin({ fork, latest = false, pin = ENGINE_PIN, build =
   const signed = spawnSync("git", ["-C", fork, "verify-tag", "--raw", ref], { env, encoding: "utf8" });
   const signature = /\[GNUPG:\] VALIDSIG ([0-9A-F]{40,64}) /.exec(signed.stderr || "");
   if (signed.status !== 0 || !signature) throw new Error("engine release tag GPG signature verification failed");
+  if (signature[1] !== signer) throw new Error("engine release tag signer differs from ENGINE_RELEASE_SIGNER");
   const hash = (at, file, expected) => {
     const actual = sha256Hex(git("show", at + ":" + file));
     if (actual !== expected) throw new Error(at + ":" + file + " SHA-256 differs from the engine pin");

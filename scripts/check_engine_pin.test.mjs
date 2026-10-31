@@ -34,7 +34,7 @@ function fixture(t) {
   const build = { provisional: false, sourceCommit: commit, distributionCommit: commit,
     sourceSha256: digest("webaudio-tinysynth.js"), sourceMapSha256: digest("webaudio-tinysynth.min.js.map"),
     recipeSha256: digest("scripts/build.js"), packageLockSha256: digest("package-lock.json"), terser: "5.51.2" };
-  return { fork: repo, env, pin, build, embedded: false, git, fingerprint };
+  return { fork: repo, env, pin, build, signer: fingerprint, embedded: false, git, fingerprint };
 }
 
 test("offline audit binds signed tag, source/build identities and freshly fetched main", (t) => {
@@ -56,6 +56,13 @@ test("lightweight and unsigned annotated tags are rejected", (t) => {
   assert.throws(() => checkEnginePin(f), /annotated signed tag/);
   f.git("tag", "-d", "v9.8.7"); f.git("tag", "-a", "v9.8.7", "-m", "Unsigned");
   assert.throws(() => checkEnginePin(f), /signature verification failed/);
+});
+
+test("a valid tag signature from a different key is rejected", (t) => {
+  const f = fixture(t);
+  execFileSync("gpg", ["--batch", "--pinentry-mode", "loopback", "--passphrase", "", "--quick-generate-key", "Other signer <other@example.invalid>", "ed25519", "sign", "0"], { env: f.env, stdio: "pipe" });
+  f.git("tag", "-f", "-s", "-u", "other@example.invalid", "v9.8.7", "-m", "Different signer");
+  assert.throws(() => checkEnginePin(f), /signer differs/);
 });
 
 test("new main source fails freshness while the pinned release remains independently auditable", (t) => {
