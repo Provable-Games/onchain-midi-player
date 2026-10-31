@@ -49,6 +49,15 @@ JS
 
 The bytearray helper accepts raw RPC felts or sncast's decoded response and reports RPC errors instead of treating them as token data. The decode helper writes `token.json` and exact `animation.html`, plus `image.svg` only for a base64 SVG metadata image. The verifier checks uniquely identified loader and combined-player artifacts separately and the exact embedded engine bytes against `scripts/library_versions.json`. Comments, inert data, template/raw-text content and encoded art are excluded; additional gzip libraries and changed NFT heads/body layouts are allowed. Matching class-library hashes do not certify additional NFT scripts or media policy. A matching hash proves payload identity; CI/source/tagged-release provenance requires reading the matching manifest and vendor record. Historical development captures may record `engine_build.provisional: true` and a `dev-` engine reference. The current engine record is non-provisional; its `engine_ref` names the fork ref, which may be a signed release tag. Confirm the tag, its signature and the build commit in the vendor provenance record (`tests/vendor/README.md`); a matching hash alone does not establish them.
 
+For the current checkout's engine provenance audit, use a full-history pocket-synth checkout and GPG with the maintainer's public key. Establish its fingerprint independently before trusting it. Fetching is explicit and separate from verification:
+
+```sh
+git -C <pocket-synth-checkout> fetch origin --tags
+npm run check:engine-pin -- --fork <pocket-synth-checkout> --latest
+```
+
+This checks the signed annotated tag, pinned commit, expected signer fingerprint, source/build/distribution hashes and the decompressed committed player fragment. `--latest` checks the locally fetched `origin/main`; it does not contact GitHub or prove the remote has not changed since the fetch. It audits this checkout's fragment, so use `verify_engine.mjs` above for fetched token bytes too. For reproducibility, independently check out the pinned fork tag, use its `.nvmrc`, run `npm ci` and `npm run verify`. See `tests/vendor/README.md` for the trust anchor and re-pinning steps.
+
 The splitter extracts complete `onchain-midi-settings`/`onchain-midi-data` blocks. No art block or image/art equality assumption exists. Data IDs must be unique across document elements, excluding template contents, and identify complete HTML `text/plain` scripts. Library selection excludes SVG/MathML scripts but includes HTML scripts inside `foreignObject`. Missing/duplicate required blocks and modified libraries fail explicitly. Arbitrary/community art belongs in NFT-owned isolated image markup; a trusted renderer may explicitly opt into inline SVG timelines. Displayed art may differ from `metadata.image`.
 
 For a StressNft provider-cap matrix, use the matching checkout and its deployed stress address explicitly. Supply a private env file of `NAME=URL` lines; the helper redacts those URLs/keys and stores only provider names. This example probes selected tokens against only the named configured provider:

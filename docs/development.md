@@ -2,6 +2,8 @@
 
 Use the pinned `.tool-versions`, `Scarb.lock`, `package-lock.json` and `.github/ci-tools/package-lock.json`. The class supplies composable shared-loader and combined engine/API fragments; NFTs own their document, art, controls and media policy. Earlier measurements retain their original source and artifact bindings; later provenance/revalidation is recorded separately.
 
+The engine-provenance tests in `npm test` require Git and GnuPG (`gpg`/`gpgconf`) on PATH. They create temporary test keys without using your signing identity. The optional real-release audit and its trust/fetch prerequisites are documented in the [vendor guide](../tests/vendor/README.md#re-pinning).
+
 ```sh
 npm ci
 npm run gen:segments

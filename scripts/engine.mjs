@@ -21,6 +21,9 @@ import { fileURLToPath } from "node:url";
 // against a fresh build; the tag commit has the identical tree, so the same source, NOTICE, lock, script and
 // map. A fresh `npm ci` build of the tag reproduces both files.
 export const ENGINE_PIN = { ref: "v2.1.2", commit: "4a2dc1cd7e43e9a8df26dd3e96f41eed62e2c9b9", sha256: "1cc2fe98bdd9c8ae0d030d00f5b5350f139a4062a314176f07ca4b820debe4f4", noticeSha256: "6ff04a5bc4e832ce90f2e3c033eacb68777d58bfc66708f2347a2e059d614595" };
+// Audit trust anchor; review a signer change when re-pinning. This does not
+// alter the embedded engine or its generated provenance manifest.
+export const ENGINE_RELEASE_SIGNER = "B3B5E2A6C50C29F90A868653CD7025F6005367A5";
 export const ENGINE_BUILD = {
   provisional: false,
   sourceCommit: "f1276f041271d392f7043e47c0a1b12438a6e572",
