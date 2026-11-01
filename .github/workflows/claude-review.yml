@@ -334,7 +334,7 @@ jobs:
       # model, effort, configuration, proxy or runtime to trusted values.
       - name: Run the Claude review
         id: claude
-        uses: anthropics/claude-code-action/base-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
+        uses: anthropics/claude-code-action/base-action@d70510b174a1244958df0b03166a54912811f3e6 # v1.0.264
         env:
           CLAUDE_WORKING_DIR: ${{ steps.workdir.outputs.dir }}
           ANTHROPIC_MODEL: ${{ steps.settings.outputs.model }}
